@@ -2,8 +2,8 @@ import {MANAGEMENT_THEME} from './management_ui.js';
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=fast-speeds-1';
 import {PLANT_SPECIES} from './city_nature.js?v=ff-growth-events-1';
 import {POLITICS_SECTIONS} from './city_ui_sections.js';
-import {CityUI,TABS, VIEWS, FILTERS} from './city_ui.js?v=survival-windows-4';
-import {BUILDING_TYPES} from './city_simulation.js?v=survival-windows-4';
+import {CityUI,TABS, VIEWS, FILTERS} from './city_ui.js?v=character-footer-5';
+import {BUILDING_TYPES} from './city_simulation.js?v=character-footer-5';
 
 export const normalizeSearch = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 const values = collection => collection instanceof Map ? [...collection.values()] : collection || [];

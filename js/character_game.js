@@ -14,6 +14,7 @@ export function movementVector(x,y,yaw=Math.PI/4){
   return {x:Math.max(-1,Math.min(1,(x*cos+y*sin)/length)),y:Math.max(-1,Math.min(1,(-x*sin+y*cos)/length))};
 }
 export const playing=city=>city.characterGame?.mode==='play';
+export const isPlayedCitizen=(city,c)=>playing(city)&&city.characterGame.citizenId===c?.id;
 export const controlledCitizen=city=>{const id=city.characterGame?.citizenId;return id==null?undefined:city.society.citizen(id)||city.accounts.get(`citizen:${id}`);};
 export function relatives(city,c=controlledCitizen(city)){
   if(!c)return [];
@@ -40,11 +41,12 @@ function release(city,c){
 }
 function restore(city){
   const s=city.characterGame,c=controlledCitizen(city);
-  if(c){if(!c.deliveryId&&!c.cleaningJobId)release(city,c);c.playerControlled=false;c.playerManaged=s.previous.managed;c.playerPoliticalAmbition=s.previous.politics;}
+  if(c){if((!s.autonomous||s.intent)&&!c.deliveryId&&!c.cleaningJobId)release(city,c);c.playerControlled=false;c.playerManaged=s.previous.managed;c.playerPoliticalAmbition=s.previous.politics;}
 }
 function possess(city,c){
   const s=city.characterGame;s.previous={managed:c.playerManaged,politics:c.playerPoliticalAmbition};
-  release(city,c);c.playerControlled=true;c.playerManaged=true;c.playerPoliticalAmbition=false;if(c.indoorLocation&&!c.indoorLocation.exiting){c.task='player-explore';c.targetId=c.indoorLocation.buildingId;}
+  s.autonomous??=false;s.manualPending=false;
+  if(!s.autonomous)release(city,c);c.playerControlled=!s.autonomous;c.playerManaged=true;c.playerPoliticalAmbition=false;if(!s.autonomous&&c.indoorLocation&&!c.indoorLocation.exiting){c.task='player-explore';c.targetId=c.indoorLocation.buildingId;}
   s.familyIds=relatives(city,c).map(person=>person.id);
   s.citizenId=c.id;s.mode='play';s.status='alive';s.intent=null;s.input={x:0,y:0};s.message='Você decide. O tempo e as necessidades continuam passando.';
 }
@@ -59,7 +61,32 @@ function route(city,c,point,kind,targetId=null,extra={}){
   city.characterGame.intent={kind,targetId,point:{x:point.x,y:point.y},startedAt:city.minute,...extra};
   c.action='Indo ao destino escolhido';return true;
 }
+function syncControl(city,c){
+  const s=city.characterGame;c.playerControlled=!s.autonomous||!!s.intent;
+  if(s.autonomous&&!s.intent&&c.task?.startsWith('player-')){c.task=null;c.targetId=null;c._nextTaskAt=0;}
+}
+function reservedActivity(city,c){return !canControl(city,c)||c.serviceQueue||c.mechanicJob||c.paintWorkId||c.fishingJob||c.sharedBoatRide;}
+function setAutonomy(city,c,enabled){
+  const s=city.characterGame;
+  if(!enabled&&reservedActivity(city,c)){
+    s.manualPending=true;message(city,'Controle manual solicitado. Aguardando concluir o transporte ou serviço em andamento.');return true;
+  }
+  if(enabled){
+    if(!s.autonomous&&!reservedActivity(city,c)&&!c.sleep?.active)release(city,c);
+    s.autonomous=true;s.manualPending=false;s.intent=null;s.input={x:0,y:0};c.playerControlled=false;c._nextTaskAt=0;
+    message(city,'Rotina automática ligada. Você pode dar ordens pontuais; a rotina continua quando terminarem.');
+  }else{
+    stop(city,c);s.autonomous=false;s.manualPending=false;c.playerControlled=true;
+    message(city,'Controle total ligado. Use WASD para andar e escolha como cuidar das necessidades.');
+  }
+  return true;
+}
 export function gameAction(city,action,options={}){
+  const result=performGameAction(city,action,options),s=city.characterGame,c=controlledCitizen(city);
+  if(playing(city)&&live(c)&&s.autonomous)syncControl(city,c);
+  return result;
+}
+function performGameAction(city,action,options={}){
   city.lastError='';if(!options||typeof options!=='object')return city.fail('Ação inválida.');
   if(action==='start'){
     const c=city.society.citizen(options.citizenId);
@@ -81,6 +108,15 @@ export function gameAction(city,action,options={}){
   }
   const c=controlledCitizen(city);
   if(!playing(city)||!live(c))return city.fail('Não há personagem vivo sob seu controle.');
+  if(action==='autonomy'){
+    if(typeof options.enabled!=='boolean')return city.fail('Escolha ligar ou desligar a rotina automática.');
+    return setAutonomy(city,c,options.enabled);
+  }
+  if(s.autonomous&&action==='input'){
+    if(options.x!==0||options.y!==0)return city.fail('Desligue a rotina automática para usar WASD.');
+    s.input={x:0,y:0};return true;
+  }
+  if(s.autonomous&&reservedActivity(city,c))return city.fail('Aguarde o transporte ou serviço em andamento antes de dar outra ordem.');
   if(c.custody||(c.unconsciousUntil||0)>city.minute||(c.surrenderedUntil||0)>city.minute||c.combatFlee?.status==='running')return city.fail('Prisão, ferimentos ou rendição impedem esta ação.');
   if(c.deliveryId||c.cleaningJobId)return city.fail('Conclua o serviço reservado ou volte à simulação para devolver a autonomia.');
   const b=city.building(options.buildingId);
@@ -189,13 +225,16 @@ export function gameAction(city,action,options={}){
     default:return city.fail('Ação desconhecida.');
   }
 }
-function finish(city,c,text){stop(city,c);if(text)message(city,text);}
+function finish(city,c,text){stop(city,c);if(city.characterGame.autonomous)syncControl(city,c);if(text)message(city,text);}
 export function characterMinute(city,c){
   if(!playing(city)||city.characterGame.citizenId!==c.id)return false;
   const s=city.characterGame,intent=s.intent;
-  if(!intent){c.action='Aguardando sua decisão';return true;}
+  if(!intent){if(s.autonomous)return false;c.action='Aguardando sua decisão';return true;}
+  if(s.autonomous&&!reservedActivity(city,c)&&['walk','work','gather','rest','talk','enter'].includes(intent.kind)&&city.urgentNeed(c)){
+    finish(city,c,'A ordem foi interrompida para cuidar de uma necessidade urgente.');return false;
+  }
   if(intent.kind==='manual'||c.path.length||c.indoorLocation?.path?.length)return true;
-  if(intent.kind==='rest'){c.needs.energy=Math.min(100,c.needs.energy+.2);c.action='Descansando no lugar';return true;}
+  if(intent.kind==='rest'){c.needs.energy=Math.min(100,c.needs.energy+.2);c.action='Descansando no lugar';if(s.autonomous&&c.needs.energy>=90)finish(city,c,'Descanso concluído. Retomando a rotina automática.');return true;}
   if(intent.kind==='talk'){const other=city.society.citizen(intent.targetId);if(!other||!samePlace(c,other)||distance(c.entity,other.entity)>2){finish(city,c,'A conversa terminou.');return true;}c.needs.social=Math.min(100,c.needs.social+.8);if(++intent.progress>=8)finish(city,c,'Conversa encerrada.');return true;}
   if(intent.kind==='exit'){if(!c.indoorLocation)finish(city,c,'Você saiu do prédio.');return true;}
   if(intent.kind==='enter'){const building=city.building(intent.targetId),room=city.units.get(intent.roomId);if(!building||!room){finish(city,c,'Entrada indisponível.');return true;}if(activityRoomReady(city,c,building,room,room.roomType==='bedroom'?'bedroom':'service')){s.intent=null;c.task='player-explore';c.targetId=building.id;c.action='Explorando o interior';}return true;}
@@ -267,7 +306,7 @@ export function characterMovement(city,dt=1/60){
   if(!playing(city))return;
   const c=controlledCitizen(city),s=city.characterGame;
   if(!live(c)||c.custody||(c.unconsciousUntil||0)>city.minute||(c.surrenderedUntil||0)>city.minute||c.combatFlee?.status==='running')return;
-  if(s.intent?.kind!=='manual')return;
+  if(s.autonomous||s.intent?.kind!=='manual')return;
   const {x,y}=s.input,len=Math.hypot(x,y);if(!len)return;
   const dx=x/len,dy=y/len;
   if(c.indoorLocation&&!c.indoorLocation.exiting){
@@ -301,6 +340,10 @@ export function characterMovement(city,dt=1/60){
 export function updateCharacterGame(city){
   const s=city.characterGame;if(!s||!playing(city))return;
   const c=controlledCitizen(city);
-  if(live(c))s.familyIds=relatives(city,c).map(person=>person.id);
+  if(live(c)){
+    s.familyIds=relatives(city,c).map(person=>person.id);
+    if(s.manualPending&&!reservedActivity(city,c))setAutonomy(city,c,false);
+    syncControl(city,c);
+  }
   if(!live(c)&&s.status!=='dead'){s.status='dead';s.intent=null;s.input={x:0,y:0};message(city,'Seu personagem morreu. Escolha um familiar vivo ou retorne à simulação.');}
 }

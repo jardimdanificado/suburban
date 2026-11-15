@@ -16,8 +16,17 @@ test('worker accepts possession, movement input and exports a resumable characte
   if(m.type==='failure')throw Error(m.message);
   if(m.type==='ready')worker.postMessage({type:'init',cityId:'character',packet});
   if(m.type==='state'){worker.postMessage({type:'ack',cityId:'character'});if(!initialized){initialized=true;worker.postMessage({type:'control',cityId:'character',paused:true,speed:1,observed:true});worker.postMessage({type:'command',cityId:'character',id:1,path:'gameAction',args:['start',{citizenId:person.id}]});}}
-  if(m.type==='result'){assert(m.ok,m.message);if(m.id===1)worker.postMessage({type:'command',cityId:'character',id:2,path:'gameAction',args:['input',{x:1,y:0}]});else if(m.id===2)worker.postMessage({type:'export-state',cityId:'character',id:3});}
-  if(m.type==='export-state')resolve(m.packet);
+  if(m.type==='result'){
+   if(m.id===3){assert(!m.ok,'Worker must reject WASD while automatic');worker.postMessage({type:'export-state',cityId:'character',id:4});}
+   else {assert(m.ok,m.message);if(m.id===1)worker.postMessage({type:'command',cityId:'character',id:2,path:'gameAction',args:['autonomy',{enabled:true}]});
+   else if(m.id===2)worker.postMessage({type:'command',cityId:'character',id:3,path:'gameAction',args:['input',{x:1,y:0}]});
+   else if(m.id===5)worker.postMessage({type:'command',cityId:'character',id:6,path:'gameAction',args:['input',{x:1,y:0}]});
+   else if(m.id===6)worker.postMessage({type:'export-state',cityId:'character',id:7});}
+  }
+  if(m.type==='export-state'){
+   if(m.id===4){const automatic=new CityStateGraph().apply(m.packet).city;bindCityState(automatic);assert(automatic.characterGame.autonomous);assert(!controlledCitizen(automatic).playerControlled);worker.postMessage({type:'command',cityId:'character',id:5,path:'gameAction',args:['autonomy',{enabled:false}]});}
+   else resolve(m.packet);
+  }
  }catch(e){reject(e);}});});
  assert(compactControl,'Movement must use compact control messages');
  const restored=new CityStateGraph().apply(saved).city;bindCityState(restored);assert.equal(restored.characterGame.mode,'play');assert.equal(restored.characterGame.input.x,1);assert(controlledCitizen(restored).playerControlled);const x=controlledCitizen(restored).entity.x;restored.update(.1);assert(controlledCitizen(restored).entity.x>x);assert(restored.gameAction('simulation'));assert(!controlledCitizen(restored).playerControlled);

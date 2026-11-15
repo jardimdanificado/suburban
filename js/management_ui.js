@@ -38,6 +38,15 @@ export class ManagementCanvasUI extends LegacyCanvasUI {
     const title=readableLabel(label);ctx.save();ctx.beginPath();ctx.rect(x+3,y+2,w-6,h-4);ctx.clip();ctx.font=this.font(1,selected);ctx.textBaseline='middle';ctx.textAlign='center';ctx.fillStyle=danger?T.red:T.ink;ctx.fillText(title,x+w/2+(selected?1:0),y+h/2+(selected?1:0));ctx.restore();
     this.regions.push({x,y,w,h,label,onClick});
   }
+  switch(x,y,w,h,label,checked,onChange){
+    bevel(this.ctx,x,y,w,h,{fill:T.face});
+    const trackX=x+5,trackY=y+Math.floor((h-16)/2),trackWidth=32;
+    bevel(this.ctx,trackX,trackY,trackWidth,16,{inset:true,fill:checked?T.green:T.track});
+    bevel(this.ctx,trackX+(checked?17:2),trackY+2,13,12,{fill:checked?T.light:T.face});
+    const text=`${label}: ${checked?'ligada':'desligada'}`;
+    this.text(this.fitText(text,w-48),x+44,y+Math.floor((h-14)/2),T.ink);
+    this.regions.push({x,y,w,h,label,role:'switch',checked:!!checked,onClick:()=>onChange(!checked)});
+  }
   tab(x,y,w,h,label,onClick,{selected=false}={}){
     const ctx=this.ctx,hover=this.pointer&&this.pointer.x>=x&&this.pointer.x<x+w&&this.pointer.y>=y&&this.pointer.y<y+h;
     // Selected tabs sit in front of the strip, instead of looking pressed in.

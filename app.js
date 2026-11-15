@@ -3,10 +3,10 @@ import {CharacterGameUI} from './js/character_game_ui.js';
 import {playing,controlledCitizen,movementVector} from './js/character_game.js';
 import { FreeCameraTouchControls } from './js/free_camera_touch_controls.js';
 import {CityFavorites} from './js/city_favorites.js?v=custom-history-limit-1';
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=survival-windows-4';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=character-footer-5';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=survival-windows-4";
-import { CityDesktop } from "./js/city_desktop.js?v=survival-windows-4";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=character-footer-5";
+import { CityDesktop } from "./js/city_desktop.js?v=character-footer-5";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=graphics-perf-1";
 import { setActiveEntities } from "./js/engine.js";
@@ -218,7 +218,6 @@ export function update(dt, _api) { city.update(dt); }
 export function renderUI(ui, _api) {
   if(gameUI.active){cityUI.element.hidden=true;cityUI.tooltipElement.hidden=true;gameUI.draw(ui);return;}
   cityUI.draw(ui);
-  gameUI.drawEntry(ui);
   favorites.refresh();
   if(!mainMenu.isActive()&&!favorites.historyWindowCreated){
     const state=cityUI.openModule('custom-history'),window=cityUI.manager.find(state.windowId);
@@ -586,6 +585,7 @@ function frame(now) {
   const frameStarted = profiling ? performance.now() : 0;
   resize();
   gameUI.element.hidden=mainMenu.isActive()||!gameUI.active;
+  if(gameUI.element.hidden)gameUI.desktop.tooltipElement.hidden=true;
   if(playing(city)){
     const c=controlledCitizen(city);
     if(c){
@@ -751,9 +751,10 @@ export const gameUI = new CharacterGameUI({root,getCity:()=>city,
     if(simulationBridge?.active)return simulationBridge.request('gameAction',[action,options]);
     const ok=city.gameAction(action,options);return {ok:!!ok,message:city.lastError};
   },
-  onEnter:()=>{gameCameraCitizenId=null;mainMenu.close();cityUI.hidden=true;editor.open=false;options.open=false;freeCameraKeys.clear();time.setSpeed?.(1);if(time.paused)togglePause();const c=controlledCitizen(city);renderer3D.setThirdPersonMode(false);if(c){renderer3D.setFollowCharacter(c.entity.id);renderer3D.setCamera(c.entity.x,c.entity.y,4);}},
+  onEnter:()=>{gameCameraCitizenId=null;mainMenu.close();cityUI.hidden=true;editor.open=false;options.open=false;freeCameraKeys.clear();if(![0.25,0.5,1].includes(time.speed))time.setSpeed(1);if(time.paused)togglePause();const c=controlledCitizen(city);renderer3D.setThirdPersonMode(false);if(c){renderer3D.setFollowCharacter(c.entity.id);renderer3D.setCamera(c.entity.x,c.entity.y,4);}},
   onSimulation:()=>{gameCameraCitizenId=null;renderer3D.cityInteriorView=null;renderer3D.setThirdPersonMode(false);renderer3D.setFollowCharacter(null);cityUI.hidden=false;},
   onMenu:()=>mainMenu.close(),onPause:togglePause,isPaused:()=>time.paused,
+  getSpeed:()=>time.speed,onSpeed:speed=>{if([0.25,0.5,1].includes(speed))time.setSpeed(speed);},
   getDirection:(x,y)=>movementVector(x,y,renderer3D.isThirdPersonActive()?renderer3D.fpYaw+Math.PI:renderer3D.fixedRotationY),
   onCamera:()=>{const c=controlledCitizen(city);if(c)renderer3D.setThirdPersonMode(!renderer3D.isThirdPersonActive(),c.entity.id);}
 });

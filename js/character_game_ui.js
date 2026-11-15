@@ -13,8 +13,8 @@ const movingCodes=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft'
 
 /** Gameplay uses the same canvas widgets, native fields and desktop windows as management. */
 export class CharacterGameUI {
-  constructor({root,getCity,command,onEnter,onSimulation,onMenu,onCamera,onPause,isPaused,getDirection}){
-    Object.assign(this,{getCity,command,onEnter,onSimulation,onMenu,onCamera,onPause,isPaused,getDirection});
+  constructor({root,getCity,command,onEnter,onSimulation,onMenu,onCamera,onPause,isPaused,getDirection,getSpeed=()=>1,onSpeed=()=>{}}){
+    Object.assign(this,{getCity,command,onEnter,onSimulation,onMenu,onCamera,onPause,isPaused,getDirection,getSpeed,onSpeed});
     this.keys=new Set();this.choosing=false;this.message='';this.targetKey=null;this.contextOpen=false;this.layoutReady=false;this.savedPanels=null;
     this.desktop=new CityDesktop({city:getCity(),root,select:()=>{},initialModule:null,notifications:false});
     this.element=this.desktop.element;
@@ -47,7 +47,7 @@ export class CharacterGameUI {
   }
   openPanel(panel){
     const searchable=['targets','interactions'].includes(panel);
-    const state=this.desktop.openPage(`survival-${panel}`,{title:titles[panel],width:panel==='inventory'?430:['profile','activity','body'].includes(panel)?280:340,height:({profile:225,activity:270,body:310,targets:260,interactions:310})[panel]||400,search:searchable?'Filtrar por nome ou tipo…':false,draw:(p,state)=>this.content(panel,p,state),onClose:()=>{if(panel==='interaction')this.contextOpen=false;}});
+    const state=this.desktop.openPage(`survival-${panel}`,{title:titles[panel],width:panel==='inventory'?430:['profile','activity','body'].includes(panel)?280:340,height:({profile:225,activity:230,body:310,targets:260,interactions:310})[panel]||400,search:searchable?'Filtrar por nome ou tipo…':false,draw:(p,state)=>this.content(panel,p,state),onClose:()=>{if(panel==='interaction')this.contextOpen=false;}});
     if(searchable)state.search.setAttribute('aria-label',`${titles[panel]}: filtrar`);return state;
   }
   input(){
@@ -85,6 +85,7 @@ export class CharacterGameUI {
     if((event.ctrlKey||event.metaKey)&&['KeyR','KeyL'].includes(event.code))return false;
     if(['ControlLeft','ControlRight'].includes(event.code)){this.combat=down;return true;}
     if(movingCodes.includes(event.code)||['ShiftLeft','ShiftRight'].includes(event.code)){
+      if(this.getCity().characterGame.autonomous){this.keys.clear();if(down&&movingCodes.includes(event.code)){this.message='Desligue a rotina automática na barra inferior para usar WASD.';this.messageUntil=performance.now()+3000;}return true;}
       if(down&&!this.keys.has(event.code)){this.keys.add(event.code);this.contextOpen=false;this.input();}else if(!down&&this.keys.delete(event.code))this.input();return true;
     }
     if(!down||event.repeat||event.metaKey||event.altKey)return false;
@@ -97,11 +98,6 @@ export class CharacterGameUI {
     if(actions[event.code]){actions[event.code]();return true;}return false;
   }
   blur(){this.combat=false;if(this.keys.size){this.keys.clear();this.input();}}
-  drawEntry(ui){
-    this.element.hidden=true;this.desktop.tooltipElement.hidden=true;
-    const s=this.getCity().characterGame,w=Math.min(340,ui.width-16),x=(ui.width-w)/2;
-    ui.button(x,ui.height-58,w,26,s?'Continuar personagem':'Jogar neste mundo',()=>s?this.act('resume'):this.choose());
-  }
   pointerDown(x,y,button,ui){
     if(button===2&&this.desktop.rightClick(x,y))return true;
     return this.desktop.pointerDown(x,y)||!!this.desktop.manager.at(x,y)||!!ui.hitTest(x,y)||this.choosing;
@@ -114,6 +110,7 @@ export class CharacterGameUI {
     this.desktop.city=city;this.element.hidden=!this.active;
     if(!this.active){this.desktop.tooltipElement.hidden=true;return;}
     const manager=this.desktop.manager;manager.bottom=4;
+    if(isPlaying&&!this.choosing)this.bottomBar(ui,city,c);
     if(isPlaying&&!this.choosing)this.launcher(ui);else manager.top=12;
     manager.viewport(ui.width,ui.height);
     if(this.marker?.visible&&isPlaying){const {x,y}=this.marker;ui.text('Você',x-12,y-16,T.light);}
@@ -132,6 +129,19 @@ export class CharacterGameUI {
     }
     manager.viewport(ui.width,ui.height);this.desktop.tooltip=null;this.desktop.draw(ui);
   }
+  bottomBar(ui,city,c){
+    const s=city.characterGame,compact=ui.width<580,height=compact?96:68,top=ui.height-height;
+    this.desktop.manager.bottom=height+4;
+    bevel(ui.ctx,0,top,ui.width,height);ui.regions.push({x:0,y:top,w:ui.width,h:height,onClick:null});
+    const stamp=`Dia ${city.day} · ${String(city.hour).padStart(2,'0')}:${String(city.minute%60).padStart(2,'0')}`;
+    const summary=`Saldo ${formatMoney(c?.balance||0)} · ${stamp} · Saúde ${Math.round(c?.needs?.health||0)} · Água ${Math.round(c?.needs?.water||0)} · Energia ${Math.round(c?.needs?.energy||0)} · ${s.manualPending?'Aguardando controle manual':s.autonomous?'Rotina automática':'Controle total'}`;
+    bevel(ui.ctx,4,top+4,ui.width-8,23,{inset:true,fill:T.paper});ui.text(ui.fitText(summary,ui.width-22),11,top+9,T.ink);
+    for(const [i,speed]of [0.25,0.5,1].entries())ui.button(4+i*61,top+33,58,25,`${speed===1?'1.0':speed}×`,()=>this.onSpeed(speed),{selected:this.getSpeed()===speed});
+    ui.button(190,top+33,74,25,this.isPaused()?'Continuar':'Pausar',()=>this.onPause(),{selected:this.isPaused()});
+    ui.switch(compact?4:272,top+(compact?63:33),Math.min(300,ui.width-(compact?8:280)),25,'Rotina automática',s.autonomous===true,enabled=>{
+      this.keys.clear();this.act('autonomy',{enabled:s.manualPending?true:enabled});
+    });
+  }
   launcher(ui){
     const tools=[['profile','C · Personagem'],['body','H · Corpo'],['activity','V · Atividade'],['targets','T · Alvos'],['interactions','B · Interações'],['inventory','I · Mochila'],['family','U · Família'],['journal','J · Diário'],['menu','Esc · Opções']];
     let x=4,y=3;const buttons=[];
@@ -141,8 +151,8 @@ export class CharacterGameUI {
     this.desktop.manager.top=h+4;
   }
   setupLayout(ui){
-    const manager=this.desktop.manager,top=manager.top+4;
-    const positions={profile:[8,top],activity:[8,top+238],body:[ui.width-288,top],targets:[8,ui.height-270],interactions:[ui.width-348,ui.height-320]};
+    const manager=this.desktop.manager,top=manager.top+4,bottom=ui.height-manager.bottom;
+    const positions={profile:[8,top],activity:[8,top+238],body:[ui.width-288,top],targets:[8,bottom-260],interactions:[ui.width-348,bottom-310]};
     for(const panel of this.savedPanels||['profile','body','activity','targets','interactions']){
       const id=`page:survival-${panel}`,saved=manager.saved.has(id);this.openPanel(panel);const w=manager.find(id);
       if(!saved&&ui.width>=1000&&positions[panel]){[w.x,w.y]=positions[panel];manager.constrain(w);}
@@ -155,7 +165,7 @@ export class CharacterGameUI {
   }
   status(city,c){
     const s=city.characterGame;
-    return !c||c.entity.destroyed||s.status==='dead'?'Você morreu':c.custody?'Detido':c.unconsciousUntil>city.minute?'Inconsciente':c.sleep?.active?'Dormindo':s.intent?.kind==='gather'?'Coletando':s.intent?.kind==='rest'?'Descansando':this.combat?'Em guarda':s.input?.run&&s.intent?.kind==='manual'?'Correndo':s.intent?.kind==='manual'?'Caminhando':s.intent?'Em atividade':'Explorando';
+    return !c||c.entity.destroyed||s.status==='dead'?'Você morreu':c.custody?'Detido':c.unconsciousUntil>city.minute?'Inconsciente':c.sleep?.active?'Dormindo':s.intent?.kind==='gather'?'Coletando':s.intent?.kind==='rest'?'Descansando':s.autonomous&&!s.intent?c.action||'Rotina automática':this.combat?'Em guarda':s.input?.run&&s.intent?.kind==='manual'?'Correndo':s.intent?.kind==='manual'?'Caminhando':s.intent?'Em atividade':'Explorando';
   }
   nearbyList(p,actions=false,query=''){
     const city=this.getCity(),reachable=this.targets(),filter=query.trim().toLocaleLowerCase('pt-BR'),targets=(actions?reachable:this.visibleTargets()).filter(t=>`${t.label} ${targetKindLabel(t)}`.toLocaleLowerCase('pt-BR').includes(filter)),reachableKeys=new Set(reachable.map(t=>`${t.kind}:${t.id}`));
@@ -186,7 +196,7 @@ export class CharacterGameUI {
     const city=this.getCity(),s=city.characterGame,c=controlledCitizen(city),target=this.target();
     if(panel==='profile'){
       p.heading(name(c));p.kv('Data',`Dia ${city.day} · ${String(city.hour).padStart(2,'0')}:${String(city.minute%60).padStart(2,'0')}`);
-      p.kv('Saldo',formatMoney(c?.balance||0));p.kv('Estado',this.status(city,c));p.kv('Tempo',this.isPaused()?'Pausado':'Em andamento');return;
+      p.kv('Saldo',formatMoney(c?.balance||0));p.kv('Estado',this.status(city,c));p.kv('Tempo',this.isPaused()?'Pausado':'Em andamento');p.kv('Controle',s.manualPending?'Aguardando concluir atividade':s.autonomous?'Rotina automática':'Total · WASD');return;
     }
     if(panel==='targets')return this.nearbyList(p,false,state.query);
     if(panel==='interactions')return this.nearbyList(p,true,state.query);

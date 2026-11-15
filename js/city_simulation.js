@@ -1,4 +1,4 @@
-import {gameAction,characterMinute,characterMovement,updateCharacterGame} from './character_game.js';
+import {gameAction,characterMinute,characterMovement,updateCharacterGame,isPlayedCitizen} from './character_game.js';
 import {familyAction, updateFamilyCampaign} from './city_family_campaign.js';
 import {canFarmVertically,isVerticalFarm,farmSiteType} from './city_farm_layout.js';
 import {releaseSharedPassenger} from './city_boat_crossings.js?v=shared-crossings-1';
@@ -270,7 +270,7 @@ export class CitySimulation {
     return true;
   }
   worldBoatCrewEligible(person,transferId=null){
-    return !!person&&!person.playerControlled&&!person.dead&&!person.entity.destroyed&&this.society.isAdult(person)&&!person.worldMigrationPending&&(!person.worldBoatCrew||person.worldBoatCrew===transferId)&&!person.deliveryId&&!person.ridingVehicleId&&!person.custody&&!person.indoorLocation&&!person.mechanicJob&&!person.cleaningJobId&&!person.informalJobId&&!person.serviceQueue&&!person.workMeal&&!person.conversation&&!['food','water','energy','health','toilet','hygiene'].some(key=>(person.needs?.[key]??100)<20);
+    return !!person&&!person.playerControlled&&!isPlayedCitizen(this,person)&&!person.dead&&!person.entity.destroyed&&this.society.isAdult(person)&&!person.worldMigrationPending&&(!person.worldBoatCrew||person.worldBoatCrew===transferId)&&!person.deliveryId&&!person.ridingVehicleId&&!person.custody&&!person.indoorLocation&&!person.mechanicJob&&!person.cleaningJobId&&!person.informalJobId&&!person.serviceQueue&&!person.workMeal&&!person.conversation&&!['food','water','energy','health','toilet','hygiene'].some(key=>(person.needs?.[key]??100)<20);
   }
   boardWorldBoatCrew(mission,boatId){
     const person=this.society.citizen(mission.citizenId),boat=boatId==null?null:this.vehicles.units.get(boatId);
@@ -521,7 +521,7 @@ export class CitySimulation {
     }}
     const ids=new Set(members.keys());
     for(const person of members.values()){
-      if(person.playerControlled||person.partnerId!=null&&!ids.has(person.partnerId)||person.dead||person.worldBoatCrew||person.worldMigrationPending||person.businessIds?.length||person.deliveryId||person.mobilityTrip||person.ridingVehicleId||person.custody||person.indoorLocation||person.expectingId!=null||[...this.units.values()].some(unit=>unit.ownerId===person.accountId)||[...this.vehicles.units.values()].some(vehicle=>vehicle.ownerAccountId===person.accountId&&!['bicicleta','bicicleta_carga','patinete','patins','skate'].includes(vehicle.good)))return null;
+      if(person.playerControlled||isPlayedCitizen(this,person)||person.partnerId!=null&&!ids.has(person.partnerId)||person.dead||person.worldBoatCrew||person.worldMigrationPending||person.businessIds?.length||person.deliveryId||person.mobilityTrip||person.ridingVehicleId||person.custody||person.indoorLocation||person.expectingId!=null||[...this.units.values()].some(unit=>unit.ownerId===person.accountId)||[...this.vehicles.units.values()].some(vehicle=>vehicle.ownerAccountId===person.accountId&&!['bicicleta','bicicleta_carga','patinete','patins','skate'].includes(vehicle.good)))return null;
       if(!this.society.isAdult(person)&&(!person.guardianId||!ids.has(person.guardianId)))return null;
     }
     return [...members.keys()];
@@ -541,7 +541,7 @@ export class CitySimulation {
   reserveWorldCitizenMigration(transferId,citizenId,{householdIds=[]}={}){
     if(typeof transferId!=='string'||!transferId)return false;
     this.worldPort.migrations??={};const previous=this.worldPort.migrations[transferId];if(previous)return previous.status==='reserved'&&previous.package.citizenId===citizenId?structuredClone(previous.package):false;
-    const citizen=this.society.citizen(citizenId),included=new Set(householdIds);if(!citizen||citizen.playerControlled||citizen.entity.destroyed||citizen.dead||citizen.worldBoatCrew||citizen.worldMigrationPending||(!householdIds.length&&!this.society.isAdult(citizen))||(!householdIds.length&&(citizen.partnerId!=null||citizen.childIds?.length))||(citizen.partnerId!=null&&!included.has(citizen.partnerId))||(citizen.childIds||[]).some(id=>{const child=this.society.citizen(id);return child?.guardianId===citizen.id&&!included.has(id);})||citizen.businessIds?.length||citizen.deliveryId||citizen.mobilityTrip||citizen.ridingVehicleId||citizen.custody||citizen.indoorLocation||citizen.expectingId!=null||[...this.units.values()].some(unit=>unit.ownerId===citizen.accountId)||[...this.vehicles.units.values()].some(vehicle=>vehicle.ownerAccountId===citizen.accountId&&!['bicicleta','bicicleta_carga','patinete','patins','skate'].includes(vehicle.good)))return false;
+    const citizen=this.society.citizen(citizenId),included=new Set(householdIds);if(!citizen||citizen.playerControlled||isPlayedCitizen(this,citizen)||citizen.entity.destroyed||citizen.dead||citizen.worldBoatCrew||citizen.worldMigrationPending||(!householdIds.length&&!this.society.isAdult(citizen))||(!householdIds.length&&(citizen.partnerId!=null||citizen.childIds?.length))||(citizen.partnerId!=null&&!included.has(citizen.partnerId))||(citizen.childIds||[]).some(id=>{const child=this.society.citizen(id);return child?.guardianId===citizen.id&&!included.has(id);})||citizen.businessIds?.length||citizen.deliveryId||citizen.mobilityTrip||citizen.ridingVehicleId||citizen.custody||citizen.indoorLocation||citizen.expectingId!=null||[...this.units.values()].some(unit=>unit.ownerId===citizen.accountId)||[...this.vehicles.units.values()].some(vehicle=>vehicle.ownerAccountId===citizen.accountId&&!['bicicleta','bicicleta_carga','patinete','patins','skate'].includes(vehicle.good)))return false;
     const packageData=this.worldCitizenMigrationPackage(transferId,citizenId,householdIds);if(!packageData||!this.vehicles.reserveWorldMigrationAssets(transferId,citizen.accountId))return false;const globalId=packageData.globalId;
     citizen.worldMigrationPending=transferId;this.worldPort.migrations[transferId]={transferId,status:'reserved',citizenId,globalId,package:packageData,createdAt:this.minute};return structuredClone(packageData);
   }

@@ -5,19 +5,20 @@ import {CharacterGameUI} from '../js/character_game_ui.js';
 import {CityDesktop} from '../js/city_desktop.js';
 import {ManagementCanvasUI} from '../js/management_ui.js';
 import {canControl} from '../js/character_game.js';
+import {SimulationTime} from '../js/simulation_time.js';
 
 function harness(width=1360,height=850){
  const text=[];
  const ctx=new Proxy({}, {get:(o,k)=>k in o?o[k]:k==='measureText'?s=>({width:String(s).length*6}):k==='fillText'?(s)=>text.push(s):()=>{}});
  globalThis.window={innerWidth:width,innerHeight:height,devicePixelRatio:1};
  globalThis.document={createElement:tag=>({tagName:tag.toUpperCase(),style:{},value:'',hidden:false,handlers:{},setAttribute(){},addEventListener(k,v){this.handlers[k]=v;},append(){},remove(){this.removed=true;},focus(){},getContext:()=>ctx})};
- const city=setup({starter:true,population:24}),calls=[];let paused=false;
- const game=new CharacterGameUI({root:{append(){}},getCity:()=>city,command:async(action,options)=>{calls.push([action,options]);return {ok:city.gameAction(action,options),message:city.lastError};},onEnter:()=>{paused=false;},onSimulation(){},onMenu(){},onCamera(){},onPause:()=>{paused=!paused;},isPaused:()=>paused});
+ const city=setup({starter:true,population:24}),calls=[],time=new SimulationTime();
+ const game=new CharacterGameUI({root:{append(){}},getCity:()=>city,command:async(action,options)=>{calls.push([action,options]);return {ok:city.gameAction(action,options),message:city.lastError};},onEnter:()=>{time.setPaused(false);},onSimulation(){},onMenu(){},onCamera(){},onPause:()=>time.setPaused(!time.paused),isPaused:()=>time.paused,getSpeed:()=>time.speed,onSpeed:speed=>time.setSpeed(speed)});
  const ui=new ManagementCanvasUI({style:{},clientWidth:width,clientHeight:height,getContext:()=>ctx});
  const draw=()=>{ui.beginFrame();game.draw(ui);};
  const start=async()=>{await game.act('start',{citizenId:city.citizens.find(c=>canControl(city,c)).id});draw();};
  const click=label=>{const r=ui.regions.find(r=>r.label===label);assert(r,`Missing ${label}`);ui.clickAt(r.x+r.w/2,r.y+r.h/2);};
- return {city,game,ui,text,calls,draw,start,click,isPaused:()=>paused};
+ return {city,game,ui,text,calls,time,draw,start,click,isPaused:()=>time.paused};
 }
 
 test('gameplay panels share the management desktop, retain independent windows and geometry',async()=>{
@@ -55,7 +56,7 @@ test('gameplay widgets and window controls stay within narrow and wide viewports
 test('all gameplay information lives in windows that stay closed until reopened',async()=>{
  const h=harness();await h.start();const manager=h.game.desktop.manager;
  for(const id of ['profile','body','activity','targets','interactions'])assert(manager.find(`page:survival-${id}`));
- manager.closeAll(true);h.text.length=0;h.draw();assert.equal(manager.windows.length,0);assert(!h.text.some(t=>t.includes('Saldo')||t.includes('Dia 1')||t==='Saúde'));
+ manager.closeAll(true);h.text.length=0;h.draw();assert.equal(manager.windows.length,0);assert(h.text.some(t=>t.startsWith('Saldo ')));assert(!h.text.includes('Ferimentos'));
  h.game.key({code:'KeyT'});h.game.key({code:'KeyB'});h.draw();assert(manager.find('page:survival-targets'));assert(manager.find('page:survival-interactions'));
  manager.close('page:survival-body');await h.game.act('simulation');await h.game.act('resume');h.draw();assert(!manager.find('page:survival-body'));assert.equal(manager.windows.length,2);
 });
@@ -98,4 +99,14 @@ test('gameplay clears window tooltips when the pointer returns to the world',asy
  const h=harness();await h.start();const w=h.game.desktop.manager.active;
  h.ui.beginFrame(w.x+w.w-10,w.y+10);h.game.draw(h.ui);assert.equal(h.game.desktop.tooltipElement.hidden,false);
  h.draw();assert.equal(h.game.desktop.tooltipElement.hidden,true);
+});
+
+test('bottom bar displays real balances, selects exactly three speeds and toggles real autonomy',async()=>{
+ const h=harness();await h.start();const c=h.city.society.citizen(h.city.characterGame.citizenId);c.balance=12345;h.text.length=0;h.draw();assert(h.text.some(t=>t.includes('Saldo R$')&&t.includes('123,45')));
+ assert.deepEqual(h.ui.regions.filter(r=>/^[\d.]+×$/.test(r.label)).map(r=>r.label),['0.25×','0.5×','1.0×']);
+ for(const [label,speed]of [['0.25×',.25],['0.5×',.5],['1.0×',1]]){h.click(label);assert.equal(h.time.speed,speed);h.draw();}
+ h.click('Rotina automática');await Promise.resolve();h.draw();assert(h.city.characterGame.autonomous);assert(!c.playerControlled);assert(h.ui.regions.find(r=>r.role==='switch').checked);
+ const commands=h.calls.length;h.game.key({code:'KeyD'});h.game.key({code:'KeyD'},false);assert.equal(h.calls.length,commands,'WASD must not send manual commands during autonomy');
+ h.click('Rotina automática');await Promise.resolve();h.draw();assert(!h.city.characterGame.autonomous);assert(c.playerControlled);assert(!h.ui.regions.find(r=>r.role==='switch').checked);
+ assert.equal(typeof h.game.drawEntry,'undefined');
 });

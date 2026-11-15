@@ -4,7 +4,7 @@ A simulação gera o mundo e mantém cidadãos, empresas, estoques, famílias e 
 
 ## Entrar e controlar
 
-Escolha **Jogar como personagem** no menu principal, ou **Jogar neste mundo** durante a simulação. A seleção pausa o mundo para manter os personagens disponíveis durante a escolha. Escolha um adulto disponível. Pessoas em cargos públicos, transporte ou serviços reservados precisam terminar suas atividades antes de serem escolhidas.
+Escolha **Jogar como personagem** no menu principal, ou em **Ferramentas → Jogar como personagem** durante a simulação. A seleção pausa o mundo para manter os personagens disponíveis durante a escolha. Escolha um adulto disponível. Pessoas em cargos públicos, transporte ou serviços reservados precisam terminar suas atividades antes de serem escolhidas.
 
 - **WASD ou setas:** caminhar na direção da tela, respeitando terreno, paredes e obstáculos.
 - **Shift:** correr, gastando energia.
@@ -22,7 +22,15 @@ Escolha **Jogar como personagem** no menu principal, ou **Jogar neste mundo** du
 - **I / U / J:** mochila, família e diário.
 - **Esc:** fechar a janela ativa; sem janelas abertas, mostrar as opções e a troca de câmera.
 
-A interface de gestão sai de cena enquanto você joga. As informações ficam em janelas: personagem, condição física, atividade, alvos próximos e interações próximas. Essas cinco janelas abrem ao entrar; a mochila começa fechada. Eles usam o mesmo sistema de janelas da administração: é possível arrastar, redimensionar, fixar, recolher e manter vários painéis abertos. **Tab** alterna a janela ativa; **Esc** fecha a janela ativa ou abre as opções quando nenhuma está aberta. Fome, sede, energia, saúde, higiene e banheiro aparecem na janela de condição física. Fechar uma janela mantém essa escolha até você reabri-la pelo atalho ou pela barra de janelas. Ao voltar da simulação, as janelas do personagem que estavam abertas e suas posições são restauradas. O personagem não escolhe sozinho quando comer, beber, procurar emprego ou dormir. Os outros cidadãos continuam autônomos.
+A interface de gestão sai de cena enquanto você joga. As informações ficam em janelas: personagem, condição física, atividade, alvos próximos e interações próximas. Essas cinco janelas abrem ao entrar; a mochila começa fechada. Eles usam o mesmo sistema de janelas da administração: é possível arrastar, redimensionar, fixar, recolher e manter vários painéis abertos. **Tab** alterna a janela ativa; **Esc** fecha a janela ativa ou abre as opções quando nenhuma está aberta. Fome, sede, energia, saúde, higiene e banheiro aparecem na janela de condição física. Fechar uma janela mantém essa escolha até você reabri-la pelo atalho ou pela barra de janelas. Ao voltar da simulação, as janelas do personagem que estavam abertas e suas posições são restauradas. Com a rotina automática desligada, o personagem não escolhe sozinho quando comer, beber, procurar emprego ou dormir. Os outros cidadãos continuam autônomos.
+
+## Barra inferior e autonomia
+
+A barra inferior mostra saldo pessoal, dia, horário, saúde, água e energia. Os controles de tempo permitem escolher **0.25×**, **0.5×** e **1.0×**, além de pausar ou continuar.
+
+O switch **Rotina automática** começa desligado, mantendo o controle total existente. Ao ligá-lo, a pessoa volta à rotina da simulação: cuida das necessidades, usa as provisões que carrega e executa suas atividades. Você continua acompanhando a mesma pessoa e pode dar ordens pontuais pelas janelas ou pelo clique no chão. Depois de concluí-las, a rotina continua. Necessidades urgentes podem interromper ordens não essenciais.
+
+Enquanto a rotina automática estiver ligada, WASD fica bloqueado. Desligar o switch cancela a atividade comum e devolve o controle total. Se houver transporte ou atendimento reservado em andamento, a solicitação aguarda sua conclusão para preservar a atividade; clicar no switch novamente cancela essa espera.
 
 ## Alvos, interações e fichas
 
@@ -46,4 +54,4 @@ Agredir uma pessoa exige proximidade. O combate usa ferimentos, reação, testem
 
 A aba **Família** permite assumir um familiar adulto disponível. A pessoa anterior volta à IA. Cada familiar mantém patrimônio, necessidades e relações. Se o personagem morrer, escolha um familiar sobrevivente ou retorne à simulação.
 
-**Simulação** devolve a autonomia ao personagem e restaura a interface de gestão. **Continuar personagem** permite retomar uma pessoa disponível. O estado de controle acompanha os snapshots existentes da cidade.
+**Simulação** devolve a autonomia ao personagem e restaura a interface de gestão. O estado de controle acompanha os snapshots existentes da cidade.
