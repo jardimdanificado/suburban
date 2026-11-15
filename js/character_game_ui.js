@@ -2,69 +2,73 @@ import {playing,controlledCitizen,canControl,relatives} from './character_game.j
 import {nearbyTargets,interactionOptions} from './character_interactions.js';
 import {formatMoney} from './city_ui_format.js';
 import {inventoryUsed} from './city_inventory.js';
+import {CityDesktop} from './city_desktop.js';
+import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
+import {drawTargetDossier,targetKindLabel} from './character_game_inspectors.js';
 
-const escape=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const name=c=>c?.entity?.properties?.name||'Sem nome';
-const meters=[['health','Saúde','+'],['food','Alimentação','F'],['water','Água','A'],['energy','Energia','E'],['hygiene','Higiene','H'],['toilet','Banheiro','B']];
+const meters=[['health','Saúde'],['food','Alimentação'],['water','Água'],['energy','Energia'],['hygiene','Higiene'],['toilet','Banheiro']];
+const titles={profile:'Personagem',activity:'Atividade e ações',targets:'Alvos próximos',interactions:'Interações próximas',inventory:'Mochila',body:'Condição física',family:'Família',journal:'Diário',menu:'Pausa e opções',death:'Fim desta vida',interaction:'Interagir'};
 const movingCodes=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
+
+/** Gameplay uses the same canvas widgets, native fields and desktop windows as management. */
 export class CharacterGameUI {
   constructor({root,getCity,command,onEnter,onSimulation,onMenu,onCamera,onPause,isPaused,getDirection}){
     Object.assign(this,{getCity,command,onEnter,onSimulation,onMenu,onCamera,onPause,isPaused,getDirection});
-    this.panel=null;this.keys=new Set();this.choosing=false;this.lastDraw=0;this.message='';this.actionMap=new Map();this.targetKey=null;
-    this.element=document.createElement('section');this.element.className='character-game';this.element.setAttribute('aria-label','Sobrevivência');root.append(this.element);
-    this.marker=document.createElement('div');this.marker.className='character-marker';this.marker.textContent='Você';this.marker.hidden=true;root.append(this.marker);
-    for(const event of ['pointerdown','pointermove','pointerup','wheel','contextmenu','dblclick'])this.element.addEventListener(event,e=>{if(e.target.closest('button,.survival-panel,.character-chooser'))e.stopPropagation();});
-    this.element.addEventListener('click',e=>{const b=e.target.closest('[data-game]');if(b){e.stopPropagation();this.actionMap.get(b.dataset.game)?.();}});
-    this.element.addEventListener('input',e=>{if(e.target.matches('[data-search]')){this.query=e.target.value;this.draw(true);}});
+    this.keys=new Set();this.choosing=false;this.message='';this.targetKey=null;this.contextOpen=false;this.layoutReady=false;this.savedPanels=null;
+    this.desktop=new CityDesktop({city:getCity(),root,select:()=>{},initialModule:null,notifications:false});
+    this.element=this.desktop.element;
   }
-  set html(value){
-    if(this.lastHTML===value)return;this.lastHTML=value;
-    const template=document.createElement('template');template.innerHTML=value;
-    const patch=(current,next)=>{
-      if(current.nodeType!==next.nodeType||current.nodeName!==next.nodeName){current.replaceWith(next.cloneNode(true));return;}
-      if(current.nodeType===Node.TEXT_NODE){if(current.textContent!==next.textContent)current.textContent=next.textContent;return;}
-      for(const attribute of [...current.attributes])if(!next.hasAttribute(attribute.name))current.removeAttribute(attribute.name);
-      for(const attribute of next.attributes)if(current.getAttribute(attribute.name)!==attribute.value)current.setAttribute(attribute.name,attribute.value);
-      patchChildren(current,next);
-    };
-    const patchChildren=(current,next)=>{
-      const children=[...current.childNodes],incoming=[...next.childNodes];
-      for(let i=0;i<Math.max(children.length,incoming.length);i++){
-        if(!incoming[i])children[i].remove();else if(!children[i])current.append(incoming[i].cloneNode(true));else patch(children[i],incoming[i]);
-      }
-    };
-    patchChildren(this.element,template.content);
-  }
-  button(text,click,cls='',title=''){
-    const id=String(this.actionMap.size);this.actionMap.set(id,click);
-    return `<button type="button" class="${cls}" data-game="${id}"${title?` title="${escape(title)}"`:''}>${escape(text)}</button>`;
-  }
-  track(point){this.marker.hidden=!point?.visible||!playing(this.getCity());if(!this.marker.hidden){this.marker.style.left=`${point.x}px`;this.marker.style.top=`${point.y}px`;}}
+  get active(){return this.choosing||playing(this.getCity());}
+  track(point){this.marker=point;}
   async act(action,options={}){
     const result=await this.command(action,options);
     if(result?.ok===false){this.message=result.message||'Ação indisponível.';this.messageUntil=performance.now()+5000;}
-    if(result?.ok!==false&&['start','resume','switch'].includes(action)){this.choosing=false;this.panel=null;this.contextOpen=false;this.keys.clear();this.onEnter();}
-    if(result?.ok!==false&&action==='simulation'){this.keys.clear();this.panel=null;this.onSimulation();}
-    this.draw(true);return result;
+    if(result?.ok!==false&&['start','resume','switch'].includes(action)){
+      if(action!=='switch'||!this.layoutReady){this.entering=true;this.desktop.closeAll(true);this.entering=false;this.layoutReady=false;}
+      this.choosing=false;this.contextOpen=false;this.keys.clear();this.onEnter();
+    }
+    if(result?.ok!==false&&action==='simulation'){this.savedPanels=this.desktop.manager.windows.filter(w=>w.id.startsWith('page:survival-')&&w.id!=='page:survival-interaction').map(w=>w.id.slice('page:survival-'.length));this.desktop.closeAll(true);this.layoutReady=false;this.keys.clear();this.contextOpen=false;this.onSimulation();}
+    return result;
   }
-  choose(){this.chooserPaused=!this.isPaused();if(this.chooserPaused)this.onPause();this.choosing=true;this.query='';this.onMenu(false);this.draw(true);}
-  toggle(panel){this.panel=this.panel===panel?null:panel;this.contextOpen=false;this.draw(true);}
+  choose(){
+    if(this.choosing){this.desktop.manager.raise('page:character');return;}
+    this.chooserPaused=!this.isPaused();if(this.chooserPaused)this.onPause();
+    this.choosing=true;this.onMenu(false);this.desktop.city=this.getCity();
+    const state=this.desktop.openPage('character',{title:'Quem vai sobreviver?',width:560,height:600,search:'Buscar pessoa…',draw:(p,state)=>this.roster(p,state),onClose:()=>{
+      this.choosing=false;if(!this.entering&&this.chooserPaused&&this.isPaused())this.onPause();this.chooserPaused=false;
+    }});
+    state.search.setAttribute('aria-label','Buscar personagem');
+  }
+  toggle(panel){
+    const id=`page:survival-${panel}`;
+    if(this.desktop.manager.find(id)){this.desktop.close(id);return;}
+    this.contextOpen=false;this.openPanel(panel);
+  }
+  openPanel(panel){
+    const searchable=['targets','interactions'].includes(panel);
+    const state=this.desktop.openPage(`survival-${panel}`,{title:titles[panel],width:panel==='inventory'?430:['profile','activity','body'].includes(panel)?280:340,height:({profile:225,activity:270,body:310,targets:260,interactions:310})[panel]||400,search:searchable?'Filtrar por nome ou tipo…':false,draw:(p,state)=>this.content(panel,p,state),onClose:()=>{if(panel==='interaction')this.contextOpen=false;}});
+    if(searchable)state.search.setAttribute('aria-label',`${titles[panel]}: filtrar`);return state;
+  }
   input(){
     const x=Number(this.keys.has('KeyD')||this.keys.has('ArrowRight'))-Number(this.keys.has('KeyA')||this.keys.has('ArrowLeft'));
     const y=Number(this.keys.has('KeyS')||this.keys.has('ArrowDown'))-Number(this.keys.has('KeyW')||this.keys.has('ArrowUp'));
     this.command('input',{...(this.getDirection?.(x,y)||{x,y}),run:this.keys.has('ShiftLeft')||this.keys.has('ShiftRight')});
   }
   targets(){return nearbyTargets(this.getCity());}
-  target(){const targets=this.targets();return targets.find(t=>`${t.kind}:${t.id}`===this.targetKey)||targets.find(t=>t.kind!=='person')||targets[0];}
+  visibleTargets(){return nearbyTargets(this.getCity(),controlledCitizen(this.getCity()),12,{inspectable:true});}
+  selectTarget(target){this.targetKey=`${target.kind}:${target.id}`;}
+  dossier(target){return this.desktop.openPage(`inspect-${target.kind}-${target.id}`,{title:`Ficha · ${target.label}`,width:380,height:440,draw:p=>drawTargetDossier(p,this.getCity(),target)});}
+  target(){const targets=this.targets();return this.targetKey?targets.find(t=>`${t.kind}:${t.id}`===this.targetKey):targets.find(t=>t.kind!=='person')||targets[0];}
   inspect(entityId){
-    const target=this.targets().find(t=>t.entityId===entityId);
-    if(target){this.targetKey=`${target.kind}:${target.id}`;this.contextOpen=true;this.draw(true);return true;}
-    this.message='Aproxime-se para interagir. Use WASD para explorar.';this.messageUntil=performance.now()+3000;this.draw(true);return false;
+    const target=this.visibleTargets().find(t=>t.entityId===entityId);
+    if(target){this.selectTarget(target);this.dossier(target);return true;}
+    this.message='Aproxime-se para interagir. Use WASD para explorar.';this.messageUntil=performance.now()+3000;return false;
   }
   interact(){
-    const target=this.target();if(!target){this.message='Nada ao alcance. Aproxime-se de uma porta, planta ou pessoa.';this.messageUntil=performance.now()+3000;this.draw(true);return;}
+    const target=this.target();if(!target){this.message='Nada ao alcance. Aproxime-se de uma porta, planta ou pessoa.';this.messageUntil=performance.now()+3000;return;}
     const choices=interactionOptions(this.getCity(),target);
-    if(choices.length===1)this.use(target,choices[0]);else{this.contextOpen=!this.contextOpen;this.draw(true);}
+    if(choices.length===1)this.use(target,choices[0]);else{this.contextOpen=!this.contextOpen;}
   }
   use(target,choice){
     if(choice.action==='family'){this.toggle('family');return;}
@@ -72,18 +76,20 @@ export class CharacterGameUI {
   }
   attack(entityId=null){
     const targets=this.targets().filter(t=>t.kind==='person'&&t.distance<=1.6),target=targets.find(t=>t.entityId===entityId)||(!entityId&&targets[0]);
-    if(target)this.act('attack',{citizenId:target.id});else{this.message='Ninguém ao alcance do golpe.';this.messageUntil=performance.now()+2500;this.draw(true);}
+    if(target)this.act('attack',{citizenId:target.id});else{this.message='Ninguém ao alcance do golpe.';this.messageUntil=performance.now()+2500;}
   }
   key(event,down=true){
-    if(!playing(this.getCity())||/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName))return false;
+    if(!this.active||/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName))return false;
+    if(down&&['Tab','PageDown','PageUp','Home','End','Slash'].includes(event.code))return this.desktop.key(event);
+    if(this.choosing){if(down&&event.code==='Escape'){this.desktop.close('page:character');return true;}return false;}
     if((event.ctrlKey||event.metaKey)&&['KeyR','KeyL'].includes(event.code))return false;
-    if(['ControlLeft','ControlRight'].includes(event.code)){this.combat=down;this.draw(true);return true;}
+    if(['ControlLeft','ControlRight'].includes(event.code)){this.combat=down;return true;}
     if(movingCodes.includes(event.code)||['ShiftLeft','ShiftRight'].includes(event.code)){
       if(down&&!this.keys.has(event.code)){this.keys.add(event.code);this.contextOpen=false;this.input();}else if(!down&&this.keys.delete(event.code))this.input();return true;
     }
     if(!down||event.repeat||event.metaKey||event.altKey)return false;
-    const actions={KeyE:()=>this.interact(),KeyI:()=>this.toggle('inventory'),KeyH:()=>this.toggle('body'),KeyU:()=>this.toggle('family'),KeyJ:()=>this.toggle('journal'),KeyP:()=>{this.onPause();this.draw(true);},KeyX:()=>{this.keys.clear();this.act('stop');},KeyR:()=>this.act('rest'),KeyF:()=>this.attack(),Space:()=>this.attack(),Digit1:()=>this.act('eat'),Digit2:()=>this.act('drink'),Escape:()=>{if(this.contextOpen){this.contextOpen=false;this.draw(true);}else this.toggle('menu');},KeyQ:()=>{
-      const targets=this.targets(),index=targets.findIndex(t=>`${t.kind}:${t.id}`===this.targetKey),target=targets[(index+1)%targets.length];if(target)this.targetKey=`${target.kind}:${target.id}`;this.draw(true);
+    const actions={KeyC:()=>this.toggle('profile'),KeyV:()=>this.toggle('activity'),KeyT:()=>this.toggle('targets'),KeyB:()=>this.toggle('interactions'),KeyE:()=>this.interact(),KeyI:()=>this.toggle('inventory'),KeyH:()=>this.toggle('body'),KeyU:()=>this.toggle('family'),KeyJ:()=>this.toggle('journal'),KeyP:()=>{this.onPause();},KeyX:()=>{this.keys.clear();this.act('stop');},KeyR:()=>this.act('rest'),KeyF:()=>this.attack(),Space:()=>this.attack(),Digit1:()=>this.act('eat'),Digit2:()=>this.act('drink'),Escape:()=>{if(this.contextOpen){this.contextOpen=false;}else if(this.desktop.manager.windows.length)this.desktop.close(this.desktop.manager.activeId);else this.toggle('menu');},KeyQ:()=>{
+      const targets=this.targets(),index=targets.findIndex(t=>`${t.kind}:${t.id}`===this.targetKey),target=targets[(index+1)%targets.length];if(target)this.targetKey=`${target.kind}:${target.id}`;
     }};
     if(this.contextOpen&&/^Digit[1-9]$/.test(event.code)){
       const target=this.target(),choice=interactionOptions(this.getCity(),target)[Number(event.code.slice(-1))-1];if(choice)this.use(target,choice);return true;
@@ -91,49 +97,153 @@ export class CharacterGameUI {
     if(actions[event.code]){actions[event.code]();return true;}return false;
   }
   blur(){this.combat=false;if(this.keys.size){this.keys.clear();this.input();}}
-  draw(force=false,now=performance.now()){
-    if(!force&&(this.choosing||now-this.lastDraw<160))return;this.lastDraw=now;
-    const active=document.activeElement,focused=active?.matches?.('[data-search]'),selection=focused?active.selectionStart:null;
+  drawEntry(ui){
+    this.element.hidden=true;this.desktop.tooltipElement.hidden=true;
+    const s=this.getCity().characterGame,w=Math.min(340,ui.width-16),x=(ui.width-w)/2;
+    ui.button(x,ui.height-58,w,26,s?'Continuar personagem':'Jogar neste mundo',()=>s?this.act('resume'):this.choose());
+  }
+  pointerDown(x,y,button,ui){
+    if(button===2&&this.desktop.rightClick(x,y))return true;
+    return this.desktop.pointerDown(x,y)||!!this.desktop.manager.at(x,y)||!!ui.hitTest(x,y)||this.choosing;
+  }
+  pointerUp(x,y,button,ui){
+    const gesture=this.desktop.pointerUp();if(!gesture&&button===0)ui.clickAt(x,y);return true;
+  }
+  draw(ui,now=performance.now()){
     const city=this.getCity(),s=city.characterGame,c=controlledCitizen(city),isPlaying=playing(city);
-    this.actionMap.clear();this.element.classList.toggle('is-playing',isPlaying);this.element.classList.toggle('is-choosing',this.choosing);
-    if(!isPlaying&&!this.choosing){this.html=`<div class="character-entry">${this.button(s?'Continuar personagem':'Jogar neste mundo',()=>s?this.act('resume'):this.choose(),'primary')}${s?this.button('Escolher outra pessoa',()=>this.choose()):''}</div>`;return;}
-    if(this.choosing){
-      const people=city.citizens.filter(person=>canControl(city,person)&&(!this.query||name(person).toLowerCase().includes(this.query.toLowerCase()))).slice(0,36);
-      this.html=`<div class="character-shade"></div><div class="character-chooser"><div class="survival-kicker">SUBURBAN / SOBREVIVÊNCIA</div><h1>Quem vai sobreviver?</h1><p>Uma pessoa. Uma mochila. Uma cidade que não espera por você.</p><input data-search aria-label="Buscar personagem" placeholder="Buscar pessoa…" value="${escape(this.query||'')}"><div class="character-roster">${people.map(person=>`<article><h3>${escape(name(person))}</h3><p>${city.society.age(person)} anos · ${escape(formatMoney(person.balance))}</p><p>${person.homeUnitId?'Tem abrigo':'Sem abrigo'} · ${person.jobId?'Empregado':'Sem emprego'}</p><small>${person.provisions||0} provisões · água ${person.pocket?.water||0}/6 · saúde ${Math.round(person.needs.health)}</small>${this.button('Sobreviver com esta pessoa',()=>this.act('start',{citizenId:person.id}),'primary')}</article>`).join('')}</div><footer>${this.button('Voltar à simulação',()=>{this.choosing=false;if(this.chooserPaused&&this.isPaused())this.onPause();this.chooserPaused=false;this.draw(true);})}<span>WASD: mover · Shift: correr · E: interagir · I: mochila</span></footer>${this.message?`<p role="alert">${escape(this.message)}</p>`:''}</div>`;
-      if(focused){const input=this.element.querySelector('[data-search]');input.focus();input.setSelectionRange(selection,selection);}return;
+    this.desktop.city=city;this.element.hidden=!this.active;
+    if(!this.active){this.desktop.tooltipElement.hidden=true;return;}
+    const manager=this.desktop.manager;manager.bottom=4;
+    if(isPlaying&&!this.choosing)this.launcher(ui);else manager.top=12;
+    manager.viewport(ui.width,ui.height);
+    if(this.marker?.visible&&isPlaying){const {x,y}=this.marker;ui.text('Você',x-12,y-16,T.light);}
+    if(isPlaying){
+      const dead=!c||c.entity.destroyed||s.status==='dead';
+      if(dead&&this.deathCitizenId!==s.citizenId){this.deathCitizenId=s.citizenId;this.openPanel('death');}
+      if(!this.layoutReady&&!this.choosing)this.setupLayout(ui);
+      this.updateNotice(s,now);
+      const target=!dead&&this.target();
+      if(this.contextOpen&&target&&!manager.find('page:survival-interaction'))this.openPanel('interaction');
+      else if((!this.contextOpen||!target)&&manager.find('page:survival-interaction'))this.desktop.close('page:survival-interaction');
     }
-    const dead=!c||c.entity.destroyed||s.status==='dead',target=!dead&&this.target(),choices=target?interactionOptions(city,target):[];
-    const danger=c&&(c.combatInjuries?.some(w=>w.bleedingRate>0&&!w.bleedingStoppedAt)||c.needs.health<25);
-    const bars=meters.map(([key,label,icon])=>{const value=Math.round(c?.needs[key]||0);return `<div class="survival-meter ${value<25?'critical':value<50?'low':''}" title="${label}: ${value}"><b>${icon}</b><progress aria-label="${label}" max="100" value="${value}"></progress><small>${value}</small></div>`;}).join('');
-    const status=dead?'Você morreu':c.custody?'Detido':c.unconsciousUntil>city.minute?'Inconsciente':c.sleep?.active?'Dormindo':s.intent?.kind==='gather'?'Coletando':s.intent?.kind==='rest'?'Descansando':this.combat?'Em guarda':s.input?.run&&s.intent?.kind==='manual'?'Correndo':s.intent?.kind==='manual'?'Caminhando':s.intent?'Em atividade':'Explorando';
-    let panel=this.panel;
-    if(dead)panel='death';
-    const titles={inventory:'Mochila',body:'Condição física',family:'Família',journal:'Diário',menu:'Pausa e opções',death:'Fim desta vida'};
-    let content='';
-    if(panel==='inventory')content=this.inventory(city,c,target);
-    if(panel==='body')content=this.body(city,c);
-    if(panel==='family'||panel==='death')content=`${dead?'<p>A cidade continua. Assuma um familiar sobrevivente ou retorne à simulação.</p>':'<p>Uma pessoa sob controle. Cada familiar mantém seus próprios bens e rotina.</p>'}${this.family(city,c)}${dead?this.button('Voltar à simulação',()=>this.act('simulation')):''}`;
-    if(panel==='journal')content=`<p>${s.meals} refeições · ${s.collected} alimentos colhidos · ${formatMoney(s.earned)} em salários</p>${[...s.journal].reverse().map(e=>`<article class="survival-log"><small>Dia ${Math.floor(e.minute/1440)+1} · ${String(Math.floor(e.minute%1440/60)).padStart(2,'0')}:${String(e.minute%60).padStart(2,'0')}</small><p>${escape(e.text)}</p></article>`).join('')}`;
-    if(panel==='menu')content=`${this.button(this.isPaused?.()?'Continuar o tempo [P]':'Pausar o tempo [P]',()=>{this.onPause();this.draw(true);})}${this.button('Alternar câmera',()=>this.onCamera())}${this.button('Voltar à simulação',()=>this.act('simulation'))}<p>WASD / setas: mover<br>Shift: correr<br>E: interagir · Q: alternar alvo<br>I: mochila · H: corpo · U: família<br>1: comer · 2: beber · R: descansar<br>Ctrl + clique / F / Espaço: atacar<br>X: interromper · P: pausar</p>`;
-    const current=this.message&&now<this.messageUntil?this.message:s.message;
-    if(current!==this.lastNotice){this.lastNotice=current;this.noticeAt=now;}
-    const toast=current&&now-(this.noticeAt||0)<4500;
-    this.html=`<header class="survival-top"><div class="survival-identity"><span class="survival-kicker">DIA ${city.day} / ${String(city.hour).padStart(2,'0')}:${String(city.minute%60).padStart(2,'0')}</span><strong>${escape(name(c))}</strong><small>${escape(formatMoney(c?.balance||0))} · ${status}</small></div><div class="survival-mode">${this.isPaused?.()?'<span>PAUSADO [P]</span>':''}${danger?'<span class="survival-alert">FERIDO · H</span>':''}${this.button('Esc',()=>this.toggle('menu'),'survival-small','Opções')}</div></header><nav class="survival-tools">${[['inventory','I','Mochila'],['body','H','Corpo'],['family','U','Família'],['journal','J','Diário']].map(([key,shortcut,label])=>this.button(`${shortcut}  ${label}`,()=>this.toggle(key),panel===key?'selected':'')).join('')}</nav><aside class="survival-vitals">${bars}</aside>${panel?`<section class="survival-panel ${panel==='inventory'?'inventory-panel':''}"><header><h2>${titles[panel]}</h2>${this.button('×',()=>{this.panel=null;this.draw(true);},'survival-close','Fechar')}</header>${content}</section>`:''}${!dead&&this.contextOpen&&target?`<section class="survival-interaction"><header><strong>${escape(target.label)}</strong><small>${target.distance.toFixed(1)} m · Q alterna alvo</small></header>${choices.map((choice,i)=>this.button(`${i+1}. ${choice.label}`,()=>this.use(target,choice))).join('')}</section>`:''}${!dead&&target&&!panel&&!this.contextOpen?`<div class="survival-prompt">${this.button(`E  ${target.label}`,()=>this.interact())}<small>${target.kind==='plant'?'Coletar alimento':target.kind==='person'?'Conversar':target.kind==='water'?'Encher garrafa · risco de contaminação':'Explorar / interagir'} · ${target.distance.toFixed(1)} m · Q troca alvo</small></div>`:''}${!dead&&s.intent&&!['manual','walk'].includes(s.intent.kind)?`<div class="survival-activity"><span>${escape(c.action||status)}</span>${s.intent.kind==='gather'?`<progress max="6" value="${s.intent.progress||0}"></progress>`:''}${s.intent.kind==='rest'&&!c.indoorLocation?this.button('Dormir no chão',()=>this.act('sleep-here')):''}${this.button('X · Cancelar',()=>{this.keys.clear();this.act('stop');})}</div>`:''}<footer class="survival-bottom"><div class="survival-hotbar">${this.button(`1  Comer · ${(c?.provisions||0)+(c?.pocket?.food?.length||0)}`,()=>this.act('eat'))}${this.button(`2  Água · ${c?.pocket?.water||0}/6`,()=>this.act('drink'))}${this.button('R  Descansar',()=>this.act('rest'))}</div><span>WASD mover · Shift correr · E interagir · Ctrl + clique atacar · P pausar</span></footer>${toast?`<div class="survival-toast ${this.message===current?'error':''}" role="status">${escape(current)}</div>`:''}`;
+    if(this.choosing){
+      ui.ctx.fillStyle='rgba(0,0,0,.4)';ui.ctx.fillRect(0,0,ui.width,ui.height);
+      ui.regions.push({x:0,y:0,w:ui.width,h:ui.height,onClick:null});
+    }
+    manager.viewport(ui.width,ui.height);this.desktop.tooltip=null;this.desktop.draw(ui);
   }
-  inventory(city,c,target){
-    if(!c)return '';
+  launcher(ui){
+    const tools=[['profile','C · Personagem'],['body','H · Corpo'],['activity','V · Atividade'],['targets','T · Alvos'],['interactions','B · Interações'],['inventory','I · Mochila'],['family','U · Família'],['journal','J · Diário'],['menu','Esc · Opções']];
+    let x=4,y=3;const buttons=[];
+    for(const [panel,label]of tools){const w=Math.min(ui.width-8,Math.ceil(ui.textWidth(label))+18);if(x+w>ui.width-4){x=4;y+=26;}buttons.push({x,y,w,panel,label});x+=w+3;}
+    const h=y+27;bevel(ui.ctx,0,0,ui.width,h);ui.regions.push({x:0,y:0,w:ui.width,h,onClick:null});
+    for(const b of buttons)ui.button(b.x,b.y,b.w,23,b.label,()=>this.toggle(b.panel),{selected:!!this.desktop.manager.find(`page:survival-${b.panel}`)});
+    this.desktop.manager.top=h+4;
+  }
+  setupLayout(ui){
+    const manager=this.desktop.manager,top=manager.top+4;
+    const positions={profile:[8,top],activity:[8,top+238],body:[ui.width-288,top],targets:[8,ui.height-270],interactions:[ui.width-348,ui.height-320]};
+    for(const panel of this.savedPanels||['profile','body','activity','targets','interactions']){
+      const id=`page:survival-${panel}`,saved=manager.saved.has(id);this.openPanel(panel);const w=manager.find(id);
+      if(!saved&&ui.width>=1000&&positions[panel]){[w.x,w.y]=positions[panel];manager.constrain(w);}
+    }
+    this.layoutReady=true;
+  }
+  updateNotice(s,now){
+    if(s.message&&s.message!==this.lastSystemNotice){this.lastSystemNotice=s.message;this.lastNotice=s.message;}
+    if(this.message&&now<this.messageUntil&&this.messageUntil!==this.noticedMessageUntil){this.noticedMessageUntil=this.messageUntil;this.lastNotice=this.message;}
+  }
+  status(city,c){
+    const s=city.characterGame;
+    return !c||c.entity.destroyed||s.status==='dead'?'Você morreu':c.custody?'Detido':c.unconsciousUntil>city.minute?'Inconsciente':c.sleep?.active?'Dormindo':s.intent?.kind==='gather'?'Coletando':s.intent?.kind==='rest'?'Descansando':this.combat?'Em guarda':s.input?.run&&s.intent?.kind==='manual'?'Correndo':s.intent?.kind==='manual'?'Caminhando':s.intent?'Em atividade':'Explorando';
+  }
+  nearbyList(p,actions=false,query=''){
+    const city=this.getCity(),reachable=this.targets(),filter=query.trim().toLocaleLowerCase('pt-BR'),targets=(actions?reachable:this.visibleTargets()).filter(t=>`${t.label} ${targetKindLabel(t)}`.toLocaleLowerCase('pt-BR').includes(filter)),reachableKeys=new Set(reachable.map(t=>`${t.kind}:${t.id}`));
+    p.note(actions?'Todas as ações disponíveis ao alcance. A lista acompanha seu movimento.':'Pessoas, construções, plantas e veículos a até 12 metros, no mesmo ambiente.');
+    if(!targets.length){if(filter){p.note('Nenhum alvo corresponde ao filtro.');return;}p.note(actions?'Nenhuma interação ao alcance. Aproxime-se de uma porta, planta ou pessoa.':'Nenhum alvo próximo.');return;}
+    const selected=this.targetKey;
+    for(const target of targets){
+      const key=`${target.kind}:${target.id}`,choices=actions?interactionOptions(city,target):[];
+      p.heading(target.label);p.note(`${targetKindLabel(target)} · ${target.distance.toFixed(1)} metros${key===selected?' · Selecionado':''}`);
+      p.buttons([{label:'Ver ficha',click:()=>this.dossier(target)},...(!actions?[{label:'Selecionar alvo',selected:key===selected,click:()=>this.selectTarget(target)}]:[])]);
+      if(actions){if(!choices.length)p.note('Sem ações disponíveis.');for(const choice of choices)p.button(choice.label,()=>{this.selectTarget(target);this.use(target,choice);});}
+      else p.note(reachableKeys.has(key)?'Ao alcance para interagir [E].':'Sem ações ao alcance; consulte a ficha.');
+      p.space(8);
+    }
+  }
+  roster(p,state){
+    const city=this.getCity(),query=state.query.trim().toLocaleLowerCase('pt-BR');
+    p.note('Uma pessoa por vez. A cidade continua funcionando quando você assume o controle.');
+    const people=city.citizens.filter(c=>canControl(city,c)&&(!query||name(c).toLocaleLowerCase('pt-BR').includes(query)));
+    if(!people.length)p.note('Nenhum adulto disponível com esse nome.');
+    p.rows(people,person=>{
+      p.card(name(person),`${city.society.age(person)} anos · ${formatMoney(person.balance)}\n${person.homeUnitId?'Tem abrigo':'Sem abrigo'} · ${person.jobId?'Empregado':'Sem emprego'}\n${person.provisions||0} provisões · água ${person.pocket?.water||0}/6 · saúde ${Math.round(person.needs.health)}`,()=>this.act('start',{citizenId:person.id}),false);
+      p.button('Sobreviver com esta pessoa',()=>this.act('start',{citizenId:person.id}));p.space(8);
+    },114);
+    p.button('Voltar à simulação',()=>this.desktop.close('page:character'));
+  }
+  content(panel,p,state={}){
+    const city=this.getCity(),s=city.characterGame,c=controlledCitizen(city),target=this.target();
+    if(panel==='profile'){
+      p.heading(name(c));p.kv('Data',`Dia ${city.day} · ${String(city.hour).padStart(2,'0')}:${String(city.minute%60).padStart(2,'0')}`);
+      p.kv('Saldo',formatMoney(c?.balance||0));p.kv('Estado',this.status(city,c));p.kv('Tempo',this.isPaused()?'Pausado':'Em andamento');return;
+    }
+    if(panel==='targets')return this.nearbyList(p,false,state.query);
+    if(panel==='interactions')return this.nearbyList(p,true,state.query);
+    if(panel==='activity'){
+      p.note(c?.action||this.status(city,c));
+      if(s.intent?.kind==='gather')p.meter('Coleta',100*(s.intent.progress||0)/6);
+      if(s.intent)p.button('X · Cancelar ação',()=>{this.keys.clear();this.act('stop');});
+      if(s.intent?.kind==='rest'&&!c?.indoorLocation)p.button('Dormir no chão',()=>this.act('sleep-here'));
+      p.buttons([{label:`1 · Comer (${(c?.provisions||0)+(c?.pocket?.food?.length||0)})`,click:()=>this.act('eat')},{label:`2 · Água (${c?.pocket?.water||0}/6)`,click:()=>this.act('drink')},{label:'R · Descansar',click:()=>this.act('rest')}]);
+      const selected=this.visibleTargets().find(t=>`${t.kind}:${t.id}`===this.targetKey)||target;
+      if(selected){p.heading('Alvo selecionado');p.note(`${selected.label} · ${selected.distance.toFixed(1)} metros`);if(target)p.button('E · Interagir',()=>this.interact());else p.note('Este alvo não oferece uma ação ao alcance.');p.button('Ver ficha do alvo',()=>this.dossier(selected));}
+      if(this.lastNotice){p.heading('Último aviso');p.note(this.lastNotice);}return;
+    }
+    if(panel==='inventory')return this.inventory(p,city,c,target);
+    if(panel==='body')return this.body(p,c);
+    if(panel==='family'||panel==='death'){
+      p.note(panel==='death'?'A cidade continua. Assuma um familiar sobrevivente ou retorne à simulação.':'Uma pessoa sob controle. Cada familiar mantém seus próprios bens e rotina.');
+      this.family(p,city,c);if(panel==='death')p.button('Voltar à simulação',()=>this.act('simulation'));return;
+    }
+    if(panel==='interaction'){
+      if(!target){p.note('Nada ao alcance.');return;}
+      p.heading(target.label);p.note(`${target.distance.toFixed(1)} metros · Q alterna o alvo`);p.button('Ver ficha',()=>this.dossier(target));
+      interactionOptions(city,target).forEach((choice,i)=>p.button(`${i+1}. ${choice.label}`,()=>this.use(target,choice)));return;
+    }
+    if(panel==='journal'){
+      p.note(`${s.meals} refeições · ${s.collected} alimentos colhidos · ${formatMoney(s.earned)} em salários`);
+      for(const e of [...s.journal].reverse()){p.heading(`Dia ${Math.floor(e.minute/1440)+1} · ${String(Math.floor(e.minute%1440/60)).padStart(2,'0')}:${String(e.minute%60).padStart(2,'0')}`);p.note(e.text);}return;
+    }
+    if(panel==='menu'){
+      p.button(this.isPaused()?'Continuar o tempo [P]':'Pausar o tempo [P]',()=>this.onPause());
+      p.button('Alternar câmera',()=>this.onCamera());p.button('Voltar à simulação',()=>this.act('simulation'));
+      p.heading('Controles');p.note('WASD / setas: mover\nShift: correr\nE: interagir · Q: alternar alvo\nC: personagem · H: corpo · V: atividade\nT: alvos próximos · B: interações próximas\nI: mochila · U: família · J: diário\n1: comer · 2: beber · R: descansar\nCtrl + clique / F / Espaço: atacar\nX: interromper · P: pausar\nTab: alternar janela · Esc: fechar');
+    }
+  }
+  inventory(p,city,c,target){
+    if(!c)return;
     const food=(c.provisions||0)+(c.pocket?.food?.length||0),goods=Object.entries(c.inventory||{}).filter(([,q])=>q>0);
-    const rows=[`<article class="survival-item"><span>Refeições / provisões <b>×${food}</b></span>${food?this.button('Comer',()=>this.act('eat')):'<small>Vazio</small>'}</article>`,`<article class="survival-item"><span>Garrafa <b>${c.pocket?.water||0}/6</b></span>${this.button('Beber',()=>this.act('drink'))}</article>`,...goods.map(([good,q])=>`<article class="survival-item"><span>${escape(city.economy.goods[good]?.label||good)} <b>×${q}</b></span>${city.nature.productsForFood(good)?this.button('Comer',()=>this.act('eat',{good})):''}</article>`)];
-    const choices=target?interactionOptions(city,target):[];
-    return `<div class="survival-inventory-grid"><div><div class="survival-section-label">CARREGANDO · ${inventoryUsed(c)}/${c.inventoryCapacity||'—'} itens</div>${rows.join('')}</div><div><div class="survival-section-label">AO ALCANCE</div>${target?`<h3>${escape(target.label)}</h3><small>${target.distance.toFixed(1)} metros</small>${choices.filter(choice=>['gather','service','sell','raw-water'].includes(choice.action)).map(choice=>this.button(choice.label,()=>this.use(target,choice))).join('')||'<p>Nenhum suprimento disponível aqui.</p>'}`:'<p>Nada ao alcance. Explore a cidade e aproxime-se de uma planta, entrada ou estabelecimento.</p>'}</div></div>`;
+    p.heading(`Carregando · ${inventoryUsed(c)}/${c.inventoryCapacity||'—'} itens`);
+    p.kv('Refeições / provisões',food);if(food)p.button('Comer',()=>this.act('eat'));
+    p.kv('Garrafa',`${c.pocket?.water||0}/6`);p.button('Beber',()=>this.act('drink'));
+    for(const [good,q]of goods){p.kv(city.economy.goods[good]?.label||good,q);if(city.nature.productsForFood(good))p.button(`Comer ${city.economy.goods[good]?.label||good}`,()=>this.act('eat',{good}));}
+    p.heading('Ao alcance');
+    if(!target){p.note('Nada ao alcance. Aproxime-se de uma planta, entrada ou estabelecimento.');return;}
+    p.note(`${target.label} · ${target.distance.toFixed(1)} metros`);
+    const choices=interactionOptions(city,target).filter(choice=>['gather','service','sell','raw-water'].includes(choice.action));
+    if(!choices.length)p.note('Nenhum suprimento disponível aqui.');
+    for(const choice of choices)p.button(choice.label,()=>this.use(target,choice));
   }
-  body(city,c){
-    if(!c)return '';
-    const injuries=c.combatInjuries||[];
-    return `<div class="survival-body">${meters.map(([key,label])=>`<p><span>${label}</span><b>${Math.round(c.needs[key])}/100</b></p>`).join('')}</div><h3>Ferimentos</h3>${injuries.length?injuries.map(w=>`<article class="survival-log"><strong>${escape(w.region||'Ferimento')}</strong><p>Gravidade ${Math.round(w.severity||0)} · ${w.bleedingRate>0&&!w.bleedingStoppedAt?'Sangrando':'Sem sangramento ativo'}</p></article>`).join(''):'<p>Nenhum ferimento registrado.</p>'}<p>Procure atendimento próximo se estiver ferido. Descansar recupera energia, mas não substitui uma noite de sono.</p>`;
+  body(p,c){
+    if(!c)return;for(const [key,label]of meters)p.meter(label,c.needs[key]);
+    p.heading('Ferimentos');const injuries=c.combatInjuries||[];
+    if(!injuries.length)p.note('Nenhum ferimento registrado.');
+    for(const w of injuries)p.status(w.region||'Ferimento',`Gravidade ${Math.round(w.severity||0)} · ${w.bleedingRate>0&&!w.bleedingStoppedAt?'Sangrando':'Sem sangramento ativo'}`,T.red);
+    p.note('Procure atendimento próximo se estiver ferido. Descansar recupera energia, mas não substitui uma noite de sono.');
   }
-  family(city,c){
-    const people=relatives(city,c);
-    return people.length?people.map(person=>`<article class="survival-log"><h3>${escape(name(person))}</h3><p>Saúde ${Math.round(person.needs.health)} · ${person.homeUnitId?'abrigado':'sem abrigo'}</p>${canControl(city,person)?this.button('Assumir controle',()=>this.act('switch',{citizenId:person.id})):'<small>Ocupado ou indisponível</small>'}</article>`).join(''):'<p>Nenhum familiar adulto disponível.</p>';
+  family(p,city,c){
+    const people=relatives(city,c);if(!people.length)p.note('Nenhum familiar adulto disponível.');
+    for(const person of people){p.heading(name(person));p.note(`Saúde ${Math.round(person.needs.health)} · ${person.homeUnitId?'abrigado':'sem abrigo'}`);if(canControl(city,person))p.button('Assumir controle',()=>this.act('switch',{citizenId:person.id}));else p.note('Ocupado ou indisponível.');}
   }
 }

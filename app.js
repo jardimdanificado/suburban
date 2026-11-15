@@ -3,10 +3,10 @@ import {CharacterGameUI} from './js/character_game_ui.js';
 import {playing,controlledCitizen,movementVector} from './js/character_game.js';
 import { FreeCameraTouchControls } from './js/free_camera_touch_controls.js';
 import {CityFavorites} from './js/city_favorites.js?v=custom-history-limit-1';
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=survival-controls-2';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=survival-windows-4';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=survival-controls-2";
-import { CityDesktop } from "./js/city_desktop.js?v=survival-controls-2";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=survival-windows-4";
+import { CityDesktop } from "./js/city_desktop.js?v=survival-windows-4";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=graphics-perf-1";
 import { setActiveEntities } from "./js/engine.js";
@@ -216,8 +216,9 @@ export function update(dt, _api) { city.update(dt); }
 
 /** Draw additional experience-specific UI after the framework HUD. */
 export function renderUI(ui, _api) {
-  if(playing(city))return;
+  if(gameUI.active){cityUI.element.hidden=true;cityUI.tooltipElement.hidden=true;gameUI.draw(ui);return;}
   cityUI.draw(ui);
+  gameUI.drawEntry(ui);
   favorites.refresh();
   if(!mainMenu.isActive()&&!favorites.historyWindowCreated){
     const state=cityUI.openModule('custom-history'),window=cityUI.manager.find(state.windowId);
@@ -295,7 +296,13 @@ function updateFreeCameraMovement(dt){
 }
 
 function onPointerDown(event) {
-  if(playing(city)){pointerDown=lastPointer={x:event.clientX,y:event.clientY};cameraLookDrag=event.button===2&&renderer3D.isThirdPersonActive();root.setPointerCapture?.(event.pointerId);return;}
+  if(gameUI.active){
+    const rect=root.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
+    pointerOnUI=gameUI.pointerDown(x,y,event.button,legacyUI);
+    pointerDown=lastPointer={x:event.clientX,y:event.clientY};
+    cameraLookDrag=!pointerOnUI&&event.button===2&&renderer3D.isThirdPersonActive();
+    root.setPointerCapture?.(event.pointerId);return;
+  }
   if (mainMenu.isActive()) {
     const rect = root.getBoundingClientRect();
     const x = event.clientX - rect.left;
@@ -365,7 +372,16 @@ function onPointerDown(event) {
 }
 
 function onPointerMove(event) {
-  if(playing(city)){if(cameraLookDrag&&lastPointer)renderer3D.rotatePerspectiveCamera((event.clientX-lastPointer.x)*.004,-(event.clientY-lastPointer.y)*.004);lastPointer={x:event.clientX,y:event.clientY};return;}
+  if(gameUI.active){
+    const rect=root.getBoundingClientRect();
+    mousePosition={x:event.clientX-rect.left,y:event.clientY-rect.top};
+    if(!gameUI.desktop.pointerMove(mousePosition.x,mousePosition.y)&&lastPointer){
+      if(pointerOnUI&&event.pointerType==='touch'&&pointerDown&&Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>=6){
+        gameUI.desktop.scrollAt(pointerDown.x-rect.left,pointerDown.y-rect.top,lastPointer.y-event.clientY);
+      }else if(cameraLookDrag)renderer3D.rotatePerspectiveCamera((event.clientX-lastPointer.x)*.004,-(event.clientY-lastPointer.y)*.004);
+    }
+    lastPointer={x:event.clientX,y:event.clientY};return;
+  }
   const rect = root.getBoundingClientRect();
   mousePosition = { x: event.clientX - rect.left, y: event.clientY - rect.top };
   renderer3D.setMousePos(mousePosition.x,mousePosition.y);
@@ -408,6 +424,11 @@ function onPointerMove(event) {
 }
 
 function onPointerUp(event) {
+  if(gameUI.active&&pointerOnUI){
+    const rect=root.getBoundingClientRect(),moved=pointerDown&&Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>=6;
+    if(moved)gameUI.desktop.pointerUp();else gameUI.pointerUp(event.clientX-rect.left,event.clientY-rect.top,event.button,legacyUI);
+    pointerOnUI=false;pointerDown=lastPointer=null;cameraLookDrag=false;return;
+  }
   if(playing(city)){
     if(pointerDown&&Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)<6){
       if(event.button===2){gameUI.inspect(renderer3D.getEntityAtScreen(event.clientX,event.clientY,entities,world));pointerDown=lastPointer=null;cameraLookDrag=false;return;}
@@ -486,10 +507,11 @@ root.addEventListener("pointerdown", onPointerDown);
 root.addEventListener("pointermove", onPointerMove);
 root.addEventListener("pointerleave",()=>renderer3D.setMousePos(undefined,undefined));
 root.addEventListener("pointerup", onPointerUp);
-root.addEventListener("dblclick",event=>{const rect=root.getBoundingClientRect();if(!playing(city)&&cityUI.doubleClick(event.clientX-rect.left,event.clientY-rect.top))event.preventDefault();});
+root.addEventListener("dblclick",event=>{const rect=root.getBoundingClientRect();if((gameUI.active?gameUI.desktop:cityUI).doubleClick(event.clientX-rect.left,event.clientY-rect.top))event.preventDefault();});
 root.addEventListener("pointercancel", (event) => {
   freeCameraTouch.pointerUp(event.pointerId);
   rightClickConsumed=false;
+  gameUI.desktop.pointerUp();
   cityUI.pointerUp();
   editor.endStroke();
   editingGesture = dragging = pointerOnUI = false;
@@ -501,7 +523,8 @@ root.addEventListener("contextmenu", (event) => event.preventDefault());
 root.addEventListener("wheel", (event) => {
   if (event.target.closest(".ui-panel")) return;
   const rect = root.getBoundingClientRect();
-  if(!playing(city)&&cityUI.scrollAt(event.clientX-rect.left,event.clientY-rect.top,event.deltaY)){event.preventDefault();return;}
+  if((gameUI.active?gameUI.desktop:cityUI).scrollAt(event.clientX-rect.left,event.clientY-rect.top,event.deltaY)){event.preventDefault();return;}
+  if(gameUI.choosing){event.preventDefault();return;}
   if (legacyUI.hitTest(event.clientX - rect.left, event.clientY - rect.top)) return;
   event.preventDefault();
   const renderer = renderer3D;
@@ -513,7 +536,7 @@ root.addEventListener("wheel", (event) => {
 }, { passive: false });
 
 window.addEventListener("keydown", (event) => {
-  if(playing(city)){if(gameUI.key(event,true))event.preventDefault();return;}
+  if(gameUI.active){if(gameUI.key(event,true))event.preventDefault();return;}
   if (mainMenu.isActive()) {
     if (event.code === 'Escape' && cityUI?.visible && cityUI?.manager?.windows?.length > 0) {
       cityUI.key(event);
@@ -562,7 +585,7 @@ window.addEventListener("resize", resize);
 function frame(now) {
   const frameStarted = profiling ? performance.now() : 0;
   resize();
-  gameUI.element.hidden=mainMenu.isActive();gameUI.draw(false,now);
+  gameUI.element.hidden=mainMenu.isActive()||!gameUI.active;
   if(playing(city)){
     const c=controlledCitizen(city);
     if(c){
@@ -609,7 +632,7 @@ function frame(now) {
       cityUI.draw(legacyUI);
     }
     mainMenu.draw(legacyUI);
-    cityUI.element.hidden = playing(city)||!cityUI.visible;
+    cityUI.element.hidden = gameUI.active||!cityUI.visible;
 
     requestAnimationFrame(frame);
     return;
@@ -643,7 +666,7 @@ function frame(now) {
   lastUiDrawnAt=now;lastUiPointerX=pointerX;lastUiPointerY=pointerY;
   legacyUI.beginFrame(pointerX, pointerY);
   const clockText = `D${String(world.clock.day).padStart(2, "0")} ${String(world.clock.hour).padStart(2, "0")}:${String(world.clock.minute).padStart(2, "0")}`;
-  if(!playing(city))cityUI.drawChrome(legacyUI,{clockText,paused,speed:time.speed,effectiveSpeed:time.effectiveSpeed,renderMode});
+  if(!gameUI.active)cityUI.drawChrome(legacyUI,{clockText,paused,speed:time.speed,effectiveSpeed:time.effectiveSpeed,renderMode});
   const hoverTile = !playing(city) && editor.open && mousePosition.x >= 0 ? mapTileAt(mousePosition.x, mousePosition.y) : null;
 
   if (!playing(city)&&!legacyUI.hitTest(mousePosition.x, mousePosition.y)) {
@@ -656,7 +679,7 @@ function frame(now) {
   }
   renderUI(legacyUI, api);
 
-  cityUI.element.hidden = playing(city)||!cityUI.visible;
+  cityUI.element.hidden = gameUI.active||!cityUI.visible;
   }
   if (profiling) {
     const ended=performance.now(),cpu=ended-frameStarted;

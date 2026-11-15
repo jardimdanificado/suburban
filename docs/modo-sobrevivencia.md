@@ -17,10 +17,20 @@ Escolha **Jogar como personagem** no menu principal, ou **Jogar neste mundo** du
 - **R:** descansar no local; ao ar livre, permite escolher dormir no chão.
 - **F ou Espaço:** atacar uma pessoa próxima. **Ctrl + clique:** atacar a pessoa apontada.
 - **P:** pausar ou continuar o tempo.
-- **H / U / J:** corpo, família e diário.
-- **Esc:** abrir o menu do personagem e alternar a câmera.
+- **C / H / V:** personagem, condição física e atividade.
+- **T / B:** alvos próximos e interações próximas.
+- **I / U / J:** mochila, família e diário.
+- **Esc:** fechar a janela ativa; sem janelas abertas, mostrar as opções e a troca de câmera.
 
-A interface de gestão sai de cena enquanto você joga. Mochila e painéis ficam fechados por padrão, deixando o mundo visível. Fome, sede, energia, saúde, higiene e banheiro continuam visíveis. O personagem não escolhe sozinho quando comer, beber, procurar emprego ou dormir. Os outros cidadãos continuam autônomos.
+A interface de gestão sai de cena enquanto você joga. As informações ficam em janelas: personagem, condição física, atividade, alvos próximos e interações próximas. Essas cinco janelas abrem ao entrar; a mochila começa fechada. Eles usam o mesmo sistema de janelas da administração: é possível arrastar, redimensionar, fixar, recolher e manter vários painéis abertos. **Tab** alterna a janela ativa; **Esc** fecha a janela ativa ou abre as opções quando nenhuma está aberta. Fome, sede, energia, saúde, higiene e banheiro aparecem na janela de condição física. Fechar uma janela mantém essa escolha até você reabri-la pelo atalho ou pela barra de janelas. Ao voltar da simulação, as janelas do personagem que estavam abertas e suas posições são restauradas. O personagem não escolhe sozinho quando comer, beber, procurar emprego ou dormir. Os outros cidadãos continuam autônomos.
+
+## Alvos, interações e fichas
+
+**Alvos próximos [T]** mostra pessoas, construções, plantas e veículos a até 12 metros no mesmo ambiente. **Interações próximas [B]** reúne todas as ações disponíveis ao alcance físico, agrupadas por alvo. As duas listas têm filtro por nome ou tipo e se atualizam conforme você anda.
+
+**Selecionar alvo** define quem recebe a interação com **E**. Se ele sair do alcance, a tecla não escolhe outra pessoa automaticamente. As ações das listas também passam pela validação de proximidade do mundo.
+
+**Ver ficha** abre uma janela de consulta com os dados atuais da pessoa, prédio, planta ou veículo. O botão direito sobre um alvo próximo também abre sua ficha. É possível manter várias fichas abertas, arrastar e redimensionar cada uma. As fichas não oferecem comandos de administração ou troca de controle.
 
 ## Sobreviver
 

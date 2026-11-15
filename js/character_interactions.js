@@ -11,17 +11,17 @@ export function entryRoom(city,b,c=controlledCitizen(city)){
 }
 const alive=entity=>entity&&!entity.destroyed;
 export function samePlace(a,b){return (a.indoorLocation?.buildingId??null)===(b.indoorLocation?.buildingId??null)&&(a.indoorLocation?.floor??0)===(b.indoorLocation?.floor??0);}
-export function nearbyTargets(city,c=controlledCitizen(city),radius=INTERACTION_REACH){
+export function nearbyTargets(city,c=controlledCitizen(city),radius=INTERACTION_REACH,{inspectable=false}={}){
   if(!c||!alive(c.entity))return [];
   const targets=[];
   const add=(kind,id,entity,point,label)=>{const distance=Math.hypot(c.entity.x-point.x,c.entity.y-point.y);if(distance<=radius)targets.push({kind,id,entityId:entity.id,point,label,distance});};
   for(const b of city.buildings){
-    if(!b.active||!alive(b.entity))continue;
+    if((!b.active&&!inspectable)||!alive(b.entity))continue;
     if(c.indoorLocation){if(c.indoorLocation.buildingId===b.id)targets.push({kind:'building',id:b.id,entityId:b.entity.id,point:b.door,label:b.entity.properties.name,distance:0});}
     else add('building',b.id,b.entity,b.door,b.entity.properties.name);
   }
   if(!c.indoorLocation)for(const plant of city.nature.plants.values()){
-    if(!alive(plant.entity)||plant.buildingId||!Object.keys(city.nature.products(plant)).some(g=>city.nature.productsForFood(g)&&city.nature.stock(plant,g)>0))continue;
+    if(!alive(plant.entity)||!inspectable&&(plant.buildingId||!Object.keys(city.nature.products(plant)).some(g=>city.nature.productsForFood(g)&&city.nature.stock(plant,g)>0)))continue;
     add('plant',plant.id,plant.entity,{x:plant.x+.5,y:plant.y+.5},plant.entity.properties.name);
   }
   if(!c.indoorLocation){
@@ -32,6 +32,7 @@ export function nearbyTargets(city,c=controlledCitizen(city),radius=INTERACTION_
       if(bodyId>=0){targets.push({kind:'water',id:bodyId,entityId:null,point:{x:c.entity.x,y:c.entity.y},label:'Água sem tratamento',distance:1});break;}
     }
   }
+  if(inspectable&&!c.indoorLocation)for(const vehicle of city.vehicles.units.values())if(vehicle.active&&!vehicle.scrapped&&alive(vehicle.entity))add('vehicle',vehicle.id,vehicle.entity,vehicle.entity,vehicle.entity.properties.name);
   for(const other of city.citizens)if(other!==c&&alive(other.entity)&&samePlace(c,other))add('person',other.id,other.entity,other.entity,other.entity.properties.name);
   return targets.sort((a,b)=>a.distance-b.distance||a.id-b.id);
 }

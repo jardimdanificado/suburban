@@ -1,7 +1,7 @@
 import {speedLabel} from './simulation_time.js?v=ff3-ff4-steps-1';
 import {CityGlobalSearch} from './city_global_search.js?v=regional-supply-17';
 import {desktopMenus} from './city_desktop_menus.js?v=custom-history-filters-1';
-import {CityUI,money} from './city_ui.js?v=survival-controls-2';
+import {CityUI,money} from './city_ui.js?v=survival-windows-4';
 import {WindowManager} from './window_manager.js';
 import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js?v=favorite-window-icons-3';
@@ -13,9 +13,10 @@ const intersects=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 
 /** OpenTTD-style desktop with tabbed modules and optional detached views. */
 export class CityDesktop {
-  constructor({city,root,select,camera,controls={}}){
+  constructor({city,root,select,camera,controls={},initialModule='city',notifications=true}){
     Object.assign(this,{city,select,camera,controls});this.manager=new WindowManager();this.hidden=false;this.tooltip=null;this.menuOpen=false;this.lastSelected=null;this.electionNotices=new Set();this.lastElectionResultId=city.politics.lastResult?.id??null;
-    this.element=document.createElement('div');this.element.className='city-desktop-inputs';root.append(this.element);this.openModule('city');
+    this.notifications=notifications;
+    this.element=document.createElement('div');this.element.className='city-desktop-inputs';root.append(this.element);if(initialModule)this.openModule(initialModule);
     this.tooltipElement=document.createElement('div');this.tooltipElement.className='city-tooltip';this.tooltipElement.setAttribute('role','tooltip');this.tooltipElement.hidden=true;root.append(this.tooltipElement);
   }
   get modules(){return CITY_WINDOWS;}
@@ -144,6 +145,21 @@ export class CityDesktop {
   }
   toggleModule(tab){const current=this.manager.find(`module:${tab}`);if(current)return this.close(current.id);return this.openModule(tab);}
   openModule(tab){const state=this.create(`module:${tab}`,tab);state.visible=true;return state;}
+  /** Feature pages share native inputs, scrolling, clipping and window controls. */
+  openPage(id,{title,width=460,height=420,search=false,draw,onClose=()=>{}}){
+    const windowId=`page:${id}`,existing=this.manager.find(windowId);
+    if(existing){this.manager.raise(windowId);if(existing.shaded)this.manager.shade(windowId);return existing.state;}
+    const state=this.create(windowId,id,{title,kind:'page'}),win=this.manager.find(windowId);
+    if(!this.manager.saved.has(windowId))Object.assign(win,{w:width,h:height});
+    this.manager.constrain(win);state.visible=true;state.onClose=onClose;state.openCurrentInWindow=null;
+    state.drawFloating=(ui,w)=>{
+      state.city=this.city;state.visible=true;state.zones=[];state.beginInputs();
+      let y=w.y+26;const x=w.x+5,bodyWidth=w.w-10,bottom=w.y+w.h-22;
+      if(search){state.search.placeholder=typeof search==='string'?search:'Pesquisar…';state.inputAt(state.search,x+5,y,bodyWidth-10);y+=25;}
+      state.pane(ui,'page',x,y,bodyWidth,Math.max(24,bottom-y),p=>draw(p,state));state.finishInputs();
+    };
+    return state;
+  }
   navigate(tab){return this.openModule(tab);}
   setView(id){this.active?.setView?.(id);}
   setFilter(id){this.active?.setFilter?.(id);}
@@ -240,7 +256,7 @@ export class CityDesktop {
     else {w.state.element.hidden=true;w.state.zones=[];}
   }
   draw(ui){
-    this.syncElectionNotices();
+    if(this.notifications)this.syncElectionNotices();
     const point=ui.pointer,hover=point&&this.manager.at(point.x,point.y),resize=hover&&this.manager.resizeAt(hover,point.x,point.y);if(ui.canvas.style)ui.canvas.style.cursor=this.manager.gesture?.kind==='resize'||resize?'nwse-resize':this.manager.gesture?.kind==='move'||hover&&this.manager.caption(hover,point.x,point.y)?'move':'default';
     if(this.element.hidden===this.visible)this.element.hidden=!this.visible;if(this.visible){for(const [i,w] of this.manager.windows.entries()){const rect=this.manager.rect(w),covered=this.manager.windows.slice(i+1).some(above=>{const r=this.manager.rect(above);return r.x<=rect.x&&r.y<=rect.y&&r.x+r.w>=rect.x+rect.w&&r.y+r.h>=rect.y+rect.h;});if(covered){w.state.element.hidden=true;w.state.zones=[];continue;}if(w.state.element.hidden)w.state.element.hidden=false;this.frame(ui,w);}this.occludeInputs();const hit=point&&ui.hitTest(point.x,point.y);if(hit?.label){const key=hit.label;if(this.hoverHint?.key!==key)this.hoverHint={key,since:performance.now()};if(/^(Fechar|Fixar|Recolher|Ampliar|Redimensionar):/.test(key)||performance.now()-this.hoverHint.since>600)this.tooltip={text:key,x:point.x,y:point.y+24};}else this.hoverHint=null;}
     ui.regions.push(...(this.menuBarRegions||[]));
