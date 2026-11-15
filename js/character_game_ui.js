@@ -1,3 +1,4 @@
+import {markerPreferences} from './city_symbols.js';
 import {playing,controlledCitizen,canControl,relatives} from './character_game.js';
 import {nearbyTargets,interactionOptions} from './character_interactions.js';
 import {formatMoney} from './city_ui_format.js';
@@ -8,7 +9,7 @@ import {drawTargetDossier,targetKindLabel} from './character_game_inspectors.js'
 
 const name=c=>c?.entity?.properties?.name||'Sem nome';
 const meters=[['health','Saúde'],['food','Alimentação'],['water','Água'],['energy','Energia'],['hygiene','Higiene'],['toilet','Banheiro']];
-const titles={profile:'Personagem',activity:'Atividade e ações',targets:'Alvos próximos',interactions:'Interações próximas',inventory:'Mochila',body:'Condição física',family:'Família',journal:'Diário',menu:'Pausa e opções',death:'Fim desta vida',interaction:'Interagir'};
+const titles={marker:'Símbolo do personagem',profile:'Personagem',activity:'Atividade e ações',targets:'Alvos próximos',interactions:'Interações próximas',inventory:'Mochila',body:'Condição física',family:'Família',journal:'Diário',menu:'Pausa e opções',death:'Fim desta vida',interaction:'Interagir'};
 const movingCodes=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
 
 /** Gameplay uses the same canvas widgets, native fields and desktop windows as management. */
@@ -46,7 +47,7 @@ export class CharacterGameUI {
   }
   openPanel(panel){
     const searchable=['targets','interactions'].includes(panel);
-    const state=this.desktop.openPage(`survival-${panel}`,{title:titles[panel],width:panel==='inventory'?430:['profile','activity','body'].includes(panel)?280:340,height:({profile:225,activity:230,body:310,targets:260,interactions:310})[panel]||400,search:searchable?'Filtrar por nome ou tipo…':false,draw:(p,state)=>this.content(panel,p,state),onClose:()=>{if(panel==='interaction')this.contextOpen=false;}});
+    const state=this.desktop.openPage(`survival-${panel}`,{title:titles[panel],width:panel==='marker'?460:panel==='inventory'?430:['profile','activity','body'].includes(panel)?280:340,height:({profile:225,activity:230,body:310,targets:260,interactions:310})[panel]||400,search:searchable?'Filtrar por nome ou tipo…':false,draw:(p,state)=>this.content(panel,p,state),onClose:()=>{if(panel==='interaction')this.contextOpen=false;}});
     if(searchable)state.search.setAttribute('aria-label',`${titles[panel]}: filtrar`);return state;
   }
   input(){
@@ -278,9 +279,12 @@ export class CharacterGameUI {
   }
   content(panel,p,state={}){
     const city=this.getCity(),s=city.characterGame,c=controlledCitizen(city),target=this.target();
+    if(panel==='marker'){
+      const pref=markerPreferences(s.marker);state.markerEditor(p,'player',pref,patch=>this.act('marker',patch));return;
+    }
     if(panel==='profile'){
       p.heading(name(c));p.kv('Data',`Dia ${city.day} · ${String(city.hour).padStart(2,'0')}:${String(city.minute%60).padStart(2,'0')}`);
-      p.kv('Saldo',formatMoney(c?.balance||0));p.kv('Estado',this.status(city,c));p.kv('Tempo',this.isPaused()?'Pausado':'Em andamento');p.kv('Controle',s.manualPending?'Aguardando concluir atividade':s.autonomous?'Rotina automática':'Total · WASD');return;
+      p.kv('Saldo',formatMoney(c?.balance||0));p.kv('Estado',this.status(city,c));p.kv('Tempo',this.isPaused()?'Pausado':'Em andamento');p.kv('Controle',s.manualPending?'Aguardando concluir atividade':s.autonomous?'Rotina automática':'Total · WASD');p.button('Personalizar símbolo',()=>this.openPanel('marker'));return;
     }
     if(panel==='targets')return this.nearbyList(p,false,state.query);
     if(panel==='interactions')return this.nearbyList(p,true,state.query);
@@ -310,6 +314,7 @@ export class CharacterGameUI {
       for(const e of [...s.journal].reverse()){p.heading(`Dia ${Math.floor(e.minute/1440)+1} · ${String(Math.floor(e.minute%1440/60)).padStart(2,'0')}:${String(e.minute%60).padStart(2,'0')}`);p.note(e.text);}return;
     }
     if(panel==='menu'){
+      p.button('Personalizar símbolo',()=>this.openPanel('marker'));
       p.button(this.isPaused()?'Continuar o tempo [P]':'Pausar o tempo [P]',()=>this.onPause());
       p.button(this.getThirdPerson()?'Câmera isométrica [Z]':'Câmera em terceira pessoa [Z]',()=>this.onCamera());p.button(this.getCameraLocked()?'Liberar câmera [L]':'Travar câmera no personagem [L]',()=>this.onCameraLock());p.button('Configurações [O]',()=>this.onSettings());p.button('Voltar à simulação',()=>this.act('simulation'));
       p.heading('Controles');p.note('WASD / setas: mover\nZ: isométrica / 3ª pessoa · L: câmera livre / travada\nBotão direito + arrastar: girar câmera em 3p ou isométrica\nBotão do meio + arrastar: deslocar câmera livre\nO: configurações\nClique: selecionar pessoa ou objeto · chão livre: andar\nBotão direito sem arrastar: menu contextual\nMenu: setas e Enter · Esc ou clique fora: cancelar\nShift: correr\nE: interagir · Q: alternar alvo\nC: personagem · H: corpo · V: atividade\nT: alvos próximos · B: interações próximas\nI: mochila · U: família · J: diário\n1: comer · 2: beber · R: descansar\nCtrl + clique / F: atacar · Espaço / P: pausar\nX: interromper · P: pausar\nTab: alternar janela · Esc: fechar');

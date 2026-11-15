@@ -10,3 +10,11 @@ export function legacyGlyphIndex(skin){
  const match=/^favorite-glyph:(\d+)$/.exec(skin);
  return match&&Number(match[1])<LEGACY_GLYPH_COUNT?Number(match[1]):null;
 }
+
+export function markerPreferences(value={}){
+ return {
+  icon:Number.isInteger(value?.icon)&&value.icon>=0&&value.icon<CITY_SYMBOLS.length?value.icon:42,
+  color:typeof value?.color==='string'&&/^#[0-9a-f]{6}$/i.test(value.color)?value.color:'#ffd84d',
+  background:value?.background!==false
+ };
+}

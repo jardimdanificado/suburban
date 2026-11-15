@@ -165,3 +165,18 @@ test('building context menu executes the shared supply action and objects expose
 test('space pauses gameplay without attacking, including when a target is nearby',async()=>{
  const h=harness();await h.start();const before=h.calls.length;assert(!h.isPaused());h.game.key({code:'Space'});assert(h.isPaused());assert.equal(h.calls.length,before);h.game.key({code:'Space',repeat:true});assert(h.isPaused());h.game.key({code:'Space'});assert(!h.isPaused());
 });
+
+test('character marker uses the favorite editor and saves symbol, color and background controls',async()=>{
+ for(const width of [390,1360]){
+  const h=harness(width,844);await h.start();h.game.desktop.closeAll(true);h.game.openPanel('profile');h.draw();h.click('Personalizar símbolo');h.draw();
+  const editor=h.game.desktop.manager.find('page:survival-marker').state;
+  assert.equal(typeof editor.markerEditor,'function');
+  const toggle=h.ui.regions.find(r=>r.label?.includes('Mostrar fundo do símbolo'));assert(toggle);
+  h.ui.clickAt(toggle.x+10,toggle.y+8);await Promise.resolve();
+  assert.equal(h.city.characterGame.marker.background,false);h.draw();
+  h.click('Símbolo 17');await Promise.resolve();assert.equal(h.city.characterGame.marker.icon,17);
+  h.draw();const color=editor.favoriteColorInputs.player;color.value='#334455';color.oninput();await Promise.resolve();
+  assert.equal(h.city.characterGame.marker.color,'#334455');
+  h.draw();for(const region of h.ui.regions.filter(r=>r.label?.startsWith('Símbolo ')))assert(region.x>=0&&region.x+region.w<=width);
+ }
+});

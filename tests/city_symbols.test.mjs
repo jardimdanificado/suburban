@@ -59,3 +59,14 @@ test('favorite tile previews redraw after loading and retain the selected color'
   assert.deepEqual(Array.from(draws[0].pixels.slice(0,4)),[18,52,86,255]);
  }finally{globalThis.document=oldDocument;globalThis.Image=oldImage;}
 });
+
+test('favorite marker backgrounds default on for old preferences and persist when hidden',()=>{
+ const city={world:{seed:123,width:128},history:{configureFavorites(){}}};
+ const storage={value:JSON.stringify({world:'123:128',people:{1:{icon:42,color:'#ffd84d',feed:true}}}),getItem(){return this.value;},setItem(key,value){this.value=value;}};
+ const favorites=new CityFavorites({city,storage});
+ assert.equal(favorites.people[1].background,true);
+ favorites.people[1].background=false;favorites.persist();
+ const restored=new CityFavorites({city,storage});
+ assert.equal(restored.people[1].background,false);
+ restored.togglePerson(2);assert.equal(restored.people[2].background,true);
+});

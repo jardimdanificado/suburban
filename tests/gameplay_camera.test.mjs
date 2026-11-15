@@ -39,3 +39,24 @@ test('exterior orbit and its smoothed camera position stay out of neighboring bu
   for(const b of neighbors)assert(!(p.x>b.entity.x&&p.x<b.entity.x+b.width&&p.z>b.entity.y&&p.z<b.entity.y+b.depth&&p.y>0&&p.y<b.floors*1.8+1),'camera penetrated a neighboring facade or roof');
  }
 });
+
+
+test('isometric follow tracks floor height, descent and unlocking',()=>{
+ const {r,entity}=fixture();r.isPerspectiveActive=()=>false;r.followCharacterId=1;r.zoom=1;r.fixedRotationY=.7;r.isometricAngleX=.6;
+ r.camera={position:vector(),updateProjectionMatrix(){},lookAt(x,y,z){this.target={x,y,z};}};
+ r.updateCamera([],1/60);assert.equal(r.camera.target.y,2+3.6+.65);
+ const before=r.camera.position.y;
+ entity.properties.citizen._renderIndoorPosition={x:6,y:7,z:5.4};
+ r.updateCamera([],1/60);assert.equal(r.camera.target.x,6);assert.equal(r.camera.target.z,7);
+ assert(Math.abs(r.camera.position.y-before-1.8)<1e-10);
+ entity.properties.citizen._renderIndoorPosition.z=0;r.updateCamera([],1/60);assert.equal(r.camera.target.y,2.65);
+ r.followCharacterId=null;r.updateCamera([],1/60);assert.equal(r.camera.target.y,1);
+});
+
+test('perspective follow tracks rendered skybridge height and descent',()=>{
+ const {r,entity}=fixture();const citizen=entity.properties.citizen;citizen.indoorLocation=null;citizen.skybridgeZ=5.4;
+ r.updateCamera([],1/60);assert(Math.abs(r.tpCameraTarget.y-6.05)<1e-10);
+ citizen._renderIndoorPosition={x:6,y:7,z:2.7};r.updateCamera([],1/60);
+ assert(Math.abs(r.tpCameraTarget.y-3.35)<1e-10);assert.equal(r.tpCameraTarget.x,6);
+ citizen._renderIndoorPosition.z=0;r.updateCamera([],1/60);assert.equal(r.tpCameraTarget.y,.65);
+});

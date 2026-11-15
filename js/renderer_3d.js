@@ -6324,13 +6324,13 @@ export class RCT3DRenderer {
       const targetEnt = this.findCameraEntity(this.fpEntityId, entities);
 
       if (targetEnt) {
-        const indoorLocation=targetEnt.properties?.citizen?.indoorLocation,inside=indoorLocation?.position;
-        const indoorBuilding=this.isThirdPersonActive()&&indoorLocation?this.cityDevelopment?.city?.building(indoorLocation.buildingId):null;
+        const citizen=targetEnt.properties?.citizen,indoorLocation=citizen?.indoorLocation,inside=citizen?._renderIndoorPosition||indoorLocation?.position;
+        const indoorBuilding=indoorLocation?this.cityDevelopment?.city?.building(indoorLocation.buildingId):null;
         const anchor=this.isThirdPersonActive()?this.thirdPersonFreeTarget:null;
         const eyeX = anchor?.x??inside?.x??targetEnt.x;
         const eyeZ = anchor?.z??inside?.y??targetEnt.y;
         const surfaceH = this.currentMap ? this.getSurfaceElevation(this.currentMap, eyeX, eyeZ) : 1.0;
-        const eyeY = anchor?.y??((indoorBuilding?.terrain?.base??surfaceH) + (inside?.z??0) + 0.65);
+        const eyeY = anchor?.y??((indoorBuilding?.terrain?.base??surfaceH) + (inside?.z??citizen?.skybridgeZ??0) + 0.65);
 
         this.camX = eyeX;
         this.camY = eyeZ;
@@ -6406,7 +6406,7 @@ export class RCT3DRenderer {
           this.tpCameraPosition.copy(safeCamera);
           this.fpCamera.position.copy(this.tpCameraPosition);
           this.fpCamera.lookAt(this.tpCameraTarget);
-          const followGroundY=surfaceH+(inside?.z??0);
+          const followGroundY=eyeY-0.65;
           this.followMarker.position.set(eyeX, followGroundY + 0.045, eyeZ);
           this.followMarker.visible = !anchor;
 
@@ -6455,9 +6455,17 @@ export class RCT3DRenderer {
       }
     }
 
+    let followHeight=1;
     if (this.followCharacterId !== null) {
       const target=this.findCameraEntity(this.followCharacterId,entities);
-      if (target) { this.camX=target.x; this.camY=target.y; }
+      if (target) {
+        const citizen=target.properties?.citizen,location=citizen?.indoorLocation;
+        const point=citizen?._renderIndoorPosition||location?.position;
+        this.camX=point?.x??target.x; this.camY=point?.y??target.y;
+        const building=location?this.cityDevelopment?.city?.building(location.buildingId):null;
+        const surface=this.currentMap?this.getSurfaceElevation(this.currentMap,this.camX,this.camY):1;
+        followHeight=(building?.terrain?.base??surface)+(point?.z??citizen?.skybridgeZ??0)+0.65;
+      }
       else this.followCharacterId=null;
     }
 
@@ -6479,10 +6487,10 @@ export class RCT3DRenderer {
 
     this.camera.position.set(
       this.camX + distance * sinY * cosX,
-      distance * sinX,
+      distance * sinX + followHeight - 1,
       this.camY + distance * cosY * cosX
     );
-    this.camera.lookAt(this.camX, 1, this.camY);
+    this.camera.lookAt(this.camX, followHeight, this.camY);
   }
 
   // ---------------------------------------------------------------------------

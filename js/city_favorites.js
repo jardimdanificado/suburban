@@ -1,5 +1,5 @@
 /** Player-owned presentation preferences. Only people have map markers. */
-import {CITY_SYMBOLS} from './city_symbols.js';
+import {CITY_SYMBOLS,markerPreferences} from './city_symbols.js';
 export const FAVORITE_GLYPH_COUNT=CITY_SYMBOLS.length;
 export const GOVERNMENT_TOPICS={government:'Governo',election:'Eleições',policy:'Leis e políticas',construction:'Obras públicas',corruption:'Corrupção',intervention:'Intervenções'};
 export const HISTORY_FILTER_GROUPS={
@@ -63,13 +63,13 @@ export class CityFavorites{
  }
  identity(){return String(this.city.world?.seed??this.city.seed??'city')+':'+String(this.city.world?.width??'');}
  sanitize(){
-  for(const [id,p]of Object.entries(this.people)){if(!/^\d+$/.test(id)||!p||typeof p!=='object'){delete this.people[id];continue;}p.icon=Number.isInteger(p.icon)&&p.icon>=0&&p.icon<FAVORITE_GLYPH_COUNT?p.icon:42;p.color=typeof p.color==='string'&&/^#[0-9a-f]{6}$/i.test(p.color)?p.color:'#ffd84d';p.feed=p.feed!==false;}
+  for(const [id,p]of Object.entries(this.people)){if(!/^\d+$/.test(id)||!p||typeof p!=='object'){delete this.people[id];continue;}Object.assign(p,markerPreferences(p));p.feed=p.feed!==false;}
   for(const key of ['businesses','parties'])for(const [id,p]of Object.entries(this[key])){if(!/^\d+$/.test(id)||!p||typeof p!=='object'){delete this[key][id];continue;}this[key][id]={feed:p.feed!==false};}
  }
  sync(){this.city.history.configureFavorites(Object.keys(this.people).map(Number),this.limit,[...Object.keys(this.businesses).map(id=>`business:${id}`),...Object.keys(this.parties).map(id=>`party:${id}`)]);}
  persist(sync=false){try{this.storage?.setItem('suburban.favorite-preferences',JSON.stringify({world:this.worldKey,people:this.people,businesses:this.businesses,parties:this.parties,limit:this.limit,eventLimit:this.eventLimit,hidden:this.hidden,government:this.government,topics:this.topics,types:this.types,filters:this.filters}));}catch{}if(sync)this.sync();this.lastSignature='';}
  has(id){return !!this.people[id];}
- togglePerson(id){if(this.has(id))delete this.people[id];else this.people[id]={icon:42,color:'#ffd84d',feed:true};this.persist(true);}
+ togglePerson(id){if(this.has(id))delete this.people[id];else this.people[id]={...markerPreferences(),feed:true};this.persist(true);}
  hasBusiness(id){return !!this.businesses[id];}
  hasParty(id){return !!this.parties[id];}
  toggleBusiness(id){this.toggleTracked('businesses',id);}

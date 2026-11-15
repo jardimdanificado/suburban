@@ -1,3 +1,4 @@
+import {markerPreferences,CITY_SYMBOLS} from './city_symbols.js';
 import {nearbyTargets,interactionOptions,samePlace,entryRoom} from './character_interactions.js';
 import {canStep} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {activityRoomReady,syncCitizenInterior} from './city_interiors.js';
@@ -108,6 +109,14 @@ function performGameAction(city,action,options={}){
   }
   const c=controlledCitizen(city);
   if(!playing(city)||!live(c))return city.fail('Não há personagem vivo sob seu controle.');
+  if(action==='marker'){
+    if(
+      ('icon' in options&&(!Number.isInteger(options.icon)||options.icon<0||options.icon>=CITY_SYMBOLS.length))||
+      ('color' in options&&(typeof options.color!=='string'||!/^#[0-9a-f]{6}$/i.test(options.color)))||
+      ('background' in options&&typeof options.background!=='boolean')
+    )return city.fail('Opções de marcador inválidas.');
+    s.marker=markerPreferences({...s.marker,...options});return true;
+  }
   if(action==='autonomy'){
     if(typeof options.enabled!=='boolean')return city.fail('Escolha ligar ou desligar a rotina automática.');
     return setAutonomy(city,c,options.enabled);

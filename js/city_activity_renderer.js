@@ -1,6 +1,6 @@
 import {activityBadge,activityBadgeCanvas,activityBadgeKey} from './city_activity_badges.js';
 import {drawFavoriteSymbol} from './city_party_flags.js';
-import {FAVORITE_GLYPH_COUNT} from './city_favorites.js';
+import {markerPreferences} from './city_symbols.js';
 import {surfaceElevation} from './city_terrain.js?v=entrance-retaining-clearance-1';
 export function syncCityActivityBadges(renderer,THREE,entities,world){
   const sprites=renderer.cityActivitySprites??=new Map(),materials=renderer.cityActivityMaterials??=new Map(),active=new Set();
@@ -16,9 +16,9 @@ export function syncCityActivityBadges(renderer,THREE,entities,world){
   if(materials.size>64){const used=new Set([...sprites.values()].map(s=>s.material));for(const [key,material]of materials)if(!used.has(material)){material.map?.dispose();material.dispose();materials.delete(key);}}
 }
 
-function favoriteGlyphCanvas(glyph,color,onReady){
+function favoriteGlyphCanvas(glyph,color,background,onReady){
   const canvas=document.createElement('canvas');canvas.width=40;canvas.height=40;const ctx=canvas.getContext('2d');
-  ctx.fillStyle='#18232ddd';ctx.beginPath();ctx.arc(20,20,18,0,Math.PI*2);ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=3;ctx.stroke();
+  if(background){ctx.fillStyle='#18232ddd';ctx.beginPath();ctx.arc(20,20,18,0,Math.PI*2);ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=3;ctx.stroke();}
   const redraw=()=>{drawFavoriteSymbol(ctx,glyph,13,13,'#17140f',2);drawFavoriteSymbol(ctx,glyph,11,11,color,2);onReady?.();};
   drawFavoriteSymbol(ctx,glyph,13,13,'#17140f',2,redraw);drawFavoriteSymbol(ctx,glyph,11,11,color,2,redraw);return canvas;
 }
@@ -29,16 +29,16 @@ export function syncCityFavoriteMarkers(renderer,THREE,city,world){
   if(renderer.showFavoriteBadges===false||!city){for(const sprite of sprites.values())sprite.visible=false;return;}
   const preferences=new Map(Object.entries(renderer.cityFavorites?.people||{}));
   const playedId=city.characterGame?.mode==='play'?city.characterGame.citizenId:null;
-  if(playedId!=null)preferences.set(String(playedId),{icon:42,color:'#ffd84d'});
+  if(playedId!=null)preferences.set(String(playedId),markerPreferences(city.characterGame.marker));
   for(const [rawId,pref]of preferences){
     const citizen=city.society.citizen(Number(rawId)),entity=citizen?.entity;
     const played=Number(rawId)===playedId;
     if(!entity||entity.destroyed||!played&&(citizen.indoorLocation||citizen.ridingVehicleId))continue;
     if(Number.isFinite(renderer.renderedMinTx)&&(entity.x<renderer.renderedMinTx-2||entity.x>renderer.renderedMaxTx+2||entity.y<renderer.renderedMinTy-2||entity.y>renderer.renderedMaxTy+2))continue;
     if(renderer.isFirstPersonActive?.()&&Number(entity.id)===Number(renderer.fpEntityId))continue;
-    const glyph=Number.isInteger(pref.icon)&&pref.icon>=0&&pref.icon<FAVORITE_GLYPH_COUNT?pref.icon:42,color=/^#[\da-f]{6}$/i.test(pref.color||'')?pref.color:'#ffd84d',key=`${glyph}:${color}`;
+    const {icon:glyph,color,background}=markerPreferences(pref),key=`${glyph}:${color}:${background}`;
     let material=materials.get(key);
-    if(!material){let texture;const canvas=favoriteGlyphCanvas(glyph,color,()=>{if(texture)texture.needsUpdate=true;});texture=new THREE.CanvasTexture(canvas);texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;material=new THREE.SpriteMaterial({map:texture,transparent:true,alphaTest:.05,depthTest:true,depthWrite:false});materials.set(key,material);}
+    if(!material){let texture;const canvas=favoriteGlyphCanvas(glyph,color,background,()=>{if(texture)texture.needsUpdate=true;});texture=new THREE.CanvasTexture(canvas);texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;material=new THREE.SpriteMaterial({map:texture,transparent:true,alphaTest:.05,depthTest:true,depthWrite:false});materials.set(key,material);}
     let sprite=sprites.get(entity.id);if(!sprite){sprite=new THREE.Sprite(material);sprite.renderOrder=36;renderer.scene.add(sprite);sprites.set(entity.id,sprite);}
     sprite.visible=true;sprite.material=material;
     const offset=renderer._citizenRenderOffsets?.get(entity.id),location=citizen.indoorLocation,point=location?.position||citizen._renderIndoorPosition,x=(point?.x??entity.x)+(offset?.x||0),z=(point?.y??entity.y)+(offset?.y||0),building=location&&city.building(location.buildingId),surface=(location&&building?building.terrain?.base??surfaceElevation(world,x,z):surfaceElevation(world,x,z))+(point?.z||0),zoom=renderer.zoom||1,size=Math.max(.85,Math.min(2,.4/zoom));

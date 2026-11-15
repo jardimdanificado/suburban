@@ -761,17 +761,21 @@ export class CityUI {
     }
     const active=people.find(person=>person.id===this.favoriteEditorId);if(!active)return;
     const personName=name(active.citizen.entity);p.heading(`MARCADOR · ${personName.toLocaleUpperCase('pt-BR')}`);p.checkbox('Incluir as atividades no histórico de canto',active.pref.feed,value=>{active.pref.feed=value;favorites.persist();});
-    p.ui.text('COR DO MARCADOR',p.x,p.y+4,C.muted);const color=this.favoriteColorInput(active.id,active.pref);this.inputAt(color,p.x+112,p.y,42);p.space(25);
+    this.markerEditor(p,active.id,active.pref,()=>favorites.persist());
+  }
+  markerEditor(p,id,pref,persist){
+    p.checkbox('Mostrar fundo do símbolo',pref.background!==false,value=>{pref.background=value;persist({background:value});});
+    p.ui.text('COR DO MARCADOR',p.x,p.y+4,C.muted);const color=this.favoriteColorInput(id,pref,persist);this.inputAt(color,p.x+112,p.y,42);p.space(25);
     p.heading(`ESCOLHA ENTRE OS ${FAVORITE_GLYPH_COUNT} SÍMBOLOS DO JOGO`);p.note('Clique em um símbolo para usar acima da cabeça. O símbolo amarelo é o padrão.');
-    const cell=22,gap=3,columns=16,gridWidth=columns*(cell+gap)-gap,startX=p.x+Math.max(0,(p.w-gridWidth)/2),startY=p.y,ctx=p.ui.ctx;
+    const cell=22,gap=3,columns=Math.max(1,Math.min(16,Math.floor(p.w/(cell+gap)))),gridWidth=columns*(cell+gap)-gap,startX=p.x+Math.max(0,(p.w-gridWidth)/2),startY=p.y,ctx=p.ui.ctx;
     for(let glyph=0;glyph<FAVORITE_GLYPH_COUNT;glyph++){
-      const col=glyph%columns,row=Math.floor(glyph/columns),x=startX+col*(cell+gap),y=startY+row*(cell+gap),selected=glyph===active.pref.icon;
-      if(y+cell>=p.top&&y<=p.bottom){bevel(ctx,x,y,cell,cell,{inset:selected,fill:selected?T.selected:T.paper});drawFavoriteSymbol(ctx,glyph,x+3,y+3,selected?active.pref.color:T.ink,2);p.ui.regions.push({x,y,w:cell,h:cell,label:`Símbolo ${glyph}${selected?' · selecionado':''}`,onClick:()=>{active.pref.icon=glyph;favorites.persist();}});}
+      const col=glyph%columns,row=Math.floor(glyph/columns),x=startX+col*(cell+gap),y=startY+row*(cell+gap),selected=glyph===pref.icon;
+      if(y+cell>=p.top&&y<=p.bottom){bevel(ctx,x,y,cell,cell,{inset:selected,fill:selected?T.selected:T.paper});drawFavoriteSymbol(ctx,glyph,x+3,y+3,selected?pref.color:T.ink,2);p.ui.regions.push({x,y,w:cell,h:cell,label:`Símbolo ${glyph}${selected?' · selecionado':''}`,onClick:()=>{pref.icon=glyph;persist({icon:glyph});}});}
     }
     p.y=startY+Math.ceil(FAVORITE_GLYPH_COUNT/columns)*(cell+gap)+3;
   }
-  favoriteColorInput(id,pref){
-    const favorites=this.favorites||this.host?.favorites;this.favoriteColorInputs??={};let input=this.favoriteColorInputs[id];if(!input){input=document.createElement('input');input.type='color';input.setAttribute('aria-label',`Cor do marcador de ${name(this.city.society.citizen(id)?.entity)}`);input.addEventListener('pointerdown',()=>this.host?.manager.raise(this.windowId));this.element.append(input);this.favoriteColorInputs[id]=input;}input.oninput=()=>{pref.color=input.value;favorites.persist();};input.value=pref.color;return input;
+  favoriteColorInput(id,pref,persist=()=>{(this.favorites||this.host?.favorites).persist();}){
+    this.favoriteColorInputs??={};let input=this.favoriteColorInputs[id];if(!input){input=document.createElement('input');input.type='color';input.setAttribute('aria-label',id==='player'?'Cor do marcador do personagem':`Cor do marcador de ${name(this.city.society.citizen(id)?.entity)}`);input.addEventListener('pointerdown',()=>this.host?.manager.raise(this.windowId));this.element.append(input);this.favoriteColorInputs[id]=input;}input.oninput=()=>{pref.color=input.value;persist({color:input.value});};input.value=pref.color;return input;
   }
   customHistory(p){
     const favorites=this.favorites||this.host?.favorites;if(!favorites){p.note('Histórico personalizado indisponível.');return;}
