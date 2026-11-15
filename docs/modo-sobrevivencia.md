@@ -64,7 +64,7 @@ Clique em pessoas, edifícios, plantas, veículos ou objetos do chão para selec
 
 O saldo aparece à direita na barra inferior. Use L para alternar câmera livre ou travada no personagem em qualquer projeção. Na isométrica livre, arraste com o botão direito ou do meio; na terceira pessoa livre, arraste com o botão do meio para deslocar o centro da órbita. O botão direito gira a câmera 3p. WASD continua controlando o personagem. O ou Configurações abre as opções normais do jogo.
 
-Ao entrar em um prédio, a câmera 3p enquadra o edifício por fora, mantendo a fachada inteira. O personagem não recebe acompanhamento interno nem corte do prédio. A colisão considera os prédios vizinhos e corrige também a posição suavizada da câmera. A câmera não adiciona iluminação pessoal.
+Ao entrar em um prédio usando 3p, a câmera muda automaticamente para isométrica. Ao sair completamente, volta para 3p com o ângulo, a distância e a condição livre/travada preservados. Quem já usava isométrica continua nela. A fachada permanece inteira, sem corte interno. A câmera não adiciona iluminação pessoal.
 
 ### Menu contextual
 
