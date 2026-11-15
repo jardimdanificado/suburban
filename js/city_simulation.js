@@ -1,3 +1,4 @@
+import {familyAction, updateFamilyCampaign} from './city_family_campaign.js';
 import {canFarmVertically,isVerticalFarm,farmSiteType} from './city_farm_layout.js';
 import {releaseSharedPassenger} from './city_boat_crossings.js?v=shared-crossings-1';
 import {advanceFishing} from './city_fishing.js';
@@ -146,6 +147,7 @@ const key = (x, y) => `${x},${y}`;
 
 export class CitySimulation {
   constructor({ world, createEntity, seed = world.seed ?? 1337, population = INITIAL_POPULATION, startFoundingWorks = false, foundingPrivateBanks = true }) {
+    this.familyCampaign = null;
     this.initialPopulation = population;
     this.startFoundingWorks = startFoundingWorks;
     this.foundingPrivateBanks = foundingPrivateBanks;
@@ -1501,6 +1503,7 @@ export class CitySimulation {
       if (parent && (child.homeId !== parent.homeId || child.homeUnitId !== parent.homeUnitId)) this.society.houseChild(child);
     }
   }
+  familyAction(action, options = {}) { return familyAction(this, action, options); }
   stepMinute() {
     const profileStart=performance.now();let profileMark=profileStart;
     this._pathSearchProfile=this.profileDiagnostics?{minute:this.minute,searches:0,totalMs:0,maxMs:0,start:null,goal:null}:null;
@@ -1520,6 +1523,7 @@ export class CitySimulation {
     this.sanitation.updateMinute();
     for (const c of this.citizens)if(!c.worldBoatCrew&&(c.workMeal||(c.jobId||c.businessIds.length)&&c.needs.food<45))this.workMeals.tryStart(c);
     this.logistics.updateMinute();
+    updateFamilyCampaign(this);
     const servicesMs=performance.now()-profileMark;profileMark=performance.now();
     const civicDetail=this.profileDiagnostics?{}:null,measureCivic=(name,work)=>{if(!civicDetail){work();return;}const started=performance.now();work();civicDetail[`${name}Ms`]=performance.now()-started;};
     measureCivic('voting',()=>this.politics.voting.updateMinute());

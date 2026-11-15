@@ -106,7 +106,7 @@ export function tradeSharesHourly(city){
   }
   const offers=(b.shareOffers||[]).filter(o=>o.status==='open');for(const open of offers)if(open.capitalRaise&&city.minute-(open.lastRepricedAt??open.createdAt)>=1440){open.valuation=Math.max(Math.floor(open.valuation*.88),Math.floor(equityValue(city,b)*.5));open.lastRepricedAt=city.minute;}
   const offer=offers[0];if(!offer)continue;
-  const buyers=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&c.accountId!==offer.sellerId&&c.balance>city.currency.price(20000)).sort((a,d)=>d.balance-a.balance||a.id-d.id);
+  const buyers=city.citizens.filter(c=>!c.playerManaged&&!c.entity.destroyed&&city.society.isAdult(c)&&c.accountId!==offer.sellerId&&c.balance>city.currency.price(20000)).sort((a,d)=>d.balance-a.balance||a.id-d.id);
   for(const c of buyers.slice(0,8)){
    if(offer.sellerId==='treasury'&&!offer.billId&&!offer.capitalRaise){const quota=privatizationQuota(city);if(quota.sold>=quota.allowed)break;}
    const budget=Math.max(0,Math.floor((c.balance-city.currency.price(20000))*.2)),points=Math.min(offer.remaining,500,Math.floor(budget*TOTAL/offer.valuation));

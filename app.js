@@ -92,7 +92,7 @@ export function startOrResumeGame() {
     cityUI.hidden = false;
     cityUI.element.hidden = false;
     if (cityUI.manager.windows.length === 0) {
-      cityUI.openModule('city');
+      cityUI.openModule('family');
     }
   }
 }
@@ -810,7 +810,7 @@ export function startNewCity({ preset = 'archipelago', seed = 482910, size = 256
     cityUI.lastElectionResultId = city.politics.lastResult?.id ?? null;
     cityUI.element.replaceChildren();
     cityUI.manager.closeAll(true);
-    cityUI.openModule('city');
+    cityUI.openModule('family');
     cityUI.notice = genError || `Nova cidade fundada com sucesso! (${size}×${size}, ${population} hab.)`;
   }
 

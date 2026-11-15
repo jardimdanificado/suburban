@@ -232,7 +232,7 @@ export class CityHousing {
       if(best){
         const owned=best.units.every(u=>u.ownerId===c.accountId);
         if(owned&&this.rentHome(c,best.home))continue;
-        if(best.price+reserve<=c.balance&&this.buyHome(c,best.home)&&this.rentHome(c,best.home))continue;
+        if(!c.playerManaged&&best.price+reserve<=c.balance&&this.buyHome(c,best.home)&&this.rentHome(c,best.home))continue;
         // Keep money for the next meals; a lease must be sustainable beyond its first payment.
         if(this.rent(best.home,c)+Math.min(1500,c.balance*.25)<=c.balance&&this.rentHome(c,best.home))continue;
       }
@@ -255,6 +255,7 @@ export class CityHousing {
     }
     const availableHomeIds=new Set(availableHomes.map(option=>option.home.id));
     for (const c of investors) {
+      if(c.playerManaged)continue;
       if (!c.homeUnitId) {
         let bestOption=null,best=Infinity;for(const option of availableHomes){const {home,units,price}=option;if(!availableHomeIds.has(home.id)||!units.every(u=>u.ownerId!==c.accountId)||price+60000>=c.balance)continue;const score=price*(1-.25*colorAffinity(c,this.homeColor(home)));if(score<best){best=score;bestOption=option;}}
         if(bestOption&&this.buyHome(c,bestOption.home)){
@@ -299,7 +300,7 @@ export class CityHousing {
     let investorHomes=profile?.homesByOwner;
     if(!investorHomes){investorHomes=new Map();for(const home of this.homes.values())for(const owner of new Set(this.units(home).map(u=>u.ownerId).filter(id=>id!=='treasury')))investorHomes.set(owner,(investorHomes.get(owner)||0)+1);}
     const investors=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&c.homeUnitId&&(c.landlordSince!=null||c.rentalPreference>=.89||c.businessIds.length&&c.rentalPreference>=.78))
-      .filter(c=>c.creditAllowed!==false&&!city.politics.officeHolder(c)&&(investorHomes.get(c.accountId)||0)<3)
+      .filter(c=>!c.playerManaged&&c.creditAllowed!==false&&!city.politics.officeHolder(c)&&(investorHomes.get(c.accountId)||0)<3)
       .sort((a,b)=>((b.skills.management||0)+b.rentalPreference*30+b.balance/100000)-((a.skills.management||0)+a.rentalPreference*30+a.balance/100000)||a.id-b.id);
     const plots=city.development.plots.filter(p=>p.ownerId==='treasury'&&p.forSale&&!p.buildingId&&!p.projectId&&p.width>=2&&p.depth>=2&&p.width<=8&&p.depth<=8&&!['farm','quarry'].includes(p.type)).sort((a,b)=>Math.abs(a.width*a.depth-4)-Math.abs(b.width*b.depth-4)||a.price-b.price);
     for(const owner of investors)for(const plot of plots){

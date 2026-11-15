@@ -6,6 +6,8 @@ Uma cidade procedural sobre o relevo natural, com pessoas, patrimônio, governo,
 python3 scripts/serve.py
 ```
 
+**Campanha familiar:** abra **Minha família**, escolha uma origem e um adulto. Trabalhe, abra empresas, construa e cumpra contratos com entregas reais para consolidar seu lugar no bairro. A cidade continua autônoma. Veja o [guia do modo familiar](docs/modo-familia.md).
+
 Abra `http://127.0.0.1:8000`. O servidor impede o cache de código da página e do worker. Arraste o mapa para mover a câmera e use a roda para aproximar. A barra superior abre janelas e controla pausa, velocidade e visualização. O minimapa e o botão de centralizar ajudam a navegar pelo terreno. Espaço pausa; +/− altera a velocidade; F3 alterna 2D/3D. Um segundo simulado representa quatro minutos da cidade.
 
 Na **câmera livre**, segure **WASD** para voar na direção da visão, **E/Q** para subir e descer, **Shift** para acelerar e **Caps Lock** para alternar entre velocidade lenta e normal. **Espaço** pausa ou retoma o tempo. Arraste com o botão esquerdo ou direito para olhar ao redor; a roda ajusta o campo de visão. No mobile, os controles de movimento aparecem ao entrar na câmera livre; segure os botões da janela de controles para mover e solte para parar; toque em **Devagar** para alternar a velocidade e arraste na cena para girar a câmera. Pressione **Esc** para sair.

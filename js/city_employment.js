@@ -142,7 +142,7 @@ export function reviewMarket(city,offers){
   const indexes={allowed:new Set(offers.map(b=>b.id)),demand:new Map()};
   for(const {application} of queueApplications(city))if(application.status==='análise')indexes.demand.set(application.buildingId,(indexes.demand.get(application.buildingId)||0)+1);
   for(const c of city.citizens){
-    if(c.entity.destroyed||!city.society.isAdult(c)||city.politics.officeHolder(c)||c.businessIds.length)continue;
+    if(c.playerManaged||c.entity.destroyed||!city.society.isAdult(c)||city.politics.officeHolder(c)||c.businessIds.length)continue;
     if(profile)profile.eligible++;
     let started=profile?performance.now():0;
     discoverVacancies(city,c);

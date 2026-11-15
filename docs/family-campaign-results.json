@@ -1,0 +1,164 @@
+{
+  "result": {
+    "seed": 1337,
+    "population": 24,
+    "minute": 5038,
+    "status": "won",
+    "firstDeliveryAt": 955,
+    "wonAt": 5038,
+    "homeProject": "project:25",
+    "progress": {
+      "completed": 3,
+      "housed": true,
+      "healthy": true,
+      "solvent": true,
+      "liquid": 338211,
+      "stableMinutes": 1440
+    },
+    "moneyConserved": true
+  },
+  "checkpoints": [
+    {
+      "day": 2,
+      "minute": 1440,
+      "contracts": [
+        {
+          "id": 1,
+          "status": "completed",
+          "delivered": 6
+        }
+      ],
+      "progress": {
+        "completed": 1,
+        "housed": true,
+        "healthy": true,
+        "solvent": true,
+        "liquid": 453936,
+        "stableMinutes": 0
+      },
+      "homeProject": "materials",
+      "family": [
+        {
+          "id": 26,
+          "home": true,
+          "food": 78,
+          "health": 85
+        }
+      ]
+    },
+    {
+      "day": 3,
+      "minute": 2880,
+      "contracts": [
+        {
+          "id": 1,
+          "status": "completed",
+          "delivered": 6
+        },
+        {
+          "id": 2,
+          "status": "completed",
+          "delivered": 6
+        }
+      ],
+      "progress": {
+        "completed": 2,
+        "housed": true,
+        "healthy": true,
+        "solvent": true,
+        "liquid": 279338,
+        "stableMinutes": 0
+      },
+      "homeProject": "materials",
+      "family": [
+        {
+          "id": 26,
+          "home": true,
+          "food": 69,
+          "health": 100
+        }
+      ]
+    },
+    {
+      "day": 4,
+      "minute": 4320,
+      "contracts": [
+        {
+          "id": 1,
+          "status": "completed",
+          "delivered": 6
+        },
+        {
+          "id": 2,
+          "status": "completed",
+          "delivered": 6
+        },
+        {
+          "id": 3,
+          "status": "completed",
+          "delivered": 6
+        }
+      ],
+      "progress": {
+        "completed": 3,
+        "housed": true,
+        "healthy": true,
+        "solvent": true,
+        "liquid": 297353,
+        "stableMinutes": 722
+      },
+      "homeProject": "materials",
+      "family": [
+        {
+          "id": 26,
+          "home": true,
+          "food": 79,
+          "health": 100
+        }
+      ]
+    },
+    {
+      "day": 4,
+      "minute": 5038,
+      "contracts": [
+        {
+          "id": 1,
+          "status": "completed",
+          "delivered": 6
+        },
+        {
+          "id": 2,
+          "status": "completed",
+          "delivered": 6
+        },
+        {
+          "id": 3,
+          "status": "completed",
+          "delivered": 6
+        },
+        {
+          "id": 4,
+          "status": "active",
+          "delivered": 0
+        }
+      ],
+      "progress": {
+        "completed": 3,
+        "housed": true,
+        "healthy": true,
+        "solvent": true,
+        "liquid": 338211,
+        "stableMinutes": 1440
+      },
+      "homeProject": "materials",
+      "family": [
+        {
+          "id": 26,
+          "home": true,
+          "food": 78,
+          "health": 100
+        }
+      ]
+    }
+  ]
+}

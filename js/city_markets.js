@@ -124,7 +124,7 @@ export function bootstrapEnterprise(economy){
   // Business ownership is a capital decision, not a requirement to quit a
   // resident's day job. Restricting founders to unemployed residents meant
   // the first shop became impossible exactly as hiring improved.
-  const people=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!city.politics.officeHolder(c)&&!c.businessIds.length&&!c.startupProjectId&&c.balance>=city.currency.price(500)).sort((a,b)=>b.balance-a.balance);
+  const people=city.citizens.filter(c=>!c.playerManaged&&!c.entity.destroyed&&city.society.isAdult(c)&&!city.politics.officeHolder(c)&&!c.businessIds.length&&!c.startupProjectId&&c.balance>=city.currency.price(500)).sort((a,b)=>b.balance-a.balance);
   if(!people.length)return false;
   const options=economy.demands.filter(d=>d.score>=30&&['market','greengrocer','restaurant','artisan','kitchen','carrier','cleaner','waste_collector'].includes(d.type)).sort((a,b)=>Number(!['market','greengrocer'].includes(a.type))-Number(!['market','greengrocer'].includes(b.type))||b.score-a.score);
   if(!people.length||!options.length)return false;

@@ -3,7 +3,9 @@ export function tycoonIcon(ctx,key,x,y,scale=2){
   ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);
   const rect=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(x,y,w,h);},line=(points,c)=>{ctx.strokeStyle=c;ctx.lineWidth=1;ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x+.5,y+.5):ctx.moveTo(x+.5,y+.5));ctx.stroke();};
   const ink='#293438',light='#f4ebc5',blue='#527cb3',dark='#714f30',brick='#b57448',green='#659453';
-  if(key==='favorites'){
+  if(key==='family'){
+    rect(2,3,4,4,dark);rect(10,3,4,4,blue);rect(1,8,6,6,green);rect(9,8,6,6,brick);rect(6,7,4,4,light);rect(6,11,4,4,blue);
+  }else if(key==='favorites'){
     rect(7,1,2,3,'#e6bd42');rect(3,4,10,2,'#e6bd42');rect(5,6,6,2,'#e6bd42');rect(6,8,4,2,'#e6bd42');rect(7,10,2,3,'#d8893d');rect(3,13,3,2,'#d8893d');rect(10,13,3,2,'#d8893d');rect(7,4,2,4,'#fff0a1');
   }else if(key==='custom-history'){
     rect(2,2,12,12,'#714f30');rect(3,3,10,10,'#f4ebc5');rect(4,5,5,1,blue);rect(4,8,7,1,blue);rect(4,11,4,1,blue);rect(10,5,4,4,'#d6b169');rect(11,4,2,1,ink);rect(11,6,1,2,ink);rect(12,7,2,1,ink);

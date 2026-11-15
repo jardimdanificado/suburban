@@ -10,7 +10,7 @@ export class CityBank {
   initializePrivateBanks(){
     const city=this.city;if(city.foundingPrivateBanks===false||this.privateBanksInitialized)return;this.privateBanksInitialized=true;
     const tower=city.buildings.find(b=>b.type==='office_tower'&&b.active&&!b.entity.destroyed);if(!tower)return;
-    const founders=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!city.politics.officeHolder(c)&&!c.businessIds.length).sort((a,b)=>(b.skills.management||0)-(a.skills.management||0)||a.id-b.id);
+    const founders=city.citizens.filter(c=>!c.playerManaged&&!c.entity.destroyed&&city.society.isAdult(c)&&!city.politics.officeHolder(c)&&!c.businessIds.length).sort((a,b)=>(b.skills.management||0)-(a.skills.management||0)||a.id-b.id);
     for(let i=0;i<2;i++){
       const founder=founders[i],floor=officeFloors(city,tower).find(f=>!f.tenantId&&f.units.length&&f.units.every(u=>u.forRent));if(!founder||!floor)break;
       ensureExternalAccount(city,'founding-bank-investors','Investidores privados fundadores');
@@ -188,7 +188,7 @@ export class CityBank {
   }
   householdFinance() {
     const city = this.city, banks = this.available();
-    for (const c of city.citizens.filter(c => !c.entity.destroyed && city.society.isAdult(c))) {
+    for (const c of city.citizens.filter(c => !c.playerManaged && !c.entity.destroyed && city.society.isAdult(c))) {
       const preferredBanks=banks.length>1?banks.slice().sort((a,b)=>city.relationships.businessPenalty(c,a)-city.relationships.businessPenalty(c,b)):banks;
       for (const deposit of this.deposits.values()) if (deposit.clientId === c.accountId && deposit.balance > 0 && c.balance < this.policy.cashReserve) this.withdraw({id:deposit.bankId},c.accountId,Math.min(deposit.balance,this.policy.cashReserve-c.balance));
       if (!banks.length) continue;

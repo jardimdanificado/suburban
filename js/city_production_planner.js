@@ -156,7 +156,7 @@ export function investProductionPlan(economy){
   for(const project of active)if(project.ownerId!=null){projectsByOwner.set(project.ownerId,(projectsByOwner.get(project.ownerId)||0)+1);projectOwners.add(project.ownerId);}
   for(const loan of city.bank.loans)if(loan.purpose==='business'&&!['paid','written-off'].includes(loan.status))businessLoanClients.add(loan.clientId);
   const managerLoad=c=>c.businessIds.length+(projectsByOwner.get(c.id)||0);
-  const founderPool=adults.filter(c=>!city.politics.officeHolder(c)&&managerLoad(c)<3&&c.creditAllowed!==false&&!businessLoanClients.has(c.accountId)&&!projectOwners.has(c.id)).map(c=>({citizen:c,load:managerLoad(c)}));
+  const founderPool=adults.filter(c=>!c.playerManaged&&!city.politics.officeHolder(c)&&managerLoad(c)<3&&c.creditAllowed!==false&&!businessLoanClients.has(c.accountId)&&!projectOwners.has(c.id)).map(c=>({citizen:c,load:managerLoad(c)}));
   markStage('siteAndFounders');
   const batchLimit=1,assignedManagers=new Set();let opened=0;
   const lotPools=new Map(),lotsFor=row=>{

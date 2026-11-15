@@ -522,7 +522,7 @@ export class CityEconomy {
     if(b.type!==type){const oldType=b.type,totals={totalRevenue:b.totalRevenue,totalExpenses:b.totalExpenses,dividends:b.dividends};b.type=type;b.entity.properties.name=city.life.buildingName(city.buildingTypes[type].label);b.entity.properties.render.style=type;b.entity.properties.render.color=city.buildingTypes[type].color;b.color=city.buildingTypes[type].color;this.setupBuilding(b);Object.assign(b,totals);b.layoutRevision=(b.layoutRevision||0)+1;city.history.record('business',`Imóvel próprio adaptado de ${city.buildingTypes[oldType].label} para ${city.buildingTypes[type].label}.`,[founder.accountId,b.accountId],{buildingId:b.id,oldType,type});}
     this.activateBusiness(b,founder,crop);city.sanitation.setupBuilding(b);return b;
   }
-  foundBusiness(founderId, type, crop = null) {
+  foundBusiness(founderId, type, crop = null, {compact = false} = {}) {
     const city = this.city, founder = this.citizen(founderId);
     if (!founder || !city.society.isAdult(founder) || !PRIVATE_TYPES.has(type) || this.city.politics.officeHolder(founder) || (type === 'farm' && !CROPS[crop])) return null;
     if (city.development.projects.some(p => p.ownerId === founder.id && p.type === type && p.crop === crop && !p.cancelled && p.status !== 'completed')) return null;
@@ -537,12 +537,12 @@ export class CityEconomy {
     let boughtLot=false;
     let lot = city.development.plots.find(p => p.ownerId === founder.accountId && !p.buildingId && !p.projectId && fertile(p));
     if (!lot) {
-      const available = city.development.plots.filter(p => p.ownerId === 'treasury' && p.forSale && !p.buildingId && !p.projectId && fertile(p)).sort((a,b)=>type==='farm'?(city.development.compactPlanning&&canFarmVertically(crop)?-1:1)*(Number(city.development.isFarmPlot(b))-Number(city.development.isFarmPlot(a))):0)[0];
+      const available = city.development.plots.filter(p => p.ownerId === 'treasury' && p.forSale && !p.buildingId && !p.projectId && fertile(p)).sort((a,b)=>type==='farm'?(!compact&&city.development.compactPlanning&&canFarmVertically(crop)?-1:1)*(Number(city.development.isFarmPlot(b))-Number(city.development.isFarmPlot(a))):0)[0];
       if (!available || founder.balance < available.price + this.quote(type) + this.city.currency.price(15000)) return null;
       lot = city.development.buyPlot(founder.accountId, available.id);boughtLot=!!lot;
     }
     if (!lot) return null;
-    const vertical=type==='farm'&&!city.development.isFarmPlot(lot),options={crop,...(vertical?{kind:'building'}:{}),width:type==='farm'?Math.min(vertical?4:20,lot.width):Math.min(3,lot.width),depth:type==='farm'?Math.min(vertical?4:20,lot.depth):Math.min(3,lot.depth)},floors=vertical?3:businessFloors(type,lot.id);
+    const vertical=type==='farm'&&!city.development.isFarmPlot(lot),options={crop,...(vertical?{kind:'building'}:{}),width:compact?Math.min(type==='farm'&&!vertical?6:2,lot.width):type==='farm'?Math.min(vertical?4:20,lot.width):Math.min(3,lot.width),depth:compact?Math.min(type==='farm'&&!vertical?6:2,lot.depth):type==='farm'?Math.min(vertical?4:20,lot.depth):Math.min(3,lot.depth)},floors=compact?1:vertical?3:businessFloors(type,lot.id);
     const project = city.development.beginProject(founder.accountId, lot.id, type, {...options,floors}) || (floors>1?city.development.beginProject(founder.accountId,lot.id,type,{...options,floors:1}):null);
     if(!project&&boughtLot&&!lot.projectId&&city.transfer('treasury',founder.accountId,lot.price,'Estorno de terreno: empresa não iniciada')){lot.ownerId='treasury';lot.forSale=true;}
     if(project&&project.status!=='completed')founder.startupProjectId=project.id;
@@ -553,7 +553,7 @@ export class CityEconomy {
     const available=search.vacant>search.reserved;
     for(const demand of this.demands.filter(d=>OFFICE_BUSINESSES.has(d.type)&&d.score>=30).sort((a,b)=>b.score-a.score)){
       if(!available&&OFFICE_ONLY_TYPES.has(demand.type))continue;
-      const founders=this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.politics.canOwnBusiness(c)&&c.businessIds.length<3&&!c.startupProjectId).sort((a,b)=>Number(b.businessIds.some(id=>this.city.building(id)?.type==='office_tower'))-Number(a.businessIds.some(id=>this.city.building(id)?.type==='office_tower'))||b.balance-a.balance).slice(0,24);
+      const founders=this.city.citizens.filter(c=>!c.playerManaged&&!c.entity.destroyed&&this.city.politics.canOwnBusiness(c)&&c.businessIds.length<3&&!c.startupProjectId).sort((a,b)=>Number(b.businessIds.some(id=>this.city.building(id)?.type==='office_tower'))-Number(a.businessIds.some(id=>this.city.building(id)?.type==='office_tower'))||b.balance-a.balance).slice(0,24);
       for(const founder of founders){
         if(available&&rentAvailableOffice(this.city,demand.type,founder,{ownOnly:true,search})){this.hire();return true;}
         if(!OFFICE_ONLY_TYPES.has(demand.type)&&this.useOwnedPremises(founder,demand.type)){this.hire();return true;}
@@ -591,7 +591,7 @@ export class CityEconomy {
       nextStage('bootstrapMs');if(bootstrapEnterprise(this))return true;
       nextStage('essentialServicesMs');const essentialStarted=this.serviceInvestment.invest();
       nextStage('refreshDemandMs');this.updateDemand();nextStage('privateFoundingMs');
-      const investors = this.city.citizens.filter(c => this.city.society.isAdult(c) && !this.city.politics.officeHolder(c) && c.businessIds.length < 10).sort((a, b) => b.balance * (.8 + (b.traits?.riskTolerance ?? .5) * .4) - a.balance * (.8 + (a.traits?.riskTolerance ?? .5) * .4) || a.id - b.id);
+      const investors = this.city.citizens.filter(c => !c.playerManaged && this.city.society.isAdult(c) && !this.city.politics.officeHolder(c) && c.businessIds.length < 10).sort((a, b) => b.balance * (.8 + (b.traits?.riskTolerance ?? .5) * .4) - a.balance * (.8 + (a.traits?.riskTolerance ?? .5) * .4) || a.id - b.id);
       const opportunities = this.demands.filter(d => d.score >= 30).map(d => ({ ...d, priority: d.score * (.9 + this.city.random() * .2) })).sort((a, b) => b.priority - a.priority);
       for (const opportunity of opportunities) {
         if(ESSENTIAL_SERVICES.has(opportunity.type))continue;

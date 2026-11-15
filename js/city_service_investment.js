@@ -106,7 +106,7 @@ export class CityServiceInvestment {
     // per investment pass instead of rescanning all citizens and all projects
     // for every service type.
     const projectAccounts = new Set(city.development.projects.filter(p=>!p.cancelled&&p.status!=='completed').map(p=>p.accountId));
-    const eligibleFounders = city.citizens.filter(c=>city.society.isAdult(c)&&!c.entity.destroyed&&!city.politics.officeHolder(c)&&!c.businessIds.length&&!c.deliveryId&&!c.cleaningJobId);
+    const eligibleFounders = city.citizens.filter(c=>!c.playerManaged&&city.society.isAdult(c)&&!c.entity.destroyed&&!city.politics.officeHolder(c)&&!c.businessIds.length&&!c.deliveryId&&!c.cleaningJobId);
     let started = false;
     for (const demand of demands) {
       const pending = this.pending(demand.type);

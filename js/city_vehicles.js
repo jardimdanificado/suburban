@@ -382,7 +382,7 @@ export class CityVehicles {
       }
     }
     if(!reducedCadence(city,this,'personal-vehicle-purchases',180,360,`${city.buildings.length}:${city.citizens.length}`))return;
-    const buyers=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!owners.has(c.accountId)&&c.mobilityNeed>=12).sort((a,b)=>(b.mobilityNeed*(b.mobilityPriority||1)-a.mobilityNeed*(a.mobilityPriority||1))||b.balance-a.balance||a.id-b.id).slice(0,6);
+    const buyers=city.citizens.filter(c=>!c.playerManaged&&!c.entity.destroyed&&city.society.isAdult(c)&&!owners.has(c.accountId)&&c.mobilityNeed>=12).sort((a,b)=>(b.mobilityNeed*(b.mobilityPriority||1)-a.mobilityNeed*(a.mobilityPriority||1))||b.balance-a.balance||a.id-b.id).slice(0,6);
     for(const c of buyers){
       const offered=unsold.filter(v=>!v.active&&!['bicicleta_carga','carrinho'].includes(v.good)&&!dislikesColor(c,v.color)&&this.vehiclePrice(v)+city.currency.price(2500)<c.balance).sort((a,b)=>Number(b.good===['bicicleta','patins','skate','patinete'][c.id%4])-Number(a.good===['bicicleta','patins','skate','patinete'][c.id%4])||this.vehiclePrice(a)*(1-.3*colorAffinity(c,a.color))-this.vehiclePrice(b)*(1-.3*colorAffinity(c,b.color)));
       if(offered[0]&&this.buyVehicle(c.accountId,offered[0].id)){owners.add(c.accountId);c.mobilityNeed*=.22;}

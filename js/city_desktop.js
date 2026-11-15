@@ -7,15 +7,15 @@ import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js?v=favorite-window-icons-3';
 import {clipCanvasRegion} from './canvas_widgets.js';
 
-export const CITY_WINDOWS=[['city','Cidade'],['government','Governo'],['people','Cidadãos'],['land','Terrenos e obras'],['buildings','Imóveis'],['economy','Empresas'],['market','Mercado e riquezas'],['production','Produção'],['transport','Transportes'],['world','Mundo e rotas'],['urban-art','Arte urbana'],['safety','Segurança'],['forensics','IML e corpos'],['justice','Justiça'],['custody','Prisões'],['sanitation','Saneamento'],['publications','Jornais e livros'],['corruption','Corrupção'],['log','Histórico'],['favorites','Favoritos'],['custom-history','Histórico personalizado'],['map','Mapa da cidade']];
-const sizes={market:[700,500],party:[560,570],contract:[530,500],'poll-response':[560,560],'party-organization':[560,500],election:[610,510],publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],world:[570,540],'urban-art':[650,500],safety:[670,520],forensics:[650,520],justice:[700,540],custody:[640,520],sanitation:[570,450],log:[530,450],favorites:[460,420],'custom-history':[370,270],newgame:[400,470]};
+export const CITY_WINDOWS=[['family','Minha família'],['city','Cidade'],['government','Governo'],['people','Cidadãos'],['land','Terrenos e obras'],['buildings','Imóveis'],['economy','Empresas'],['market','Mercado e riquezas'],['production','Produção'],['transport','Transportes'],['world','Mundo e rotas'],['urban-art','Arte urbana'],['safety','Segurança'],['forensics','IML e corpos'],['justice','Justiça'],['custody','Prisões'],['sanitation','Saneamento'],['publications','Jornais e livros'],['corruption','Corrupção'],['log','Histórico'],['favorites','Favoritos'],['custom-history','Histórico personalizado'],['map','Mapa da cidade']];
+const sizes={family:[650,640],market:[700,500],party:[560,570],contract:[530,500],'poll-response':[560,560],'party-organization':[560,500],election:[610,510],publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],world:[570,540],'urban-art':[650,500],safety:[670,520],forensics:[650,520],justice:[700,540],custody:[640,520],sanitation:[570,450],log:[530,450],favorites:[460,420],'custom-history':[370,270],newgame:[400,470]};
 const intersects=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 
 /** OpenTTD-style desktop with tabbed modules and optional detached views. */
 export class CityDesktop {
   constructor({city,root,select,camera,controls={}}){
     Object.assign(this,{city,select,camera,controls});this.manager=new WindowManager();this.hidden=false;this.tooltip=null;this.menuOpen=false;this.lastSelected=null;this.electionNotices=new Set();this.lastElectionResultId=city.politics.lastResult?.id??null;
-    this.element=document.createElement('div');this.element.className='city-desktop-inputs';root.append(this.element);this.openModule('city');
+    this.element=document.createElement('div');this.element.className='city-desktop-inputs';root.append(this.element);this.openModule('family');
     this.tooltipElement=document.createElement('div');this.tooltipElement.className='city-tooltip';this.tooltipElement.setAttribute('role','tooltip');this.tooltipElement.hidden=true;root.append(this.tooltipElement);
   }
   get modules(){return CITY_WINDOWS;}

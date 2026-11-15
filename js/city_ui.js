@@ -1,3 +1,4 @@
+import {renderFamilyCampaign} from './city_family_ui.js';
 import {isVerticalFarm} from './city_farm_layout.js';
 import {renderCitizenSubstances} from './city_substances_ui.js';
 import {funeralSpec} from './city_funeral_services.js';
@@ -55,6 +56,7 @@ import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=citizen-acce
 import { renderWorldManagement } from './city_world_ui.js?v=world-management-9';
 export const money = formatMoney;
 export const TABS = [
+  ['family', 'MINHA FAMÍLIA', 'CAMPANHA', 'Trabalho, negócios, contratos e legado familiar.'],
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
   ['government', 'GOVERNO', 'CIDADE', 'Prefeito, patrimônio público e orçamento municipal.'],
   ['people', 'PESSOAS', 'HABITANTES', 'Rotinas, necessidades, famílias e condições de vida.'],
@@ -821,6 +823,7 @@ export class CityUI {
     p.rows(events.slice(0,limit),event=>p.record(event.message,`${stamp(event.minute)} · ${EVENT_CATEGORIES[event.category]||event.kind}`,()=>this.openEvent(event.id),false,{value:event.amount!==undefined?money(event.amount):'',color:C.cyan}));
   }
   content(p) {
+    if(this.tab==='family')return renderFamilyCampaign(this,p);
     if(this.tab==='world')return renderWorldManagement(this,p);
     if(this.tab==='newgame')return this.worldGeneration(p);
     if(this.tab==='favorites')return this.favoriteDirectory(p);
