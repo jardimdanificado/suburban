@@ -36,24 +36,25 @@ test('conversations need proximity, availability and cooldown; each person talks
   assert.equal(a.conversation, b.conversation);
   assert.equal(city.society.startConversation(a, third), false);
   assert.equal(city.society.startConversation(a, a), false);
+  const conversationsBefore=city.society.getRelation(a,b).conversations;
   const conversation = a.conversation;
   city.minute = conversation.until;
   city.society.finishConversation(a, b, conversation);
   assert.equal(a.conversation, null); assert.equal(b.conversation, null);
   assert.equal(city.society.startConversation(a, b), false);
   const r = city.society.getRelation(a, b);
-  assert.equal(r.conversations, 1); assert.equal(city.society.getRelation(b, a), r);
+  assert.equal(r.conversations, conversationsBefore+1); assert.equal(city.society.getRelation(b, a), r);
   assert(city.events.some(e => e.data.kind === 'conversation' && e.citizenIds.includes(a.id)));
 });
 
 test('daily social cleanup forgets stale weak acquaintances and keeps meaningful bonds',()=>{
   const city=setup({population:24}),[a,b,c,d]=city.citizens;
-  const cold=city.society.getRelation(a,b,true);cold.contexts=[];cold.familiarity=5;cold.lastContact=city.minute-SOCIAL_RULES.forgetAfter-1;
+  const cold=city.society.getRelation(a,b,true);cold.contexts=[];for(const view of Object.values(cold.views))Object.assign(view,{affection:10,trust:15,respect:25,resentment:0,fear:0,status:'known',romance:'none'});cold.status='known';cold.familiarity=5;cold.lastContact=city.minute-SOCIAL_RULES.forgetAfter-1;
   const strong=city.society.getRelation(c,d,true);strong.contexts=[];strong.familiarity=20;strong.lastContact=city.minute-SOCIAL_RULES.forgetAfter-1;
   for(const view of Object.values(strong.views)){view.affection=50;view.trust=45;}
   city.relationships.sync(strong);city.society.daily();
   assert.equal(city.society.getRelation(a,b),undefined);
-  assert.equal(city.society.contactIndex.has(a.id),false);assert.equal(city.society.contactIndex.has(b.id),false);
+  assert(!city.society.contactIndex.get(a.id)?.has(cold.id));assert(!city.society.contactIndex.get(b.id)?.has(cold.id));
   assert.equal(city.society.getRelation(c,d),strong);
   const renewed=city.society.getRelation(a,b,true);assert(renewed);assert.notEqual(renewed,cold);
 });
@@ -191,14 +192,15 @@ test('urgent needs finish paid essential services without repeatedly charging or
 test('a fifteen-day city develops families with coherent private contracts, needs and conserved currency', () => {
   const city = setup(),[a,b]=pair(city),r=bond(city,a,b);
   city.minute=r.partnerSince+2*1440;assert(city.society.planChild(a,b));
+  const foundingChildren=city.citizens.filter(c=>c.parentIds.length).length;
   let childcare=false;
   for (let i = 0; i < 15 * 1440 * 4; i++) {city.update(1 / 16);if(i%240===0)childcare ||= city.events.some(e=>e.data.kind==='childcare');}
   const children = city.citizens.filter(c => c.parentIds.length);
   assert(children.length > 0);
   assert(city.stats().couples > 0);
-  assert.equal(city.stats().births, children.length + [...city.accounts.values()].filter(c => c.dead && c.parentIds?.length).length);
+  assert.equal(city.stats().births+foundingChildren, children.length + [...city.accounts.values()].filter(c => c.dead && c.parentIds?.length).length);
   assert.equal(totalMoney(city), city.currency.netIssued());
-  for (const child of children) {
+  for (const child of children.filter(c=>!city.society.isAdult(c))) {
     if (child.homeUnitId) assert.equal(child.homeId, city.housing.home(city.society.guardian(child)).id);
     assert.equal(child.jobId, null);
     assert(child.needs.health >= 0 && child.needs.health <= 100);

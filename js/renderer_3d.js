@@ -5810,6 +5810,11 @@ export class RCT3DRenderer {
     return entity && !entity.destroyed && (!entity.properties?.life || !entity.properties.life.isDead) ? entity : null;
   }
 
+  rotateIsometricCamera(dYaw){
+    if(!Number.isFinite(dYaw))return;
+    this.fixedRotationY=((this.fixedRotationY+dYaw)%(Math.PI*2)+Math.PI*2)%(Math.PI*2);
+  }
+
   rotatePerspectiveCamera(dYaw, dPitch) {
     if (this.isThirdPersonActive()) {
       // 3P uses inverted vertical drag: dragging down raises the orbit, dragging up lowers it.

@@ -45,7 +45,7 @@ export class CitySociety {
   }
   initializeCitizen(c, options = {}) {
     const { age = 20 + Math.floor(this.city.random() * 24), parentIds = [] } = options;
-    Object.assign(c, { initialAge: age, bornAt: this.city.minute, parentIds: [...parentIds], childIds: [], partnerId: null, expectingId: null, lastBirthAt: null, guardianId: parentIds[0] ?? null, personality: { sociability: 0.3 + this.city.random() * 0.7, kindness: 0.4 + this.city.random() * 0.6, interest: Math.floor(this.city.random() * topics.length), wantsRomance: this.city.random() < 0.9, wantsChildren: this.city.random() < 0.8 }, conversation: null, lastConversationAt: -Infinity });
+    Object.assign(c, { initialAge: age, bornAt: this.city.minute, parentIds: [...parentIds], childIds: [], partnerId: null, expectingId: null, lastBirthAt: null, guardianId: parentIds[0] ?? null, personality: { sociability: 0.3 + this.city.random() * 0.7, kindness: 0.4 + this.city.random() * 0.6, interest: Math.floor(this.city.random() * topics.length), wantsRomance: options.wantsRomance ?? this.city.random() < 0.9, wantsChildren: this.city.random() < 0.8 }, conversation: null, lastConversationAt: -Infinity });
     Object.freeze(c.personality);
     this.citizensById?.set(c.id,c);
     this.city.relationships.initialize(c, options);initializePrejudices(c,this.city.initialSeed);

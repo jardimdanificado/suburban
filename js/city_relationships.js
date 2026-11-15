@@ -27,6 +27,7 @@ export class CityRelationships {
     if(a.parentIds.some(id=>b.parentIds.includes(id)))return 'sibling';
     if(a.guardianId===b.id)return 'guardian';
     if(b.guardianId===a.id)return 'dependent';
+    if(this.city.society.related(a,b))return 'relative';
     return null;
   }
   accepts(a,b) {

@@ -1,3 +1,4 @@
+import {populateFoundingCommunity} from './city_initial_relationships.js';
 import {gameAction,characterMinute,characterMovement,updateCharacterGame,isPlayedCitizen} from './character_game.js';
 import {familyAction, updateFamilyCampaign} from './city_family_campaign.js';
 import {canFarmVertically,isVerticalFarm,farmSiteType} from './city_farm_layout.js';
@@ -664,7 +665,7 @@ export class CitySimulation {
       }
     }
     if(!arrivalTiles.length)throw new Error('Não há células de terra acessíveis para distribuir a população neste mapa.');
-    for (let i = 0; i < this.initialPopulation; i++) { const p = arrivalTiles[i % arrivalTiles.length]; this.addCitizen(p.x, p.y, i); }
+    populateFoundingCommunity(this,arrivalTiles);
     this.economy.initialize();
     this.vehicles.equipInitialWorkers();
     this.nature.initialize();

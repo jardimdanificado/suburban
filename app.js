@@ -7,7 +7,7 @@ import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=game-approach-camera-9";
 import { CityDesktop } from "./js/city_desktop.js?v=game-approach-camera-9";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=game-approach-camera-9";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=isometric-camera-rotation-11";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
@@ -279,7 +279,8 @@ function midpoint(a,b){return {x:(a.x+b.x)/2,y:(a.y+b.y)/2};}
 function pointerDistance(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
 function moveCameraByPointer(dx,dy,zoom){
   const factor=56/(zoom*Math.max(100,root.clientHeight));
-  renderer3D.setCamera(renderer3D.getCameraX()-(dx*.70710678+dy*1.22474487)*factor,renderer3D.getCameraY()-(-dx*.70710678+dy*1.22474487)*factor,zoom);
+  const yaw=renderer3D.fixedRotationY,sin=Math.sin(yaw),cos=Math.cos(yaw),vertical=1/Math.sin(renderer3D.isometricAngleX);
+  renderer3D.setCamera(renderer3D.getCameraX()-(dx*cos+dy*sin*vertical)*factor,renderer3D.getCameraY()-(-dx*sin+dy*cos*vertical)*factor,zoom);
 }
 function updateFreeCameraMovement(dt){
   const active=!mainMenu.isActive()&&renderer3D.isFirstPersonActive()&&renderer3D.fpEntityId==null;
@@ -331,7 +332,7 @@ function onPointerDown(event) {
     const rect=root.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
     pointerOnUI=gameUI.pointerDown(x,y,event.button,legacyUI);
     pointerDown=lastPointer={x:event.clientX,y:event.clientY};
-    cameraLookDrag=!pointerOnUI&&event.button===2&&renderer3D.isThirdPersonActive();
+    cameraLookDrag=!pointerOnUI&&event.button===2;
     root.setPointerCapture?.(event.pointerId);return;
   }
   if (mainMenu.isActive()) {
@@ -409,8 +410,13 @@ function onPointerMove(event) {
     if(!gameUI.pointerMove(mousePosition.x,mousePosition.y)&&lastPointer){
       if(pointerOnUI&&event.pointerType==='touch'&&pointerDown&&Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>=6){
         gameUI.desktop.scrollAt(pointerDown.x-rect.left,pointerDown.y-rect.top,lastPointer.y-event.clientY);
-      }else if(!pointerOnUI&&pointerDown&&!gameCameraLocked&&((event.buttons&4)||!renderer3D.isPerspectiveActive()&&(event.buttons&2))){panGameCamera(event.clientX-lastPointer.x,event.clientY-lastPointer.y);
-      }else if(cameraLookDrag)renderer3D.rotatePerspectiveCamera((event.clientX-lastPointer.x)*.004,-(event.clientY-lastPointer.y)*.004);
+      }else if(!pointerOnUI&&pointerDown&&!gameCameraLocked&&(event.buttons&4)){panGameCamera(event.clientX-lastPointer.x,event.clientY-lastPointer.y);
+      }else if(cameraLookDrag&&pointerDown&&Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>=6){
+        const dx=event.clientX-lastPointer.x,dy=event.clientY-lastPointer.y;
+        if(renderer3D.isPerspectiveActive())renderer3D.rotatePerspectiveCamera(dx*.004,-dy*.004);
+        else renderer3D.rotateIsometricCamera(-dx*.004);
+        if([...gameUI.keys].some(code=>/^Key[WASD]$|^Arrow/.test(code)))gameUI.input();
+      }
     }
     lastPointer={x:event.clientX,y:event.clientY};return;
   }
