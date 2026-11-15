@@ -73,6 +73,7 @@ export class CityFiscal {
     }
   }
   requestRevenueReview(){
+    if(this.city.mayorCampaign?.mode==='play')return;
     const city=this.city,p=city.politics;if(!economicPolicy(city,'automaticStabilizer')||this.lastRevenueReviewDay===city.day||this.days.length<3)return;this.lastRevenueReviewDay=city.day;
     const finance=this.report();if(finance.operatingBalance>=0||finance.runwayDays==null||finance.runwayDays>economicPolicy(city,'fiscalGuardDays'))return;
     const pending=p.council.bills.find(b=>b.type==='businessTax'&&b.payload.value>p.policy.businessTax&&['awaiting-session','proposed','awaiting-sanction','executing','vetoed'].includes(b.status));if(pending){this.revenueReviewBillId=pending.id;return;}

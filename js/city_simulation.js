@@ -1,3 +1,4 @@
+import {mayorAction, updateMayorCampaign, mayorMode} from './city_mayor_campaign.js';
 import {populateFoundingCommunity} from './city_initial_relationships.js';
 import {gameAction,characterMinute,characterMovement,updateCharacterGame,isPlayedCitizen} from './character_game.js';
 import {familyAction, updateFamilyCampaign} from './city_family_campaign.js';
@@ -151,6 +152,7 @@ export class CitySimulation {
   constructor({ world, createEntity, seed = world.seed ?? 1337, population = INITIAL_POPULATION, startFoundingWorks = false, foundingPrivateBanks = true }) {
     this.characterGame = null;
     this.familyCampaign = null;
+    this.mayorCampaign = null;
     this.initialPopulation = population;
     this.startFoundingWorks = startFoundingWorks;
     this.foundingPrivateBanks = foundingPrivateBanks;
@@ -1508,7 +1510,10 @@ export class CitySimulation {
   }
   gameAction(action, options = {}) { return gameAction(this, action, options); }
   familyAction(action, options = {}) { return familyAction(this, action, options); }
+  mayorAction(action, options = {}) { return mayorAction(this, action, options); }
   stepMinute() {
+    updateMayorCampaign(this);
+    if(mayorMode(this)&&this.mayorCampaign.status==='defeated')return;
     const profileStart=performance.now();let profileMark=profileStart;
     this._pathSearchProfile=this.profileDiagnostics?{minute:this.minute,searches:0,totalMs:0,maxMs:0,start:null,goal:null}:null;
     this.minute++;
@@ -1672,6 +1677,7 @@ export class CitySimulation {
     }
     this.history.captureFavoriteActivities();
     this.lastStepProfile={minute:this.minute,totalMs:performance.now()-profileStart,reconcileMs,servicesMs,civicMs,setupMs,citizenMs,interiorMs,societyMs,moverSetupMs,...(civicDetail?{civicDetail}:{}),...(citizenDetail?{citizenDetail}:{}),...(this.profileDiagnostics?{societyDetail:this.society.lastUpdateProfile,societyParts,...(this.gigs.lastSpontaneousArtworkProfile?{spontaneousArtwork:this.gigs.lastSpontaneousArtworkProfile}:{})}:{}),...(economyHourly?{economyHourly}:{}),...(this._pathSearchProfile?{pathSearches:this._pathSearchProfile.searches,pathSearchTotalMs:this._pathSearchProfile.totalMs,pathSearchWork:Object.fromEntries(['groundCalls','groundCacheHits','aStarCalls','sharedCalls','destinationFields','sourceFields','fieldResets','bridgeChecks'].map(key=>[key,this._pathSearchProfile[key]||0])),pathSearchMaxMs:this._pathSearchProfile.maxMs,pathSearchPeak:this._pathSearchProfile.maxMs?{start:this._pathSearchProfile.start,goal:this._pathSearchProfile.goal}:null}:{})};
+    updateMayorCampaign(this);
     this.syncClock();
   }
   syncClock() {
@@ -1682,10 +1688,12 @@ export class CitySimulation {
     this.world.clock.tick(0);
   }
   update(dt) {
+    updateMayorCampaign(this);
+    if(mayorMode(this)&&this.mayorCampaign.status==='defeated'){this.accumulator=0;return;}
     const profileStart=performance.now();let profileMark=profileStart;
     // One simulation second = four city minutes; all systems share this clock.
     this.accumulator += dt * 4;
-    while (this.accumulator >= 1) { this.accumulator -= 1; this.stepMinute(); }
+    while (this.accumulator >= 1) { this.accumulator -= 1; this.stepMinute(); if(mayorMode(this)&&this.mayorCampaign.status==='defeated'){this.accumulator=0;break;} }
     const minuteStepsMs=performance.now()-profileMark;profileMark=performance.now();
     characterMovement(this,dt);
     const movers=this._movingCitizens||[];

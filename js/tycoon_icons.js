@@ -1,5 +1,6 @@
 /** Small pixel icons drawn locally, in the style of classic transport-management toolbars. */
 export function tycoonIcon(ctx,key,x,y,scale=2){
+  if(key==='mayor')key='government';
   ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);
   const rect=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(x,y,w,h);},line=(points,c)=>{ctx.strokeStyle=c;ctx.lineWidth=1;ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x+.5,y+.5):ctx.moveTo(x+.5,y+.5));ctx.stroke();};
   const ink='#293438',light='#f4ebc5',blue='#527cb3',dark='#714f30',brick='#b57448',green='#659453';

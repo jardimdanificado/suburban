@@ -6,6 +6,8 @@ Uma cidade procedural sobre o relevo natural, com pessoas, patrimônio, governo,
 python3 scripts/serve.py
 ```
 
+**Modo prefeito:** escolha **Jogar como prefeito** no menu principal ou em **Ferramentas**. Assuma o partido governante, encomende obras, defina prioridades, destine custeio e negocie orçamento na Câmara. Cidadãos executam o trabalho real; se outro partido assumir a prefeitura, a campanha termina. Veja o [guia do modo prefeito](docs/modo-prefeito.md).
+
 **Modo de sobrevivência:** escolha **Jogar como personagem** no menu principal ou em **Ferramentas** durante a simulação. Controle um adulto com WASD/setas ou clique no chão. Shift corre; E interage com o que está ao alcance; I abre a mochila. Portas, coleta e serviços exigem presença no mundo. O HUD deixa o cenário visível e mantém necessidades, descanso e família acessíveis. Apenas uma pessoa fica sob controle; voltar à simulação devolve sua autonomia. Veja o [guia de sobrevivência](docs/modo-sobrevivencia.md).
 
 Abra `http://127.0.0.1:8000`. O servidor impede o cache de código da página e do worker. Arraste o mapa para mover a câmera e use a roda para aproximar. Segure o botão do meio e arraste para girar o mundo, tanto na simulação quanto no modo jogo. A barra superior abre janelas e controla pausa, velocidade e visualização. O minimapa e o botão de centralizar ajudam a navegar pelo terreno. Espaço pausa; +/− altera a velocidade; F3 alterna 2D/3D. Um segundo simulado representa quatro minutos da cidade.

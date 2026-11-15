@@ -27,7 +27,7 @@ export function contextActions(ui,p,{person=null,business=null,vehicle=null,case
  if(!actions.length)return;compactInterventions(ui,p,`context:${person?.id??business?.id??vehicle?.id??caseRecord?.id??poll?.id??election?.id??artwork?.id}`,actions);
 }
 
-export function interventionsVisible(ui){return ui.host?.controls?.interventionsVisible?.()??true;}
+export function interventionsVisible(ui){return ui.city?.mayorCampaign?.mode==='play'?false:ui.host?.controls?.interventionsVisible?.()??true;}
 export function compactInterventions(ui,p,key,actions){
  if(!interventionsVisible(ui)||!actions.length)return;
  if(!p.disclosure){p.buttons?.(actions);return;}

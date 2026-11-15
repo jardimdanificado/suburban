@@ -60,6 +60,7 @@ export class MainMenu {
     time,
     onStartGame,
     onPlayGame,
+    onMayorGame,
     onStartNewCity,
     onOpenNewGame,
     onOpenOptions
@@ -71,6 +72,7 @@ export class MainMenu {
     this.time = time;
     this.onStartGame = onStartGame;
     this.onPlayGame = onPlayGame;
+    this.onMayorGame = onMayorGame;
     this.onStartNewCity = onStartNewCity;
     this.onOpenNewGame = onOpenNewGame;
     this.onOpenOptions = onOpenOptions;
@@ -279,7 +281,7 @@ export class MainMenu {
     const ctx = ui.ctx;
 
     const winW = Math.min(280, width - 24);
-    const winH = 154;
+    const winH = 184;
 
     // Initialize or constrain window position
     if (this.windowPos.x === null || this.windowPos.y === null) {
@@ -336,6 +338,9 @@ export class MainMenu {
     btnY += 30;
 
     ui.button(btnX, btnY, btnW, btnH, 'Jogar como personagem', () => this.onPlayGame?.());
+    btnY += 30;
+
+    ui.button(btnX, btnY, btnW, btnH, 'Jogar como prefeito', () => this.onMayorGame?.());
     btnY += 30;
 
     // Button: Novo Jogo…

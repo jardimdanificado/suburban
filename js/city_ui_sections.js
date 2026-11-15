@@ -2,6 +2,7 @@ export const POLITICS_SECTIONS=[['overview','Governo'],['interventions','Interve
 export const POLITICS_GROUPS=[['management','Gestão',['overview','approval','promises','interventions']],['institutions','Instituições',['parties','council','secretariats','institutes']],['regulation','Regulação',['substances']],['elections','Eleições',['campaign','polls','results']]];
 const details={profile:'Perfil',botany:'Ficha botânica',skills:'Trabalho',resume:'Currículo',history:'Histórico',family:'Família',memories:'Memórias',politics:'Política',finance:'Finanças',infrastructure:'Infraestrutura',assets:'Conta',stock:'Estoque',staff:'Equipe',services:'Serviços',units:'Unidades'};
 export function sectionTitle(state){
+  if(state.tab==='mayor')return 'Modo prefeito';
   if(state.tab==='family')return 'Minha família';
   if(state.tab==='newgame'||state.tab==='new-game')return 'Novo Jogo';
   if(state.tab==='economy'&&!state.selected&&state.employmentCompanyId!=null)return `Trabalho · ${state.city.building(state.employmentCompanyId)?.entity.properties.name||'Empresa'}${state.employmentCitizenId!=null?' · Candidatura':''}`;

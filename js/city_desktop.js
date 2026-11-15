@@ -7,8 +7,8 @@ import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js?v=favorite-window-icons-3';
 import {clipCanvasRegion} from './canvas_widgets.js';
 
-export const CITY_WINDOWS=[['city','Cidade'],['government','Governo'],['people','Cidadãos'],['land','Terrenos e obras'],['buildings','Imóveis'],['economy','Empresas'],['market','Mercado e riquezas'],['production','Produção'],['transport','Transportes'],['world','Mundo e rotas'],['urban-art','Arte urbana'],['safety','Segurança'],['forensics','IML e corpos'],['justice','Justiça'],['custody','Prisões'],['sanitation','Saneamento'],['publications','Jornais e livros'],['corruption','Corrupção'],['log','Histórico'],['favorites','Favoritos'],['custom-history','Histórico personalizado'],['map','Mapa da cidade']];
-const sizes={family:[650,640],market:[700,500],party:[560,570],contract:[530,500],'poll-response':[560,560],'party-organization':[560,500],election:[610,510],publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],world:[570,540],'urban-art':[650,500],safety:[670,520],forensics:[650,520],justice:[700,540],custody:[640,520],sanitation:[570,450],log:[530,450],favorites:[460,420],'custom-history':[370,270],newgame:[400,470]};
+export const CITY_WINDOWS=[['mayor','Modo prefeito'],['city','Cidade'],['government','Governo'],['people','Cidadãos'],['land','Terrenos e obras'],['buildings','Imóveis'],['economy','Empresas'],['market','Mercado e riquezas'],['production','Produção'],['transport','Transportes'],['world','Mundo e rotas'],['urban-art','Arte urbana'],['safety','Segurança'],['forensics','IML e corpos'],['justice','Justiça'],['custody','Prisões'],['sanitation','Saneamento'],['publications','Jornais e livros'],['corruption','Corrupção'],['log','Histórico'],['favorites','Favoritos'],['custom-history','Histórico personalizado'],['map','Mapa da cidade']];
+const sizes={mayor:[660,640],family:[650,640],market:[700,500],party:[560,570],contract:[530,500],'poll-response':[560,560],'party-organization':[560,500],election:[610,510],publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],world:[570,540],'urban-art':[650,500],safety:[670,520],forensics:[650,520],justice:[700,540],custody:[640,520],sanitation:[570,450],log:[530,450],favorites:[460,420],'custom-history':[370,270],newgame:[400,470]};
 const intersects=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 
 /** OpenTTD-style desktop with tabbed modules and optional detached views. */
@@ -104,6 +104,7 @@ export class CityDesktop {
   openCorruption(id){if(id==null)return this.openModule('corruption');const state=this.create(`corruption:${id}`,'corruption-case',{title:`Corrupção · caso #${id}`,kind:'inspector'});state.corruptionCaseId=id;state.corruptionSnapshot??=this.city.politics.corruption.find(r=>r.id===id)||this.city.politics.scandals.find(r=>r.id===id);return state;}
   toggleTool(id,tool){const current=this.manager.find(`tool:${id}`);if(current){this.close(current.id);return;}return this.openTool(id,tool);}
   openTool(id,tool){
+    if(id==='editor'&&this.city.mayorCampaign?.mode==='play'){this.notice='Editor indisponível durante a campanha de prefeito.';return;}
     const existing=this.manager.find(`tool:${id}`);if(existing){this.manager.raise(existing.id);return existing.state;}
     const title=id==='options'?'Opções':'Editor de mapa',element=document.createElement('div');this.element.append(element);
     const toolInputs=[];element.className='city-inputs';
@@ -212,6 +213,8 @@ export class CityDesktop {
     if(['PageDown','PageUp','Home','End','Backspace'].includes(event.code))return this.active?.key(event)||false;return false;
   }
   drawChrome(ui,{clockText='',paused=false,speed=1,effectiveSpeed=null,renderMode='3d'}={}){
+    if(this.city.mayorCampaign?.mode==='play'&&this.manager.find('tool:editor'))this.close('tool:editor');
+    if(this.city.mayorCampaign?.mode==='play'&&this.city.mayorCampaign.status==='defeated'&&!this.mayorDefeatShown){this.mayorDefeatShown=true;this.hidden=false;this.element.hidden=false;this.openModule('mayor');}
     this.chromeState={clockText,paused,speed,renderMode};this.menuGroups??=desktopMenus(this);this.tooltip=null;this.menuAnchors=[];
     const activeWorldCity=this.worldCoordinator?.cities.get(this.worldCoordinator.activeCityId),activeCityName=activeWorldCity?.city?.municipalIdentity?.name||this.city?.municipalIdentity?.name||activeWorldCity?.metadata?.name||'Cidade',worldButtonWidth=Math.min(160,Math.max(82,ui.textWidth(activeCityName)+34));
     let x=4,barY=2;const controls=[[paused?'play':'pause',paused?'Continuar':'Pausar',this.controls.pause,paused],['fast',`Velocidade ${speedLabel(speed)}${speed>=128?' · simulação muito reduzida':speed>=64?' · avanço com detalhe reduzido':''}`,this.controls.speed,false]];

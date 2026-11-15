@@ -109,6 +109,7 @@ export function familyAction(city, action, options={}) {
   city.lastError='';
   if(!options||typeof options!=='object')return city.fail('Opções inválidas.');
   if(action==='start'){
+    if(city.mayorCampaign?.mode==='play')return city.fail('Encerre o modo prefeito antes de iniciar uma campanha familiar.');
     if(city.familyCampaign)return city.fail('Esta cidade já possui uma campanha familiar.');
     const c=city.society.citizen(options.citizenId),profile=Object.hasOwn(FAMILY_STARTS,options.profile)?FAMILY_STARTS[options.profile]:null;
     if(!alive(c)||!city.society.isAdult(c)||city.politics.officeHolder(c)||!profile)return city.fail('Escolha um adulto sem cargo público e uma origem.');

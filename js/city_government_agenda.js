@@ -69,6 +69,7 @@ export class CityGovernmentAgenda {
     }
   }
   hourly(force=false){
+    if(this.city.mayorCampaign?.mode==='play')return;
     const city=this.city,p=city.politics,term=p.mandates.current,pr=term?.promises[0];if(!pr||term.endedAt!=null)return;
     const period=`${term.id}:${Math.floor(city.minute/360)}`;if(!force&&this.lastPeriod===period)return;this.lastPeriod=period;
     this.execute(term,pr);

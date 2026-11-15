@@ -172,6 +172,7 @@ export function investProductionPlan(economy){
     // Open-air fields finish immediately and use no masonry construction slot.
     if(row.type!=='farm'&&productionProjects.length>=pipelineLimit+(officeException?1:0)){recordResponse(economy,row,`Aguardando execução das ${pipelineLimit} obras de cadeias já financiadas.`);continue;}
     if(OFFICE_ONLY_TYPES.has(row.type)){
+      if(city.mayorCampaign?.mode==='play'){recordResponse(economy,row,'Aguardando decisão do prefeito para abrir atividade municipal.');continue;}
       const towers=city.economy.businesses.filter(b=>b.type==='office_tower'&&b.municipal),vacant=towers.flatMap(tower=>officeFloors(city,tower).filter(f=>!f.tenantId&&f.units.length&&f.units.every(u=>u.forRent)).map(f=>({tower,floor:f})));
       const partyReserve=city.politics.parties.filter(p=>p.active&&p.headquarters?.kind!=='office').length,slot=vacant.length>partyReserve?vacant[0]:null,budget=city.currency.price(row.type==='bank'?2000000:100000),reserve=city.welfare.conditions().reserve;
       if(slot&&city.treasury>=reserve+budget){
@@ -207,6 +208,7 @@ export function investProductionPlan(economy){
       if(loan)city.bank.cancelBusinessLoan(loan);
     }
     if(!project){
+      if(city.mayorCampaign?.mode==='play'){recordResponse(economy,row,'Sem investimento privado; aguardando ordem do prefeito.');continue;}
       const cost=stone*economy.goods.pedra.price+Math.ceil(fee*DEVELOPMENT_RULES.municipalMultiplier)+capital+freight+city.currency.price(70000);
       const foodSafe=row.type==='farm'||row.type==='bakery'||needs.foodDays>=2||needs.hungry<Math.max(3,needs.population*.15);
       if(!foodSafe){recordResponse(economy,row,city.bank.lastBusinessRefusal?.reason||'Sem crédito privado; município preservando alimentação emergencial.');continue;}

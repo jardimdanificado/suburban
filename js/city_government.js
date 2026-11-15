@@ -1,3 +1,4 @@
+import {updateMayorCampaign} from './city_mayor_campaign.js';
 import {canFarmVertically} from './city_farm_layout.js';
 import {governmentPerformance} from './city_government_performance.js';
 import {substanceStance} from './city_substances.js?v=economic-flow-7';
@@ -44,7 +45,7 @@ export class CityGovernment extends CityPolitics {
   partyAccount(party){return partyAccount(this,party);}
   leaseHeadquarters(partyId,towerId,floor){return leaseHeadquarters(this,partyId,towerId,floor);}
   changePartyFund(value,bill){return changePartyFund(this,value,bill);}
-  executePlayerAction(kind,targetId=null,options={}){return (this.interventions??=new CityInterventions(this.city)).dispatch(kind,targetId,options);}
+  executePlayerAction(kind,targetId=null,options={}){if(this.city.mayorCampaign?.mode==='play')return this.city.fail('Use as ordens do modo prefeito. Intervenções do observador estão desativadas.');return (this.interventions??=new CityInterventions(this.city)).dispatch(kind,targetId,options);}
   intervene(kind,targetId=null,options={}){return this.executePlayerAction(kind,targetId,options);}
   getResearch(){return this.research??=new CityResearch(this.city);}
   ensureMunicipalIdentity(){const city=this.city;city.municipalIdentity??={name:city.life.cityName(),slogan:'',flag:null,history:[],foundedAt:city.minute};const identity=city.municipalIdentity;identity.name=String(identity.name||city.life.cityName());identity.slogan=String(identity.slogan||'');identity.history??=[];identity.foundedAt??=city.minute;if(!identity.flag)identity.flag=makeMunicipalFlag(city,identity);else{const hasApprovedFlagChange=identity.history.some(row=>row.type==='cityFlag'),weak=!identity.flag.layoutId||!(identity.flag.emblems||[]).length||!identity.flag.backgroundStyle||identity.flag.backgroundStyle==='solid';identity.flag=weak&&!hasApprovedFlagChange?makeMunicipalFlag(city,identity):upgradePartyFlagPalette(city,identity.flag);identity.flag=Object.freeze({...identity.flag,texts:Object.freeze((identity.flag.texts||[]).map(text=>Object.freeze({...text,value:text.kind==='phrase'?compactPartySlogan(identity.slogan):['name','number','name-number'].includes(text.kind)?identity.name:text.value})))});}return identity;}
@@ -117,6 +118,7 @@ export class CityGovernment extends CityPolitics {
     }
   }
   syncGoverningFlag(){
+    updateMayorCampaign(this.city);
     const identity=this.ensureMunicipalIdentity();for(const b of this.city.buildings)if(['townhall','council_chamber'].includes(b.type)&&!b.entity.destroyed){const party=this.partyOfId(b.type==='townhall'?this.city.economy.mayorId:this.council.leaderId);b.governingPartyId=party?.id??null;b.governingPartyName=party?.name??null;b.governingPartyFlag=party?.flag??null;b.cityName=identity.name;b.citySlogan=identity.slogan;b.governingFlag=b.type==='townhall'?identity.flag:party?.flag??COUNCIL_INSTITUTIONAL_FLAG;b.governingFlagDescription=b.type==='townhall'?`Bandeira de ${identity.name}`:party?`Bandeira da presidência: ${party.name}`:'Bandeira institucional da Câmara';}
   }
   platform(c){const profile=ideologicalProfile(this.party(c?.political?.partyId)||c);return profile.redistribution>.3||profile.ownership>.45?'social':profile.economy>.3&&profile.ownership<.2?'thrift':'balanced';}
@@ -129,6 +131,7 @@ export class CityGovernment extends CityPolitics {
   requestWorksBudget(value){return this.applyPlayerDirective('worksBudget',{value});}
   requestWorksTransfer(value){return this.applyPlayerDirective('worksTransfer',{value});}
   startPublicWork(type,crop='milho',{observer=false,vertical=null,floors:requestedFloors=null}={}){
+    if(observer&&this.city.mayorCampaign?.mode==='play')return this.city.fail('Patrocínio externo indisponível no modo prefeito.');
     const city=this.city,mayor=city.society.citizen(city.economy.mayorId);if(!mayor||mayor.entity.destroyed)return city.fail('Não há prefeito em exercício.');if(!city.buildingTypes[type]||['townhall','mint','council_chamber'].includes(type))return city.fail('Tipo de obra indisponível para contratação direta.');
     vertical=type==='farm'&&(vertical??(city.development.compactPlanning&&canFarmVertically(crop)));if(vertical&&(!canFarmVertically(crop)||requestedFloors!==null&&(!Number.isInteger(requestedFloors)||requestedFloors<2||requestedFloors>8)))return city.fail('Fazenda vertical exige cultura sem árvores e entre dois e oito andares.');
     const farm=type==='farm',mine=['quarry','iron_mine'].includes(type),site=city.development.publicBuildingSite(type,vertical?{kind:'building'}:{});
@@ -401,7 +404,7 @@ export class CityGovernment extends CityPolitics {
       else{b.businessTaxDue=(b.businessTaxDue||0)+value;const operatingReserve=city.fiscal?.businessReserve(b)??b.workers.length*b.wage*480*7,amount=Math.min(b.businessTaxDue,Math.max(0,b.balance-operatingReserve));if(amount&&city.transfer(b.accountId,'treasury',amount,'Imposto empresarial')){b.businessTaxDue-=amount;b.businessTaxPaid=(b.businessTaxPaid||0)+amount;}}
     }
     for(const loan of this.stateEquityLoans||[]){if(loan.remaining<=0)continue;const resident=this.city.society.citizen(loan.citizenId);if(!resident||resident.entity.destroyed)continue;const reserve=Math.max(this.city.currency.price(8000),(resident.jobId?this.city.building(resident.jobId)?.wage||0:0)*240),amount=Math.min(loan.remaining,Math.max(0,Math.floor((resident.balance-reserve)*.08)));if(amount>=1&&this.city.transfer(resident.accountId,'treasury',amount,'Parcela do empréstimo de participação em estatal',{termId:loan.termId,buildingId:loan.buildingId,citizenId:resident.id})){loan.remaining-=amount;loan.lastPaymentAt=this.city.minute;}}
-    listDailyPrivatization(this.city);
+    if(this.city.mayorCampaign?.mode!=='play')listDailyPrivatization(this.city);
   }
   hourly(){this.city.taxRate=Math.max(MINIMUM_WAGE_TAX_RATE,Math.min(.5,Number(this.city.taxRate)||0));this.policy.businessTax=Math.max(MINIMUM_BUSINESS_TAX_RATE,Math.min(.5,Number(this.policy.businessTax)||0));this.policy.salesTaxes??={};for(const [category,spec]of Object.entries(TAX_CATEGORIES))this.policy.salesTaxes[category]=Math.max(spec.rate,Math.min(.5,Number.isFinite(this.policy.salesTaxes[category])?this.policy.salesTaxes[category]:spec.rate));this.fundInitialWorksBudget();this.policy.partyFund??=80000;for(const party of this.parties)this.partyAccount(party);for(const pending of [...(this.pendingPartyFunding||[])])allocatePartyFunds(this,pending);allocatePartyFunds(this,this.active);headquartersHourly(this);stockHeadquarters(this,this.active);illegalPartyFunding(this);this.syncGoverningFlag();this.liquidateEmptyParties();this.resumeExecutive();this.ensureMayor();this.syncLaborSecretaryWorkplace();if(this.lastDaily!==this.city.day){this.lastDaily=this.city.day;this.daily();}this.agenda.hourly();this.mandates.update();this.updateApproval();this.council.hourly();this.getResearch().ensureSupply();this.organization.hourly();this.investigate();this.assignPartyNumbers();this.standing.refresh();this.standing.replaceUnavailable();if(this.active&&this.active.status!=='campaign')for(const citizen of this.city.citizens)if(citizen.campaignPresence?.electionId===this.active.id)citizen.campaignPresence=null;if(this.nextElectionAt===null)return;if(!this.active)this.nextElectionAt=this.voting.schedule(this.nextElectionAt);if(!this.active&&this.city.minute>=this.nextElectionAt-this.termRules.campaignMinutes)this.beginElection();if(this.active?.status==='scheduled'&&this.city.minute>=this.active.startedAt)this.active.status='campaign';if(this.active?.status==='campaign')this.campaigns.hourly(this.active);}
 }

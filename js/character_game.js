@@ -92,6 +92,7 @@ export function gameAction(city,action,options={}){
 }
 function performGameAction(city,action,options={}){
   city.lastError='';if(!options||typeof options!=='object')return city.fail('Ação inválida.');
+  if((action==='start'||action==='resume')&&city.mayorCampaign?.mode==='play')return city.fail('Encerre o modo prefeito antes de controlar um personagem.');
   if(action==='start'){
     const c=city.society.citizen(options.citizenId);
     if(!canControl(city,c))return city.fail('Escolha um adulto livre, fora de transporte e serviço reservado.');

@@ -69,6 +69,7 @@ export const mainMenu = new MainMenu({
   time,
   onStartGame: () => startOrResumeGame(),
   onPlayGame: () => gameUI.choose(),
+  onMayorGame: () => {startOrResumeGame();cityUI.openModule('mayor');},
   onStartNewCity: (params) => startNewCity(params),
   onOpenNewGame: () => {
     if (typeof cityUI !== 'undefined') {
