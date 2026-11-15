@@ -89,6 +89,7 @@ export function syncConstructionSites(renderer,THREE,world,development){
   site=new THREE.Group();site.userData.signature=signature;
   addFarmSoil(THREE,world,cells,site);
   if(project.service==='building'){const materials=addConstructionPerimeter(THREE,world,site,cells);addConstructionMaterials(THREE,site,world,cells,materials);}
+  renderer.registerSurfaceMaterials?.(site);
   renderer.scene.add(site);renderer.constructionMeshes.set(project.id,site);
  }
  for(const [id,site]of renderer.constructionMeshes)if(!live.has(id)){renderer.scene.remove(site);site.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});renderer.constructionMeshes.delete(id);}

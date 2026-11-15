@@ -67,13 +67,13 @@ class Geometry{
 }
 class Mesh{
   constructor(geometry,material,capacity){Object.assign(this,{geometry,material,count:capacity});this.instanceMatrix=new Attribute(new Float32Array(capacity*16),16);this.matrices=[];}
-  setMatrixAt(index,matrix){this.matrices[index]=matrix;}
+  setMatrixAt(index,matrix){this.matrices[index]=matrix;this.instanceMatrix.array.set(matrix.elements,index*16);}
   dispose(){this.disposed=true;}
 }
 const THREE={BufferGeometry:Geometry,Float32BufferAttribute:Attribute,InstancedBufferAttribute:Attribute,InstancedMesh:Mesh,MeshDepthMaterial:class{constructor(values){Object.assign(this,values);}},DoubleSide:2,RGBADepthPacking:3201};
 test('batches reuse geometry, preserve growth, reset removed instances, rebind materials and dispose owned resources',()=>{
   const group={children:new Set(),add(mesh){this.children.add(mesh);},remove(mesh){this.children.delete(mesh);}},first={},next={};
-  const models=new BotanicalTreeInstances(THREE,group,first,2),matrix={};models.begin();
+  const models=new BotanicalTreeInstances(THREE,group,first,2),matrix={elements:[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]};models.begin();
   assert.equal(models.add('coconut_palm',matrix),false);assert.equal(models.batches.size,0);
   assert.equal(models.add('tree',matrix,.3),true);models.add('oak',matrix,1);models.add('oak',matrix,1);models.end();
   const batch=models.batches.get('oak'),geometry=batch.mesh.geometry;
@@ -89,4 +89,16 @@ test('batches reuse geometry, preserve growth, reset removed instances, rebind m
   models.begin();models.end();assert.equal(batch.mesh.count,0);
   models.clear();assert.equal(models.batches.size,0);assert.equal(group.children.size,0);
   assert.equal(geometry.disposed,true);assert.equal(batch.mesh.disposed,true);
+});
+
+test('camera refreshes skip identical matrix and growth uploads; edits upload only changed instances',()=>{
+ const group={add(){},remove(){}},models=new BotanicalTreeInstances(THREE,group,{},8),matrix={elements:[1,0,0,0,0,1,0,0,0,0,1,0,1.1,0,2.2,1]};
+ models.begin();for(let i=0;i<3;i++)models.add('oak',matrix,.65);models.end();
+ const {mesh,age}=models.batches.get('oak');mesh.instanceMatrix.needsUpdate=age.needsUpdate=false;
+ models.begin();for(let i=0;i<3;i++)models.add('oak',matrix,.65);models.end();
+ assert.equal(mesh.instanceMatrix.needsUpdate,false);assert.equal(age.needsUpdate,false);
+ models.begin();models.add('oak',matrix,.65);matrix.elements[12]=4;models.add('oak',matrix,.9);matrix.elements[12]=1.1;models.add('oak',matrix,.65);models.end();
+ assert.deepEqual(mesh.instanceMatrix.ranges,[{start:16,count:16}]);assert.deepEqual(age.ranges,[{start:1,count:1}]);
+ assert.equal(mesh.instanceMatrix.array[28],4);assert.equal(mesh.instanceMatrix.array[44],Math.fround(1.1));
+ assert.equal(mesh.count,3);models.clear();
 });

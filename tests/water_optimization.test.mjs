@@ -1,3 +1,4 @@
+import {clearTerrainFadeMaterials} from '../js/terrain_quality_fade.js';
 import {terrainZoomDetail} from '../js/terrain_zoom_detail.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -6,7 +7,7 @@ import {cachedWaterGeometry,setWaterGeometryCacheEnabled} from '../js/water_geom
 import {sandShoreTileSurface} from '../js/sand_shore.js';
 import {shoreFoamTileSurface,cachedShoreFoamTileSurface} from '../js/water_foam.js';
 import {sandNormalField} from '../js/sand_surface_lighting.js';
-import {grassChunkSignatures,grassExclusionSignature,grassExclusionCells,constructionSiteCells} from '../js/city_site_footprints.js';
+import {grassChunkSignatures,grassExclusionSignature,grassExclusionCells,cachedConstructionFootprint} from '../js/city_site_footprints.js';
 const world=()=>({width:128,height:128,revision:1,getTile(x,z){return x<0||z<0||x>=128||z>=128?5:z<64?3:2;}});
 
 test('coast caches preserve geometry and invalidate on terrain edits, dimensions and map replacement',()=>{
@@ -35,7 +36,7 @@ test('footprints invalidate nearby chunks and their blend neighbors, not distant
 
 const source=readFileSync(new URL('../js/renderer_3d.js',import.meta.url),'utf8');
 const method=source.slice(source.indexOf('  rebuildTerrainIfNeeded('),source.indexOf('\n  buildTerrainChunk('));
-const Klass=new Function('terrainZoomDetail','cityGoverningParty','grassExclusionSignature','grassExclusionCells','constructionSiteCells','grassChunkSignatures',`return class {${method} ${source.slice(source.indexOf('  invalidateTerrainAt('),source.indexOf('\n  terrainViewportBounds('))}}`)(terrainZoomDetail,()=>null,grassExclusionSignature,grassExclusionCells,constructionSiteCells,grassChunkSignatures);
+const Klass=new Function('clearTerrainFadeMaterials','terrainZoomDetail','cityGoverningParty','grassExclusionSignature','grassExclusionCells','cachedConstructionFootprint','grassChunkSignatures',`return class {${method} ${source.slice(source.indexOf('  invalidateTerrainAt('),source.indexOf('\n  terrainViewportBounds('))}}`)(clearTerrainFadeMaterials,terrainZoomDetail,()=>null,grassExclusionSignature,grassExclusionCells,cachedConstructionFootprint,grassChunkSignatures);
 test('actual chunk renderer builds visible terrain only and a far building does not rebuild its coast',()=>{
  const r=new Klass(),w=world(),city={structureRevision:0,buildings:[]};let builds=0;
  const group=()=>({add(child){child.parent=this;},remove(child){child.parent=null;}});

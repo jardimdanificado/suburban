@@ -375,6 +375,18 @@ export function botanicalTreeTextures(THREE){
   nc.putImageData(normal,0,0);const normalMap=new THREE.CanvasTexture(normalCanvas);
   map.magFilter=normalMap.magFilter=THREE.NearestFilter;return {map,normalMap};
 }
+const sharedTreeTextures=new WeakMap();
+/** Farms share identical atlases until their last material is disposed. */
+export function acquireBotanicalTreeTextures(THREE){
+  let entry=sharedTreeTextures.get(THREE);
+  if(!entry){entry={...botanicalTreeTextures(THREE),users:0};sharedTreeTextures.set(THREE,entry);}
+  entry.users++;let released=false;
+  return {map:entry.map,normalMap:entry.normalMap,release(){
+    if(released)return;released=true;
+    if(--entry.users===0){sharedTreeTextures.delete(THREE);entry.map.dispose();entry.normalMap.dispose();}
+  }};
+}
+
 export function addBotanicalTreeWind(material){
   const previous=material.onBeforeCompile,key=material.customProgramCacheKey?.()||'';
   material.customProgramCacheKey=()=>key+':botanical-tree-1';
@@ -402,7 +414,7 @@ export class BotanicalTreeInstances {
     };
     this.shadowMaterial.customProgramCacheKey=()=> 'botanical-wood-shadow-1';
   }
-  begin(){for(const batch of this.batches.values())batch.used=0;}
+  begin(){for(const batch of this.batches.values()){batch.used=0;batch.matrixStart=batch.ageStart=Infinity;batch.matrixEnd=batch.ageEnd=0;}}
   add(species,matrix,growth=1){
     if(species==='tree')species='oak';
 
@@ -414,17 +426,22 @@ export class BotanicalTreeInstances {
       geometry.setAttribute('instanceGrowth',age);
       const mesh=new THREE.InstancedMesh(geometry,this.material,this.capacity);
       mesh.name=`botanical:${species}`;mesh.count=0;mesh.frustumCulled=false;mesh.receiveShadow=true;mesh.castShadow=true;mesh.customDepthMaterial=this.shadowMaterial;
-      this.group.add(mesh);batch={mesh,age,used:0};this.batches.set(species,batch);
+      this.group.add(mesh);batch={mesh,age,used:0,matrixStart:Infinity,matrixEnd:0,ageStart:Infinity,ageEnd:0};this.batches.set(species,batch);
     }
     if(batch.used>=this.capacity)return true;
-    batch.mesh.setMatrixAt(batch.used,matrix);batch.age.setX(batch.used,growth);batch.used++;return true;
+    const index=batch.used,offset=index*16,values=batch.mesh.instanceMatrix.array;
+    let changed=false;
+    for(let i=0;i<16;i++)if(values[offset+i]!==Math.fround(matrix.elements[i])){changed=true;break;}
+    if(changed){batch.mesh.setMatrixAt(index,matrix);batch.matrixStart=Math.min(batch.matrixStart,offset);batch.matrixEnd=offset+16;}
+    if(batch.age.array[index]!==Math.fround(growth)){batch.age.setX(index,growth);batch.ageStart=Math.min(batch.ageStart,index);batch.ageEnd=index+1;}
+    batch.used++;return true;
   }
   end(){
-    for(const {mesh,age,used} of this.batches.values()){
+    for(const {mesh,age,used,matrixStart,matrixEnd,ageStart,ageEnd} of this.batches.values()){
       mesh.count=used;
       if(!used)continue;
-      mesh.instanceMatrix.clearUpdateRanges();mesh.instanceMatrix.addUpdateRange(0,used*16);mesh.instanceMatrix.needsUpdate=true;
-      age.clearUpdateRanges();age.addUpdateRange(0,used);age.needsUpdate=true;
+      if(matrixEnd){mesh.instanceMatrix.clearUpdateRanges();mesh.instanceMatrix.addUpdateRange(matrixStart,matrixEnd-matrixStart);mesh.instanceMatrix.needsUpdate=true;}
+      if(ageEnd){age.clearUpdateRanges();age.addUpdateRange(ageStart,ageEnd-ageStart);age.needsUpdate=true;}
     }
   }
   setMaterial(material){this.material=material;for(const {mesh} of this.batches.values())mesh.material=material;}

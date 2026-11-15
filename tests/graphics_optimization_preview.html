@@ -1,0 +1,40 @@
+<!doctype html><meta charset="utf-8"><title>Graphics optimization checks</title>
+<style>body{margin:0;background:#233841;color:white;font:13px monospace}#view{width:640px;height:400px}pre{white-space:pre-wrap}</style>
+<div id="view"></div><pre id="status">Loading…</pre>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {RCT3DRenderer} from '../js/renderer_3d.js';
+import {setActiveEntities} from '../js/engine.js';
+import {acquireBotanicalTreeTextures} from '../js/botanical_trees.js?v=species-colors-3';
+const status=document.querySelector('#status'),params=new URLSearchParams(location.search);
+try{
+ let seed=1337;Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
+ const size=128,world={width:size,height:size,map:new Uint8Array(size*size).fill(3),revision:1,clock:{day:1,hour:12,minute:0},groups:[],getTile(x,y){return x<0||y<0||x>=size||y>=size?5:this.map[y*size+x];}};
+ if(params.has('grass'))for(let y=42;y<58;y++)for(let x=42;x<58;x++)world.map[y*size+x]=0;
+ const entities=Array.from({length:120},(_,id)=>({id:id+1,x:20+(id%12)*6,y:20+Math.floor(id/12)*6,properties:{species:['oak','mango','pine','guava'][id%4],tree:true,render:{size:.8,skin:'feature_tree_full.png'}}}));
+ const target={id:1000,x:52,y:52,properties:{render:{size:1,color:0xbe966e},citizen:{task:'idle',path:[],wardrobe:[],bodyHeightCm:170,bodyWeightKg:70,wearingIndex:-1,lowerWearIndex:-1,headwearIndex:-1,footwearIndex:-1,handwearIndex:-1}}};entities.push(target);setActiveEntities(entities);
+ const r=window.graphicsRenderer=new RCT3DRenderer(document.querySelector('#view'));r.mapWidth=r.mapHeight=size;r.resize(640,400);r.setResolutionScale(1);r.profileFrame=true;
+ let shaderErrors=0;r.renderer.debug.onShaderError=()=>shaderErrors++;await r.cityCitizenModels.loading;
+ if(params.has('cpu'))r.renderer.render=()=>{};
+ const mode=params.get('mode')||'iso';r.setCamera(52,52,1.2);
+ if(mode==='third')r.setThirdPersonMode(true,target.id);else if(mode==='free')r.setFreeCameraMode(true);
+ const render=()=>r.render(world,entities,0,1/60,0);
+ const yieldTask=()=>new Promise(resolve=>setTimeout(resolve,0));
+ let warmFrames=0;do{render();warmFrames++;await yieldTask();}while(warmFrames<1200&&(warmFrames<10||r._terrainBuildJobs?.size||r.grassRootJobs?.running||r.grassRootJobs?.queue.length||r._terrainFades?.size));
+ const sample=async moving=>{const times=[],terrain=[];for(let frame=0;frame<90;frame++){
+   if(moving){if(mode==='iso')r.setCamera(52+frame*.12,52,1.2);else if(mode==='free'){r.freeCamX=52+frame*.12;r.fpYaw=frame*.003;}else{target.x=52+frame*.04;r.fpYaw=frame*.003;}}
+   const start=performance.now();render();times.push(performance.now()-start);terrain.push(r.frameProfile.terrain);await yieldTask();
+ }times.sort((a,b)=>a-b);return {meanMs:times.reduce((a,b)=>a+b)/times.length,p95Ms:times[Math.floor(times.length*.95)],maxMs:times.at(-1),terrainMeanMs:terrain.reduce((a,b)=>a+b)/terrain.length};};
+ const stationary=await sample(false),moving=await sample(true);
+ // Post shader equivalence uses fixed texture data, independent of scene animation.
+ const pixels=new Uint8Array(64*64*4);for(let i=0;i<pixels.length;i++)pixels[i]=(i*37+(i>>7)*61)%256;
+ const texture=new THREE.DataTexture(pixels,64,64);texture.needsUpdate=true;texture.minFilter=texture.magFilter=THREE.LinearFilter;
+ const output=new THREE.WebGLRenderTarget(128,128),hashes=[];r.postMaterial.uniforms.tDiffuse.value=texture;r.postMaterial.uniforms.uAoEnabled.value=0;r.postMaterial.uniforms.uBayerEnabled.value=1;r.postMaterial.uniforms.uResolution.value.set(128,128);
+ for(const chroma of [0,1])for(const dof of [0,.85,1.35,2.1]){r.postMaterial.uniforms.uChroma.value=chroma;r.postMaterial.uniforms.uDofStrength.value=dof;r.renderer.setRenderTarget(output);r.renderer.render(r.postScene,r.postCamera);const data=new Uint8Array(128*128*4);if(!params.has('cpu'))r.renderer.readRenderTargetPixels(output,0,0,128,128,data);hashes.push(Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data))).map(x=>x.toString(16).padStart(2,'0')).join(''));}
+ r.renderer.setRenderTarget(null);output.dispose();texture.dispose();
+ const atlasA=acquireBotanicalTreeTextures(THREE),atlasB=acquireBotanicalTreeTextures(THREE),sharedAtlases=atlasA.map===atlasB.map&&atlasA.normalMap===atlasB.normalMap;let disposed=0;atlasA.map.addEventListener('dispose',()=>disposed++);atlasA.release();const aliveAfterFirstRelease=disposed===0;atlasB.release();atlasB.release();
+ window.graphicsResult={mode,cpuOnly:params.has('cpu'),warmFrames,stationary,moving,shaderErrors,postHashes:hashes,sharedAtlases,aliveAfterFirstRelease,atlasDisposals:disposed,allDetailsLoaded:!r._terrainBuildJobs?.size&&!r.grassRootJobs?.running&&!r.grassRootJobs?.queue.length};
+ if(shaderErrors||!sharedAtlases||!aliveAfterFirstRelease||disposed!==1)throw Error(JSON.stringify(window.graphicsResult));
+ status.textContent=JSON.stringify(window.graphicsResult,null,2);document.body.dataset.ready='true';
+}catch(error){status.textContent=error.stack;document.body.dataset.ready='error';}
+</script>

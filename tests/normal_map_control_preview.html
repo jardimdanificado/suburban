@@ -1,0 +1,20 @@
+<!doctype html><meta charset="utf-8"><title>Normal maps globais</title><style>body{margin:0}#view{height:100vh}pre{position:absolute;background:#fff;z-index:2;padding:8px}</style><pre id="status">Carregando…</pre><div id="view"></div>
+<script type="module">
+import {RCT3DRenderer} from '../js/renderer_3d.js';
+import {setActiveEntities} from '../js/engine.js';
+import {setup} from './helpers/city.mjs';
+import {FARM_CROPS} from '../js/farm_crop_catalog.js';
+try{
+ const city=setup({population:12}),farm=city.buildings.find(b=>b.type==='farm'),renderer=new RCT3DRenderer(document.querySelector('#view'));let errors=0;renderer.renderer.debug.onShaderError=()=>errors++;renderer.cityDevelopment=city.development;renderer.terrainOptimizationsEnabled=false;
+ city.world.map=new Uint8Array(128*128).fill(3);city.world.getTile=(x,y)=>city.world.map[y*128+x]??5;city.world.clock.hour=12;city.world.clock.minute=0;
+ const entities=[farm.entity];setActiveEntities(entities);renderer.setCamera(farm.entity.x+farm.width/2,farm.entity.y+farm.depth/2,3);
+ renderer.setGraphicOptions({normalMaps:false});farm.crop='alface';city.economy.setupFarm(farm);for(const field of farm.fields)field.plantedAt=720-FARM_CROPS.alface.grow-1;
+ renderer.render(city.world,entities,0,1/60,1);
+ const plants=renderer.cityMeshes.get(farm.id).userData.cropPlants.mesh.material,wall=renderer.createCityBuildingMaterial('wood',0x987654);
+ if(plants.normalMap||wall.normalMap)throw Error('New materials ignored disabled setting');
+ renderer.setGraphicOptions({normalMaps:true});if(!plants.normalMap||!wall.normalMap||!renderer.materials.terrainRock0.normalMap)throw Error('Missing restored normals');const saved=plants.normalMap;
+ renderer.render(city.world,entities,0,1/60,1);renderer.setGraphicOptions({normalMaps:false});if(plants.normalMap||wall.normalMap||renderer.materials.terrainRock0.normalMap)throw Error('Existing materials ignored toggle');renderer.render(city.world,entities,0,1/60,1);
+ renderer.setGraphicOptions({normalMaps:true});renderer.render(city.world,entities,0,1/60,1);if(plants.normalMap!==saved||errors)throw Error('Restore or shader failure');wall.dispose();
+ document.querySelector('#status').textContent=JSON.stringify({newMaterials:'off',existingMaterials:'off/on',texturesRestored:true,shaderErrors:errors});document.body.dataset.ready='true';
+}catch(error){document.querySelector('#status').textContent=error.stack;document.body.dataset.ready='error';}
+</script>

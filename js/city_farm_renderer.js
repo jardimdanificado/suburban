@@ -1,14 +1,14 @@
 import {NATURAL_PLANTS} from './plant_catalog.js';
 import {createFarmPlantGeometry} from './farm_plant_geometry.js';
 import {FARM_CROPS} from './farm_crop_catalog.js';
-import {addBotanicalTreeWind,botanicalTreeTextures} from './botanical_trees.js?v=species-colors-3';
+import {addBotanicalTreeWind,acquireBotanicalTreeTextures} from './botanical_trees.js?v=species-colors-3';
 import {farmCells,isVerticalFarm} from './city_farm_layout.js';
 import {surfaceElevation} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 export function createFarmPlants(THREE,b){
   const species=FARM_CROPS[b.crop]?.plantSpecies,perennial=FARM_CROPS[b.crop]?.perennial||!!species&&!!(NATURAL_PLANTS[species]?.wood||NATURAL_PLANTS[species]?.tree),capacity=b.units.length*3,group=new THREE.Group(),geometry=createFarmPlantGeometry(THREE,b.crop);
-  const textures=botanicalTreeTextures(THREE),material=addBotanicalTreeWind(new THREE.MeshStandardMaterial({vertexColors:true,side:THREE.DoubleSide,roughness:.95,map:textures.map,normalMap:textures.normalMap,alphaTest:.5}));
-  material.addEventListener('dispose',()=>{textures.map.dispose();textures.normalMap.dispose();});
+  const textures=acquireBotanicalTreeTextures(THREE),material=addBotanicalTreeWind(new THREE.MeshStandardMaterial({vertexColors:true,side:THREE.DoubleSide,roughness:.95,map:textures.map,normalMap:textures.normalMap,alphaTest:.5}));
+  material.addEventListener('dispose',textures.release);
   const age=new THREE.InstancedBufferAttribute(new Float32Array(capacity),1);geometry.setAttribute('instanceGrowth',age);
   const mesh=new THREE.InstancedMesh(geometry,material,capacity);mesh.count=0;mesh.receiveShadow=true;mesh.castShadow=false;group.add(mesh);
   return {group,mesh,age,capacity,perennial,grow:FARM_CROPS[b.crop]?.grow||120};

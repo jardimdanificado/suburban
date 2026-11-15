@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><title>Iluminação das pedras</title><style>body{margin:0}#view{height:100vh}pre{position:absolute;background:#fff;z-index:2;padding:8px}</style><pre id="status">Carregando…</pre><div id="view"></div>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {RCT3DRenderer} from '../js/renderer_3d.js';
+import {TILE_FLOOR,TILE_STONE} from '../js/world_gen.js';
+import {WorldClock} from '../js/world.js';
+try{
+ const world={width:24,height:24,seed:42,revision:1,map:new Uint8Array(24*24).fill(TILE_FLOOR),clock:new WorldClock(),getTile(x,y){return this.map[y*24+x]??5;}};
+ for(let y=8;y<16;y++)for(let x=8;x<16;x++)world.map[y*24+x]=TILE_STONE;
+ const renderer=new RCT3DRenderer(document.querySelector('#view'));let errors=0;renderer.renderer.debug.onShaderError=()=>errors++;const lamp=new THREE.PointLight(0xffae74,25,24,1);lamp.position.set(10,5,12);renderer.scene.add(lamp);renderer.terrainOptimizationsEnabled=false;renderer.setCamera(12,12,5);
+ for(const hour of [12,20]){world.clock.hour=hour;renderer.render(world,[],0,1/60,1);}
+ const material=renderer.materials.terrainRock0;if(!material.normalMap||material.normalScale.x!==.65)throw Error('Missing shallow surface normals');if(errors)throw Error(`Shader errors: ${errors}`);
+ document.querySelector('#status').textContent=JSON.stringify({shaderErrors:errors,normalSize:material.normalMap.image.width,strength:material.normalScale.x});document.body.dataset.ready='true';
+}catch(error){document.querySelector('#status').textContent=error.stack;document.body.dataset.ready='error';}
+</script>

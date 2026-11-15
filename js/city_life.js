@@ -1,4 +1,4 @@
-import { makeIdentity, makeBuildingName } from './city_names.js';
+import { makeIdentity, makeBuildingName, makeCityName } from './city_names.js';
 import {initializeBodyMetrics} from './city_body_metrics.js?v=citizen-access-1';
 export const LIFE_RULES = { starvationMinutes: 720, dehydrationMinutes: 360, terminalHealthMinutes: 120, stalledMinutes: 120 };
 const NEED_KEYS=['food','water','energy','hygiene','toilet','social','leisure','health','shelter','safety'];
@@ -6,6 +6,7 @@ export class CityLife {
   constructor(city) { this.city = city; this.deaths = []; this.deathCount = 0; this.usedNames = new Set(); this.usedBuildingNames = new Set(); this.stallRecoveries = 0; this.positionChecks=new WeakMap(); }
   identity(index, options = {}) { return makeIdentity(this.city, this.usedNames, index, options); }
   name(index, options = {}) { return this.identity(index, options).name; }
+  cityName() { return makeCityName(this.city, this.usedBuildingNames); }
   buildingName(label) { return makeBuildingName(this.city, this.usedBuildingNames, label); }
   heir(c) { return [c.partnerId, ...c.childIds, ...c.parentIds].map(id => this.city.society.citizen(id)).find(p => p && p.id !== c.id && this.city.society.isAdult(p)); }
   die(c, cause) {

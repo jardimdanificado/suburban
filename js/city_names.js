@@ -65,3 +65,15 @@ export function makeBuildingName(city, used, label) {
     if (!used.has(name)) {used.add(name);return name;}
   }
 }
+
+// Equally weighted place nouns keep one settlement type from dominating new cities.
+export const CITY_NAME_NOUNS=Object.freeze([
+  'Vila','Porto','Serra','Vale','Ilha','Ponta','Enseada','Costa','Campo','Jardim',
+  'Recanto','Refúgio','Monte','Morro','Pedra','Barra','Praia','Arroio','Riacho',
+  'Vereda','Mirante','Colina','Cachoeira','Várzea','Bosque','Travessia','Lagoa',
+  'Ribeirão','Baía','Cabo','Chapada','Campina','Prado','Restinga','Rochedo','Fonte', 
+  'Comunidade','Centro','Vilarejo', 
+]);
+export function makeCityName(city,used){
+  return makeBuildingName(city,used,pick(city,CITY_NAME_NOUNS));
+}

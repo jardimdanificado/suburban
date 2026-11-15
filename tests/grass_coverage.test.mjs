@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {constructionSiteCells,grassExclusionCells} from '../js/city_site_footprints.js';
+import {constructionSiteCells,cachedConstructionFootprint,grassExclusionCells} from '../js/city_site_footprints.js';
 import {grassRoots} from '../js/volumetric_grass.js';
 const tile=(x,z)=>[x,0,z,x,0,z+1,x+1,0,z+1,x,0,z,x+1,0,z+1,x+1,0,z];
 
@@ -57,4 +57,17 @@ test('quarries, iron mines and parks retain grass while farms and buildings excl
  const excluded=grassExclusionCells(lots,[]);assert.deepEqual([...excluded].sort(),['3,0','4,0']);
  const surface=lots.flatMap((_,i)=>tile(i,0)),roots=grassRoots(surface,null,excluded).roots;
  assert.equal(roots.length/3,300);
+});
+
+test('construction mask cache preserves exact coverage and follows in-place project and plot edits',()=>{
+ const owner={},plot={id:1,x:2,y:3,width:8,depth:8},building={service:'building',plotId:1,width:4,depth:5,status:'materials'},road={service:'road-repair',path:[{x:10.5,y:12.5}],status:'labor'},lamp={service:'lighting',door:{x:9.5,y:8.5}};
+ const development={plots:[plot],projects:[building,road,lamp]};
+ const expected=()=>[...new Set(development.projects.flatMap(p=>constructionSiteCells(p,development.plots.find(plot=>plot.id===p.plotId))).map(p=>`${Math.floor(p.x)},${Math.floor(p.y)}`))].sort().join(';');
+ let prior=cachedConstructionFootprint(owner,development);assert.equal(prior.signature,expected());
+ assert.equal(cachedConstructionFootprint(owner,development),prior);
+ building.status='labor';assert.equal(cachedConstructionFootprint(owner,development),prior,'progress alone must not rebuild an identical mask');
+ for(const edit of [()=>plot.x++,()=>building.width++,()=>road.path[0].x++,()=>road.path.push({x:14,y:15}),()=>lamp.door.y++,()=>building.status='completed',()=>road.cancelled=true,()=>development.projects.pop()]){
+  edit();const next=cachedConstructionFootprint(owner,development);assert.notEqual(next,prior);assert.equal(next.signature,expected());prior=next;
+ }
+ assert.notEqual(cachedConstructionFootprint(owner,{...development}),prior,'changing cities must not retain the previous city');
 });

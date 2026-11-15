@@ -1,8 +1,10 @@
+import {NormalMapControl} from './normal_map_control.js';
+import {terrainSurfaceNormals} from './terrain_surface_normals.js';
 import {createFarmPlantGeometry} from './farm_plant_geometry.js';
 import {BOTANICAL_TREE_MODELS,botanicalTreeTextures,addBotanicalTreeWind,BotanicalTreeInstances} from './botanical_trees.js?v=species-colors-3';
 import {dirtRoadGround} from './dirt_road_visuals.js';
 import {scheduleTerrainIdleWork,stopTerrainIdleWork} from './terrain_idle_work.js';
-import {beginTerrainFade,finishTerrainFade,advanceTerrainFades} from './terrain_quality_fade.js';
+import {beginTerrainFade,finishTerrainFade,advanceTerrainFades,clearTerrainFadeMaterials} from './terrain_quality_fade.js';
 import {syncCardboardGrass} from './cardboard_grass.js?v=local-mask-2';
 import {setWaterGeometryCacheEnabled} from './water_geometry_cache.js?v=terrain-revision-2';
 import {GrassRootJobs} from './grass_root_jobs.js?v=worker-roots-11';
@@ -18,7 +20,7 @@ import {createGrassDetailsMesh,grassDetailInstanceSteps} from './grass_details.j
 import {addShoreFoamShader,cachedShoreFoamTileSurface} from './water_foam.js?v=zoom-coast-12';
 import {farmSurfaceTile} from './city_farm_ground.js?v=whole-farm-soil-1';
 import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,addSandDepositsToMaterial,TerrainTracks} from './terrain_tracks.js?v=grass-soil-carry-1';
-import {constructionSiteCells,grassExclusionCells,grassExclusionSignature,grassChunkSignatures} from './city_site_footprints.js?v=local-chunk-mask-3';
+import {cachedConstructionFootprint,grassExclusionCells,grassExclusionSignature,grassChunkSignatures} from './city_site_footprints.js?v=local-chunk-mask-3';
 import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=typed-roots-2';
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-glyph-sprites-3';
@@ -36,7 +38,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import {NightLighting} from "./night_lighting.js?v=local-night-lights-1";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=vertical-farms-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=graphics-perf-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=head-flag-crown-1';
@@ -412,6 +414,20 @@ function createTerrainSurfaceTexture(style, variant) {
   texture.colorSpace = THREE.SRGBColorSpace;
   applyTextureAnisotropy(texture);
   return texture;
+}
+
+const rockSurfaceCache=new Map();
+function rockSurfaceTextures(style,variant){
+ const key=`${style}:${variant}`;if(rockSurfaceCache.has(key))return rockSurfaceCache.get(key);
+ const map=createTerrainSurfaceTexture(style,variant),canvas=map.image,{width,height}=canvas;
+ const pixels=canvas.getContext('2d').getImageData(0,0,width,height).data;
+ const normalMap=new THREE.DataTexture(terrainSurfaceNormals(pixels,width,height),width,height);
+ normalMap.wrapS=normalMap.wrapT=THREE.RepeatWrapping;
+ // CanvasTexture flips its source vertically. Match that orientation for the derived data.
+ normalMap.flipY=map.flipY;
+ normalMap.magFilter=THREE.LinearFilter;normalMap.minFilter=THREE.LinearMipmapLinearFilter;normalMap.generateMipmaps=true;
+ applyTextureAnisotropy(normalMap);normalMap.needsUpdate=true;
+ const surface={map,normalMap};rockSurfaceCache.set(key,surface);return surface;
 }
 
 function createCaribbeanWaterTexture() {
@@ -3721,9 +3737,14 @@ export class RCT3DRenderer {
           // Chromatic aberration (RGB fringe towards screen edge)
           float chromaOffset = dist * (uChroma * 0.014);
           vec4 centerColor = texture2D(tDiffuse, uv);
-          float r = texture2D(tDiffuse, uv + center * chromaOffset).r;
+          float r = centerColor.r;
+          float b = centerColor.b;
+          if (chromaOffset != 0.0) {
+            r = texture2D(tDiffuse, uv + center * chromaOffset).r;
+            b = texture2D(tDiffuse, uv - center * chromaOffset).b;
+          }
           float g = centerColor.g;
-          float b = texture2D(tDiffuse, uv - center * chromaOffset).b;
+
           float a = centerColor.a;
           vec3 baseColor = vec3(r, g, b);
 
@@ -3736,7 +3757,8 @@ export class RCT3DRenderer {
           }
 
           // Multi-tap Golden-Angle Bokeh Depth of Field
-          if (uDofStrength > 0.001) {
+          float blend = smoothstep(0.04, 0.38, dist);
+          if (uDofStrength > 0.001 && blend > 0.0) {
             float blur = dist * uDofStrength * 0.0065;
             vec4 blurCol = vec4(0.0);
             // 8-tap circular bokeh disk
@@ -3754,7 +3776,6 @@ export class RCT3DRenderer {
             // to the blurred sample without repeating its depth taps.
             blurCol.rgb *= ao;
 
-            float blend = smoothstep(0.04, 0.38, dist);
             vec3 finalCol = mix(baseColor, blurCol.rgb, blend * 0.65);
             // Apply Contrast and Brightness calibration
             finalCol = (finalCol - 0.5) * uContrast + 0.5;
@@ -3877,6 +3898,7 @@ export class RCT3DRenderer {
     }
 
     // 4.5 Graphic Options (Calibrated via in-game Settings Modal)
+    this.normalMapControl = new NormalMapControl();
     this.graphicOptions = {
       normalMaps: true,
       moonlight: true,
@@ -3974,8 +3996,9 @@ export class RCT3DRenderer {
     const terrainSurfaceMaterials = (normalMapsEnabled, category, style, normalMap, normalScale, roughness, metalness) => Object.fromEntries(
       Array.from({length:4},(_,variant)=>{
         const street=style==='pavedRoad'||style.startsWith('sidewalk');
-        const surface=street?streetSurfaceTextures(THREE,style,variant):{map:createTerrainSurfaceTexture(style,variant),normalMap};
-        return [`terrain${category}${variant}`,makeMat(normalMapsEnabled,{map:surface.map,color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},surface.normalMap,normalScale,roughness,metalness)];
+        const stone=['rock','mountain','peak'].includes(style);
+        const surface=street?streetSurfaceTextures(THREE,style,variant):stone?rockSurfaceTextures(style,variant):{map:createTerrainSurfaceTexture(style,variant),normalMap};
+        return [`terrain${category}${variant}`,makeMat(normalMapsEnabled,{map:surface.map,color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},surface.normalMap,stone?.65:normalScale,roughness,metalness)];
       })
     );
 
@@ -5371,6 +5394,11 @@ export class RCT3DRenderer {
 
   setGraphicOptions(opts) {
     if (!opts) return;
+    if(opts.normalMaps!==undefined&&(opts.normalMaps!==false)!==this.normalMapControl.enabled){
+      // Visit existing meshes only when settings change; new groups register at creation.
+      this.normalMapControl.registerGroup(this.scene);
+      this.normalMapControl.setEnabled(opts.normalMaps);
+    }
     Object.assign(this.graphicOptions, opts);
     if(opts.nightLightLimit!==undefined)this.setNightLightLimit(opts.nightLightLimit);
     if (opts.anisotropy !== undefined) {
@@ -5551,6 +5579,7 @@ export class RCT3DRenderer {
       this._terrainChunkVersions=new Map();this.grassRootJobs?.clear();
       for (const chunk of this.terrainChunks?.values() || []) this.disposeTerrainChunk(chunk);
       this.terrainChunks?.clear();
+      clearTerrainFadeMaterials(this);
       this.visibleTerrainChunkKeys?.clear();
       this._terrainHasLocalInvalidation = false;
       this.terrainDirty = true;
@@ -5576,32 +5605,33 @@ export class RCT3DRenderer {
     const camera = this.isPerspectiveActive() ? this.fpCamera : this.camera;
     if (!camera) return { minTx: 0, maxTx: this.mapWidth - 1, minTy: 0, maxTy: this.mapHeight - 1 };
     camera.updateMatrixWorld(true);
-    const raycaster = new THREE.Raycaster();
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    const points = [];
-    const reach = this.isPerspectiveActive() ? Math.min(camera.far || 120, this.scene.fog?.far || camera.far || 120) : Infinity;
-    for (const [x, y] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
-      raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
-      const point = new THREE.Vector3();
-      if (raycaster.ray.intersectPlane(plane, point)) {
-        if (Number.isFinite(reach) && point.distanceTo(raycaster.ray.origin) > reach) points.push(raycaster.ray.at(reach, point));
-        else points.push(point);
-      }
-      else if (Number.isFinite(reach)) points.push(raycaster.ray.at(reach, point));
+    const perspective=this.isPerspectiveActive();
+    const reach=perspective?Math.min(camera.far||120,this.scene.fog?.far||camera.far||120):Infinity;
+    const cache=this._terrainViewportCache??={raycaster:new THREE.Raycaster(),plane:new THREE.Plane(new THREE.Vector3(0,1,0),0),ndc:new THREE.Vector2(),point:new THREE.Vector3(),worldMatrix:new Float64Array(16),projection:new Float64Array(16),corners:[[-1,-1],[-1,1],[1,-1],[1,1]]};
+    const worldMatrix=camera.matrixWorld.elements,projection=camera.projectionMatrix.elements;
+    let changed=cache.camera!==camera||cache.width!==this.mapWidth||cache.height!==this.mapHeight||cache.reach!==reach||cache.perspective!==perspective;
+    for(let i=0;i<16;i++)if(cache.worldMatrix[i]!==worldMatrix[i]||cache.projection[i]!==projection[i]){changed=true;break;}
+    if(!changed)return cache.bounds;
+    cache.camera=camera;cache.width=this.mapWidth;cache.height=this.mapHeight;cache.reach=reach;cache.perspective=perspective;
+    cache.worldMatrix.set(worldMatrix);cache.projection.set(projection);
+    const {raycaster,plane,ndc,point}=cache;
+    let minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;
+    for(const [x,y] of cache.corners){
+      raycaster.setFromCamera(ndc.set(x,y),camera);
+      if(raycaster.ray.intersectPlane(plane,point)){
+        if(Number.isFinite(reach)&&point.distanceTo(raycaster.ray.origin)>reach)raycaster.ray.at(reach,point);
+      }else if(Number.isFinite(reach))raycaster.ray.at(reach,point);
+      else continue;
+      minX=Math.min(minX,point.x);maxX=Math.max(maxX,point.x);minZ=Math.min(minZ,point.z);maxZ=Math.max(maxZ,point.z);
     }
-    if (!points.length) return { minTx: 0, maxTx: this.mapWidth - 1, minTy: 0, maxTy: this.mapHeight - 1 };
+    if(minX===Infinity)return cache.bounds={minTx:0,maxTx:this.mapWidth-1,minTy:0,maxTy:this.mapHeight-1};
     // Perspective views can show elevated parts of buildings and people whose
     // ground point is outside the corner-ray footprint. Keep a generous
     // loading/rendering apron for third-person and free-camera views.
-    const margin = this.isPerspectiveActive() ? 8 : 4;
-    const clampX = value => Math.max(0, Math.min(this.mapWidth - 1, value));
-    const clampY = value => Math.max(0, Math.min(this.mapHeight - 1, value));
-    return {
-      minTx: clampX(Math.floor(Math.min(...points.map(p => p.x)) - margin)),
-      maxTx: clampX(Math.ceil(Math.max(...points.map(p => p.x)) + margin)),
-      minTy: clampY(Math.floor(Math.min(...points.map(p => p.z)) - margin)),
-      maxTy: clampY(Math.ceil(Math.max(...points.map(p => p.z)) + margin))
-    };
+    const margin=perspective?8:4;
+    const clampX=value=>Math.max(0,Math.min(this.mapWidth-1,value));
+    const clampY=value=>Math.max(0,Math.min(this.mapHeight-1,value));
+    return cache.bounds={minTx:clampX(Math.floor(minX)-margin),maxTx:clampX(Math.ceil(maxX)+margin),minTy:clampY(Math.floor(minZ)-margin),maxTy:clampY(Math.ceil(maxZ)+margin)};
   }
 
   getFullWorldModeName() {
@@ -5617,12 +5647,13 @@ export class RCT3DRenderer {
       map=portugueseClayTileTexture(THREE,color,variant%8);
     }else ({map,normalMap}=caribbeanBuildingSurfaceTextures(THREE,kind==='wood'?'wood':'plaster',variant%8));
     const materialParams={color:kind==='roof'?0xffffff:color,map,side:THREE.DoubleSide};if(normalMap)materialParams.normalMap=normalMap;
-    const material=new THREE.MeshLambertMaterial(materialParams);
+    const material=this.normalMapControl.register(new THREE.MeshLambertMaterial(materialParams));
     if(kind==='roof')applyRetroDitherToMaterial(material,24,0);
     else applyRetroDitherToMaterial(material);
     return material;
   }
-  decorateCityMaterials(group){group.traverse(object=>{for(const material of [object.material].flat())if(material?.isMeshLambertMaterial)applyRetroDitherToMaterial(material);});}
+  registerSurfaceMaterials(group){this.normalMapControl.registerGroup(group);}
+  decorateCityMaterials(group){this.registerSurfaceMaterials(group);group.traverse(object=>{for(const material of [object.material].flat())if(material?.isMeshLambertMaterial)applyRetroDitherToMaterial(material);});}
   setPaused(p) { this.isPaused = !!p; }
   isSimPaused() { return this.isPaused; }
 
@@ -5633,6 +5664,7 @@ export class RCT3DRenderer {
     this.terrainTracks?.clear();
     for (const chunk of this.terrainChunks?.values() || []) this.disposeTerrainChunk(chunk);
     this.terrainChunks?.clear();
+    clearTerrainFadeMaterials(this);
     this.visibleTerrainChunkKeys?.clear();
     this.cityCitizenBatches?.clear();
     this.cityCitizenModels?.clear();
@@ -5822,18 +5854,22 @@ export class RCT3DRenderer {
   thirdPersonBuildingIndex(city){
     if(!city)return null;
     const revision=`${city.structureRevision||0}:${city.buildings.length}`;
-    if(this._thirdPersonCollisionRevision===revision)return this._thirdPersonBuildingCells;
+    if(this._thirdPersonCollisionCity===city&&this._thirdPersonCollisionRevision===revision)return this._thirdPersonBuildingCells;
     const cells=new Map();
     for(const b of city.buildings){
       if(b.entity.destroyed||b.constructionKind==='open-air')continue;
       for(let y=Math.floor(b.entity.y);y<Math.ceil(b.entity.y+b.depth);y++)for(let x=Math.floor(b.entity.x);x<Math.ceil(b.entity.x+b.width);x++)cells.set(`${x},${y}`,b);
     }
-    this._thirdPersonCollisionRevision=revision;this._thirdPersonBuildingCells=cells;return cells;
+    this._thirdPersonCollisionCity=city;this._thirdPersonCollisionRevision=revision;this._thirdPersonBuildingCells=cells;return cells;
   }
 
   resolveThirdPersonCamera(target,desired,city,insideBuildingId=null){
     const dx=desired.x-target.x,dy=desired.y-target.y,dz=desired.z-target.z,distance=Math.hypot(dx,dy,dz);
     if(distance<.001)return desired;
+    const world=this.currentWorld,map=this.currentMap,revision=world?.revision,structure=city?.structureRevision;
+    const cacheable=(!map||world?.map===map&&Number.isFinite(revision))&&(!city||Number.isFinite(structure));
+    const cached=this._thirdPersonCameraCollision;
+    if(cacheable&&cached&&cached.world===world&&cached.map===map&&cached.width===world?.width&&cached.height===world?.height&&cached.revision===revision&&cached.city===city&&cached.structure===structure&&cached.buildings===city?.buildings.length&&cached.inside===insideBuildingId&&cached.tx===target.x&&cached.ty===target.y&&cached.tz===target.z&&cached.dx===desired.x&&cached.dy===desired.y&&cached.dz===desired.z)return cached.position;
     const buildings=this.thirdPersonBuildingIndex(city),steps=Math.max(1,Math.ceil(distance/.18));let safeDistance=distance;
     for(let i=1;i<=steps;i++){
       const along=distance*i/steps,x=target.x+dx*along/distance,y=target.y+dy*along/distance,z=target.z+dz*along/distance;
@@ -5846,6 +5882,7 @@ export class RCT3DRenderer {
     }
     const position=new THREE.Vector3(target.x+dx*safeDistance/distance,target.y+dy*safeDistance/distance,target.z+dz*safeDistance/distance);
     if(this.currentMap)position.y=Math.max(position.y,this.getSurfaceElevation(this.currentMap,position.x,position.z)+.3);
+    if(cacheable)this._thirdPersonCameraCollision={world,map,width:world?.width,height:world?.height,revision,city,structure,buildings:city?.buildings.length,inside:insideBuildingId,tx:target.x,ty:target.y,tz:target.z,dx:desired.x,dy:desired.y,dz:desired.z,position};
     return position;
   }
 
@@ -6695,9 +6732,8 @@ export class RCT3DRenderer {
     if(!farmSignatureCache||farmSignatureCache.city!==city||farmSignatureCache.structureRevision!==(city?.structureRevision||0)){
       this._terrainFarmSignatureCache={city,structureRevision:city?.structureRevision||0,grassValue:grassExclusionSignature(city?.buildings||[])};
     }
-    const development=this.cityDevelopment,plots=new Map((development?.plots||[]).map(plot=>[plot.id,plot]));
-    const siteCells=(development?.projects||[]).flatMap(project=>constructionSiteCells(project,plots.get(project.plotId)));
-    const grassSignature=`${this._terrainFarmSignatureCache.grassValue}|sites:${[...new Set(siteCells.map(p=>`${Math.floor(p.x)},${Math.floor(p.y)}`))].sort().join(';')}`;
+    const footprint=cachedConstructionFootprint(this,this.cityDevelopment),siteCells=footprint.cells;
+    const grassSignature=`${this._terrainFarmSignatureCache.grassValue}|sites:${footprint.signature}`;
     if(this._grassCoverageCity!==city||this._grassCoverageSignature!==grassSignature){
       this._grassCoverageCity=city;this._grassCoverageSignature=grassSignature;
       this._grassExclusionCells=grassExclusionCells(city?.buildings||[],siteCells);
@@ -6784,14 +6820,18 @@ export class RCT3DRenderer {
     const jobs=this._terrainBuildJobs;if(!jobs?.size)return;
     const deadline=performance.now()+budgetMs;
     for(const [key,job]of jobs)if(job.world!==world||!visible.has(key)&&!this._terrainPrefetchKeys?.has(key))this.cancelTerrainBuild(key);
-    const ordered=[...jobs].sort((a,b)=>{
-      const distance=entry=>{const [x,y]=entry[0].split(',').map(Number),size=this.terrainChunkSize||16;return (x*size+size/2-this.camX)**2+(y*size+size/2-this.camY)**2;};
-      return Number(visible.has(b[0]))-Number(visible.has(a[0]))||distance(a)-distance(b);
-    });
+    const ordered=[...jobs],size=this.terrainChunkSize||16;
+    let pendingVisible=0;
+    for(const entry of ordered){
+      const key=entry[0],comma=key.indexOf(','),x=Number(key.slice(0,comma)),y=Number(key.slice(comma+1));
+      entry[2]=Number(visible.has(key));pendingVisible+=entry[2];
+      entry[3]=(x*size+size/2-this.camX)**2+(y*size+size/2-this.camY)**2;
+    }
+    ordered.sort((a,b)=>b[2]-a[2]||a[3]-b[3]);
     for(const [key,job]of ordered){
       // Waiting for visible grass is still foreground work. Do not spend its
       // frame budget constructing or queuing more off-screen grass.
-      if(!visible.has(key)&&[...jobs.keys()].some(pending=>visible.has(pending)))break;
+      if(!visible.has(key)&&pendingVisible>0)break;
       while(performance.now()<deadline){
         const step=job.steps.next();
         if(step.value?.terrain)job.partial=step.value;
@@ -6800,6 +6840,7 @@ export class RCT3DRenderer {
         const chunk=step.value,old=this.terrainChunks.get(key);
         if(old&&!this.beginTerrainTransition?.(old,chunk))this.disposeTerrainChunk(old);
         this.terrainChunks.set(key,chunk);chunk.lastUsed=performance.now();jobs.delete(key);
+        if(visible.has(key))pendingVisible--;
         if(visible.has(key)){
           this.terrainGroup.add(chunk.terrain);this.waterGroup.add(chunk.water);
           if(gridEnabled&&chunk.grid.children.length)this.rctGridLineGroup.add(chunk.grid);

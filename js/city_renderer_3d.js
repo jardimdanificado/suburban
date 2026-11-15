@@ -7,7 +7,7 @@ import {syncLampBatches} from './city_lamp_batches.js?v=lamp-batches-1';
 import {furnitureModel} from './city_furniture_models.js?v=no-beach-towels-1';
 import {addBuildingDetails} from './city_building_details.js?v=mine-sign-removed-1';
 import {drawPixelText} from './pixel_text.js?v=pixel-text-1';
-import {syncConstructionSites} from './city_construction_renderer.js?v=ground-realism-2';
+import {syncConstructionSites} from './city_construction_renderer.js?v=normal-maps-all-1';
 import {syncCityMobility} from './city_mobility_renderer.js?v=harbor-boats-2';
 import {syncCityWatercraft} from './city_watercraft_renderer.js?v=boats-transport-23';
 import {syncCampaignDecorations} from './city_campaign_renderer.js';

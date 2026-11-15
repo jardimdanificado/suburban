@@ -13,6 +13,24 @@ export function constructionSiteCells(project, plot) {
   return cells;
 }
 
+/** Cache the unchanged construction mask, rather than expanding every lot each frame. */
+export function cachedConstructionFootprint(owner,development){
+  const plots=new Map((development?.plots||[]).map(plot=>[plot.id,plot]));
+  const projects=development?.projects||[];
+  const layout=projects.map(project=>{
+    if(project.cancelled||project.status==='completed'||project.status==='cancelled')return '';
+    const plot=plots.get(project.plotId),route=project.path||project.route;
+    if(project.service==='building'&&plot)return `b:${plot.x},${plot.y},${Math.min(plot.width,project.width||plot.width)},${Math.min(plot.depth,project.depth||plot.depth)}`;
+    if((project.service==='road'||project.service==='road-repair')&&route)return `r:${route.map(p=>`${Math.floor(p.x)},${Math.floor(p.y)}`).join(';')}`;
+    return project.door?`d:${project.door.x},${project.door.y}`:'';
+  }).join('|');
+  const previous=owner._constructionFootprint;
+  if(previous&&previous.development===development&&previous.layout===layout)return previous;
+  const cells=projects.flatMap(project=>constructionSiteCells(project,plots.get(project.plotId)));
+  const signature=[...new Set(cells.map(p=>`${Math.floor(p.x)},${Math.floor(p.y)}`))].sort().join(';');
+  return owner._constructionFootprint={development,layout,cells,signature};
+}
+
 // Parks, quarries and mines keep their natural lawn. Other built lots clear their footprint;
 // office tenants share the enclosing tower's footprint instead of adding one.
 export function buildingClearsGrass(building) {
