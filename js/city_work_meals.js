@@ -85,7 +85,7 @@ export class CityWorkMeals {
     const holder = this.site(c, b);
     const outdoorSite=this.constructionSite(holder);
     if(!this.mealSiteReady(holder))return false;
-    const atFarm=holder.type==='farm'&&c.entity.x>=holder.entity.x-1&&c.entity.x<=holder.entity.x+holder.width+1&&c.entity.y>=holder.entity.y-1&&c.entity.y<=holder.entity.y+holder.depth+1;
+    const atFarm=!outdoorSite&&holder.type==='farm'&&c.entity.x>=holder.entity.x-1&&c.entity.x<=holder.entity.x+holder.width+1&&c.entity.y>=holder.entity.y-1&&c.entity.y<=holder.entity.y+holder.depth+1;
     if(!atFarm&&Math.hypot(c.entity.x-holder.door.x,c.entity.y-holder.door.y)>2&&!c.indoorLocation)return false;
     const offer = this.offer(holder, c); if (!offer) return false;
     if(c.task!=='workmeal'){c.mealResume={task:c.task,targetId:c.targetId,workProjectId:c.workProjectId};c.task='workmeal';c.path=[];c.targetId=b.id;c.mealTargetId=holder.id;}
