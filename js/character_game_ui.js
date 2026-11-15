@@ -13,21 +13,21 @@ const movingCodes=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft'
 
 /** Gameplay uses the same canvas widgets, native fields and desktop windows as management. */
 export class CharacterGameUI {
-  constructor({root,getCity,command,onEnter,onSimulation,onMenu,onCamera,onPause,isPaused,getDirection,getSpeed=()=>1,onSpeed=()=>{},getThirdPerson=()=>false,getEntities=()=>[]}){
-    Object.assign(this,{getCity,command,onEnter,onSimulation,onMenu,onCamera,onPause,isPaused,getDirection,getSpeed,onSpeed,getThirdPerson,getEntities});
+  constructor({root,getCity,command,onEnter,onSimulation,onMenu,onCamera,onPause,isPaused,getDirection,getSpeed=()=>1,onSpeed=()=>{},getThirdPerson=()=>false,getEntities=()=>[],getCameraLocked=()=>true,onCameraLock=()=>{},onSettings=()=>{}}){
+    Object.assign(this,{getCity,command,onEnter,onSimulation,onMenu,onCamera,onPause,isPaused,getDirection,getSpeed,onSpeed,getThirdPerson,getEntities,getCameraLocked,onCameraLock,onSettings});
     this.keys=new Set();this.choosing=false;this.message='';this.targetKey=null;this.contextOpen=false;this.layoutReady=false;this.savedPanels=null;
     this.desktop=new CityDesktop({city:getCity(),root,select:()=>{},initialModule:null,notifications:false});
     this.element=this.desktop.element;
   }
   get active(){return this.choosing||playing(this.getCity());}
   async act(action,options={}){
-    const result=await this.command(action,options);
+    this.worldMenu=null;const result=await this.command(action,options);
     if(result?.ok===false){this.message=result.message||'Ação indisponível.';this.messageUntil=performance.now()+5000;}
     if(result?.ok!==false&&['start','resume','switch'].includes(action)){
       if(action!=='switch'||!this.layoutReady){this.entering=true;this.desktop.closeAll(true);this.entering=false;this.layoutReady=false;}
-      this.choosing=false;this.contextOpen=false;this.keys.clear();this.targetKey=null;this.selectedEntityId=null;this.onEnter();
+      this.choosing=false;this.contextOpen=false;this.worldMenu=null;this.keys.clear();this.targetKey=null;this.selectedEntityId=null;this.onEnter();
     }
-    if(result?.ok!==false&&action==='simulation'){this.savedPanels=this.desktop.manager.windows.filter(w=>w.id.startsWith('page:survival-')&&w.id!=='page:survival-interaction').map(w=>w.id.slice('page:survival-'.length));this.desktop.closeAll(true);this.layoutReady=false;this.keys.clear();this.contextOpen=false;this.onSimulation();}
+    if(result?.ok!==false&&action==='simulation'){this.savedPanels=this.desktop.manager.windows.filter(w=>w.id.startsWith('page:survival-')&&w.id!=='page:survival-interaction').map(w=>w.id.slice('page:survival-'.length));this.desktop.closeAll(true);this.layoutReady=false;this.keys.clear();this.contextOpen=false;this.worldMenu=null;this.onSimulation();}
     return result;
   }
   choose(){
@@ -75,6 +75,53 @@ export class CharacterGameUI {
     if(target){this.selectTarget(target);this.dossier(target);return true;}
     if(notify){this.message='Aproxime-se para interagir. Use WASD para explorar.';this.messageUntil=performance.now()+3000;}return false;
   }
+  openWorldMenu(entityId,point,x,y){
+    const city=this.getCity(),c=controlledCitizen(city);if(!playing(city)||!c||c.entity.destroyed)return false;
+    const self=entityId===c.entity.id,target=self?{kind:'self',id:c.id,entityId,label:name(c)}:this.visibleTargets(Infinity).find(t=>t.entityId===entityId);
+    if(target&&!self)this.selectTarget(target);
+    this.contextOpen=false;this.worldMenu={entityId:target?entityId:null,self,point:point&&{x:point.x+.5,y:point.y+.5},x,y,index:0,offset:0};return true;
+  }
+  worldMenuItems(){
+    const menu=this.worldMenu;if(!menu)return null;
+    const city=this.getCity(),c=controlledCitizen(city);if(!playing(city)||!c||c.entity.destroyed)return null;
+    const target=menu.self?{kind:'self',id:c.id,label:name(c)}:menu.entityId!=null?this.visibleTargets(Infinity).find(t=>t.entityId===menu.entityId):null;
+    if(menu.entityId!=null&&!target)return null;
+    const items=[],add=(label,click,disabled=false,danger=false)=>items.push({label,click,disabled,danger});
+    if(menu.self){
+      add('Ver personagem',()=>this.openPanel('profile'));add('Abrir mochila',()=>this.openPanel('inventory'));add('Descansar',()=>this.act('rest'));add('Interromper ação',()=>this.act('stop'));
+    }else if(target){
+      const reachable=this.targets().find(t=>t.kind===target.kind&&t.id===target.id);
+      for(const choice of interactionOptions(city,target))add(choice.label,()=>this.use(target,choice),!reachable);
+      if(target.kind==='person')add('Atacar',()=>this.attack(target.entityId),!reachable||target.distance>1.6,true);
+      if(!c.indoorLocation&&target.point)add('Aproximar-se',()=>this.act('walk',target.point));
+      add('Selecionar alvo',()=>this.selectTarget(target));add('Examinar',()=>this.dossier(target));
+    }
+    if(menu.point&&!c.indoorLocation)add('Caminhar até aqui',()=>this.act('walk',menu.point));
+    add('Cancelar',()=>{});
+    return {label:target?.label||'Chão',items};
+  }
+  runWorldMenuItem(item){
+    if(!item||item.disabled)return;
+    this.worldMenu=null;item.click();
+  }
+  drawWorldMenu(ui){
+    const data=this.worldMenuItems(),menu=this.worldMenu;if(!data){this.worldMenu=null;return;}
+    const width=Math.min(ui.width-8,Math.max(220,...data.items.map(item=>ui.textWidth(item.label)+40))),rows=Math.max(1,Math.floor((ui.height-this.desktop.manager.top-this.desktop.manager.bottom-52)/25)),visible=Math.min(rows,data.items.length),height=49+visible*25;
+    const x=Math.max(4,Math.min(menu.x,ui.width-width-4)),y=Math.max(this.desktop.manager.top,Math.min(menu.y,ui.height-this.desktop.manager.bottom-height));
+    menu.index=Math.min(menu.index,data.items.length-1);menu.offset=Math.max(0,Math.min(menu.offset,data.items.length-visible));menu.bounds={x,y,w:width,h:height,rows:visible,total:data.items.length};
+    bevel(ui.ctx,x,y,width,height,{fill:T.paper});ui.regions.push({x,y,w:width,h:height,onClick:null});
+    bevel(ui.ctx,x+3,y+3,width-6,20,{fill:T.header});ui.text(ui.fitText('Escolha uma opção'+(data.items.length>visible?' · role para mais':''),width-18),x+9,y+7,T.captionInk);ui.text(ui.fitText(data.label,width-18),x+9,y+27,T.muted);
+    for(let row=0;row<visible;row++){
+      const index=menu.offset+row,item=data.items[index],label=ui.fitText(item.label+(item.disabled?' · fora de alcance':''),width-24),py=y+46+row*25,hover=ui.pointer&&ui.pointer.x>=x+4&&ui.pointer.x<x+width-4&&ui.pointer.y>=py&&ui.pointer.y<py+23;
+      ui.button(x+4,py,width-8,23,label,()=>this.runWorldMenuItem(item),{selected:!item.disabled&&(menu.keyboard?menu.index===index:hover),danger:item.danger&&!item.disabled});
+      const region=ui.regions.at(-1);Object.assign(region,{role:'menuitem',disabled:item.disabled});
+      if(item.disabled){bevel(ui.ctx,x+4,py,width-8,23,{fill:T.paper});ui.text(label,x+10,py+5,T.muted);}
+    }
+  }
+  scrollAt(x,y,delta){
+    const menu=this.worldMenu;if(menu){const b=menu.bounds;if(b&&x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h)menu.offset=Math.max(0,Math.min(b.total-b.rows,menu.offset+Math.sign(delta)*2));return true;}
+    return this.desktop.scrollAt(x,y,delta);
+  }
   interact(){
     const target=this.target();if(!target){this.message='Nada ao alcance. Aproxime-se de uma porta, planta ou pessoa.';this.messageUntil=performance.now()+3000;return;}
     const choices=interactionOptions(this.getCity(),target);
@@ -90,16 +137,23 @@ export class CharacterGameUI {
   }
   key(event,down=true){
     if(!this.active||/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName))return false;
+    if(down&&this.worldMenu){
+      const data=this.worldMenuItems();if(!data){this.worldMenu=null;return true;}else if(event.code==='Escape'){this.worldMenu=null;return true;}else if(['ArrowUp','ArrowDown','Enter'].includes(event.code)||/^Digit[1-9]$/.test(event.code)){
+        const menu=this.worldMenu;menu.keyboard=true;if(event.code==='Enter')this.runWorldMenuItem(data.items[menu.index]);
+        else if(/^Digit/.test(event.code))this.runWorldMenuItem(data.items[menu.offset+Number(event.code.slice(-1))-1]);
+        else{const step=event.code==='ArrowUp'?-1:1;menu.index=(menu.index+step+data.items.length)%data.items.length;const rows=menu.bounds?.rows||data.items.length;if(menu.index<menu.offset)menu.offset=menu.index;else if(menu.index>=menu.offset+rows)menu.offset=menu.index-rows+1;}return true;
+      }
+    }
     if(down&&['Tab','PageDown','PageUp','Home','End','Slash'].includes(event.code))return this.desktop.key(event);
     if(this.choosing){if(down&&event.code==='Escape'){this.desktop.close('page:character');return true;}return false;}
     if((event.ctrlKey||event.metaKey)&&['KeyR','KeyL'].includes(event.code))return false;
     if(['ControlLeft','ControlRight'].includes(event.code)){this.combat=down;return true;}
     if(movingCodes.includes(event.code)||['ShiftLeft','ShiftRight'].includes(event.code)){
       if(this.getCity().characterGame.autonomous){this.keys.clear();if(down&&movingCodes.includes(event.code)){this.message='Desligue a rotina automática na barra inferior para usar WASD.';this.messageUntil=performance.now()+3000;}return true;}
-      if(down&&!this.keys.has(event.code)){this.keys.add(event.code);this.contextOpen=false;this.input();}else if(!down&&this.keys.delete(event.code))this.input();return true;
+      if(down&&!this.keys.has(event.code)){this.keys.add(event.code);this.contextOpen=false;this.worldMenu=null;this.input();}else if(!down&&this.keys.delete(event.code))this.input();return true;
     }
     if(!down||event.repeat||event.metaKey||event.altKey)return false;
-    const actions={KeyZ:()=>this.onCamera(),KeyC:()=>this.toggle('profile'),KeyV:()=>this.toggle('activity'),KeyT:()=>this.toggle('targets'),KeyB:()=>this.toggle('interactions'),KeyE:()=>this.interact(),KeyI:()=>this.toggle('inventory'),KeyH:()=>this.toggle('body'),KeyU:()=>this.toggle('family'),KeyJ:()=>this.toggle('journal'),KeyP:()=>{this.onPause();},KeyX:()=>{this.keys.clear();this.act('stop');},KeyR:()=>this.act('rest'),KeyF:()=>this.attack(),Space:()=>this.attack(),Digit1:()=>this.act('eat'),Digit2:()=>this.act('drink'),Escape:()=>{if(this.contextOpen){this.contextOpen=false;}else if(this.desktop.manager.windows.length)this.desktop.close(this.desktop.manager.activeId);else this.toggle('menu');},KeyQ:()=>{
+    const actions={KeyO:()=>this.onSettings(),KeyL:()=>this.onCameraLock(),KeyZ:()=>this.onCamera(),KeyC:()=>this.toggle('profile'),KeyV:()=>this.toggle('activity'),KeyT:()=>this.toggle('targets'),KeyB:()=>this.toggle('interactions'),KeyE:()=>this.interact(),KeyI:()=>this.toggle('inventory'),KeyH:()=>this.toggle('body'),KeyU:()=>this.toggle('family'),KeyJ:()=>this.toggle('journal'),KeyP:()=>{this.onPause();},KeyX:()=>{this.keys.clear();this.act('stop');},KeyR:()=>this.act('rest'),KeyF:()=>this.attack(),Space:()=>this.attack(),Digit1:()=>this.act('eat'),Digit2:()=>this.act('drink'),Escape:()=>{if(this.contextOpen){this.contextOpen=false;}else if(this.desktop.manager.windows.length)this.desktop.close(this.desktop.manager.activeId);else this.toggle('menu');},KeyQ:()=>{
       const targets=this.targets(),index=targets.findIndex(t=>`${t.kind}:${t.id}`===this.targetKey),target=targets[(index+1)%targets.length];if(target)this.selectTarget(target);
     }};
     if(this.contextOpen&&/^Digit[1-9]$/.test(event.code)){
@@ -107,12 +161,23 @@ export class CharacterGameUI {
     }
     if(actions[event.code]){actions[event.code]();return true;}return false;
   }
-  blur(){this.combat=false;if(this.keys.size){this.keys.clear();this.input();}}
+  blur(){this.worldMenu=null;this.combat=false;if(this.keys.size){this.keys.clear();this.input();}}
   pointerDown(x,y,button,ui){
+    this.menuDismiss=false;
+    if(this.worldMenu){
+      const b=this.worldMenu.bounds;if(b&&x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h){if(button===2){this.worldMenu=null;this.menuDismiss=true;}return true;}
+      this.worldMenu=null;if(button===0){this.menuDismiss=true;return true;}
+    }
     if(button===2&&this.desktop.rightClick(x,y))return true;
     return this.desktop.pointerDown(x,y)||!!this.desktop.manager.at(x,y)||!!ui.hitTest(x,y)||this.choosing;
   }
+  pointerMove(x,y){
+    const menu=this.worldMenu;
+    if(menu){menu.keyboard=false;const b=menu.bounds,row=b&&Math.floor((y-b.y-46)/25);if(b&&x>=b.x&&x<=b.x+b.w&&row>=0&&row<b.rows)menu.index=menu.offset+row;return true;}
+    return this.desktop.pointerMove(x,y);
+  }
   pointerUp(x,y,button,ui){
+    if(this.menuDismiss){this.menuDismiss=false;return true;}
     const gesture=this.desktop.pointerUp();if(!gesture&&button===0)ui.clickAt(x,y);return true;
   }
   draw(ui,now=performance.now()){
@@ -138,21 +203,30 @@ export class CharacterGameUI {
       ui.regions.push({x:0,y:0,w:ui.width,h:ui.height,onClick:null});
     }
     manager.viewport(ui.width,ui.height);this.desktop.tooltip=null;this.desktop.draw(ui);
+    if(isPlaying&&!this.choosing)this.drawWorldMenu(ui);
   }
   bottomBar(ui,city,c){
-    const s=city.characterGame,compact=ui.width<580,height=compact?96:68,top=ui.height-height;
-    this.desktop.manager.bottom=height+4;
+    const s=city.characterGame,controls=[];
+    for(const speed of [0.25,0.5,1,2,4,8,16])controls.push({w:46,label:`${speed===1?'1.0':speed}×`,click:()=>this.onSpeed(speed),selected:this.getSpeed()===speed});
+    controls.push({w:74,label:this.isPaused()?'Continuar':'Pausar',click:()=>this.onPause(),selected:this.isPaused()},
+      {w:230,switch:true},{w:170,label:this.getThirdPerson()?'Z · Câmera: 3ª pessoa':'Z · Câmera: isométrica',click:()=>this.onCamera(),selected:this.getThirdPerson()},
+      {w:150,label:this.getCameraLocked()?'L · Câmera travada':'L · Câmera livre',click:()=>this.onCameraLock(),selected:this.getCameraLocked()},
+      {w:125,label:'O · Configurações',click:()=>this.onSettings()});
+    let x=4,y=33;
+    for(const control of controls){control.w=Math.min(control.w,ui.width-8);if(x+control.w>ui.width-4){x=4;y+=29;}Object.assign(control,{x,y});x+=control.w+4;}
+    const height=y+33,top=ui.height-height;this.desktop.manager.bottom=height+4;
     bevel(ui.ctx,0,top,ui.width,height);ui.regions.push({x:0,y:top,w:ui.width,h:height,onClick:null});
     const stamp=`Dia ${city.day} · ${String(city.hour).padStart(2,'0')}:${String(city.minute%60).padStart(2,'0')}`;
-    const summary=`Saldo ${formatMoney(c?.balance||0)} · ${stamp} · Saúde ${Math.round(c?.needs?.health||0)} · Água ${Math.round(c?.needs?.water||0)} · Energia ${Math.round(c?.needs?.energy||0)} · ${s.manualPending?'Aguardando controle manual':s.autonomous?'Rotina automática':'Controle total'}`;
-    bevel(ui.ctx,4,top+4,ui.width-8,23,{inset:true,fill:T.paper});ui.text(ui.fitText(summary,ui.width-22),11,top+9,T.ink);
-    for(const [i,speed]of [0.25,0.5,1].entries())ui.button(4+i*61,top+33,58,25,`${speed===1?'1.0':speed}×`,()=>this.onSpeed(speed),{selected:this.getSpeed()===speed});
-    ui.button(190,top+33,74,25,this.isPaused()?'Continuar':'Pausar',()=>this.onPause(),{selected:this.isPaused()});
-    if(ui.width>=760)ui.button(580,top+33,170,25,this.getThirdPerson()?'Z · Câmera: 3ª pessoa':'Z · Câmera: isométrica',()=>this.onCamera(),{selected:this.getThirdPerson()});
-    ui.switch(compact?4:272,top+(compact?63:33),Math.min(300,ui.width-(compact?8:280)),25,'Rotina automática',s.autonomous===true,enabled=>{
-      this.keys.clear();this.act('autonomy',{enabled:s.manualPending?true:enabled});
-    });
+    const summary=`${stamp} · Saúde ${Math.round(c?.needs?.health||0)} · Água ${Math.round(c?.needs?.water||0)} · Energia ${Math.round(c?.needs?.energy||0)} · ${s.manualPending?'Aguardando controle manual':s.autonomous?'Rotina automática':'Controle total'}`;
+    const balance=`Saldo ${formatMoney(c?.balance||0)}`,balanceWidth=Math.min(ui.width-24,ui.textWidth(balance)+16),balanceX=ui.width-balanceWidth-4;
+    bevel(ui.ctx,4,top+4,Math.max(0,balanceX-8),23,{inset:true,fill:T.paper});ui.text(ui.fitText(summary,balanceX-22),11,top+9,T.ink);
+    bevel(ui.ctx,balanceX,top+4,balanceWidth,23,{inset:true,fill:T.paper});ui.text(ui.fitText(balance,balanceWidth-12),balanceX+6,top+9,T.ink);
+    for(const control of controls){
+      if(control.switch)ui.switch(control.x,top+control.y,control.w,25,'Rotina automática',s.autonomous===true,enabled=>{this.keys.clear();this.act('autonomy',{enabled:s.manualPending?true:enabled});});
+      else ui.button(control.x,top+control.y,control.w,25,control.label,control.click,{selected:!!control.selected});
+    }
   }
+
   launcher(ui){
     const tools=[['profile','C · Personagem'],['body','H · Corpo'],['activity','V · Atividade'],['targets','T · Alvos'],['interactions','B · Interações'],['inventory','I · Mochila'],['family','U · Família'],['journal','J · Diário'],['menu','Esc · Opções']];
     let x=4,y=3;const buttons=[];
@@ -225,7 +299,7 @@ export class CharacterGameUI {
     if(panel==='body')return this.body(p,c);
     if(panel==='family'||panel==='death'){
       p.note(panel==='death'?'A cidade continua. Assuma um familiar sobrevivente ou retorne à simulação.':'Uma pessoa sob controle. Cada familiar mantém seus próprios bens e rotina.');
-      this.family(p,city,c);if(panel==='death')p.button('Voltar à simulação',()=>this.act('simulation'));return;
+      this.family(p,city,c);if(panel==='death')p.button(this.getCameraLocked()?'Liberar câmera [L]':'Travar câmera no personagem [L]',()=>this.onCameraLock());p.button('Configurações [O]',()=>this.onSettings());p.button('Voltar à simulação',()=>this.act('simulation'));return;
     }
     if(panel==='interaction'){
       if(!target){p.note('Nada ao alcance.');return;}
@@ -238,8 +312,8 @@ export class CharacterGameUI {
     }
     if(panel==='menu'){
       p.button(this.isPaused()?'Continuar o tempo [P]':'Pausar o tempo [P]',()=>this.onPause());
-      p.button(this.getThirdPerson()?'Câmera isométrica [Z]':'Câmera em terceira pessoa [Z]',()=>this.onCamera());p.button('Voltar à simulação',()=>this.act('simulation'));
-      p.heading('Controles');p.note('WASD / setas: mover\nZ: alternar câmera · botão direito + arrastar: girar em 3ª pessoa\nClique: selecionar pessoa ou objeto · chão livre: andar\nShift: correr\nE: interagir · Q: alternar alvo\nC: personagem · H: corpo · V: atividade\nT: alvos próximos · B: interações próximas\nI: mochila · U: família · J: diário\n1: comer · 2: beber · R: descansar\nCtrl + clique / F / Espaço: atacar\nX: interromper · P: pausar\nTab: alternar janela · Esc: fechar');
+      p.button(this.getThirdPerson()?'Câmera isométrica [Z]':'Câmera em terceira pessoa [Z]',()=>this.onCamera());p.button(this.getCameraLocked()?'Liberar câmera [L]':'Travar câmera no personagem [L]',()=>this.onCameraLock());p.button('Configurações [O]',()=>this.onSettings());p.button('Voltar à simulação',()=>this.act('simulation'));
+      p.heading('Controles');p.note('WASD / setas: mover\nZ: isométrica / 3ª pessoa · L: câmera livre / travada\nBotão direito + arrastar: girar em 3p; mover na isométrica livre\nBotão do meio + arrastar: deslocar câmera livre\nO: configurações\nClique: selecionar pessoa ou objeto · chão livre: andar\nBotão direito sem arrastar: menu contextual\nMenu: setas e Enter · Esc ou clique fora: cancelar\nShift: correr\nE: interagir · Q: alternar alvo\nC: personagem · H: corpo · V: atividade\nT: alvos próximos · B: interações próximas\nI: mochila · U: família · J: diário\n1: comer · 2: beber · R: descansar\nCtrl + clique / F / Espaço: atacar\nX: interromper · P: pausar\nTab: alternar janela · Esc: fechar');
     }
   }
   inventory(p,city,c,target){

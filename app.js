@@ -3,12 +3,12 @@ import {CharacterGameUI} from './js/character_game_ui.js';
 import {playing,controlledCitizen,movementVector} from './js/character_game.js';
 import { FreeCameraTouchControls } from './js/free_camera_touch_controls.js';
 import {CityFavorites} from './js/city_favorites.js?v=custom-history-limit-1';
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=character-selection-6';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=game-context-menu-8';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=character-selection-6";
-import { CityDesktop } from "./js/city_desktop.js?v=character-selection-6";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=game-context-menu-8";
+import { CityDesktop } from "./js/city_desktop.js?v=game-context-menu-8";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=character-picking-6";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=game-context-menu-8";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
@@ -22,6 +22,7 @@ const canvasUI = document.querySelector("#canvas-ui");
 const container3D = document.querySelector("#container-3d");
 const renderer3D = new RCT3DRenderer(container3D);
 let gameCameraCitizenId=null;
+let gameCameraLocked=true;
 const urlParams = new URLSearchParams(window.location.search);
 const worldSettings = resolveWorldSettings(urlParams);
 const world = new World(worldSettings.presetId, worldSettings.seed, worldSettings.size);
@@ -256,7 +257,7 @@ function stepSimulation() {
 }
 
 function toggleOptions() {
-  cityUI.toggleTool('options',options);
+  (gameUI.active?gameUI.desktop:cityUI).toggleTool('options',options);
   editor.endStroke();
   editingGesture = dragging = false;
   pointerDown = lastPointer = null;
@@ -292,6 +293,22 @@ function updateFreeCameraMovement(dt){
   const fast=held('ShiftLeft')||held('ShiftRight');
   const slow=freeCameraTouch.slow;
   renderer3D.moveFreeCamera(x/length,y/length,z/length,12*Math.min(dt,.05)*(fast ? 3 : slow ? .25 : 1));
+}
+
+function configureGameCameraLock(){
+  const c=controlledCitizen(city);if(!c)return;
+  if(renderer3D.isThirdPersonActive()){
+    const location=c.indoorLocation,point=location?.position,b=location&&city.building(location.buildingId),surface=b?.terrain?.base??renderer3D.getSurfaceElevation(world.map,c.entity.x,c.entity.y);
+    renderer3D.thirdPersonFreeTarget=gameCameraLocked?null:{x:point?.x??c.entity.x,y:surface+(point?.z||0)+.65,z:point?.y??c.entity.y};
+  }else renderer3D.setFollowCharacter(gameCameraLocked?c.entity.id:null);
+}
+function panGameCamera(dx,dy){
+  const target=renderer3D.thirdPersonFreeTarget;
+  if(renderer3D.isThirdPersonActive()&&target){
+    const yaw=renderer3D.fpYaw,scale=renderer3D.tpDistance/Math.max(150,root.clientHeight);
+    target.x+=(dx*Math.cos(yaw)+dy*Math.sin(yaw))*scale*2;
+    target.z+=(-dx*Math.sin(yaw)+dy*Math.cos(yaw))*scale*2;
+  }else if(!renderer3D.isPerspectiveActive())moveCameraByPointer(dx,dy,renderer3D.getCameraZoom());
 }
 
 function onPointerDown(event) {
@@ -374,9 +391,10 @@ function onPointerMove(event) {
   if(gameUI.active){
     const rect=root.getBoundingClientRect();
     mousePosition={x:event.clientX-rect.left,y:event.clientY-rect.top};
-    if(!gameUI.desktop.pointerMove(mousePosition.x,mousePosition.y)&&lastPointer){
+    if(!gameUI.pointerMove(mousePosition.x,mousePosition.y)&&lastPointer){
       if(pointerOnUI&&event.pointerType==='touch'&&pointerDown&&Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>=6){
         gameUI.desktop.scrollAt(pointerDown.x-rect.left,pointerDown.y-rect.top,lastPointer.y-event.clientY);
+      }else if(!pointerOnUI&&pointerDown&&!gameCameraLocked&&((event.buttons&4)||!renderer3D.isPerspectiveActive()&&(event.buttons&2))){panGameCamera(event.clientX-lastPointer.x,event.clientY-lastPointer.y);
       }else if(cameraLookDrag)renderer3D.rotatePerspectiveCamera((event.clientX-lastPointer.x)*.004,-(event.clientY-lastPointer.y)*.004);
     }
     lastPointer={x:event.clientX,y:event.clientY};return;
@@ -430,7 +448,7 @@ function onPointerUp(event) {
   }
   if(playing(city)){
     if(pointerDown&&Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)<6){
-      if(event.button===2){gameUI.inspect(renderer3D.getEntityAtScreen(event.clientX,event.clientY,entities,world));pointerDown=lastPointer=null;cameraLookDrag=false;return;}
+      if(event.button===2){const rect=root.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;gameUI.openWorldMenu(renderer3D.getEntityAtScreen(event.clientX,event.clientY,entities,world),mapTileAt(x,y),x,y);pointerDown=lastPointer=null;cameraLookDrag=false;return;}
       if(event.button===0&&gameUI.combat){gameUI.attack(renderer3D.getEntityAtScreen(event.clientX,event.clientY,entities,world));pointerDown=lastPointer=null;return;}
       if(event.button!==0){pointerDown=lastPointer=null;return;}
       if(gameUI.inspect(renderer3D.getEntityAtScreen(event.clientX,event.clientY,entities,world),false)){pointerDown=lastPointer=null;cameraLookDrag=false;return;}
@@ -523,7 +541,7 @@ root.addEventListener("contextmenu", (event) => event.preventDefault());
 root.addEventListener("wheel", (event) => {
   if (event.target.closest(".ui-panel")) return;
   const rect = root.getBoundingClientRect();
-  if((gameUI.active?gameUI.desktop:cityUI).scrollAt(event.clientX-rect.left,event.clientY-rect.top,event.deltaY)){event.preventDefault();return;}
+  if((gameUI.active?gameUI:cityUI).scrollAt(event.clientX-rect.left,event.clientY-rect.top,event.deltaY)){event.preventDefault();return;}
   if(gameUI.choosing){event.preventDefault();return;}
   if (legacyUI.hitTest(event.clientX - rect.left, event.clientY - rect.top)) return;
   event.preventDefault();
@@ -593,9 +611,9 @@ function frame(now) {
       // The worker sends the command result before the new world state. Set up
       // the gameplay camera when the controlled person reaches the mirror.
       if(gameCameraCitizenId!==c.id){renderer3D.setThirdPersonMode(false);renderer3D.setFollowCharacter(c.entity.id);renderer3D.setCamera(c.entity.x,c.entity.y,4);gameCameraCitizenId=c.id;}
-      if(!renderer3D.isThirdPersonActive()&&renderer3D.followCharacterId!==c.entity.id)renderer3D.setFollowCharacter(c.entity.id);
+      if(gameCameraLocked&&!renderer3D.isThirdPersonActive()&&renderer3D.followCharacterId!==c.entity.id)renderer3D.setFollowCharacter(c.entity.id);
       renderer3D.selectEntity(gameUI.selectedEntityId??c.entity.id);
-      if(!renderer3D.isPerspectiveActive())renderer3D.cityInteriorView=interiorViewForLocation(c.indoorLocation,c.indoorLocation&&city.building(c.indoorLocation.buildingId));
+      renderer3D.cityInteriorView=interiorViewForLocation(c.indoorLocation,c.indoorLocation&&city.building(c.indoorLocation.buildingId));
     }
   }
   const dt = Math.min((now - previousFrame) / 1000, 0.25);
@@ -751,13 +769,14 @@ export const gameUI = new CharacterGameUI({root,getCity:()=>city,
     if(simulationBridge?.active)return simulationBridge.request('gameAction',[action,options]);
     const ok=city.gameAction(action,options);return {ok:!!ok,message:city.lastError};
   },
-  onEnter:()=>{gameCameraCitizenId=null;mainMenu.close();cityUI.hidden=true;editor.open=false;options.open=false;freeCameraKeys.clear();if(![0.25,0.5,1].includes(time.speed))time.setSpeed(1);if(time.paused)togglePause();const c=controlledCitizen(city);renderer3D.setThirdPersonMode(false);if(c){renderer3D.setFollowCharacter(c.entity.id);renderer3D.setCamera(c.entity.x,c.entity.y,4);}},
+  onEnter:()=>{gameCameraLocked=true;gameCameraCitizenId=null;mainMenu.close();cityUI.hidden=true;editor.open=false;options.open=false;freeCameraKeys.clear();if(![0.25,0.5,1,2,4,8,16].includes(time.speed))time.setSpeed(1);if(time.paused)togglePause();const c=controlledCitizen(city);renderer3D.setThirdPersonMode(false);if(c){renderer3D.setFollowCharacter(c.entity.id);renderer3D.setCamera(c.entity.x,c.entity.y,4);}},
   onSimulation:()=>{gameCameraCitizenId=null;renderer3D.cityInteriorView=null;renderer3D.setThirdPersonMode(false);renderer3D.setFollowCharacter(null);cityUI.hidden=false;},
   onMenu:()=>mainMenu.close(),onPause:togglePause,isPaused:()=>time.paused,
+  onSettings:toggleOptions,getCameraLocked:()=>gameCameraLocked,onCameraLock:()=>{gameCameraLocked=!gameCameraLocked;configureGameCameraLock();},
   getEntities:()=>entities,getThirdPerson:()=>renderer3D.isThirdPersonActive(),
-  getSpeed:()=>time.speed,onSpeed:speed=>{if([0.25,0.5,1].includes(speed))time.setSpeed(speed);},
+  getSpeed:()=>time.speed,onSpeed:speed=>{if([0.25,0.5,1,2,4,8,16].includes(speed))time.setSpeed(speed);},
   getDirection:(x,y)=>movementVector(x,y,renderer3D.isThirdPersonActive()?renderer3D.fpYaw+Math.PI:renderer3D.fixedRotationY),
-  onCamera:()=>{const c=controlledCitizen(city);if(c)renderer3D.setThirdPersonMode(!renderer3D.isThirdPersonActive(),c.entity.id);}
+  onCamera:()=>{const c=controlledCitizen(city);if(c){renderer3D.setThirdPersonMode(!renderer3D.isThirdPersonActive(),c.entity.id);configureGameCameraLock();}}
 });
 if (mainMenu.isActive()) {
   cityUI.manager.closeAll(true);

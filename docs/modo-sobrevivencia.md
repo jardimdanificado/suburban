@@ -26,7 +26,7 @@ A interface de gestão sai de cena enquanto você joga. As informações ficam e
 
 ## Barra inferior e autonomia
 
-A barra inferior mostra saldo pessoal, dia, horário, saúde, água e energia. Os controles de tempo permitem escolher **0.25×**, **0.5×** e **1.0×**, além de pausar ou continuar.
+A barra inferior mostra saldo pessoal, dia, horário, saúde, água e energia. Os controles de tempo permitem escolher **0.25×**, **0.5×**, **1.0×**, **2×**, **4×**, **8×** e **16×**, além de pausar ou continuar.
 
 O switch **Rotina automática** começa desligado, mantendo o controle total existente. Ao ligá-lo, a pessoa volta à rotina da simulação: cuida das necessidades, usa as provisões que carrega e executa suas atividades. Você continua acompanhando a mesma pessoa e pode dar ordens pontuais pelas janelas ou pelo clique no chão. Depois de concluí-las, a rotina continua. Necessidades urgentes podem interromper ordens não essenciais.
 
@@ -61,3 +61,13 @@ A aba **Família** permite assumir um familiar adulto disponível. A pessoa ante
 Use Z ou o botão da barra inferior para alternar entre câmera isométrica e terceira pessoa. Em terceira pessoa, segure o botão direito e arraste para girar a câmera; WASD acompanha a direção da câmera. O personagem jogável recebe uma estrela dourada sobre a cabeça, usando o mesmo marcador dos favoritos.
 
 Clique em pessoas, edifícios, plantas, veículos ou objetos do chão para selecionar e abrir a ficha. As ações continuam limitadas ao alcance do personagem. Clicar no chão livre dá uma ordem de caminhada. Objetos genéricos do chão mostram informações; a seleção não adiciona uma ação de coleta.
+
+O saldo aparece à direita na barra inferior. Use L para alternar câmera livre ou travada no personagem em qualquer projeção. Na isométrica livre, arraste com o botão direito ou do meio; na terceira pessoa livre, arraste com o botão do meio para deslocar o centro da órbita. O botão direito gira a câmera 3p. WASD continua controlando o personagem. O ou Configurações abre as opções normais do jogo.
+
+Ao entrar em um prédio, a câmera 3p acompanha a posição e o andar do personagem, com uma órbita mais curta. O corte interno remove a fachada, o telhado e os outros andares; sair restaura o exterior. A câmera não adiciona iluminação pessoal.
+
+### Menu contextual
+
+Clique com o botão direito sem arrastar para abrir um menu junto ao cursor. Pessoas, edifícios e plantas mostram suas interações reais, além de selecionar, aproximar-se e examinar. Pessoas também oferecem ataque, destacado em vermelho. Ações fora de alcance ficam desativadas; use Aproximar-se antes de interagir. Veículos e objetos do chão permitem selecionar e examinar. No chão livre, o menu oferece Caminhar até aqui; sobre o próprio personagem, ficha, mochila, descanso e interrupção da ação.
+
+Clique numa opção, use as setas e Enter ou as teclas 1–9. Esc, Cancelar ou um clique fora fecham o menu. Esse clique fora não dá uma ordem de movimento. A roda percorre menus longos. Arrastar o botão direito mantém os controles da câmera. As ações são revalidadas pela simulação e continuam disponíveis durante a rotina automática.

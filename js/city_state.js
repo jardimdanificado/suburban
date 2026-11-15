@@ -26,7 +26,7 @@ import { CityMandates } from './city_mandates.js?v=mandate-one-pass-1';
 import { CityNature } from './city_nature.js?v=ff-growth-events-1';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=character-selection-6';
+import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=game-context-menu-8';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=citizen-access-1';
 import { CityWelfare } from './city_welfare.js';

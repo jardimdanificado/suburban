@@ -23,7 +23,7 @@ import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMater
 import {cachedConstructionFootprint,grassExclusionCells,grassExclusionSignature,grassChunkSignatures} from './city_site_footprints.js?v=local-chunk-mask-3';
 import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=typed-roots-2';
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
-import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-player-marker-4';
+import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-player-marker-5';
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import {streetSurfaceTextures} from './street_surface_textures.js?v=ground-realism-2';
 import {groundGrassSurface} from './ground_grass_geometry.js?v=natural-streets-2';
@@ -38,7 +38,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import {NightLighting} from "./night_lighting.js?v=local-night-lights-1";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=graphics-perf-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=game-interior-cutaway-7";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=head-flag-crown-1';
@@ -73,7 +73,10 @@ const compareCrowdCitizenIds=(a,b)=>a.entity.id-b.entity.id;
 const PAVED_ROAD_TILES=new Set([TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL_STONE]);
 const ROAD_SURFACE_TILES=new Set([TILE_ROAD_GRASS,TILE_ROAD_SAND,TILE_ROAD_HILL,...PAVED_ROAD_TILES]);
 function indoorCitizenVisibleFromOutside(renderer,location){
-  if(!location||location.exiting||location.path?.length)return false;
+  if(!location||location.exiting)return false;
+  const view=renderer.cityInteriorView,owner=renderer.cityDevelopment?.city?.building(location.buildingId);
+  if(view?.buildingId===(owner?.officeTenantOf||location.buildingId)&&view.floor===(location.position?Math.floor((location.position.z||0)/CITY_FLOOR_HEIGHT+.001):location.floor??0))return true;
+  if(location.path?.length)return false;
   if(location.roomType==='balcony'||location.roomType==='roof_terrace')return true;
   const city=renderer.cityDevelopment?.city,building=city?.building(location.buildingId),unit=location.unitId?city?.units?.get(location.unitId):null;
   if(!building||!unit)return false;
@@ -5733,6 +5736,7 @@ export class RCT3DRenderer {
 
   setThirdPersonMode(enabled, entityId = null) {
     this.fpCamera.fov=75;this.fpCamera.updateProjectionMatrix();
+    this.thirdPersonFreeTarget=null;
     this.isThirdPersonMode = !!enabled;
     if (!enabled) this.followCharacterId = null;
     this.isFirstPersonMode = false;
@@ -6315,10 +6319,11 @@ export class RCT3DRenderer {
       if (targetEnt) {
         const indoorLocation=targetEnt.properties?.citizen?.indoorLocation,inside=indoorLocation?.position;
         const indoorBuilding=this.isThirdPersonActive()&&indoorLocation?this.cityDevelopment?.city?.building(indoorLocation.buildingId):null;
-        const eyeX = inside?.x??targetEnt.x;
-        const eyeZ = inside?.y??targetEnt.y;
+        const anchor=this.isThirdPersonActive()?this.thirdPersonFreeTarget:null;
+        const eyeX = anchor?.x??inside?.x??targetEnt.x;
+        const eyeZ = anchor?.z??inside?.y??targetEnt.y;
         const surfaceH = this.currentMap ? this.getSurfaceElevation(this.currentMap, eyeX, eyeZ) : 1.0;
-        const eyeY = surfaceH + (inside?.z??0) + 0.65;
+        const eyeY = anchor?.y??((indoorBuilding?.terrain?.base??surfaceH) + (inside?.z??0) + 0.65);
 
         this.camX = eyeX;
         this.camY = eyeZ;
@@ -6367,21 +6372,12 @@ export class RCT3DRenderer {
           }
           const orbitCosPitch=Math.cos(this.tpCameraPitch),orbitSinPitch=Math.sin(this.tpCameraPitch),orbitSinYaw=Math.sin(this.tpCameraYaw),orbitCosYaw=Math.cos(this.tpCameraYaw);
           let desiredCamera, lookTarget;
-          if (indoorBuilding) {
-            const b=indoorBuilding, centerX=b.entity.x+b.width/2, centerZ=b.entity.y+b.depth/2;
-            const dx=(b.door?.x??centerX)-centerX, dz=(b.door?.y??centerZ)-centerZ, length=Math.hypot(dx,dz)||1;
-            const doorYaw=Math.atan2(dx/length,dz/length), outsideYaw=doorYaw+this.tpCameraYaw;
-            const radius=Math.hypot(b.width/2,b.depth/2)+Math.max(3,this.tpDistance);
-            const base=b.terrain?.base??(this.currentMap?this.getSurfaceElevation(this.currentMap,centerX,centerZ):0);
-            desiredCamera={x:centerX+Math.sin(outsideYaw)*radius,y:base+Math.max(2.5,Math.min(5,b.floors*1.2)),z:centerZ+Math.cos(outsideYaw)*radius};
-            lookTarget={x:centerX,y:base+Math.max(1.2,Math.min(3,b.floors*.55)),z:centerZ};
-          } else {
-            // Orbit from outside and keep the building facade intact while the resident is indoors.
-            const desired={x:eyeX-orbitSinYaw*orbitCosPitch*this.tpDistance,y:eyeY+orbitSinPitch*this.tpDistance,z:eyeZ-orbitCosYaw*orbitCosPitch*this.tpDistance};
-            const safe=this.resolveThirdPersonCamera({x:eyeX,y:eyeY,z:eyeZ},desired,this.cityDevelopment?.city,null);
-            desiredCamera=safe;
-            lookTarget={x:eyeX,y:eyeY,z:eyeZ};
-          }
+          const distance=indoorBuilding?Math.min(this.tpDistance,3):this.tpDistance;
+          const desired={x:eyeX-orbitSinYaw*orbitCosPitch*distance,y:eyeY+orbitSinPitch*distance,z:eyeZ-orbitCosYaw*orbitCosPitch*distance};
+          desiredCamera=this.resolveThirdPersonCamera({x:eyeX,y:eyeY,z:eyeZ},desired,this.cityDevelopment?.city,indoorBuilding?.officeTenantOf||indoorBuilding?.id||null);
+          lookTarget={x:eyeX,y:eyeY,z:eyeZ};
+          const interiorKey=indoorBuilding?`${indoorBuilding.id}:${indoorLocation.floor}`:null;
+          if(this.tpInteriorKey!==interiorKey){this.tpCameraInitialized=false;this.tpInteriorKey=interiorKey;}
           if (!this.tpCameraInitialized) {
             this.tpCameraPosition.set(desiredCamera.x,desiredCamera.y,desiredCamera.z);
             this.tpCameraTarget.set(lookTarget.x,lookTarget.y,lookTarget.z);
@@ -6396,9 +6392,8 @@ export class RCT3DRenderer {
           this.fpCamera.lookAt(this.tpCameraTarget);
           const followGroundY=surfaceH+(inside?.z??0);
           this.followMarker.position.set(eyeX, followGroundY + 0.045, eyeZ);
-          this.followMarker.visible = true;
-          this.followLight.position.set(eyeX, followGroundY + 1.22, eyeZ);
-          this.followLight.visible = true;
+          this.followMarker.visible = !anchor;
+
         } else {
           // 1P First Person Camera: Position at creature eyes and look forward
           this.fpCamera.position.set(eyeX, eyeY, eyeZ);

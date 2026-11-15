@@ -8,17 +8,17 @@ import {canControl} from '../js/character_game.js';
 import {SimulationTime} from '../js/simulation_time.js';
 
 function harness(width=1360,height=850){
- const text=[];
- const ctx=new Proxy({}, {get:(o,k)=>k in o?o[k]:k==='measureText'?s=>({width:String(s).length*6}):k==='fillText'?(s)=>text.push(s):()=>{}});
+ const text=[],textPositions=[];
+ const ctx=new Proxy({}, {get:(o,k)=>k in o?o[k]:k==='measureText'?s=>({width:String(s).length*6}):k==='fillText'?((s,x,y)=>{text.push(s);textPositions.push({text:s,x,y});}):()=>{}});
  globalThis.window={innerWidth:width,innerHeight:height,devicePixelRatio:1};
  globalThis.document={createElement:tag=>({tagName:tag.toUpperCase(),style:{},value:'',hidden:false,handlers:{},setAttribute(){},addEventListener(k,v){this.handlers[k]=v;},append(){},remove(){this.removed=true;},focus(){},getContext:()=>ctx})};
- const city=setup({starter:true,population:24}),calls=[],time=new SimulationTime(),entities=[];let thirdPerson=false;
- const game=new CharacterGameUI({root:{append(){}},getCity:()=>city,command:async(action,options)=>{calls.push([action,options]);return {ok:city.gameAction(action,options),message:city.lastError};},onEnter:()=>{time.setPaused(false);},onSimulation(){},onMenu(){},getEntities:()=>entities,getThirdPerson:()=>thirdPerson,onCamera(){thirdPerson=!thirdPerson;},onPause:()=>time.setPaused(!time.paused),isPaused:()=>time.paused,getSpeed:()=>time.speed,onSpeed:speed=>time.setSpeed(speed)});
+ const city=setup({starter:true,population:24}),calls=[],time=new SimulationTime(),entities=[];let thirdPerson=false,cameraLocked=true,settingsOpened=0;
+ const game=new CharacterGameUI({root:{append(){}},getCity:()=>city,command:async(action,options)=>{calls.push([action,options]);return {ok:city.gameAction(action,options),message:city.lastError};},onEnter:()=>{time.setPaused(false);},onSimulation(){},onMenu(){},getCameraLocked:()=>cameraLocked,onCameraLock:()=>{cameraLocked=!cameraLocked;},onSettings:()=>{settingsOpened++;},getEntities:()=>entities,getThirdPerson:()=>thirdPerson,onCamera(){thirdPerson=!thirdPerson;},onPause:()=>time.setPaused(!time.paused),isPaused:()=>time.paused,getSpeed:()=>time.speed,onSpeed:speed=>time.setSpeed(speed)});
  const ui=new ManagementCanvasUI({style:{},clientWidth:width,clientHeight:height,getContext:()=>ctx});
  const draw=()=>{ui.beginFrame();game.draw(ui);};
  const start=async()=>{await game.act('start',{citizenId:city.citizens.find(c=>canControl(city,c)).id});draw();};
  const click=label=>{const r=ui.regions.find(r=>r.label===label);assert(r,`Missing ${label}`);ui.clickAt(r.x+r.w/2,r.y+r.h/2);};
- return {city,game,ui,text,calls,time,entities,draw,start,click,isPaused:()=>time.paused};
+ return {city,game,ui,text,textPositions,calls,time,entities,get settingsOpened(){return settingsOpened;},draw,start,click,isPaused:()=>time.paused};
 }
 
 test('gameplay panels share the management desktop, retain independent windows and geometry',async()=>{
@@ -101,10 +101,10 @@ test('gameplay clears window tooltips when the pointer returns to the world',asy
  h.draw();assert.equal(h.game.desktop.tooltipElement.hidden,true);
 });
 
-test('bottom bar displays real balances, selects exactly three speeds and toggles real autonomy',async()=>{
- const h=harness();await h.start();const c=h.city.society.citizen(h.city.characterGame.citizenId);c.balance=12345;h.text.length=0;h.draw();assert(h.text.some(t=>t.includes('Saldo R$')&&t.includes('123,45')));
- assert.deepEqual(h.ui.regions.filter(r=>/^[\d.]+×$/.test(r.label)).map(r=>r.label),['0.25×','0.5×','1.0×']);
- for(const [label,speed]of [['0.25×',.25],['0.5×',.5],['1.0×',1]]){h.click(label);assert.equal(h.time.speed,speed);h.draw();}
+test('bottom bar displays real balances, selects speeds through 16× and toggles real autonomy',async()=>{
+ const h=harness();await h.start();const c=h.city.society.citizen(h.city.characterGame.citizenId);c.balance=12345;h.text.length=0;h.draw();assert(h.text.some(t=>t.includes('Saldo R$')&&t.includes('123,45')));assert(h.textPositions.filter(t=>t.text.startsWith('Saldo R$')).every(t=>t.x>h.ui.width/2));
+ assert.deepEqual(h.ui.regions.filter(r=>/^[\d.]+×$/.test(r.label)).map(r=>r.label),['0.25×','0.5×','1.0×','2×','4×','8×','16×']);
+ for(const [label,speed]of [['0.25×',.25],['0.5×',.5],['1.0×',1],['2×',2],['4×',4],['8×',8],['16×',16]]){h.click(label);assert.equal(h.time.speed,speed);h.draw();}
  h.click('Rotina automática');await Promise.resolve();h.draw();assert(h.city.characterGame.autonomous);assert(!c.playerControlled);assert(h.ui.regions.find(r=>r.role==='switch').checked);
  const commands=h.calls.length;h.game.key({code:'KeyD'});h.game.key({code:'KeyD'},false);assert.equal(h.calls.length,commands,'WASD must not send manual commands during autonomy');
  h.click('Rotina automática');await Promise.resolve();h.draw();assert(!h.city.characterGame.autonomous);assert(c.playerControlled);assert(!h.ui.regions.find(r=>r.role==='switch').checked);
@@ -123,4 +123,39 @@ test('gameplay exposes third person and mouse selection of people, buildings and
  assert(h.game.inspect(item.id));h.draw();assert(h.text.includes('Madeira caída'));assert(h.text.includes('Objeto no chão'));assert(h.text.includes('Quantidade'));
  assert(h.game.visibleTargets().some(t=>t.entityId===item.id));item.destroyed=true;assert(!h.game.inspect(item.id,false));
  const count=h.calls.length;assert(!h.game.inspect(-1,false));assert.equal(h.calls.length,count);
+});
+
+
+test('gameplay can detach either projection and open settings from its controls and keyboard',async()=>{
+ const h=harness();await h.start();h.game.desktop.closeAll(true);h.draw();
+ h.click('L · Câmera travada');assert(!h.game.getCameraLocked());h.draw();h.click('Z · Câmera: isométrica');assert(h.game.getThirdPerson());assert(!h.game.getCameraLocked());
+ h.game.key({code:'KeyL'});assert(h.game.getCameraLocked());assert(h.game.getThirdPerson());h.draw();h.click('O · Configurações');assert.equal(h.settingsOpened,1);h.game.key({code:'KeyO'});assert.equal(h.settingsOpened,2);
+});
+
+test('right-click person menu uses real interactions, requires range and opens dossiers only on examine',async()=>{
+ const h=harness();await h.start();h.game.desktop.closeAll(true);const c=h.city.society.citizen(h.city.characterGame.citizenId),other=h.city.citizens.find(p=>p!==c);c.indoorLocation=null;other.indoorLocation=null;other.entity.x=c.entity.x+.5;other.entity.y=c.entity.y;
+ h.game.openWorldMenu(other.entity.id,{x:5,y:5},500,300);h.draw();assert.equal(h.game.desktop.manager.windows.length,0);assert(h.ui.regions.some(r=>r.role==='menuitem'&&r.label==='Conversar'));
+ h.click('Conversar');await Promise.resolve();assert.equal(h.calls.at(-1)[0],'interact');assert.equal(h.calls.at(-1)[1].targetId,other.id);assert.equal(h.city.characterGame.intent.kind,'talk');assert.equal(h.game.worldMenu,null);
+ other.entity.x=c.entity.x+10;h.game.openWorldMenu(other.entity.id,null,500,300);h.draw();const disabled=h.ui.regions.find(r=>r.role==='menuitem'&&r.label.startsWith('Conversar'));assert(disabled.disabled);const before=h.calls.length;h.ui.clickAt(disabled.x+5,disabled.y+5);assert.equal(h.calls.length,before);assert(h.game.worldMenu);
+ h.click('Examinar');assert(h.game.desktop.manager.find(`page:inspect-person-${other.id}`));assert.equal(h.game.worldMenu,null);
+});
+
+test('right-click ground menu sends one movement order and outside dismissal never clicks through',async()=>{
+ const h=harness();await h.start();h.game.desktop.closeAll(true);const c=h.city.society.citizen(h.city.characterGame.citizenId);c.indoorLocation=null;
+ h.game.openWorldMenu(-1,{x:5,y:6},500,300);h.draw();const before=h.calls.length;assert(h.game.pointerDown(900,400,0,h.ui));h.game.pointerUp(900,400,0,h.ui);assert.equal(h.calls.length,before);assert.equal(h.game.worldMenu,null);
+ h.game.openWorldMenu(-1,{x:5,y:6},500,300);h.draw();h.click('Caminhar até aqui');await Promise.resolve();assert.equal(h.calls.length,before+1);assert.deepEqual(h.calls.at(-1),['walk',{x:5.5,y:6.5}]);assert.equal(h.game.worldMenu,null);
+});
+
+test('context menus fit the viewport, support keyboard and cancel when targets disappear',async()=>{
+ const h=harness(390,844);await h.start();h.game.desktop.closeAll(true);const c=h.city.society.citizen(h.city.characterGame.citizenId);c.indoorLocation=null;
+ h.game.openWorldMenu(c.entity.id,null,389,843);h.draw();const b=h.game.worldMenu.bounds;assert(b.x>=0&&b.x+b.w<=390);assert(b.y>=h.game.desktop.manager.top&&b.y+b.h<=844-h.game.desktop.manager.bottom);
+ h.game.key({code:'ArrowDown'});h.game.key({code:'Enter'});assert(h.game.desktop.manager.find('page:survival-inventory'));assert.equal(h.game.worldMenu,null);
+ h.game.openWorldMenu(-1,{x:1,y:1},20,80);h.game.key({code:'Escape'});assert.equal(h.game.worldMenu,null);
+ const other=h.city.citizens.find(p=>p!==c);other.indoorLocation=null;other.entity.x=c.entity.x+.5;other.entity.y=c.entity.y;h.game.openWorldMenu(other.entity.id,null,20,80);other.entity.destroyed=true;h.draw();assert.equal(h.game.worldMenu,null);
+});
+
+test('building context menu executes the shared supply action and objects expose read-only examination',async()=>{
+ const h=harness();await h.start();h.game.desktop.closeAll(true);const c=h.city.society.citizen(h.city.characterGame.citizenId),hall=h.city.buildings.find(b=>b.type==='townhall');c.indoorLocation=null;Object.assign(c.entity,hall.door);
+ h.game.openWorldMenu(hall.entity.id,null,500,300);h.draw();h.click('Encher garrafa');await Promise.resolve();assert.deepEqual(h.calls.at(-1),['interact',{kind:'building',targetId:hall.id,choice:'water'}]);
+ const item={id:999999,x:c.entity.x+.5,y:c.entity.y,properties:{name:'Madeira caída',resourceType:'wood',species:'item',render:{}}};h.entities.push(item);h.game.openWorldMenu(item.id,null,500,300);h.draw();assert(h.ui.regions.some(r=>r.role==='menuitem'&&r.label==='Examinar'));assert(!h.ui.regions.some(r=>r.role==='menuitem'&&r.label==='Encher garrafa'));h.click('Examinar');assert(h.game.desktop.manager.find(`page:inspect-object-${item.id}`));
 });

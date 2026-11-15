@@ -40,7 +40,8 @@ export function syncCityFavoriteMarkers(renderer,THREE,city,world){
     let sprite=sprites.get(entity.id);if(!sprite){sprite=new THREE.Sprite(material);sprite.renderOrder=36;renderer.scene.add(sprite);sprites.set(entity.id,sprite);}
     sprite.visible=true;sprite.material=material;
     const offset=renderer._citizenRenderOffsets?.get(entity.id),location=citizen.indoorLocation,point=location?.position||citizen._renderIndoorPosition,x=(point?.x??entity.x)+(offset?.x||0),z=(point?.y??entity.y)+(offset?.y||0),building=location&&city.building(location.buildingId),surface=(location&&building?building.terrain?.base??surfaceElevation(world,x,z):surfaceElevation(world,x,z))+(point?.z||0),zoom=renderer.zoom||1,size=Math.max(.85,Math.min(2,.4/zoom));
-    sprite.scale.set(size,size,1);sprite.position.set(x,surface+2.05,z);active.add(entity.id);
+    const compact=played&&renderer.isThirdPersonActive?.(),markerSize=compact ? .28 : size;
+    sprite.scale.set(markerSize,markerSize,1);sprite.position.set(x,surface+(compact?1.45:2.05),z);active.add(entity.id);
   }
   for(const [id,sprite]of sprites)if(!active.has(id))sprite.visible=false;
   if(materials.size>128){const used=new Set([...sprites.values()].filter(sprite=>sprite.visible).map(sprite=>sprite.material));for(const [key,material]of materials)if(!used.has(material)){material.map?.dispose();material.dispose();materials.delete(key);}}
