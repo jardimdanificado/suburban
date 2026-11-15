@@ -1,14 +1,13 @@
-import {interiorViewForLocation} from './js/city_interior_view.js';
 import {CharacterGameUI} from './js/character_game_ui.js';
 import {playing,controlledCitizen,movementVector} from './js/character_game.js';
 import { FreeCameraTouchControls } from './js/free_camera_touch_controls.js';
 import {CityFavorites} from './js/city_favorites.js?v=custom-history-limit-1';
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=game-context-menu-8';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=game-approach-camera-9';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=game-context-menu-8";
-import { CityDesktop } from "./js/city_desktop.js?v=game-context-menu-8";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=game-approach-camera-9";
+import { CityDesktop } from "./js/city_desktop.js?v=game-approach-camera-9";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=game-context-menu-8";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=game-approach-camera-9";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
@@ -613,7 +612,7 @@ function frame(now) {
       if(gameCameraCitizenId!==c.id){renderer3D.setThirdPersonMode(false);renderer3D.setFollowCharacter(c.entity.id);renderer3D.setCamera(c.entity.x,c.entity.y,4);gameCameraCitizenId=c.id;}
       if(gameCameraLocked&&!renderer3D.isThirdPersonActive()&&renderer3D.followCharacterId!==c.entity.id)renderer3D.setFollowCharacter(c.entity.id);
       renderer3D.selectEntity(gameUI.selectedEntityId??c.entity.id);
-      renderer3D.cityInteriorView=interiorViewForLocation(c.indoorLocation,c.indoorLocation&&city.building(c.indoorLocation.buildingId));
+      renderer3D.cityInteriorView=null;
     }
   }
   const dt = Math.min((now - previousFrame) / 1000, 0.25);

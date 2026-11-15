@@ -1,5 +1,6 @@
 import {activityBadge,activityBadgeCanvas,activityBadgeKey} from './city_activity_badges.js';
-import {drawGlyph8x8} from './legacy_ui.js';
+import {drawFavoriteSymbol} from './city_party_flags.js';
+import {FAVORITE_GLYPH_COUNT} from './city_favorites.js';
 import {surfaceElevation} from './city_terrain.js?v=entrance-retaining-clearance-1';
 export function syncCityActivityBadges(renderer,THREE,entities,world){
   const sprites=renderer.cityActivitySprites??=new Map(),materials=renderer.cityActivityMaterials??=new Map(),active=new Set();
@@ -15,10 +16,11 @@ export function syncCityActivityBadges(renderer,THREE,entities,world){
   if(materials.size>64){const used=new Set([...sprites.values()].map(s=>s.material));for(const [key,material]of materials)if(!used.has(material)){material.map?.dispose();material.dispose();materials.delete(key);}}
 }
 
-function favoriteGlyphCanvas(glyph,color){
+function favoriteGlyphCanvas(glyph,color,onReady){
   const canvas=document.createElement('canvas');canvas.width=40;canvas.height=40;const ctx=canvas.getContext('2d');
   ctx.fillStyle='#18232ddd';ctx.beginPath();ctx.arc(20,20,18,0,Math.PI*2);ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=3;ctx.stroke();
-  drawGlyph8x8(ctx,glyph,13,13,'#17140f',2);drawGlyph8x8(ctx,glyph,11,11,color,2);return canvas;
+  const redraw=()=>{drawFavoriteSymbol(ctx,glyph,13,13,'#17140f',2);drawFavoriteSymbol(ctx,glyph,11,11,color,2);onReady?.();};
+  drawFavoriteSymbol(ctx,glyph,13,13,'#17140f',2,redraw);drawFavoriteSymbol(ctx,glyph,11,11,color,2,redraw);return canvas;
 }
 
 /** Favorite markers use the game's 8×8 glyph atlas as depth-tested world sprites. */
@@ -34,9 +36,9 @@ export function syncCityFavoriteMarkers(renderer,THREE,city,world){
     if(!entity||entity.destroyed||!played&&(citizen.indoorLocation||citizen.ridingVehicleId))continue;
     if(Number.isFinite(renderer.renderedMinTx)&&(entity.x<renderer.renderedMinTx-2||entity.x>renderer.renderedMaxTx+2||entity.y<renderer.renderedMinTy-2||entity.y>renderer.renderedMaxTy+2))continue;
     if(renderer.isFirstPersonActive?.()&&Number(entity.id)===Number(renderer.fpEntityId))continue;
-    const glyph=Number.isInteger(pref.icon)&&pref.icon>=0&&pref.icon<256?pref.icon:42,color=/^#[\da-f]{6}$/i.test(pref.color||'')?pref.color:'#ffd84d',key=`${glyph}:${color}`;
+    const glyph=Number.isInteger(pref.icon)&&pref.icon>=0&&pref.icon<FAVORITE_GLYPH_COUNT?pref.icon:42,color=/^#[\da-f]{6}$/i.test(pref.color||'')?pref.color:'#ffd84d',key=`${glyph}:${color}`;
     let material=materials.get(key);
-    if(!material){const texture=new THREE.CanvasTexture(favoriteGlyphCanvas(glyph,color));texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;material=new THREE.SpriteMaterial({map:texture,transparent:true,alphaTest:.05,depthTest:true,depthWrite:false});materials.set(key,material);}
+    if(!material){let texture;const canvas=favoriteGlyphCanvas(glyph,color,()=>{if(texture)texture.needsUpdate=true;});texture=new THREE.CanvasTexture(canvas);texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;material=new THREE.SpriteMaterial({map:texture,transparent:true,alphaTest:.05,depthTest:true,depthWrite:false});materials.set(key,material);}
     let sprite=sprites.get(entity.id);if(!sprite){sprite=new THREE.Sprite(material);sprite.renderOrder=36;renderer.scene.add(sprite);sprites.set(entity.id,sprite);}
     sprite.visible=true;sprite.material=material;
     const offset=renderer._citizenRenderOffsets?.get(entity.id),location=citizen.indoorLocation,point=location?.position||citizen._renderIndoorPosition,x=(point?.x??entity.x)+(offset?.x||0),z=(point?.y??entity.y)+(offset?.y||0),building=location&&city.building(location.buildingId),surface=(location&&building?building.terrain?.base??surfaceElevation(world,x,z):surfaceElevation(world,x,z))+(point?.z||0),zoom=renderer.zoom||1,size=Math.max(.85,Math.min(2,.4/zoom));

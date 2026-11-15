@@ -1,11 +1,13 @@
 import {ASSET_DATA} from './assets_data.js';
+import {CITY_SYMBOLS,legacyGlyphIndex} from './city_symbols.js';
+import {drawGlyph8x8} from './legacy_ui.js';
 import {SPRITE_CLASSIFICATIONS} from './sprite_classification.js';
 import {ideologicalProfile,politicalPosition} from './city_ideology.js';
 import {drawPixelText} from './pixel_text.js?v=pixel-text-1';
 import {gerarPaletaDeBandeira} from './paletas_bandeiras.js';
 
 export const COUNCIL_INSTITUTIONAL_FLAG=Object.freeze({foreground:'#f5e9bf',background:'#4c655c',skin:'Feature_Flower.png',pattern:1});
-const PARTY_EMBLEMS=Object.freeze(ASSET_DATA.filter(asset=>/\.png$/i.test(asset.filename)).map(asset=>asset.filename));
+const PARTY_EMBLEMS=CITY_SYMBOLS;
 const imageCache=new Map(),tintedCache=new Map(),pendingImages=new Map();
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const ICON_LAYOUTS=Object.freeze({
@@ -298,6 +300,12 @@ function requestImage(filename,onReady){
  if(onReady){let callbacks=pendingImages.get(filename);if(!callbacks)pendingImages.set(filename,callbacks=new Set());callbacks.add(onReady);}return null;
 }
 function tintedSprite(filename,foreground,background,transparent,detailed,onReady){
+ const glyph=legacyGlyphIndex(filename);
+ if(glyph!==null){
+  const key=`${filename}:${foreground}`;if(tintedCache.has(key))return tintedCache.get(key);
+  const canvas=document.createElement('canvas');canvas.width=canvas.height=8;
+  drawGlyph8x8(canvas.getContext('2d'),glyph,0,0,foreground);tintedCache.set(key,canvas);return canvas;
+ }
  const raw=requestImage(filename,onReady);if(!raw)return null;const key=`${filename}:${foreground}:${detailed}:${background}:${transparent?'cutout':'tile'}`;if(tintedCache.has(key))return tintedCache.get(key);
  const canvas=document.createElement('canvas');canvas.width=raw.naturalWidth;canvas.height=raw.naturalHeight;const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(raw,0,0);const pixels=context.getImageData(0,0,canvas.width,canvas.height),data=pixels.data,fg=foreground.match(/\w\w/g).map(v=>parseInt(v,16)),bg=background.match(/\w\w/g).map(v=>parseInt(v,16));
  if(transparent){
@@ -475,4 +483,12 @@ export function drawPartyFlag(ctx,flag,x,y,w=60,h=38,onReady=null){
 }
 export function partyFlagCanvas(flag,onReady){
  const canvas=document.createElement('canvas');canvas.width=120;canvas.height=76;const redraw=()=>{drawPartyFlag(canvas.getContext('2d',{willReadFrequently:true}),flag,0,0,120,76);onReady?.();};drawPartyFlag(canvas.getContext('2d',{willReadFrequently:true}),flag,0,0,120,76,redraw);return canvas;
+}
+
+/** Draw a favorite using the same symbol catalog as flags and artwork. */
+export function drawFavoriteSymbol(ctx,index,x,y,color='#ffffff',scale=1,onReady=null){
+ const skin=CITY_SYMBOLS[index]||CITY_SYMBOLS[42],glyph=legacyGlyphIndex(skin);
+ if(glyph!==null){drawGlyph8x8(ctx,glyph,x,y,color,scale);return;}
+ const image=tintedSprite(skin,color,'#18232d',true,true,onReady)||tintedSprite(skin,color,'#18232d',false,true,onReady);
+ if(image){ctx.save();ctx.imageSmoothingEnabled=false;ctx.drawImage(image,x,y,8*scale,8*scale);ctx.restore();}
 }

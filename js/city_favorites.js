@@ -1,5 +1,6 @@
 /** Player-owned presentation preferences. Only people have map markers. */
-export const FAVORITE_GLYPH_COUNT=256;
+import {CITY_SYMBOLS} from './city_symbols.js';
+export const FAVORITE_GLYPH_COUNT=CITY_SYMBOLS.length;
 export const GOVERNMENT_TOPICS={government:'Governo',election:'Eleições',policy:'Leis e políticas',construction:'Obras públicas',corruption:'Corrupção',intervention:'Intervenções'};
 export const HISTORY_FILTER_GROUPS={
  politics:{label:'Política',types:{'politics.votes':'Votações e resultados','politics.party-reaction':'Reação popular aos votos das bancadas','politics.person-reaction':'Reação popular e reputação de cada político','politics.legislation':'Tramitação, execução e vetos de leis','politics.elections':'Eleição, apuração e mandatos','politics.campaign':'Campanhas e mobilização','politics.research':'Pesquisas e divulgação de resultados','politics.interviews':'Entrevistas e contatos eleitorais','politics.parties':'Filiação, organização e relações partidárias','politics.corruption':'Corrupção e investigações políticas','politics.government':'Demais acontecimentos do governo'}},

@@ -90,9 +90,8 @@ export class CharacterGameUI {
     if(menu.self){
       add('Ver personagem',()=>this.openPanel('profile'));add('Abrir mochila',()=>this.openPanel('inventory'));add('Descansar',()=>this.act('rest'));add('Interromper ação',()=>this.act('stop'));
     }else if(target){
-      const reachable=this.targets().find(t=>t.kind===target.kind&&t.id===target.id);
-      for(const choice of interactionOptions(city,target))add(choice.label,()=>this.use(target,choice),!reachable);
-      if(target.kind==='person')add('Atacar',()=>this.attack(target.entityId),!reachable||target.distance>1.6,true);
+      for(const choice of interactionOptions(city,target))add(choice.label,()=>choice.action==='family'?this.toggle('family'):this.act('approach-interact',{kind:target.kind,targetId:target.id,choice:choice.id}));
+      if(target.kind==='person')add('Atacar',()=>this.act('approach-interact',{kind:'person',targetId:target.id,choice:'attack'}),false,true);
       if(!c.indoorLocation&&target.point)add('Aproximar-se',()=>this.act('walk',target.point));
       add('Selecionar alvo',()=>this.selectTarget(target));add('Examinar',()=>this.dossier(target));
     }
@@ -153,7 +152,7 @@ export class CharacterGameUI {
       if(down&&!this.keys.has(event.code)){this.keys.add(event.code);this.contextOpen=false;this.worldMenu=null;this.input();}else if(!down&&this.keys.delete(event.code))this.input();return true;
     }
     if(!down||event.repeat||event.metaKey||event.altKey)return false;
-    const actions={KeyO:()=>this.onSettings(),KeyL:()=>this.onCameraLock(),KeyZ:()=>this.onCamera(),KeyC:()=>this.toggle('profile'),KeyV:()=>this.toggle('activity'),KeyT:()=>this.toggle('targets'),KeyB:()=>this.toggle('interactions'),KeyE:()=>this.interact(),KeyI:()=>this.toggle('inventory'),KeyH:()=>this.toggle('body'),KeyU:()=>this.toggle('family'),KeyJ:()=>this.toggle('journal'),KeyP:()=>{this.onPause();},KeyX:()=>{this.keys.clear();this.act('stop');},KeyR:()=>this.act('rest'),KeyF:()=>this.attack(),Space:()=>this.attack(),Digit1:()=>this.act('eat'),Digit2:()=>this.act('drink'),Escape:()=>{if(this.contextOpen){this.contextOpen=false;}else if(this.desktop.manager.windows.length)this.desktop.close(this.desktop.manager.activeId);else this.toggle('menu');},KeyQ:()=>{
+    const actions={KeyO:()=>this.onSettings(),KeyL:()=>this.onCameraLock(),KeyZ:()=>this.onCamera(),KeyC:()=>this.toggle('profile'),KeyV:()=>this.toggle('activity'),KeyT:()=>this.toggle('targets'),KeyB:()=>this.toggle('interactions'),KeyE:()=>this.interact(),KeyI:()=>this.toggle('inventory'),KeyH:()=>this.toggle('body'),KeyU:()=>this.toggle('family'),KeyJ:()=>this.toggle('journal'),KeyP:()=>{this.onPause();},KeyX:()=>{this.keys.clear();this.act('stop');},KeyR:()=>this.act('rest'),KeyF:()=>this.attack(),Space:()=>this.onPause(),Digit1:()=>this.act('eat'),Digit2:()=>this.act('drink'),Escape:()=>{if(this.contextOpen){this.contextOpen=false;}else if(this.desktop.manager.windows.length)this.desktop.close(this.desktop.manager.activeId);else this.toggle('menu');},KeyQ:()=>{
       const targets=this.targets(),index=targets.findIndex(t=>`${t.kind}:${t.id}`===this.targetKey),target=targets[(index+1)%targets.length];if(target)this.selectTarget(target);
     }};
     if(this.contextOpen&&/^Digit[1-9]$/.test(event.code)){
@@ -313,7 +312,7 @@ export class CharacterGameUI {
     if(panel==='menu'){
       p.button(this.isPaused()?'Continuar o tempo [P]':'Pausar o tempo [P]',()=>this.onPause());
       p.button(this.getThirdPerson()?'Câmera isométrica [Z]':'Câmera em terceira pessoa [Z]',()=>this.onCamera());p.button(this.getCameraLocked()?'Liberar câmera [L]':'Travar câmera no personagem [L]',()=>this.onCameraLock());p.button('Configurações [O]',()=>this.onSettings());p.button('Voltar à simulação',()=>this.act('simulation'));
-      p.heading('Controles');p.note('WASD / setas: mover\nZ: isométrica / 3ª pessoa · L: câmera livre / travada\nBotão direito + arrastar: girar em 3p; mover na isométrica livre\nBotão do meio + arrastar: deslocar câmera livre\nO: configurações\nClique: selecionar pessoa ou objeto · chão livre: andar\nBotão direito sem arrastar: menu contextual\nMenu: setas e Enter · Esc ou clique fora: cancelar\nShift: correr\nE: interagir · Q: alternar alvo\nC: personagem · H: corpo · V: atividade\nT: alvos próximos · B: interações próximas\nI: mochila · U: família · J: diário\n1: comer · 2: beber · R: descansar\nCtrl + clique / F / Espaço: atacar\nX: interromper · P: pausar\nTab: alternar janela · Esc: fechar');
+      p.heading('Controles');p.note('WASD / setas: mover\nZ: isométrica / 3ª pessoa · L: câmera livre / travada\nBotão direito + arrastar: girar em 3p; mover na isométrica livre\nBotão do meio + arrastar: deslocar câmera livre\nO: configurações\nClique: selecionar pessoa ou objeto · chão livre: andar\nBotão direito sem arrastar: menu contextual\nMenu: setas e Enter · Esc ou clique fora: cancelar\nShift: correr\nE: interagir · Q: alternar alvo\nC: personagem · H: corpo · V: atividade\nT: alvos próximos · B: interações próximas\nI: mochila · U: família · J: diário\n1: comer · 2: beber · R: descansar\nCtrl + clique / F: atacar · Espaço / P: pausar\nX: interromper · P: pausar\nTab: alternar janela · Esc: fechar');
     }
   }
   inventory(p,city,c,target){

@@ -15,7 +15,7 @@ Escolha **Jogar como personagem** no menu principal, ou em **Ferramentas → Jog
 - **Q:** alternar entre os alvos próximos.
 - **1 / 2:** comer / beber da mochila.
 - **R:** descansar no local; ao ar livre, permite escolher dormir no chão.
-- **F ou Espaço:** atacar uma pessoa próxima. **Ctrl + clique:** atacar a pessoa apontada.
+- **F:** atacar uma pessoa próxima. **Espaço:** pausar ou retomar. **Ctrl + clique:** atacar a pessoa apontada.
 - **P:** pausar ou continuar o tempo.
 - **C / H / V:** personagem, condição física e atividade.
 - **T / B:** alvos próximos e interações próximas.
@@ -64,10 +64,12 @@ Clique em pessoas, edifícios, plantas, veículos ou objetos do chão para selec
 
 O saldo aparece à direita na barra inferior. Use L para alternar câmera livre ou travada no personagem em qualquer projeção. Na isométrica livre, arraste com o botão direito ou do meio; na terceira pessoa livre, arraste com o botão do meio para deslocar o centro da órbita. O botão direito gira a câmera 3p. WASD continua controlando o personagem. O ou Configurações abre as opções normais do jogo.
 
-Ao entrar em um prédio, a câmera 3p acompanha a posição e o andar do personagem, com uma órbita mais curta. O corte interno remove a fachada, o telhado e os outros andares; sair restaura o exterior. A câmera não adiciona iluminação pessoal.
+Ao entrar em um prédio, a câmera 3p enquadra o edifício por fora, mantendo a fachada inteira. O personagem não recebe acompanhamento interno nem corte do prédio. A colisão considera os prédios vizinhos e corrige também a posição suavizada da câmera. A câmera não adiciona iluminação pessoal.
 
 ### Menu contextual
 
-Clique com o botão direito sem arrastar para abrir um menu junto ao cursor. Pessoas, edifícios e plantas mostram suas interações reais, além de selecionar, aproximar-se e examinar. Pessoas também oferecem ataque, destacado em vermelho. Ações fora de alcance ficam desativadas; use Aproximar-se antes de interagir. Veículos e objetos do chão permitem selecionar e examinar. No chão livre, o menu oferece Caminhar até aqui; sobre o próprio personagem, ficha, mochila, descanso e interrupção da ação.
+Clique com o botão direito sem arrastar para abrir um menu junto ao cursor. Pessoas, edifícios e plantas mostram suas interações reais, além de selecionar, aproximar-se e examinar. Pessoas também oferecem ataque, destacado em vermelho. Escolher uma ação distante faz o personagem caminhar até o alvo e executá-la ao chegar. Alvos móveis são acompanhados; alvos removidos ou caminhos inacessíveis cancelam a ordem. Interromper ou usar WASD cancela a ação pendente. Veículos e objetos do chão permitem selecionar e examinar. No chão livre, o menu oferece Caminhar até aqui; sobre o próprio personagem, ficha, mochila, descanso e interrupção da ação.
 
 Clique numa opção, use as setas e Enter ou as teclas 1–9. Esc, Cancelar ou um clique fora fecham o menu. Esse clique fora não dá uma ordem de movimento. A roda percorre menus longos. Arrastar o botão direito mantém os controles da câmera. As ações são revalidadas pela simulação e continuam disponíveis durante a rotina automática.
+
+Espaço e P pausam ou retomam o jogo. Ataque usa F, Ctrl + clique ou a opção Atacar do menu contextual.

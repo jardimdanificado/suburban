@@ -132,11 +132,12 @@ test('gameplay can detach either projection and open settings from its controls 
  h.game.key({code:'KeyL'});assert(h.game.getCameraLocked());assert(h.game.getThirdPerson());h.draw();h.click('O · Configurações');assert.equal(h.settingsOpened,1);h.game.key({code:'KeyO'});assert.equal(h.settingsOpened,2);
 });
 
-test('right-click person menu uses real interactions, requires range and opens dossiers only on examine',async()=>{
+test('right-click person menu approaches distant targets and opens dossiers only on examine',async()=>{
  const h=harness();await h.start();h.game.desktop.closeAll(true);const c=h.city.society.citizen(h.city.characterGame.citizenId),other=h.city.citizens.find(p=>p!==c);c.indoorLocation=null;other.indoorLocation=null;other.entity.x=c.entity.x+.5;other.entity.y=c.entity.y;
  h.game.openWorldMenu(other.entity.id,{x:5,y:5},500,300);h.draw();assert.equal(h.game.desktop.manager.windows.length,0);assert(h.ui.regions.some(r=>r.role==='menuitem'&&r.label==='Conversar'));
- h.click('Conversar');await Promise.resolve();assert.equal(h.calls.at(-1)[0],'interact');assert.equal(h.calls.at(-1)[1].targetId,other.id);assert.equal(h.city.characterGame.intent.kind,'talk');assert.equal(h.game.worldMenu,null);
- other.entity.x=c.entity.x+10;h.game.openWorldMenu(other.entity.id,null,500,300);h.draw();const disabled=h.ui.regions.find(r=>r.role==='menuitem'&&r.label.startsWith('Conversar'));assert(disabled.disabled);const before=h.calls.length;h.ui.clickAt(disabled.x+5,disabled.y+5);assert.equal(h.calls.length,before);assert(h.game.worldMenu);
+ h.click('Conversar');await Promise.resolve();assert.equal(h.calls.at(-1)[0],'approach-interact');assert.equal(h.calls.at(-1)[1].targetId,other.id);assert.equal(h.city.characterGame.intent.kind,'talk');assert.equal(h.game.worldMenu,null);
+ c.entity.x=5.5;c.entity.y=5.5;other.entity.x=15.5;other.entity.y=5.5;h.game.openWorldMenu(other.entity.id,null,500,300);h.draw();const talk=h.ui.regions.find(r=>r.role==='menuitem'&&r.label==='Conversar');assert(!talk.disabled);h.ui.clickAt(talk.x+5,talk.y+5);await Promise.resolve();assert.equal(h.city.characterGame.intent.kind,'approach');
+ h.game.openWorldMenu(other.entity.id,null,500,300);h.draw();
  h.click('Examinar');assert(h.game.desktop.manager.find(`page:inspect-person-${other.id}`));assert.equal(h.game.worldMenu,null);
 });
 
@@ -156,6 +157,11 @@ test('context menus fit the viewport, support keyboard and cancel when targets d
 
 test('building context menu executes the shared supply action and objects expose read-only examination',async()=>{
  const h=harness();await h.start();h.game.desktop.closeAll(true);const c=h.city.society.citizen(h.city.characterGame.citizenId),hall=h.city.buildings.find(b=>b.type==='townhall');c.indoorLocation=null;Object.assign(c.entity,hall.door);
- h.game.openWorldMenu(hall.entity.id,null,500,300);h.draw();h.click('Encher garrafa');await Promise.resolve();assert.deepEqual(h.calls.at(-1),['interact',{kind:'building',targetId:hall.id,choice:'water'}]);
+ h.game.openWorldMenu(hall.entity.id,null,500,300);h.draw();h.click('Encher garrafa');await Promise.resolve();assert.deepEqual(h.calls.at(-1),['approach-interact',{kind:'building',targetId:hall.id,choice:'water'}]);
  const item={id:999999,x:c.entity.x+.5,y:c.entity.y,properties:{name:'Madeira caída',resourceType:'wood',species:'item',render:{}}};h.entities.push(item);h.game.openWorldMenu(item.id,null,500,300);h.draw();assert(h.ui.regions.some(r=>r.role==='menuitem'&&r.label==='Examinar'));assert(!h.ui.regions.some(r=>r.role==='menuitem'&&r.label==='Encher garrafa'));h.click('Examinar');assert(h.game.desktop.manager.find(`page:inspect-object-${item.id}`));
+});
+
+
+test('space pauses gameplay without attacking, including when a target is nearby',async()=>{
+ const h=harness();await h.start();const before=h.calls.length;assert(!h.isPaused());h.game.key({code:'Space'});assert(h.isPaused());assert.equal(h.calls.length,before);h.game.key({code:'Space',repeat:true});assert(h.isPaused());h.game.key({code:'Space'});assert(!h.isPaused());
 });

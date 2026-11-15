@@ -23,3 +23,10 @@ test('worlds without revision tracking keep sampling, rather than caching potent
  const r=new Camera();let reads=0;r.currentMap={};r.getSurfaceElevation=()=>{reads++;return 0;};
  r.resolveThirdPersonCamera({x:0,y:1,z:0},{x:0,y:2,z:4});reads=0;r.resolveThirdPersonCamera({x:0,y:1,z:0},{x:0,y:2,z:4});assert.ok(reads>0);
 });
+
+test('camera endpoints never remain inside a building even when the orbit anchor is inside it',()=>{
+ const r=new Camera(),building={id:1,entity:{x:4,y:4},width:4,depth:4,floors:3,terrain:{base:0}},city={structureRevision:1,buildings:[building]};r.getSurfaceElevation=()=>0;
+ for(const ignored of [null,building.id]){
+  const camera=r.resolveThirdPersonCamera({x:5,y:1,z:5},{x:6,y:2,z:6},city,ignored);assert(camera.y>=3*1.2+.28);
+ }
+});

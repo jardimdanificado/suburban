@@ -121,6 +121,15 @@ function performGameAction(city,action,options={}){
   if(c.deliveryId||c.cleaningJobId)return city.fail('Conclua o serviço reservado ou volte à simulação para devolver a autonomia.');
   const b=city.building(options.buildingId);
   switch(action){
+    case 'approach-interact':{
+      const target=nearbyTargets(city,c,Infinity,{inspectable:true}).find(t=>t.id===options.targetId&&t.kind===options.kind);
+      const attack=options.kind==='person'&&options.choice==='attack';
+      if(!target||!attack&&!interactionOptions(city,target,c).some(choice=>choice.id===options.choice&&choice.action!=='family'))return city.fail('Essa interação não está disponível.');
+      const reach=attack?1.6:1.8;
+      if(target.distance<=reach)return gameAction(city,attack?'attack':'interact',attack?{citizenId:target.id}:{kind:target.kind,targetId:target.id,choice:options.choice});
+      if(c.indoorLocation)return city.fail('Aproxime-se do alvo dentro do prédio para interagir.');
+      return route(city,c,target.point,'approach',target.id,{targetKind:target.kind,choice:options.choice,nextPathAt:city.minute+2});
+    }
     case 'interact':{
       const target=nearbyTargets(city,c).find(t=>t.id===options.targetId&&t.kind===options.kind);
       if(!target)return city.fail('Aproxime-se para interagir.');
@@ -230,8 +239,23 @@ export function characterMinute(city,c){
   if(!playing(city)||city.characterGame.citizenId!==c.id)return false;
   const s=city.characterGame,intent=s.intent;
   if(!intent){if(s.autonomous)return false;c.action='Aguardando sua decisão';return true;}
-  if(s.autonomous&&!reservedActivity(city,c)&&['walk','work','gather','rest','talk','enter'].includes(intent.kind)&&city.urgentNeed(c)){
+  if(s.autonomous&&!reservedActivity(city,c)&&['walk','work','gather','rest','talk','enter','approach'].includes(intent.kind)&&city.urgentNeed(c)){
     finish(city,c,'A ordem foi interrompida para cuidar de uma necessidade urgente.');return false;
+  }
+  if(intent.kind==='approach'){
+    const target=nearbyTargets(city,c,Infinity,{inspectable:true}).find(t=>t.id===intent.targetId&&t.kind===intent.targetKind),attack=intent.targetKind==='person'&&intent.choice==='attack';
+    if(!target||!attack&&!interactionOptions(city,target,c).some(choice=>choice.id===intent.choice&&choice.action!=='family')){finish(city,c,'O alvo ou a ação não está mais disponível.');return true;}
+    if(target.distance<=(attack?1.6:1.8)){
+      stop(city,c);
+      const ok=gameAction(city,attack?'attack':'interact',attack?{citizenId:target.id}:{kind:target.kind,targetId:target.id,choice:intent.choice});
+      if(!ok)finish(city,c,city.lastError||'Não foi possível executar a ação.');return true;
+    }
+    if(!c.path.length||city.minute>=intent.nextPathAt&&distance(target.point,intent.point)>1.2){
+      const path=city.findPath(c.entity,target.point);
+      if(!path?.length){finish(city,c,'Não existe caminho acessível até o alvo.');return true;}
+      c.path=path;intent.point={x:target.point.x,y:target.point.y};intent.nextPathAt=city.minute+2;
+    }
+    c.action='Aproximando-se para executar a ação';return true;
   }
   if(intent.kind==='manual'||c.path.length||c.indoorLocation?.path?.length)return true;
   if(intent.kind==='rest'){c.needs.energy=Math.min(100,c.needs.energy+.2);c.action='Descansando no lugar';if(s.autonomous&&c.needs.energy>=90)finish(city,c,'Descanso concluído. Retomando a rotina automática.');return true;}

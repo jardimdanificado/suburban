@@ -42,7 +42,7 @@ import { REPUTATION_LABELS } from './city_reputation.js';
 import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js?v=ff-growth-events-1';
 import { HISTORY_LIMIT } from './city_history.js';
 import { FAVORITE_GLYPH_COUNT, GOVERNMENT_TOPICS, HISTORY_FILTER_GROUPS } from './city_favorites.js';
-import {drawGlyph8x8} from './legacy_ui.js';
+import {drawFavoriteSymbol} from './city_party_flags.js';
 import { INDUSTRIES } from './city_industries.js';
 import { SANITATION_RULES } from './city_sanitation.js?v=ff2-speed-2';
 import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js';
@@ -52,7 +52,7 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=regional-supply-5';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-128-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=ff2-speed-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=game-context-menu-8';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=game-approach-camera-9';
 import { renderWorldManagement } from './city_world_ui.js?v=world-management-9';
 export const money = formatMoney;
 export const TABS = [
@@ -756,17 +756,17 @@ export class CityUI {
     for(const {id,pref,citizen}of people){
       const personName=name(citizen.entity),selected=this.favoriteEditorId===id,rowY=p.y;
       p.record(personName,`${this.city.society.age(citizen)} anos · ${citizen.profession||citizen.action||'Rotina'}`,()=>{this.favoriteEditorId=id;this.resetScroll();},selected,{color:C.gold});
-      drawGlyph8x8(p.ui.ctx,pref.icon,p.x+p.w-21,rowY+8,pref.color,2);
+      drawFavoriteSymbol(p.ui.ctx,pref.icon,p.x+p.w-21,rowY+8,pref.color,2);
       p.buttons([{label:'SÍMBOLO E COR',selected,click:()=>{this.favoriteEditorId=id;this.resetScroll();}},{label:'HISTÓRICO',click:()=>this.openPanel({tab:'log',logCitizenId:id,logLimit:200})},{label:'REMOVER',click:()=>favorites.togglePerson(id)}]);
     }
     const active=people.find(person=>person.id===this.favoriteEditorId);if(!active)return;
     const personName=name(active.citizen.entity);p.heading(`MARCADOR · ${personName.toLocaleUpperCase('pt-BR')}`);p.checkbox('Incluir as atividades no histórico de canto',active.pref.feed,value=>{active.pref.feed=value;favorites.persist();});
     p.ui.text('COR DO MARCADOR',p.x,p.y+4,C.muted);const color=this.favoriteColorInput(active.id,active.pref);this.inputAt(color,p.x+112,p.y,42);p.space(25);
-    p.heading('ESCOLHA ENTRE OS 256 SÍMBOLOS DO JOGO');p.note('Clique em um glifo para usar acima da cabeça. O símbolo amarelo é o padrão.');
+    p.heading(`ESCOLHA ENTRE OS ${FAVORITE_GLYPH_COUNT} SÍMBOLOS DO JOGO`);p.note('Clique em um símbolo para usar acima da cabeça. O símbolo amarelo é o padrão.');
     const cell=22,gap=3,columns=16,gridWidth=columns*(cell+gap)-gap,startX=p.x+Math.max(0,(p.w-gridWidth)/2),startY=p.y,ctx=p.ui.ctx;
     for(let glyph=0;glyph<FAVORITE_GLYPH_COUNT;glyph++){
       const col=glyph%columns,row=Math.floor(glyph/columns),x=startX+col*(cell+gap),y=startY+row*(cell+gap),selected=glyph===active.pref.icon;
-      if(y+cell>=p.top&&y<=p.bottom){bevel(ctx,x,y,cell,cell,{inset:selected,fill:selected?T.selected:T.paper});drawGlyph8x8(ctx,glyph,x+3,y+3,selected?active.pref.color:T.ink,2);p.ui.regions.push({x,y,w:cell,h:cell,label:`Símbolo ${glyph}${selected?' · selecionado':''}`,onClick:()=>{active.pref.icon=glyph;favorites.persist();}});}
+      if(y+cell>=p.top&&y<=p.bottom){bevel(ctx,x,y,cell,cell,{inset:selected,fill:selected?T.selected:T.paper});drawFavoriteSymbol(ctx,glyph,x+3,y+3,selected?active.pref.color:T.ink,2);p.ui.regions.push({x,y,w:cell,h:cell,label:`Símbolo ${glyph}${selected?' · selecionado':''}`,onClick:()=>{active.pref.icon=glyph;favorites.persist();}});}
     }
     p.y=startY+Math.ceil(FAVORITE_GLYPH_COUNT/columns)*(cell+gap)+3;
   }

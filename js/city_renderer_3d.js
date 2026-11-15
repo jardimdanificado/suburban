@@ -1,5 +1,3 @@
-import {roomFurnitureForCity} from './city_furniture_catalog.js?v=fast-speeds-1';
-import {applyInteriorCutaway} from './city_interior_view.js';
 import {addBuildingRoof} from './city_building_roof.js';
 import {createFarmPlants,syncFarmPlants} from './city_farm_renderer.js';
 import {syncVerticalFarm} from './city_vertical_farm_renderer.js';
@@ -524,9 +522,7 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
       }
       let totalCellVertices=0;for(const parts of cellSourcesByFloor.values())for(const {source}of parts)totalCellVertices+=source.attributes.position.count;
       const cellPositions=new Float32Array(totalCellVertices*3),cellNormals=new Float32Array(totalCellVertices*3),cellUvs=new Float32Array(totalCellVertices*2),cellColors=new Float32Array(totalCellVertices*3);let cellVertexOffset=0;
-      const cellFloorRanges=new Map();
       for(const [floor,parts] of cellSourcesByFloor){
-        const floorStart=cellVertexOffset;
         const floorOffset=floor*CITY_FLOOR_HEIGHT+CITY_FLOOR_HEIGHT/2;
         for(const {source,unit} of parts){
           const sourcePositions=source.attributes.position.array,sourceNormals=source.attributes.normal.array,sourceUvs=source.attributes.uv.array,sourceColors=source.attributes.color.array,count=source.attributes.position.count,positionOffset=cellVertexOffset*3,uvOffset=cellVertexOffset*2;
@@ -538,20 +534,17 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
           }
           cellVertexOffset+=count;
         }
-        cellFloorRanges.set(floor,{start:floorStart,count:cellVertexOffset-floorStart});
       }
       const cellGeometry=new THREE.BufferGeometry();
       cellGeometry.setAttribute('position',new THREE.BufferAttribute(cellPositions,3));cellGeometry.setAttribute('normal',new THREE.BufferAttribute(cellNormals,3));
       cellGeometry.setAttribute('uv',new THREE.BufferAttribute(cellUvs,2));cellGeometry.setAttribute('color',new THREE.BufferAttribute(cellColors,3));cellGeometry.computeBoundingSphere();
       const cells=new THREE.Mesh(cellGeometry,material);cells.castShadow=true;cells.receiveShadow=true;
-      cells.userData.combinedCellFloors=cellFloorRanges;cells.userData.cellVertexCount=totalCellVertices;
       group.add(cells);const cellMeshes=[cells];
       for(const parts of cellSourcesByFloor.values())for(const {source} of parts)source.dispose();
       group.userData.cellMeshes=cellMeshes;
       const floorCells=[...b.units,...(b.circulation||[])],roomFloors=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.06,1),new THREE.MeshLambertMaterial({color:0x928571}),floorCells.length);
-      roomFloors.userData.interiorFloors=floorCells.map(u=>u.z);roomFloors.userData.interiorBaseMatrices=[];
-      for(let i=0;i<floorCells.length;i++){const unit=floorCells[i];matrix.makeTranslation(unit.x+.5,unit.z*CITY_FLOOR_HEIGHT-.03,unit.y+.5);roomFloors.setMatrixAt(i,matrix);roomFloors.userData.interiorBaseMatrices.push(matrix.clone());}
-      roomFloors.receiveShadow=true;roomFloors.castShadow=false;group.add(roomFloors);group.userData.roomFloors=roomFloors;group.userData.interiorFloors=roomFloors;
+      for(let i=0;i<floorCells.length;i++){const unit=floorCells[i];matrix.makeTranslation(unit.x+.5,unit.z*CITY_FLOOR_HEIGHT-.03,unit.y+.5);roomFloors.setMatrixAt(i,matrix);}
+      roomFloors.receiveShadow=true;roomFloors.castShadow=false;group.add(roomFloors);group.userData.roomFloors=roomFloors;
       const roof = new THREE.Mesh(new THREE.BoxGeometry(b.width + .15, .14, b.depth + .15), buildingMaterial(renderer,THREE,'roof',mine?0x454b49:style.roof));
       roof.position.set(b.width / 2, b.floors*CITY_FLOOR_HEIGHT + .03, b.depth / 2); roof.castShadow = true; group.add(roof);group.userData.roof=roof;
       const facade=new THREE.Group(),origin=buildingPoint(b,0,0);facade.rotation.y=(b.rotation||0)*Math.PI/2;facade.position.set(origin.x,0,origin.y);group.add(facade);group.userData.facade=facade;
@@ -682,21 +675,7 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
       group.userData.terrainRevision = world.revision || 0;
     }
     if(group.position.x!==entity.x||group.position.y!==b.terrain.base||group.position.z!==entity.y){group.position.set(entity.x,b.terrain.base,entity.y);renderer.cityMeshVisualRevision=(renderer.cityMeshVisualRevision||0)+1;}
-    const interior=renderer.cityInteriorView?.buildingId===b.id?renderer.cityInteriorView:null;
-    const furnitureKey=interior?`${interior.floor}:${b.layoutRevision||0}`:null;
-    if(interior&&group.userData.roomFurnitureKey!==furnitureKey){
-      const oldProps=group.userData.roomProps;
-      if(oldProps){group.remove(oldProps);oldProps.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}
-      const props=new THREE.Group(),city=renderer.cityDevelopment?.city;
-      for(const room of b.units)if(room.z===interior.floor)for(const item of roomFurnitureForCity(city,b,room)){
-        const model=furnitureModel(THREE,item);model.position.set(item.x,item.z*CITY_FLOOR_HEIGHT+.02,item.y);model.userData.interiorFloor=room.z;props.add(model);
-      }
-      group.add(props);group.userData.roomProps=props;group.userData.roomFurnitureKey=furnitureKey;group.userData.lastInteriorView=null;
-    }
-    const previousInterior=group.userData.lastInteriorView;
-    applyInteriorCutaway(THREE,group,interior?.floor??null,interior?.hideWalls??false);
-    if(interior?.hideWalls)group.userData.doorFrames.visible=false;
-    if(previousInterior!==group.userData.lastInteriorView&&renderer.shadowsEnabled&&renderer.renderer?.shadowMap)renderer.renderer.shadowMap.needsUpdate=true;
+    group.userData.doorFrames.visible=false;group.userData.exteriorDoorFrames.visible=true;
     group.userData.supports.visible=false;group.userData.stairs.visible=false;
     const windowShutters=group.userData.portugueseWindowShutters||[],sleepingFloors=sleepingFloorsByBuilding.get(b.id)||EMPTY_FLOORS,shutterState=[...sleepingFloors].sort((a,b)=>a-b).join(',');
     if(group.userData.shutterState!==shutterState){

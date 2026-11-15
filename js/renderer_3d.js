@@ -38,7 +38,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import {NightLighting} from "./night_lighting.js?v=local-night-lights-1";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=game-interior-cutaway-7";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=game-exterior-camera-9";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=head-flag-crown-1';
@@ -73,10 +73,7 @@ const compareCrowdCitizenIds=(a,b)=>a.entity.id-b.entity.id;
 const PAVED_ROAD_TILES=new Set([TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL_STONE]);
 const ROAD_SURFACE_TILES=new Set([TILE_ROAD_GRASS,TILE_ROAD_SAND,TILE_ROAD_HILL,...PAVED_ROAD_TILES]);
 function indoorCitizenVisibleFromOutside(renderer,location){
-  if(!location||location.exiting)return false;
-  const view=renderer.cityInteriorView,owner=renderer.cityDevelopment?.city?.building(location.buildingId);
-  if(view?.buildingId===(owner?.officeTenantOf||location.buildingId)&&view.floor===(location.position?Math.floor((location.position.z||0)/CITY_FLOOR_HEIGHT+.001):location.floor??0))return true;
-  if(location.path?.length)return false;
+  if(!location||location.exiting||location.path?.length)return false;
   if(location.roomType==='balcony'||location.roomType==='roof_terrace')return true;
   const city=renderer.cityDevelopment?.city,building=city?.building(location.buildingId),unit=location.unitId?city?.units?.get(location.unitId):null;
   if(!building||!unit)return false;
@@ -5880,12 +5877,17 @@ export class RCT3DRenderer {
       if(this.currentMap&&y<this.getSurfaceElevation(this.currentMap,x,z)+.28){safeDistance=Math.max(0,along-.2);break;}
       const building=buildings?.get(`${Math.floor(x)},${Math.floor(z)}`);
       if(building&&building.id!==insideBuildingId){
-        const base=building.terrain?.base??(this.currentMap?this.getSurfaceElevation(this.currentMap,x,z):0),roof=base+Math.max(1,building.floors||1)*CITY_FLOOR_HEIGHT;
+        const base=building.terrain?.base??(this.currentMap?this.getSurfaceElevation(this.currentMap,x,z):0),roof=base+Math.max(1,building.floors||1)*CITY_FLOOR_HEIGHT+1;
         if(y>base+.12&&y<roof){safeDistance=Math.max(0,along-.24);break;}
       }
     }
     const position=new THREE.Vector3(target.x+dx*safeDistance/distance,target.y+dy*safeDistance/distance,target.z+dz*safeDistance/distance);
     if(this.currentMap)position.y=Math.max(position.y,this.getSurfaceElevation(this.currentMap,position.x,position.z)+.3);
+    const enclosing=buildings?.get(`${Math.floor(position.x)},${Math.floor(position.z)}`);
+    if(enclosing){
+      const base=enclosing.terrain?.base??(map?this.getSurfaceElevation(map,position.x,position.z):0),roof=base+Math.max(1,enclosing.floors||1)*CITY_FLOOR_HEIGHT+1;
+      if(position.y>base-.1&&position.y<roof+.28)position.y=roof+.3;
+    }
     if(cacheable)this._thirdPersonCameraCollision={world,map,width:world?.width,height:world?.height,revision,city,structure,buildings:city?.buildings.length,inside:insideBuildingId,tx:target.x,ty:target.y,tz:target.z,dx:desired.x,dy:desired.y,dz:desired.z,position};
     return position;
   }
@@ -6372,13 +6374,20 @@ export class RCT3DRenderer {
           }
           const orbitCosPitch=Math.cos(this.tpCameraPitch),orbitSinPitch=Math.sin(this.tpCameraPitch),orbitSinYaw=Math.sin(this.tpCameraYaw),orbitCosYaw=Math.cos(this.tpCameraYaw);
           let desiredCamera, lookTarget;
-          const distance=indoorBuilding?Math.min(this.tpDistance,3):this.tpDistance;
-          const desired={x:eyeX-orbitSinYaw*orbitCosPitch*distance,y:eyeY+orbitSinPitch*distance,z:eyeZ-orbitCosYaw*orbitCosPitch*distance};
-          desiredCamera=this.resolveThirdPersonCamera({x:eyeX,y:eyeY,z:eyeZ},desired,this.cityDevelopment?.city,indoorBuilding?.officeTenantOf||indoorBuilding?.id||null);
-          lookTarget={x:eyeX,y:eyeY,z:eyeZ};
+          const city=this.cityDevelopment?.city;
+          if(indoorBuilding&&!anchor){
+            const b=indoorBuilding,centerX=b.entity.x+b.width/2,centerZ=b.entity.y+b.depth/2,base=b.terrain?.base??surfaceH;
+            const yaw=Math.atan2((b.door?.x??centerX)-centerX,(b.door?.y??centerZ)-centerZ)+this.tpCameraYaw;
+            const radius=Math.hypot(b.width/2,b.depth/2)+Math.max(3,this.tpDistance);
+            lookTarget={x:centerX,y:base+Math.max(1.2,Math.min(3,b.floors*.55)),z:centerZ};
+            desiredCamera=this.resolveThirdPersonCamera(lookTarget,{x:centerX+Math.sin(yaw)*radius,y:base+Math.max(2.5,Math.min(5,b.floors*1.2)),z:centerZ+Math.cos(yaw)*radius},city,b.officeTenantOf||b.id);
+          }else{
+            const desired={x:eyeX-orbitSinYaw*orbitCosPitch*this.tpDistance,y:eyeY+orbitSinPitch*this.tpDistance,z:eyeZ-orbitCosYaw*orbitCosPitch*this.tpDistance};
+            lookTarget={x:eyeX,y:eyeY,z:eyeZ};desiredCamera=this.resolveThirdPersonCamera(lookTarget,desired,city,null);
+          }
           const interiorKey=indoorBuilding?`${indoorBuilding.id}:${indoorLocation.floor}`:null;
           if(this.tpInteriorKey!==interiorKey){this.tpCameraInitialized=false;this.tpInteriorKey=interiorKey;}
-          if (!this.tpCameraInitialized) {
+          if (!this.tpCameraInitialized||indoorBuilding&&!anchor) {
             this.tpCameraPosition.set(desiredCamera.x,desiredCamera.y,desiredCamera.z);
             this.tpCameraTarget.set(lookTarget.x,lookTarget.y,lookTarget.z);
             this.tpCameraInitialized=true;
@@ -6388,6 +6397,8 @@ export class RCT3DRenderer {
             this.tpCameraPosition.lerp(this.tpDesiredPosition,followSmoothing);
             this.tpCameraTarget.lerp(this.tpDesiredTarget,followSmoothing);
           }
+          const safeCamera=this.resolveThirdPersonCamera(lookTarget,this.tpCameraPosition,city,indoorBuilding&&!anchor?(indoorBuilding.officeTenantOf||indoorBuilding.id):null);
+          this.tpCameraPosition.copy(safeCamera);
           this.fpCamera.position.copy(this.tpCameraPosition);
           this.fpCamera.lookAt(this.tpCameraTarget);
           const followGroundY=surfaceH+(inside?.z??0);
