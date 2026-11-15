@@ -13,20 +13,19 @@ const movingCodes=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft'
 
 /** Gameplay uses the same canvas widgets, native fields and desktop windows as management. */
 export class CharacterGameUI {
-  constructor({root,getCity,command,onEnter,onSimulation,onMenu,onCamera,onPause,isPaused,getDirection,getSpeed=()=>1,onSpeed=()=>{}}){
-    Object.assign(this,{getCity,command,onEnter,onSimulation,onMenu,onCamera,onPause,isPaused,getDirection,getSpeed,onSpeed});
+  constructor({root,getCity,command,onEnter,onSimulation,onMenu,onCamera,onPause,isPaused,getDirection,getSpeed=()=>1,onSpeed=()=>{},getThirdPerson=()=>false,getEntities=()=>[]}){
+    Object.assign(this,{getCity,command,onEnter,onSimulation,onMenu,onCamera,onPause,isPaused,getDirection,getSpeed,onSpeed,getThirdPerson,getEntities});
     this.keys=new Set();this.choosing=false;this.message='';this.targetKey=null;this.contextOpen=false;this.layoutReady=false;this.savedPanels=null;
     this.desktop=new CityDesktop({city:getCity(),root,select:()=>{},initialModule:null,notifications:false});
     this.element=this.desktop.element;
   }
   get active(){return this.choosing||playing(this.getCity());}
-  track(point){this.marker=point;}
   async act(action,options={}){
     const result=await this.command(action,options);
     if(result?.ok===false){this.message=result.message||'Ação indisponível.';this.messageUntil=performance.now()+5000;}
     if(result?.ok!==false&&['start','resume','switch'].includes(action)){
       if(action!=='switch'||!this.layoutReady){this.entering=true;this.desktop.closeAll(true);this.entering=false;this.layoutReady=false;}
-      this.choosing=false;this.contextOpen=false;this.keys.clear();this.onEnter();
+      this.choosing=false;this.contextOpen=false;this.keys.clear();this.targetKey=null;this.selectedEntityId=null;this.onEnter();
     }
     if(result?.ok!==false&&action==='simulation'){this.savedPanels=this.desktop.manager.windows.filter(w=>w.id.startsWith('page:survival-')&&w.id!=='page:survival-interaction').map(w=>w.id.slice('page:survival-'.length));this.desktop.closeAll(true);this.layoutReady=false;this.keys.clear();this.contextOpen=false;this.onSimulation();}
     return result;
@@ -56,14 +55,25 @@ export class CharacterGameUI {
     this.command('input',{...(this.getDirection?.(x,y)||{x,y}),run:this.keys.has('ShiftLeft')||this.keys.has('ShiftRight')});
   }
   targets(){return nearbyTargets(this.getCity());}
-  visibleTargets(){return nearbyTargets(this.getCity(),controlledCitizen(this.getCity()),12,{inspectable:true});}
-  selectTarget(target){this.targetKey=`${target.kind}:${target.id}`;}
-  dossier(target){return this.desktop.openPage(`inspect-${target.kind}-${target.id}`,{title:`Ficha · ${target.label}`,width:380,height:440,draw:p=>drawTargetDossier(p,this.getCity(),target)});}
+  visibleTargets(radius=12){
+    const city=this.getCity(),c=controlledCitizen(city),targets=nearbyTargets(city,c,radius,{inspectable:true});
+    if(!c||c.indoorLocation)return targets;
+    const known=new Set(targets.map(t=>t.entityId));
+    for(const entity of this.getEntities()){
+      const p=entity.properties;
+      if(entity===c.entity||entity.destroyed||known.has(entity.id)||!p?.render||p.species==='effect'||p.citizen||p.cityBuilding||p.cityPlant||p.cityVehicle)continue;
+      const distance=Math.hypot(c.entity.x-entity.x,c.entity.y-entity.y);
+      if(distance<=radius)targets.push({kind:'object',id:entity.id,entityId:entity.id,point:{x:entity.x,y:entity.y},label:p.name||'Objeto no chão',distance});
+    }
+    return targets.sort((a,b)=>a.distance-b.distance);
+  }
+  selectTarget(target){this.targetKey=`${target.kind}:${target.id}`;this.selectedEntityId=target.entityId;}
+  dossier(target){return this.desktop.openPage(`inspect-${target.kind}-${target.id}`,{title:`Ficha · ${target.label}`,width:380,height:440,draw:p=>drawTargetDossier(p,this.getCity(),target,id=>this.getEntities().find(e=>e.id===id))});}
   target(){const targets=this.targets();return this.targetKey?targets.find(t=>`${t.kind}:${t.id}`===this.targetKey):targets.find(t=>t.kind!=='person')||targets[0];}
-  inspect(entityId){
-    const target=this.visibleTargets().find(t=>t.entityId===entityId);
+  inspect(entityId,notify=true){
+    const target=this.visibleTargets(Infinity).find(t=>t.entityId===entityId);
     if(target){this.selectTarget(target);this.dossier(target);return true;}
-    this.message='Aproxime-se para interagir. Use WASD para explorar.';this.messageUntil=performance.now()+3000;return false;
+    if(notify){this.message='Aproxime-se para interagir. Use WASD para explorar.';this.messageUntil=performance.now()+3000;}return false;
   }
   interact(){
     const target=this.target();if(!target){this.message='Nada ao alcance. Aproxime-se de uma porta, planta ou pessoa.';this.messageUntil=performance.now()+3000;return;}
@@ -89,8 +99,8 @@ export class CharacterGameUI {
       if(down&&!this.keys.has(event.code)){this.keys.add(event.code);this.contextOpen=false;this.input();}else if(!down&&this.keys.delete(event.code))this.input();return true;
     }
     if(!down||event.repeat||event.metaKey||event.altKey)return false;
-    const actions={KeyC:()=>this.toggle('profile'),KeyV:()=>this.toggle('activity'),KeyT:()=>this.toggle('targets'),KeyB:()=>this.toggle('interactions'),KeyE:()=>this.interact(),KeyI:()=>this.toggle('inventory'),KeyH:()=>this.toggle('body'),KeyU:()=>this.toggle('family'),KeyJ:()=>this.toggle('journal'),KeyP:()=>{this.onPause();},KeyX:()=>{this.keys.clear();this.act('stop');},KeyR:()=>this.act('rest'),KeyF:()=>this.attack(),Space:()=>this.attack(),Digit1:()=>this.act('eat'),Digit2:()=>this.act('drink'),Escape:()=>{if(this.contextOpen){this.contextOpen=false;}else if(this.desktop.manager.windows.length)this.desktop.close(this.desktop.manager.activeId);else this.toggle('menu');},KeyQ:()=>{
-      const targets=this.targets(),index=targets.findIndex(t=>`${t.kind}:${t.id}`===this.targetKey),target=targets[(index+1)%targets.length];if(target)this.targetKey=`${target.kind}:${target.id}`;
+    const actions={KeyZ:()=>this.onCamera(),KeyC:()=>this.toggle('profile'),KeyV:()=>this.toggle('activity'),KeyT:()=>this.toggle('targets'),KeyB:()=>this.toggle('interactions'),KeyE:()=>this.interact(),KeyI:()=>this.toggle('inventory'),KeyH:()=>this.toggle('body'),KeyU:()=>this.toggle('family'),KeyJ:()=>this.toggle('journal'),KeyP:()=>{this.onPause();},KeyX:()=>{this.keys.clear();this.act('stop');},KeyR:()=>this.act('rest'),KeyF:()=>this.attack(),Space:()=>this.attack(),Digit1:()=>this.act('eat'),Digit2:()=>this.act('drink'),Escape:()=>{if(this.contextOpen){this.contextOpen=false;}else if(this.desktop.manager.windows.length)this.desktop.close(this.desktop.manager.activeId);else this.toggle('menu');},KeyQ:()=>{
+      const targets=this.targets(),index=targets.findIndex(t=>`${t.kind}:${t.id}`===this.targetKey),target=targets[(index+1)%targets.length];if(target)this.selectTarget(target);
     }};
     if(this.contextOpen&&/^Digit[1-9]$/.test(event.code)){
       const target=this.target(),choice=interactionOptions(this.getCity(),target)[Number(event.code.slice(-1))-1];if(choice)this.use(target,choice);return true;
@@ -113,7 +123,7 @@ export class CharacterGameUI {
     if(isPlaying&&!this.choosing)this.bottomBar(ui,city,c);
     if(isPlaying&&!this.choosing)this.launcher(ui);else manager.top=12;
     manager.viewport(ui.width,ui.height);
-    if(this.marker?.visible&&isPlaying){const {x,y}=this.marker;ui.text('Você',x-12,y-16,T.light);}
+
     if(isPlaying){
       const dead=!c||c.entity.destroyed||s.status==='dead';
       if(dead&&this.deathCitizenId!==s.citizenId){this.deathCitizenId=s.citizenId;this.openPanel('death');}
@@ -138,6 +148,7 @@ export class CharacterGameUI {
     bevel(ui.ctx,4,top+4,ui.width-8,23,{inset:true,fill:T.paper});ui.text(ui.fitText(summary,ui.width-22),11,top+9,T.ink);
     for(const [i,speed]of [0.25,0.5,1].entries())ui.button(4+i*61,top+33,58,25,`${speed===1?'1.0':speed}×`,()=>this.onSpeed(speed),{selected:this.getSpeed()===speed});
     ui.button(190,top+33,74,25,this.isPaused()?'Continuar':'Pausar',()=>this.onPause(),{selected:this.isPaused()});
+    if(ui.width>=760)ui.button(580,top+33,170,25,this.getThirdPerson()?'Z · Câmera: 3ª pessoa':'Z · Câmera: isométrica',()=>this.onCamera(),{selected:this.getThirdPerson()});
     ui.switch(compact?4:272,top+(compact?63:33),Math.min(300,ui.width-(compact?8:280)),25,'Rotina automática',s.autonomous===true,enabled=>{
       this.keys.clear();this.act('autonomy',{enabled:s.manualPending?true:enabled});
     });
@@ -227,8 +238,8 @@ export class CharacterGameUI {
     }
     if(panel==='menu'){
       p.button(this.isPaused()?'Continuar o tempo [P]':'Pausar o tempo [P]',()=>this.onPause());
-      p.button('Alternar câmera',()=>this.onCamera());p.button('Voltar à simulação',()=>this.act('simulation'));
-      p.heading('Controles');p.note('WASD / setas: mover\nShift: correr\nE: interagir · Q: alternar alvo\nC: personagem · H: corpo · V: atividade\nT: alvos próximos · B: interações próximas\nI: mochila · U: família · J: diário\n1: comer · 2: beber · R: descansar\nCtrl + clique / F / Espaço: atacar\nX: interromper · P: pausar\nTab: alternar janela · Esc: fechar');
+      p.button(this.getThirdPerson()?'Câmera isométrica [Z]':'Câmera em terceira pessoa [Z]',()=>this.onCamera());p.button('Voltar à simulação',()=>this.act('simulation'));
+      p.heading('Controles');p.note('WASD / setas: mover\nZ: alternar câmera · botão direito + arrastar: girar em 3ª pessoa\nClique: selecionar pessoa ou objeto · chão livre: andar\nShift: correr\nE: interagir · Q: alternar alvo\nC: personagem · H: corpo · V: atividade\nT: alvos próximos · B: interações próximas\nI: mochila · U: família · J: diário\n1: comer · 2: beber · R: descansar\nCtrl + clique / F / Espaço: atacar\nX: interromper · P: pausar\nTab: alternar janela · Esc: fechar');
     }
   }
   inventory(p,city,c,target){

@@ -23,7 +23,7 @@ import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMater
 import {cachedConstructionFootprint,grassExclusionCells,grassExclusionSignature,grassChunkSignatures} from './city_site_footprints.js?v=local-chunk-mask-3';
 import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=typed-roots-2';
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
-import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-glyph-sprites-3';
+import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-player-marker-4';
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import {streetSurfaceTextures} from './street_surface_textures.js?v=ground-realism-2';
 import {groundGrassSurface} from './ground_grass_geometry.js?v=natural-streets-2';
@@ -6005,7 +6005,7 @@ export class RCT3DRenderer {
     const ndcX = ((screenX - rect.left) / w) * 2 - 1;
     const ndcY = -((screenY - rect.top) / h) * 2 + 1;
 
-    this.raycaster.setFromCamera({ x: ndcX, y: ndcY }, this.camera);
+    this.raycaster.setFromCamera({ x: ndcX, y: ndcY }, this.isPerspectiveActive()?this.fpCamera:this.camera);
     const ray = this.raycaster.ray;
     this.selectedCityUnitId = null;
     this.selectedWorldVessel = null;
@@ -6169,7 +6169,7 @@ export class RCT3DRenderer {
     const ndcX = (screenX / this.width) * 2 - 1;
     const ndcY = -(screenY / this.height) * 2 + 1;
 
-    this.raycaster.setFromCamera({ x: ndcX, y: ndcY }, this.camera);
+    this.raycaster.setFromCamera({ x: ndcX, y: ndcY }, this.isPerspectiveActive()?this.fpCamera:this.camera);
     const ray = this.raycaster.ray;
 
     const map = world?.map || this.currentWorld?.map || this.currentMap;
@@ -6177,8 +6177,9 @@ export class RCT3DRenderer {
       // Raymarch through terrain elevation range (y: 8.0 down to -0.5)
       const tMaxY = (8.0 - ray.origin.y) / ray.direction.y;
       const tMinY = (-0.5 - ray.origin.y) / ray.direction.y;
-      const tStart = Math.min(tMaxY, tMinY);
+      const tStart = Math.max(0, Math.min(tMaxY, tMinY));
       const tEnd = Math.max(tMaxY, tMinY);
+      if(tEnd<=tStart)return null;
 
       const steps = 80;
       const dt = (tEnd - tStart) / steps;

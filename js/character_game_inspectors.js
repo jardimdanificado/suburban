@@ -3,14 +3,14 @@ import {controlledCitizen} from './character_game.js';
 import {samePlace} from './character_interactions.js';
 
 const name=c=>c?.entity?.properties?.name||'Não informado';
-const kindLabels={person:'Pessoa',building:'Construção',plant:'Planta',water:'Água',vehicle:'Veículo'};
+const kindLabels={person:'Pessoa',building:'Construção',plant:'Planta',water:'Água',vehicle:'Veículo',object:'Objeto no chão'};
 export const targetKindLabel=target=>kindLabels[target.kind]||'Objeto';
 
 /** Read-only dossiers resolve live records; they never expose management commands. */
-export function drawTargetDossier(p,city,target){
+export function drawTargetDossier(p,city,target,getEntity=()=>null){
   const c=controlledCitizen(city);
-  const record=target.kind==='person'?city.society.citizen(target.id)||city.accounts.get(`citizen:${target.id}`):target.kind==='building'?city.building(target.id):target.kind==='plant'?city.nature.plants.get(target.id):target.kind==='vehicle'?city.vehicles.units.get(target.id):city.water.bodies.find(b=>b.id===target.id);
-  if(!record){p.note('Este alvo não está mais disponível no mundo.');return;}
+  const record=target.kind==='object'?{entity:getEntity(target.id)}:target.kind==='person'?city.society.citizen(target.id)||city.accounts.get(`citizen:${target.id}`):target.kind==='building'?city.building(target.id):target.kind==='plant'?city.nature.plants.get(target.id):target.kind==='vehicle'?city.vehicles.units.get(target.id):city.water.bodies.find(b=>b.id===target.id);
+  if(!record||target.kind==='object'&&!record.entity){p.note('Este alvo não está mais disponível no mundo.');return;}
   const entity=record.entity;
   p.heading(entity?.properties?.name||target.label);p.kv('Tipo',targetKindLabel(target));
   if(entity?.destroyed){p.note(target.kind==='person'?'Esta pessoa morreu.':'Este objeto foi removido.');return;}
@@ -18,6 +18,13 @@ export function drawTargetDossier(p,city,target){
     const point=target.kind==='building'?record.door:target.kind==='plant'?{x:record.x+.5,y:record.y+.5}:entity;
     const visibleFloor=target.kind!=='person'||samePlace(c,record);
     p.kv('Distância atual',visibleFloor?`${Math.hypot(c.entity.x-point.x,c.entity.y-point.y).toFixed(1)} metros`:'Outro ambiente');
+  }
+  if(target.kind==='object'){
+    const props=entity.properties;
+    p.kv('Categoria',props.resourceType||props.species||'Objeto');
+    if(props.item?.quantity!=null)p.kv('Quantidade',props.item.quantity);
+    p.kv('Posição',`${entity.x.toFixed(1)}, ${entity.y.toFixed(1)}`);
+    p.note('Objeto presente no mundo.');return;
   }
   if(target.kind==='person'){
     p.kv('Idade',`${city.society.age(record)} anos`);

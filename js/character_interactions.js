@@ -48,7 +48,7 @@ export function interactionOptions(city,target,c=controlledCitizen(city)){
     const person=city.society.citizen(target.id);if(!person)return [];
     add('talk','Conversar','talk',{citizenId:person.id});
     if(relatives(city,c).includes(person))add('family','Ver familiar','family',{citizenId:person.id});
-  }else{
+  }else if(target.kind==='building'){
     const b=city.building(target.id);if(!b?.active)return [];
     const buildingId=b.id,meal=city.economy.mealOffer(b,c),home=city.housing.home(c);
     if(!c.indoorLocation&&entryRoom(city,b,c))add('enter','Entrar','enter',{buildingId});

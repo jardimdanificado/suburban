@@ -12,13 +12,13 @@ function harness(width=1360,height=850){
  const ctx=new Proxy({}, {get:(o,k)=>k in o?o[k]:k==='measureText'?s=>({width:String(s).length*6}):k==='fillText'?(s)=>text.push(s):()=>{}});
  globalThis.window={innerWidth:width,innerHeight:height,devicePixelRatio:1};
  globalThis.document={createElement:tag=>({tagName:tag.toUpperCase(),style:{},value:'',hidden:false,handlers:{},setAttribute(){},addEventListener(k,v){this.handlers[k]=v;},append(){},remove(){this.removed=true;},focus(){},getContext:()=>ctx})};
- const city=setup({starter:true,population:24}),calls=[],time=new SimulationTime();
- const game=new CharacterGameUI({root:{append(){}},getCity:()=>city,command:async(action,options)=>{calls.push([action,options]);return {ok:city.gameAction(action,options),message:city.lastError};},onEnter:()=>{time.setPaused(false);},onSimulation(){},onMenu(){},onCamera(){},onPause:()=>time.setPaused(!time.paused),isPaused:()=>time.paused,getSpeed:()=>time.speed,onSpeed:speed=>time.setSpeed(speed)});
+ const city=setup({starter:true,population:24}),calls=[],time=new SimulationTime(),entities=[];let thirdPerson=false;
+ const game=new CharacterGameUI({root:{append(){}},getCity:()=>city,command:async(action,options)=>{calls.push([action,options]);return {ok:city.gameAction(action,options),message:city.lastError};},onEnter:()=>{time.setPaused(false);},onSimulation(){},onMenu(){},getEntities:()=>entities,getThirdPerson:()=>thirdPerson,onCamera(){thirdPerson=!thirdPerson;},onPause:()=>time.setPaused(!time.paused),isPaused:()=>time.paused,getSpeed:()=>time.speed,onSpeed:speed=>time.setSpeed(speed)});
  const ui=new ManagementCanvasUI({style:{},clientWidth:width,clientHeight:height,getContext:()=>ctx});
  const draw=()=>{ui.beginFrame();game.draw(ui);};
  const start=async()=>{await game.act('start',{citizenId:city.citizens.find(c=>canControl(city,c)).id});draw();};
  const click=label=>{const r=ui.regions.find(r=>r.label===label);assert(r,`Missing ${label}`);ui.clickAt(r.x+r.w/2,r.y+r.h/2);};
- return {city,game,ui,text,calls,time,draw,start,click,isPaused:()=>time.paused};
+ return {city,game,ui,text,calls,time,entities,draw,start,click,isPaused:()=>time.paused};
 }
 
 test('gameplay panels share the management desktop, retain independent windows and geometry',async()=>{
@@ -109,4 +109,18 @@ test('bottom bar displays real balances, selects exactly three speeds and toggle
  const commands=h.calls.length;h.game.key({code:'KeyD'});h.game.key({code:'KeyD'},false);assert.equal(h.calls.length,commands,'WASD must not send manual commands during autonomy');
  h.click('Rotina automática');await Promise.resolve();h.draw();assert(!h.city.characterGame.autonomous);assert(c.playerControlled);assert(!h.ui.regions.find(r=>r.role==='switch').checked);
  assert.equal(typeof h.game.drawEntry,'undefined');
+});
+
+
+test('gameplay exposes third person and mouse selection of people, buildings and ground objects',async()=>{
+ const h=harness();await h.start();h.game.desktop.closeAll(true);
+ h.click('Z · Câmera: isométrica');h.draw();assert(h.game.getThirdPerson());h.game.key({code:'KeyZ'});assert(!h.game.getThirdPerson());
+ const c=h.city.society.citizen(h.city.characterGame.citizenId),other=h.city.citizens.find(p=>p!==c);c.indoorLocation=null;other.indoorLocation=null;
+ other.entity.x=c.entity.x+20;other.entity.y=c.entity.y;
+ assert(h.game.inspect(other.entity.id));assert.equal(h.game.targetKey,`person:${other.id}`);assert.equal(h.game.selectedEntityId,other.entity.id);assert(h.game.desktop.manager.find(`page:inspect-person-${other.id}`));
+ const b=h.city.buildings[0];assert(h.game.inspect(b.entity.id));assert.equal(h.game.targetKey,`building:${b.id}`);
+ const item={id:999999,x:c.entity.x+.5,y:c.entity.y,properties:{name:'Madeira caída',species:'item',resourceType:'wood',render:{},item:{quantity:2}}};h.entities.push(item);
+ assert(h.game.inspect(item.id));h.draw();assert(h.text.includes('Madeira caída'));assert(h.text.includes('Objeto no chão'));assert(h.text.includes('Quantidade'));
+ assert(h.game.visibleTargets().some(t=>t.entityId===item.id));item.destroyed=true;assert(!h.game.inspect(item.id,false));
+ const count=h.calls.length;assert(!h.game.inspect(-1,false));assert.equal(h.calls.length,count);
 });

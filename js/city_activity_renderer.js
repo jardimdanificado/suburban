@@ -25,9 +25,13 @@ function favoriteGlyphCanvas(glyph,color){
 export function syncCityFavoriteMarkers(renderer,THREE,city,world){
   const sprites=renderer.cityFavoriteSprites??=new Map(),materials=renderer.cityFavoriteMaterials??=new Map(),active=new Set();
   if(renderer.showFavoriteBadges===false||!city){for(const sprite of sprites.values())sprite.visible=false;return;}
-  for(const [rawId,pref]of Object.entries(renderer.cityFavorites?.people||{})){
+  const preferences=new Map(Object.entries(renderer.cityFavorites?.people||{}));
+  const playedId=city.characterGame?.mode==='play'?city.characterGame.citizenId:null;
+  if(playedId!=null)preferences.set(String(playedId),{icon:42,color:'#ffd84d'});
+  for(const [rawId,pref]of preferences){
     const citizen=city.society.citizen(Number(rawId)),entity=citizen?.entity;
-    if(!entity||entity.destroyed||citizen.indoorLocation||citizen.ridingVehicleId)continue;
+    const played=Number(rawId)===playedId;
+    if(!entity||entity.destroyed||!played&&(citizen.indoorLocation||citizen.ridingVehicleId))continue;
     if(Number.isFinite(renderer.renderedMinTx)&&(entity.x<renderer.renderedMinTx-2||entity.x>renderer.renderedMaxTx+2||entity.y<renderer.renderedMinTy-2||entity.y>renderer.renderedMaxTy+2))continue;
     if(renderer.isFirstPersonActive?.()&&Number(entity.id)===Number(renderer.fpEntityId))continue;
     const glyph=Number.isInteger(pref.icon)&&pref.icon>=0&&pref.icon<256?pref.icon:42,color=/^#[\da-f]{6}$/i.test(pref.color||'')?pref.color:'#ffd84d',key=`${glyph}:${color}`;
@@ -35,7 +39,7 @@ export function syncCityFavoriteMarkers(renderer,THREE,city,world){
     if(!material){const texture=new THREE.CanvasTexture(favoriteGlyphCanvas(glyph,color));texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;material=new THREE.SpriteMaterial({map:texture,transparent:true,alphaTest:.05,depthTest:true,depthWrite:false});materials.set(key,material);}
     let sprite=sprites.get(entity.id);if(!sprite){sprite=new THREE.Sprite(material);sprite.renderOrder=36;renderer.scene.add(sprite);sprites.set(entity.id,sprite);}
     sprite.visible=true;sprite.material=material;
-    const offset=renderer._citizenRenderOffsets?.get(entity.id),x=entity.x+(offset?.x||0),z=entity.y+(offset?.y||0),surface=surfaceElevation(world,x,z),zoom=renderer.zoom||1,size=Math.max(.85,Math.min(2,.4/zoom));
+    const offset=renderer._citizenRenderOffsets?.get(entity.id),location=citizen.indoorLocation,point=location?.position||citizen._renderIndoorPosition,x=(point?.x??entity.x)+(offset?.x||0),z=(point?.y??entity.y)+(offset?.y||0),building=location&&city.building(location.buildingId),surface=(location&&building?building.terrain?.base??surfaceElevation(world,x,z):surfaceElevation(world,x,z))+(point?.z||0),zoom=renderer.zoom||1,size=Math.max(.85,Math.min(2,.4/zoom));
     sprite.scale.set(size,size,1);sprite.position.set(x,surface+2.05,z);active.add(entity.id);
   }
   for(const [id,sprite]of sprites)if(!active.has(id))sprite.visible=false;

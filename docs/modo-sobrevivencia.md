@@ -55,3 +55,9 @@ Agredir uma pessoa exige proximidade. O combate usa ferimentos, reação, testem
 A aba **Família** permite assumir um familiar adulto disponível. A pessoa anterior volta à IA. Cada familiar mantém patrimônio, necessidades e relações. Se o personagem morrer, escolha um familiar sobrevivente ou retorne à simulação.
 
 **Simulação** devolve a autonomia ao personagem e restaura a interface de gestão. O estado de controle acompanha os snapshots existentes da cidade.
+
+### Câmera e seleção no mundo
+
+Use Z ou o botão da barra inferior para alternar entre câmera isométrica e terceira pessoa. Em terceira pessoa, segure o botão direito e arraste para girar a câmera; WASD acompanha a direção da câmera. O personagem jogável recebe uma estrela dourada sobre a cabeça, usando o mesmo marcador dos favoritos.
+
+Clique em pessoas, edifícios, plantas, veículos ou objetos do chão para selecionar e abrir a ficha. As ações continuam limitadas ao alcance do personagem. Clicar no chão livre dá uma ordem de caminhada. Objetos genéricos do chão mostram informações; a seleção não adiciona uma ação de coleta.
