@@ -1,13 +1,13 @@
 import {chooseBuildingSite} from './city_terrain.js?v=entrance-retaining-clearance-1';
 const mines=new Set(['quarry','iron_mine','bauxite_mine']);
-function dimensions(lot,type,vertical=false){
+function dimensions(lot,type,vertical=false,compact=false){
   if(type==='farm'&&!vertical||mines.has(type))return [[lot.width,lot.depth]];
-  const size=['super_popular_housing','popular_housing','popular_luxury_housing'].includes(type)?3:4,options=[[Math.min(size,lot.width),Math.min(size,lot.depth)],[Math.min(3,lot.width),Math.min(3,lot.depth)],[Math.min(2,lot.width),Math.min(2,lot.depth)]];
+  const size=compact?3:['super_popular_housing','popular_housing','popular_luxury_housing'].includes(type)?3:4,options=[[Math.min(size,lot.width),Math.min(size,lot.depth)],[Math.min(3,lot.width),Math.min(3,lot.depth)],[Math.min(2,lot.width),Math.min(2,lot.depth)]];
   return options.filter(([w,d],i)=>w*d>=4&&options.findIndex(([x,y])=>x===w&&y===d)===i);
 }
 function compatible(dev,lot,type,vertical=false){return !lot.landingReserved&&!lot.buildingId&&!lot.projectId&&lot.width*lot.depth>=4&&(type==='farm'&&!vertical?dev.isFarmPlot(lot):mines.has(type)?lot.type==='quarry':!['farm','quarry'].includes(lot.type));}
 function fit(dev,lot,type,vertical=false){
-  for(const [width,depth]of dimensions(lot,type,vertical)){
+  for(const [width,depth]of dimensions(lot,type,vertical,dev.compactPlanning)){
     if(dev.projects.some(project=>project.service==='road'&&!project.cancelled&&project.status!=='completed'&&project.route?.some(point=>point.x>=lot.x&&point.x<lot.x+width&&point.y>=lot.y&&point.y<lot.y+depth)))continue;
     for(let rotation=0;rotation<4;rotation++){
     const site=chooseBuildingSite(dev.city,lot.x,lot.y,width,depth,{plotId:lot.id,type:vertical?'building':type,rotation});if(!site.error)return{lot,width,depth,rotation:site.rotation,door:site.door,purchasePrice:lot.ownerId==='treasury'?0:lot.price};
@@ -21,7 +21,9 @@ function spiral(index,cx,cy){
 export function findPublicBuildingSite(dev,type,{allowPurchase=true,kind=null}={}){
   const city=dev.city;if(!city.buildingTypes[type])return null;
   const vertical=type==='farm'&&kind==='building',category=type==='farm'&&!vertical?'farm':mines.has(type)?'quarry':'urban',report={type,category,checked:0,created:false,reason:''};dev.publicLandReport=report;
+  const centerPoint=city.world.spawnCenter||city.spawn,distance=lot=>Math.hypot(lot.x-centerPoint.x,lot.y-centerPoint.y);
   const vacant=dev.plots.filter(lot=>compatible(dev,lot,type,vertical));
+  if(dev.compactPlanning)vacant.sort((a,b)=>distance(a)-distance(b)||a.width*a.depth-b.width*b.depth);
   for(const lot of vacant.filter(lot=>lot.ownerId==='treasury')){report.checked++;const site=fit(dev,lot,type,vertical);if(site){report.reason='Terreno público validado para a implantação.';return site;}}
   // Buying land is negotiated at its advertised price; occupied and unlisted property is excluded.
   if(allowPurchase)for(const lot of vacant.filter(lot=>lot.ownerId!=='treasury'&&lot.forSale&&Number.isSafeInteger(lot.price)&&lot.price>0&&city.accounts.has(lot.ownerId)).sort((a,b)=>a.price-b.price)){
@@ -29,7 +31,7 @@ export function findPublicBuildingSite(dev,type,{allowPurchase=true,kind=null}={
   }
   const states=dev.publicLandSearches??={},state=states[category]??={cursor:0,frontierCursor:0},revision=`${city.structureRevision}:${city.world.revision}:${city.world.parkingRevision||0}:${dev.plots.length}:${city.occupied.size}`;
   if((state.nextAt>city.minute||state.exhausted)&&state.revision===revision){report.reason=state.reason||'Procurando novo terreno acessível fora do catálogo atual.';return null;}state.nextAt=city.minute+60;if(state.revision!==revision)state.exhausted=false;state.revision=revision;
-  const sizes=category==='farm'?[[10,10],[8,8]]:category==='quarry'?[[3,3]]:['super_popular_housing','popular_housing','popular_luxury_housing'].includes(type)?[[3,3],[2,2]]:[[4,4],[3,3],[2,2]],center=city.world.spawnCenter||city.spawn;
+  const sizes=category==='urban'&&dev.compactPlanning?[[3,3],[2,3],[3,2],[2,2]]:category==='farm'?[[10,10],[8,8]]:category==='quarry'?[[3,3]]:['super_popular_housing','popular_housing','popular_luxury_housing'].includes(type)?[[3,3],[2,2]]:[[4,4],[3,3],[2,2]],center=city.world.spawnCenter||city.spawn;
   let attempts=0;
   const attempt=(x,y)=>{
     if(x<1||y<1||x>=city.world.width-2||y>=city.world.height-2)return null;
@@ -37,8 +39,8 @@ export function findPublicBuildingSite(dev,type,{allowPurchase=true,kind=null}={
       const lot=dev.createPlot(x,y,width,depth,{type:category==='urban'?null:category});if(!lot)continue;const site=fit(dev,lot,type,vertical);if(site){report.created=true;report.reason='Novo terreno público cadastrado com acesso validado.';city.log(`Novo terreno ${lot.id} cadastrado para ${city.buildingTypes[type].label}.`,'land',[],{kind:'public-land-planned',plotId:lot.id,buildingType:type,x,y});return site;}dev.removePlot(lot);
     }return null;
   };
-  const anchors=dev.plots.filter(lot=>lot.buildingId||lot.projectId).sort((a,b)=>Math.hypot(b.x-center.x,b.y-center.y)-Math.hypot(a.x-center.x,a.y-center.y)).slice(0,24),frontiers=[];
-  for(const lot of anchors){const w=sizes[0][0],d=sizes[0][1];for(const [x,y]of [[lot.x+lot.width+2,lot.y],[lot.x-w-2,lot.y],[lot.x,lot.y+lot.depth+2],[lot.x,lot.y-d-2],[lot.x+lot.width+2,lot.y+lot.depth+2],[lot.x-w-2,lot.y-d-2],[lot.x+lot.width+2,lot.y-d-2],[lot.x-w-2,lot.y+lot.depth+2]])frontiers.push({x,y});}
+  const anchors=dev.plots.filter(lot=>lot.buildingId||lot.projectId).sort((a,b)=>(dev.compactPlanning?1:-1)*(Math.hypot(a.x-center.x,a.y-center.y)-Math.hypot(b.x-center.x,b.y-center.y))).slice(0,24),frontiers=[];
+  for(const lot of anchors){const w=sizes[0][0],d=sizes[0][1],gap=dev.compactPlanning?1:2;for(const [x,y]of [[lot.x+lot.width+gap,lot.y],[lot.x-w-gap,lot.y],[lot.x,lot.y+lot.depth+gap],[lot.x,lot.y-d-gap],[lot.x+lot.width+gap,lot.y+lot.depth+gap],[lot.x-w-gap,lot.y-d-gap],[lot.x+lot.width+gap,lot.y-d-gap],[lot.x-w-gap,lot.y+lot.depth+gap]])frontiers.push({x,y});}
   for(let i=0;i<Math.min(64,frontiers.length);i++){const point=frontiers[(state.frontierCursor||0)%frontiers.length];state.frontierCursor=(state.frontierCursor||0)+1;attempts++;const site=attempt(point.x,point.y);if(site)return site;}
   // Unlike sparse angular rings, this fallback eventually visits every integer origin on the map.
   const cx=Math.floor(center.x),cy=Math.floor(center.y),radius=Math.max(cx,cy,city.world.width-cx,city.world.height-cy),total=(2*radius+1)**2;

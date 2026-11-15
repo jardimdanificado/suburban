@@ -91,3 +91,13 @@ test('healthy employees do not leave their shift just to top up pocket supplies'
  assert.equal(city.supplies.route(worker),false);assert.equal(worker.task,null);
  worker.needs.water=20;assert.equal(city.supplies.route(worker),true);assert.equal(worker.task,'supplies');
 });
+
+test('compact production selects a financed vertical farm even with fertile land available',()=>{
+ const city=setup({starter:true,funded:true,population:24});
+ assert(city.development.plots.some(p=>city.development.isFarmPlot(p)&&!p.buildingId&&!p.projectId));
+ city.economy.demands=[{type:'farm',crop:'trigo',score:120,reason:'Hortaliças locais'}];
+ assert(investProductionPlan(city.economy));
+ const project=city.development.projects.find(p=>p.type==='farm'&&p.crop==='trigo');
+ assert(project);assert.equal(project.kind,'building');assert.equal(project.floors,3);
+ assert(project.materialAccountId);assert.equal(project.status,'materials');
+});

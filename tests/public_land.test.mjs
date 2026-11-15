@@ -51,3 +51,20 @@ test('housing promises can expand municipal homes vertically when new land is un
 test('new public buildings avoid the footprint of a contracted road before it is paved',()=>{
   const city=setup({starter:true,population:48});hideEmptyLots(city);const blocked=lot(city),clear=lot(city);city.development.projects.push({id:'planned-road',service:'road',status:'materials',route:[{x:blocked.x+.5,y:blocked.y+.5}]});const site=city.development.publicBuildingSite('clinic');assert.equal(site.lot.id,clear.id);
 });
+
+test('compact catalogue registers small accessible lots without overlapping neighbours',()=>{
+ const city=setup({starter:true,funded:true,population:24}),dev=city.development;
+ const lots=dev.plots.filter(p=>!p.buildingId&&!p.projectId&&!['farm','quarry'].includes(p.type));
+ assert(lots.length>0);
+ for(const p of lots){assert(p.width<=3&&p.depth<=3);assert(p.width*p.depth>=4);assert.equal(dev.overlaps(p.x,p.y,p.width,p.depth,p.id),false);}
+ const site=dev.publicBuildingSite('clinic');assert(site);assert(site.width<=3&&site.depth<=3);
+ assert.equal(chooseBuildingSite(city,site.lot.x,site.lot.y,site.width,site.depth,{plotId:site.lot.id,type:'clinic',rotation:site.rotation}).error,undefined);
+});
+
+test('council farm works use vertical construction in compact cities',()=>{
+ const city=setup({starter:true,funded:true,population:48}),council=city.politics.council;
+ const bill=council.propose(council.people()[0],'build',{buildingType:'farm',crop:'alface'},'Horta compacta');
+ assert(bill);council.execute(bill);
+ const project=city.development.projects.find(p=>p.id===bill.projectId);
+ assert(project,bill.result);assert.equal(project.kind,'building');assert.equal(project.floors,3);assert(project.stone>0);
+});

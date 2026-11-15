@@ -161,7 +161,7 @@ export function investProductionPlan(economy){
   const batchLimit=1,assignedManagers=new Set();let opened=0;
   const lotPools=new Map(),lotsFor=row=>{
     const ruralAvailable=row.type==='farm'&&city.development.plots.some(p=>p.ownerId==='treasury'&&!p.buildingId&&!p.projectId&&city.development.isFarmPlot(p));
-    const kind=row.type==='farm'?(canFarmVertically(row.crop)&&!ruralAvailable?'vertical-farm':'farm'):['iron_mine','bauxite_mine'].includes(row.type)?'quarry':'urban';
+    const kind=row.type==='farm'?(canFarmVertically(row.crop)&&(city.development.compactPlanning&&!pipelineFull||!ruralAvailable)?'vertical-farm':'farm'):['iron_mine','bauxite_mine'].includes(row.type)?'quarry':'urban';
     let lots=lotPools.get(kind);if(lots)return lots;
     lots=city.development.plots.filter(p=>p.ownerId==='treasury'&&!p.buildingId&&!p.projectId&&(kind==='farm'?city.development.isFarmPlot(p):p.width>=2&&p.depth>=2&&p.width<=8&&p.depth<=8&&(kind==='quarry'?p.type==='quarry':!['farm','quarry'].includes(p.type)))).sort((a,b)=>a.price-b.price||a.id-b.id).slice(0,4);
     lotPools.set(kind,lots);return lots;

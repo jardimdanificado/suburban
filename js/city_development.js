@@ -20,6 +20,7 @@ const FOUNDING_ESSENTIAL_WORKS = Object.freeze([
 export const DEVELOPMENT_RULES = { landPerCell: 4000, stonePerCell: 2, laborPerCell: 3, constructionFeePerCell: 12000, roadStonePerTile: 1, roadLaborPerTile: 2, roadFeePerTile: 8000, municipalMultiplier: 1.5, wearInterval: 30 * 1440, repairThreshold: 60 };
 export class CityDevelopment {
   constructor(city) { this.city = city; this.plots = []; this.projects = []; this.nextPlotId = 1; this.nextProjectId = 1; this.plotOverlapBuckets = null; }
+  get compactPlanning(){return Math.max(this.city.world.width,this.city.world.height)<256;}
   publicBuildingSite(type,options={}){return findPublicBuildingSite(this,type,options);}
   acquirePublicSite(site){return acquirePublicBuildingSite(this,site);}
   clientCitizen(accountId) { return accountId === 'treasury' ? this.city.economy.citizen(this.city.economy.mayorId) : this.ownerCitizen(accountId); }
@@ -344,7 +345,7 @@ export class CityDevelopment {
   }
   ensurePlots(count = 18) {
     const available = () => this.plots.filter(p => !p.landingReserved && !p.buildingId && !p.projectId && p.ownerId === 'treasury');
-    const ruralTarget = 3;
+    const ruralTarget = this.compactPlanning ? 1 : 3;
     const supply = () => {
       const plots = available();
       return { rural: plots.filter(p => this.isFarmPlot(p)).length, urban: plots.filter(p => !['farm','quarry'].includes(p.type) && p.width <= 8 && p.depth <= 8).length };
@@ -357,8 +358,30 @@ export class CityDevelopment {
     const budget = this.hasSearchedPlots ? 24 : 96;
     this.hasSearchedPlots = true;
     const ruralSizes = [[10, 10], [8, 12], [12, 12], [16, 12], [8, 8]];
-    const urbanSizes = [[4, 5], [6, 6], [5, 7], [4, 4]];
+    const urbanSizes = this.compactPlanning ? [[3,3],[2,3],[3,2],[2,2]] : [[4, 5], [6, 6], [5, 7], [4, 4]];
     const center = this.city.world.spawnCenter;
+    if(this.compactPlanning){
+      // Keep one outdoor parcel for orchards and crops needed during a full construction queue.
+      if(stock.rural<ruralTarget)for(let i=0;i<32;i++){
+        const angle=i*Math.PI/16,x=Math.floor(center.x+Math.cos(angle)*20),y=Math.floor(center.y+Math.sin(angle)*20);
+        if(this.createPlot(x,y,8,8,{type:'farm'})){stock=supply();break;}
+      }
+      // Scan every origin from the centre outward so small gaps stay usable.
+      const radius=Math.max(center.x,center.y,this.city.world.width-center.x,this.city.world.height-center.y),total=(2*Math.ceil(radius)+1)**2;
+      for(let i=0;i<budget*4;i++){
+        const index=(this.compactPlotCursor||0)%total;this.compactPlotCursor=index+1;
+        const r=Math.ceil((Math.sqrt(index+1)-1)/2),side=r*2,offset=index-(2*r-1)**2,edge=Math.floor(offset/side),n=offset%side;
+        const point=!index?[0,0]:edge===0?[-r+n,-r]:edge===1?[r,-r+n]:edge===2?[r-n,r]:[-r,r-n];
+        const x=Math.floor(center.x)+point[0],y=Math.floor(center.y)+point[1];
+        if(x<1||y<1||x>=this.city.world.width-2||y>=this.city.world.height-2)continue;
+        let created=null;
+        if(stock.urban<count)for(const [w,d]of urbanSizes){created=this.createPlot(x,y,w,d);if(created)break;}
+        if(!created&&stock.rural<ruralTarget)created=this.createPlot(x,y,8,8,{type:'farm'});
+        if(created)stock=supply();
+        if(stock.urban>=count&&stock.rural>=ruralTarget)return;
+      }
+      return;
+    }
     const maxRadius = Math.max(this.city.world.width, this.city.world.height) * .65;
     const radii = [];
     for (let r = 8; r < maxRadius; r += 6) { radii.push(r); if (r + 30 < maxRadius) radii.push(r + 30); }

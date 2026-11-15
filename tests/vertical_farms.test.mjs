@@ -73,3 +73,30 @@ test('vertical beds, crop progress and ownership survive state serialization',()
  const saved=restored.building(farm.id);assert.equal(saved.constructionKind,'building');assert.equal(saved.floors,3);assert.equal(saved.crop,'alface');assert.equal(saved.fields[0].plantedAt,123);assert.equal(saved.fields[0].labor,8);assert.equal(saved.ownerId,f.owner.id);
  for(const field of saved.fields)assert.ok(field.unitIds.every(id=>restored.units.get(id)?.buildingId===farm.id));
 });
+
+test('compact government automatically builds vertical crops but keeps trees outdoors',()=>{
+ const city=setup({starter:true,funded:true,population:24});
+ assert.equal(city.development.compactPlanning,true);
+ const project=city.politics.startPublicWork('farm','alface',{observer:true});
+ assert.ok(project,city.lastError);assert.equal(project.kind,'building');assert.equal(project.floors,3);
+ assert.ok(project.width<=3&&project.depth<=3);
+ const orchard=city.politics.startPublicWork('farm','maca',{observer:true});
+ assert.ok(orchard,city.lastError);assert.equal(orchard.kind,'open-air');
+ const field=city.politics.startPublicWork('farm','trigo',{observer:true,vertical:false});
+ assert.ok(field,city.lastError);assert.equal(field.kind,'open-air');
+});
+
+test('compact planning stops at 256 and preserves rectangular large maps',()=>{
+ const city=setup({starter:true,funded:true,population:16}),dev=city.development;
+ assert.equal(dev.compactPlanning,true);
+ city.world.width=255;city.world.height=255;assert.equal(dev.compactPlanning,true);
+ city.world.width=256;assert.equal(dev.compactPlanning,false);
+ city.world.width=128;city.world.height=256;assert.equal(dev.compactPlanning,false);
+});
+
+test('private founders prefer vertical farming in compact cities with rural plots available',()=>{
+ const city=setup({starter:true,funded:true,population:24}),owner=city.citizens.find(c=>c.fixtureInvestor);
+ assert(city.development.plots.some(p=>city.development.isFarmPlot(p)&&!p.buildingId&&!p.projectId));
+ const project=city.economy.foundBusiness(owner.id,'farm','alface');
+ assert(project,city.lastError);assert.equal(project.kind,'building');assert.equal(project.floors,3);
+});

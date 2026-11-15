@@ -537,7 +537,7 @@ export class CityEconomy {
     let boughtLot=false;
     let lot = city.development.plots.find(p => p.ownerId === founder.accountId && !p.buildingId && !p.projectId && fertile(p));
     if (!lot) {
-      const available = city.development.plots.filter(p => p.ownerId === 'treasury' && p.forSale && !p.buildingId && !p.projectId && fertile(p)).sort((a,b)=>type==='farm'?Number(city.development.isFarmPlot(b))-Number(city.development.isFarmPlot(a)):0)[0];
+      const available = city.development.plots.filter(p => p.ownerId === 'treasury' && p.forSale && !p.buildingId && !p.projectId && fertile(p)).sort((a,b)=>type==='farm'?(city.development.compactPlanning&&canFarmVertically(crop)?-1:1)*(Number(city.development.isFarmPlot(b))-Number(city.development.isFarmPlot(a))):0)[0];
       if (!available || founder.balance < available.price + this.quote(type) + this.city.currency.price(15000)) return null;
       lot = city.development.buyPlot(founder.accountId, available.id);boughtLot=!!lot;
     }

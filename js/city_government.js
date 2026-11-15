@@ -128,9 +128,9 @@ export class CityGovernment extends CityPolitics {
   applyPlayerDirective(type,payload={}){return this.executePlayerAction('divineGovernment',null,{type,payload});}
   requestWorksBudget(value){return this.applyPlayerDirective('worksBudget',{value});}
   requestWorksTransfer(value){return this.applyPlayerDirective('worksTransfer',{value});}
-  startPublicWork(type,crop='milho',{observer=false,vertical=false,floors:requestedFloors=null}={}){
+  startPublicWork(type,crop='milho',{observer=false,vertical=null,floors:requestedFloors=null}={}){
     const city=this.city,mayor=city.society.citizen(city.economy.mayorId);if(!mayor||mayor.entity.destroyed)return city.fail('Não há prefeito em exercício.');if(!city.buildingTypes[type]||['townhall','mint','council_chamber'].includes(type))return city.fail('Tipo de obra indisponível para contratação direta.');
-    vertical=type==='farm'&&vertical;if(vertical&&(!canFarmVertically(crop)||requestedFloors!==null&&(!Number.isInteger(requestedFloors)||requestedFloors<2||requestedFloors>8)))return city.fail('Fazenda vertical exige cultura sem árvores e entre dois e oito andares.');
+    vertical=type==='farm'&&(vertical??(city.development.compactPlanning&&canFarmVertically(crop)));if(vertical&&(!canFarmVertically(crop)||requestedFloors!==null&&(!Number.isInteger(requestedFloors)||requestedFloors<2||requestedFloors>8)))return city.fail('Fazenda vertical exige cultura sem árvores e entre dois e oito andares.');
     const farm=type==='farm',mine=['quarry','iron_mine'].includes(type),site=city.development.publicBuildingSite(type,vertical?{kind:'building'}:{});
     if(!site)return city.fail(city.development.publicLandReport?.reason||'Procurando terreno público acessível e compatível.');
     const lot=site.lot,{width,depth}=site,floors=vertical?(requestedFloors||3):['super_popular_housing','popular_housing','popular_luxury_housing'].includes(type)?4:1,builder=city.development.selectBuilder('treasury',site.door);if(!builder&&(!farm||vertical)&&!mine)return city.fail('Aguardando construtora disponível.');
