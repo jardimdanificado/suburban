@@ -233,3 +233,11 @@ test('seated bench occupants keep their pose and facing during delayed position 
  c.path=[{x:2,y:0}];model.begin(.05,1);model.add(e,2);model.end();
  assert([...model.batches.entries()].some(([key,b])=>key.startsWith('run:')&&b.count),'an active route still takes precedence');
 });
+
+test('a confirmed bench seat keeps bent legs when an earlier delivery is still mirrored',async()=>{
+ const {model}=await models(),e=person(92),c=e.properties.citizen;
+ c.task='work-wait';c.deliveryId=12;c.path=[];c.seated=true;
+ c.furnitureUse={id:'bench:1:0',type:'bench',seated:true,posePoint:{x:2,y:3,z:0}};
+ model.begin(.05,1);model.add(e,0);model.end();
+ assert([...model.batches.entries()].some(([key,b])=>key.startsWith('sentado_no_banco:')&&b.count),'a stationary seated delivery worker must use bent legs, not the running body at the seat anchor');
+});

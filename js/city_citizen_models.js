@@ -446,8 +446,10 @@ export class CityCitizenModels {
     if(moved)advanceCitizenGait(motion,this.animationPaused);
     // Keep the travel pose for the full route, including frames between
     // simulation movement updates. A sit task can be assigned before arrival.
+    // Once a seat is confirmed, stale delivery/mobility flags must not turn
+    // the seated body back into the walking one at the seat anchor.
     const settledFurniture=!!c.furnitureUse?.seated||c.furnitureUse?.pose==='lying';
-    const traveling=moved&&!settledFurniture||citizenHasPath(c)||!!c.indoorLocation?.path?.length||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding';
+    const traveling=citizenHasPath(c)||!!c.indoorLocation?.path?.length||!settledFurniture&&(moved||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding');
     const sleeping=citizenIsSleeping(c),lying=!sleeping&&!traveling&&c.furnitureUse?.pose==='lying',clip=citizenAnimation(c,traveling),actionState=clip==='murro'||clip==='chute'||clip==='derrotado',actionToken=c.combatAnimation?.sequence??c.combatReaction?.sequence??c.unconsciousUntil??null;
     // The seated OBJ pose puts the legs in the same vertical bands used by
     // the standing-body fat mask. Cap its morph so those vertices do not
