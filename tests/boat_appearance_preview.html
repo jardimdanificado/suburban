@@ -1,6 +1,6 @@
 <!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Barcos: materiais e bandeiras</title>
 <style>body{margin:0;background:#aac6ce;font:14px system-ui}header{position:absolute;top:14px;left:18px;color:#203a43}canvas{display:block}</style>
-<header>Madeira, metal e tecido procedurais · Convés plano · Bandeira municipal e partidária menor<br><span id="status">Carregando…</span></header>
+<header>Madeira, metal e tecido procedurais · Convés plano · Velas com bandeiras da cidade e do partido<br><button id="motion">Parar barcos</button> <button id="party">Retirar filiação</button><br><span id="status">Carregando…</span></header>
 <script type="module">
 import * as THREE from 'https://esm.sh/three@0.160.0';
 import {syncCityWatercraft} from '../js/city_watercraft_renderer.js';
@@ -15,9 +15,12 @@ try{
  const boats=['canoe','launch','ferry','cargo'].map((boatClass,i)=>({id:i+1,boatClass,ownerAccountId:owner.accountId,x:(i-1.5)*3.8,y:0,angle:.2,active:true}));
  const world={width:32,height:32,getTile:()=>2};
  const city={id:'preview',world,worldPort:null,buildings:[],citizens:[owner],municipalIdentity:{flag:flag('#163d7b','#f5c64a','cross')},politics:{party:()=>({active:true,flag:flag('#b52c41','#fff3ce','diagonal')})},vehicles:{units:new Map(boats.map(b=>[b.id,b]))}};
+ let moving=true;
+ document.querySelector('#motion').onclick=event=>{moving=!moving;event.target.textContent=moving?'Parar barcos':'Mover barcos';};
+ document.querySelector('#party').onclick=event=>{owner.political.partyId=owner.political.partyId==null?1:null;event.target.textContent=owner.political.partyId==null?'Filiar proprietário':'Retirar filiação';};
  const view={scene,waterTime:0,foliageAnimationTick:25};
  const camera=new THREE.PerspectiveCamera(36,innerWidth/innerHeight,.1,100);camera.position.set(7,10,15);camera.lookAt(0,.3,0);
- function draw(time){view.foliageAnimationTick=time/10;syncCityWatercraft(view,THREE,city,world);renderer.render(scene,camera);status.textContent=`${boats.length} classes · shaders: ${shaderErrors===0?'OK':'ERRO'}`;window.boatPreview={view,city,shaderErrors};requestAnimationFrame(draw);}
+ function draw(time){if(moving)boats.forEach((boat,i)=>boat.x=(i-1.5)*3.8+Math.sin(time/1000)*.3);view.foliageAnimationTick=time/10;syncCityWatercraft(view,THREE,city,world);renderer.render(scene,camera);status.textContent=`${boats.length} classes · shaders: ${shaderErrors===0?'OK':'ERRO'}`;window.boatPreview={view,city,shaderErrors,renderer,camera};requestAnimationFrame(draw);}
  requestAnimationFrame(draw);
 }catch(error){status.textContent=error.stack;throw error;}
 </script></html>

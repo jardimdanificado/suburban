@@ -47,3 +47,27 @@ test('render interpolation also respects tree and bench collision',()=>{
  sampleCitizenMotion(city.world,sample,1000,false);
  assert.equal(sample.entity.x,3.5);assert.equal(sample.entity.y,4.5);
 });
+
+test('a citizen walks to a collidable bench, sits, and publishes the seat without a full snapshot',async()=>{
+ const {packBenchSeats,applyBenchSeats}=await import('../js/bench_seat_motion.js');
+ const {citizenAnimation}=await import('../js/city_citizen_models.js');
+ const city=setup({starter:true,population:48});city.minute=720;city.syncClock();
+ const c=city.citizens.find(c=>!city.politics.officeHolder(c)&&!c.businessIds.length);
+ city.economy.leaveJob(c);c.indoorLocation=null;c.path=[];c.conversation=null;
+ for(const need in c.needs)c.needs[need]=95;c.needs.leisure=20;
+ city.furniture.routeBeach=()=>false;
+ const bench=city.furniture.benches[0];c.entity.x=bench.x;c.entity.y=bench.y+1;
+ city.minute+=((c.id-city.minute)%5+5)%5;
+ assert(city.furniture.routeLeisure(c));assert(c.path.length);
+ const mirror={id:c.id,task:'walk',path:[],seated:false};
+ const observed={citizens:[mirror],society:{citizen:id=>id===mirror.id?mirror:null}};
+ for(let frame=0;frame<300&&!c.seated;frame++){
+  city.update(1/60);applyBenchSeats(observed,packBenchSeats([c]));
+ }
+ assert(c.seated,'real movement must finish in the seated state without teleporting the test resident');
+ assert.equal(citizenAnimation(mirror,false),'sentado_no_banco');
+ assert.deepEqual(mirror.furnitureUse.posePoint,c.furnitureUse.posePoint);
+ assert.equal(city.walkable(Math.floor(bench.x),Math.floor(bench.y)),false);
+ city.furniture.release(c);applyBenchSeats(observed,packBenchSeats([c]));
+ assert.equal(citizenAnimation(mirror,false),'idle');
+});

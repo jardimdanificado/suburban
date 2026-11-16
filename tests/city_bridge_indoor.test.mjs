@@ -35,3 +35,17 @@ test('motion recovers at the authoritative land position after a blocked interpo
  assert.equal(sampleCitizenMotion(world,sample,1600),false);assert.equal(entity.x,.5);
  assert.equal(sampleCitizenMotion(world,sample,2200),true);assert.equal(entity.x,2.5);
 });
+
+test('compact motion shows and clears a bench seat between full snapshots',async()=>{
+ const {citizenAnimation}=await import('../js/city_citizen_models.js');
+ const c={id:4,task:'walk',path:[],needs:{},entity:{x:2.5,y:3.5}},sample={id:4,citizen:c,entity:c.entity,from:{x:2.5,y:3.5},to:{x:2.5,y:3.5}};
+ const city={world:{width:8,height:8,getTile:()=>TILE_FLOOR},citizens:[c],society:{citizen:id=>id===4?c:null}},bridge=Object.create(CitySimulationBridge.prototype);
+ Object.assign(bridge,{city,time:{paused:false},motionSamples:new Map([[4,sample]]),motion:new Map(),interpolate(){},applyVehiclePositions(){}});
+ const use={id:'bench:9:0',type:'bench',seated:true,posePoint:{x:2.5,y:2.78,z:.1}};
+ bridge.receiveMotion({positions:new Float64Array([4,2.5,3.5,0]),benchSeats:[{id:4,use,facing:{x:2.5,y:4.5}}]});
+ assert.equal(citizenAnimation(c,false),'sentado_no_banco');assert.deepEqual(c.furnitureUse.posePoint,use.posePoint);
+ c.task='sit';
+ bridge.receiveMotion({positions:new Float64Array([4,2.5,3.5,0]),benchSeats:[]});
+ assert.equal(citizenAnimation(c,false),'idle','the stale task from the last full snapshot must not keep a departed person seated');
+ assert.equal(c.seated,false);assert.equal(c.furnitureUse,null);
+});

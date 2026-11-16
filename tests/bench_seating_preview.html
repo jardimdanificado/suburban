@@ -5,19 +5,39 @@
 import * as THREE from 'https://esm.sh/three@0.160.0';
 import {CityCitizenModels} from '../js/city_citizen_models.js';
 import {furnitureModel} from '../js/city_furniture_models.js';
+import {setup} from './helpers/city.mjs';
+import {packBenchSeats,applyBenchSeats} from '../js/bench_seat_motion.js';
+import {surfaceElevation} from '../js/city_terrain.js';
 const status=document.querySelector('#status');
 try{
  const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);document.body.append(renderer.domElement);
  const scene=new THREE.Scene();scene.background=new THREE.Color(0xb4c3b2);scene.add(new THREE.HemisphereLight(0xffffff,0x667755,2));
  const light=new THREE.DirectionalLight(0xffffff,2);light.position.set(3,5,4);scene.add(light);
  const ground=new THREE.Mesh(new THREE.PlaneGeometry(8,8),new THREE.MeshLambertMaterial({color:0x7b8665}));ground.rotation.x=-Math.PI/2;ground.position.y=-.01;scene.add(ground);
- const bench=furnitureModel(THREE,{type:'bench',colonialStyle:3});bench.position.y=.02;scene.add(bench);
+ const city=setup({starter:true,population:48});city.minute=720;city.syncClock();
+ const resident=city.citizens.find(c=>!city.politics.officeHolder(c)&&!c.businessIds.length);
+ city.economy.leaveJob(resident);resident.indoorLocation=null;resident.path=[];resident.conversation=null;
+ for(const need in resident.needs)resident.needs[need]=95;resident.needs.leisure=20;
+ city.furniture.routeBeach=()=>false;const seat=city.furniture.benches[0];
+ resident.entity.x=seat.x;resident.entity.y=seat.y+1;city.minute+=((resident.id-city.minute)%5+5)%5;
+ const groundHeight=surfaceElevation(city.world,seat.x,seat.y);ground.position.y=groundHeight-.01;ground.position.x=seat.x;ground.position.z=seat.y;
+ const bench=furnitureModel(THREE,{type:'bench',colonialStyle:3});bench.position.set(seat.x,groundHeight+.02,seat.y);bench.rotation.y=seat.angle;scene.add(bench);
  const group=new THREE.Group();scene.add(group);const models=new CityCitizenModels(THREE,group);await models.loading;if(!models.ready)throw Error(models.error);
- const entity={id:1,x:-.18,y:.72,properties:{render:{color:0x668d55},citizen:{task:'sit',path:[],seated:true,furnitureUse:{type:'bench',seated:true,posePoint:{x:-.18,y:0,z:0}},facingTarget:{x:-.18,y:1.72}}}};
+ const entity={id:resident.id,x:resident.entity.x,y:resident.entity.y,properties:{render:{color:0x668d55},citizen:{id:resident.id,task:'walk',path:[]}}};
+ const observed={citizens:[entity.properties.citizen],society:{citizen:id=>id===resident.id?entity.properties.citizen:null}};
+ if(!city.furniture.routeLeisure(resident))throw Error('Banco sem acesso');
  const camera=new THREE.OrthographicCamera(-1.25*innerWidth/innerHeight,1.25*innerWidth/innerHeight,1.25,-1.25,.1,100);
- function view(x,y,z){camera.position.set(x,y,z);camera.lookAt(0,.4,0);}
+ function view(x,y,z){camera.position.set(seat.x+x,groundHeight+y,seat.y+z);camera.lookAt(seat.x,groundHeight+.4,seat.y);}
  view(3,1.1,1);document.querySelector('#side').onclick=()=>view(3,1.1,1);document.querySelector('#rear').onclick=()=>view(2,2,-3);
- function render(){models.begin(1/60,1);models.add(entity,0);models.end();renderer.render(scene,camera);requestAnimationFrame(render);}render();
- status.textContent='Banco real e modelo sentado do jogo';
+
+ function render(){
+  if(!resident.seated)city.update(1/60);
+  entity.x=resident.entity.x;entity.y=resident.entity.y;entity.properties.citizen._renderPathActive=resident.path.length>0;
+  applyBenchSeats(observed,packBenchSeats([resident]));
+  models.begin(1/60,1);models.add(entity,surfaceElevation(city.world,entity.x,entity.y));models.end();renderer.render(scene,camera);
+  if(resident.seated){status.textContent='Caminhou até o banco e sentou · postura recebida sem snapshot completo';}
+  else status.textContent='Caminhando até o banco com colisão ativa…';
+  requestAnimationFrame(render);
+ }render();
 }catch(error){status.textContent=error.stack;}
 </script>

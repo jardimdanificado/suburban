@@ -1,3 +1,4 @@
+import {syncBoatSails} from './boat_sails.js';
 import {partyFlagCanvas} from './city_party_flags.js';
 import {clothFlagGeometry,animateClothFlag,flagWindTime} from './city_flag_animation.js?v=flag-wind-tick-13';
 import {BOAT_HULL_DIMENSIONS} from './boat_types.js?v=local-sea-travel-2';
@@ -35,6 +36,7 @@ export function syncBoatFlags(renderer,THREE,city,group){
       flags.position.set(0,.28,-BOAT_HULL_DIMENSIONS[kind].length*.38);
     }
   }
+  syncBoatSails(THREE,city,group,identity);
   const flags=group.userData.boatFlags;
   // Keep the stern attachment, but cancel the hull heading so cloth follows
   // the same world-space wind direction as the municipal flags (rotation PI).

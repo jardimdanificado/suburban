@@ -33,7 +33,7 @@ function makeDock(THREE,port){
   return group;
 }
 function makeBoatModel(THREE,kind){
-  const spec=BOAT_CLASSES[kind],group=new THREE.Group(),hullMaterial=boatMaterial(THREE,kind==='canoe'?'wood':'metal',kind==='canoe'?0xa47a48:kind==='cargo'?0x344b58:kind==='ferry'?0x246b72:0xeee7d4),deckMaterial=boatMaterial(THREE,'wood',0xc5a777),dark=boatMaterial(THREE,'metal',0x303c40),sailMaterial=boatMaterial(THREE,'cloth',0xf4ead0,{side:THREE.DoubleSide});
+  const spec=BOAT_CLASSES[kind],group=new THREE.Group(),hullMaterial=boatMaterial(THREE,kind==='canoe'?'wood':'metal',kind==='canoe'?0xa47a48:kind==='cargo'?0x344b58:kind==='ferry'?0x246b72:0xeee7d4),deckMaterial=boatMaterial(THREE,'wood',0xc5a777),dark=boatMaterial(THREE,'metal',0x303c40);
   const {length,width}=BOAT_HULL_DIMENSIONS[kind];
   const outline=new THREE.Shape();outline.moveTo(0,length*.5);outline.lineTo(width*.38,length*.28);outline.lineTo(width*.5,length*.08);outline.lineTo(width*.5,-length*.36);outline.lineTo(width*.36,-length*.46);outline.lineTo(kind==='canoe'?0:-width*.36,-length*.46);outline.lineTo(-width*.5,-length*.36);outline.lineTo(-width*.5,length*.08);outline.lineTo(-width*.38,length*.28);outline.closePath();
   const geometry=new THREE.ExtrudeGeometry(outline,{depth:.19,bevelEnabled:false,steps:1,curveSegments:12});geometry.rotateX(Math.PI/2);
@@ -52,8 +52,11 @@ function makeBoatModel(THREE,kind){
   }
   const mast=(z,height,sailWidth)=>{
     const pole=new THREE.Mesh(new THREE.CylinderGeometry(.025,.04,height,6),dark);pole.position.set(0,.3+height/2,z);pole.castShadow=true;group.add(pole);
-    const shape=new THREE.Shape();shape.moveTo(-sailWidth*.42,-height*.4);shape.lineTo(sailWidth*.48,-height*.28);shape.lineTo(-sailWidth*.12,height*.48);shape.closePath();
-    const sail=new THREE.Mesh(new THREE.ShapeGeometry(shape),sailMaterial);sail.position.set(0,.3+height*.56,z+.035);sail.castShadow=true;group.add(sail);
+    const sailGeometry=new THREE.PlaneGeometry(sailWidth,height*.72,12,8),positions=sailGeometry.attributes.position,uv=sailGeometry.attributes.uv;
+    for(let i=0;i<positions.count;i++){const u=uv.getX(i),v=uv.getY(i);positions.setXYZ(i,positions.getX(i)*(.65+.35*(1-v)),positions.getY(i),Math.sin(u*Math.PI)*Math.sin(v*Math.PI)*.08);}
+    sailGeometry.computeVertexNormals();
+    const sail=new THREE.Mesh(sailGeometry,boatMaterial(THREE,'cloth',0xffffff,{side:THREE.DoubleSide}));sail.userData.raisedY=.3+height*.56;sail.userData.furledY=.3+height*.9;sail.position.set(0,sail.userData.furledY,z+.035);sail.scale.y=.09;sail.castShadow=true;group.add(sail);
+    (group.userData.sails??=[]).push(sail);
     const yard=new THREE.Mesh(new THREE.CylinderGeometry(.018,.018,sailWidth,5),dark);yard.rotation.z=Math.PI/2;yard.position.set(0,.3+height*.55,z+.05);group.add(yard);
   };
   if(kind!=='canoe'){mast(length*.05,1.45,kind==='cargo'?.88:.7);if(kind==='cargo'||kind==='ferry')mast(length*.3,1.05,.58);}

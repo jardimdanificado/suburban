@@ -1,3 +1,4 @@
+import {packBenchSeats} from './bench_seat_motion.js';
 import {mayorDecisionBlocked} from './city_mayor_decisions.js';
 import {packFishing} from './fishing_motion.js';
 import {packBoatRiders,packBoatTows} from './boat_rider_motion.js?v=shared-crossings-1';
@@ -118,7 +119,7 @@ function snapshot(force = false, sync = false) {
   const checkpointIds=pendingCheckpointIds.splice(0);
   const transfer=[motion.buffer, inside.buffer, vehicles.buffer];
   if(packet.packedNeeds)transfer.push(packet.packedNeeds.buffer);
-  postMessage({ type: 'state', cityId, packet, checkpointIds, positions: motion, boatRiders:packBoatRiders(state.city.citizens), boatTows:packBoatTows(state.city.citizens), fishing:packFishing(state.city.citizens), inside, vehicles, tick, elapsed, sync, encodedWhileObserved: observed, workMs: lastSnapshotCost, workerMetrics:workerMetrics(true) }, transfer);
+  postMessage({ type: 'state', cityId, packet, checkpointIds, positions: motion, boatRiders:packBoatRiders(state.city.citizens), boatTows:packBoatTows(state.city.citizens), fishing:packFishing(state.city.citizens), benchSeats:packBenchSeats(state.city.citizens), inside, vehicles, tick, elapsed, sync, encodedWhileObserved: observed, workMs: lastSnapshotCost, workerMetrics:workerMetrics(true) }, transfer);
   awaitingAck = true; lastSnapshot = lastMotion = performance.now(); dirty = forceSnapshotPending = false;
   return true;
 }
@@ -126,7 +127,7 @@ function sendMotion(force=false) {
   if (!state || !dirty || !force&&(paused || performance.now() - lastMotion < motionInterval())) return;
   if(!observed){postMessage({type:'heartbeat',cityId,minute:state.city.minute,tick,elapsed,workerMetrics:workerMetrics()});lastMotion=performance.now();return;}
   const motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions(),needs=vitals();
-  postMessage({ type: 'motion', cityId, minute:state.city.minute, positions: motion, boatRiders:packBoatRiders(state.city.citizens), boatTows:packBoatTows(state.city.citizens), fishing:packFishing(state.city.citizens), inside, vehicles, needs, tick, elapsed, workerMetrics:workerMetrics() }, [motion.buffer, inside.buffer, vehicles.buffer, needs.buffer]);
+  postMessage({ type: 'motion', cityId, minute:state.city.minute, positions: motion, boatRiders:packBoatRiders(state.city.citizens), boatTows:packBoatTows(state.city.citizens), fishing:packFishing(state.city.citizens), benchSeats:packBenchSeats(state.city.citizens), inside, vehicles, needs, tick, elapsed, workerMetrics:workerMetrics() }, [motion.buffer, inside.buffer, vehicles.buffer, needs.buffer]);
   lastMotion = performance.now();
 }
 function sendSummary(){

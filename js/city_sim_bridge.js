@@ -1,3 +1,4 @@
+import {applyBenchSeats} from './bench_seat_motion.js';
 import {applyFishing} from './fishing_motion.js';
 import {applyBoatRiders,applyBoatTows} from './boat_rider_motion.js?v=shared-crossings-1';
 import {queueMotion,sampleRoundedMotion,sampleMotion,MOTION_BUFFER_MS} from './city_motion.js?v=rounded-routes-1';
@@ -261,7 +262,7 @@ export class CitySimulationBridge {
       if(!reset){this.motion.set(c.id,sample);sampleCitizenMotion(this.city.world,sample,now,this.motionOptions?.smoothMovement!==false);}
     }
     for(const [id,sample] of this.motionSamples)if(sample.seen!==this.city._uiRevision)this.motionSamples.delete(id);
-    applyBoatRiders(this.city,data.boatRiders);applyBoatTows(this.city,data.boatTows);applyFishing(this.city,data.fishing);
+    applyBoatRiders(this.city,data.boatRiders);applyBoatTows(this.city,data.boatTows);applyFishing(this.city,data.fishing);applyBenchSeats(this.city,data.benchSeats);
     this.applyVehiclePositions(data.vehicles);
     this.changed({ terrain: terrainChanged, terrainTiles, entities: structureChanged });
     this.metrics={...this.metrics,...data.workerMetrics,encodeMs:data.workMs,applyMs:performance.now()-receiveStarted,changedNodes:data.packet.nodes.length,...(nodeKinds?{nodeKinds}:{}),newEvents:(data.packet.histories||[]).reduce((n,h)=>n+h.entries.length,0)};
@@ -273,7 +274,7 @@ export class CitySimulationBridge {
     // the much heavier business/political snapshot arrives.
     if(Number.isFinite(data.minute)){this.city.minute=data.minute;this.city.syncClock?.();this.onProgress?.(data.minute);}
     if(data.workerMetrics)this.metrics={...this.metrics,...data.workerMetrics};
-    applyBoatRiders(this.city,data.boatRiders);applyBoatTows(this.city,data.boatTows);applyFishing(this.city,data.fishing);
+    applyBoatRiders(this.city,data.boatRiders);applyBoatTows(this.city,data.boatTows);applyFishing(this.city,data.fishing);applyBenchSeats(this.city,data.benchSeats);
     this.interpolate(now);
     const positions=data.positions,needs=data.needs,needsStride=CITY_NEED_FIELDS.length+2;
     this.lastPositionUpdate=now;
@@ -298,7 +299,7 @@ export class CitySimulationBridge {
       if(data.indoors)renderIndoorPosition(sample.citizen,data.indoors[i/4]?{x,y,z:0}:null);
     }
     receiveInteriorMotion(this,data.inside,now,this.time.paused);
-    applyBoatRiders(this.city,data.boatRiders);applyBoatTows(this.city,data.boatTows);applyFishing(this.city,data.fishing);
+    applyBoatRiders(this.city,data.boatRiders);applyBoatTows(this.city,data.boatTows);applyFishing(this.city,data.fishing);applyBenchSeats(this.city,data.benchSeats);
     this.applyVehiclePositions(data.vehicles);
   }
   applyVehiclePositions(positions,now=performance.now()) {
