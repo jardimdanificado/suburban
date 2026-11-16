@@ -1,4 +1,4 @@
-/** Decisions are simulation state, so closing a window or using fast-forward cannot skip them. */
+/** Government reviews block time; council approvals remain actionable only during the veto deadline. */
 export function pendingMayorDecisions(city){
   const s=city.mayorCampaign;if(s?.mode!=='play'||s.status!=='active')return [];
   const rows=[];

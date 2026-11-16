@@ -64,7 +64,7 @@ test('budget requests follow the council and player decides sanction',()=>{
   const bill=city.mayorAction('bill',{type:'worksTransfer',value:10000});assert(bill,city.lastError);
   assert.equal(p.ensureWorksBudget(),before);assert.notEqual(bill.status,'executed');
   assert(!city.mayorAction('sanction',{billId:bill.id}));
-  bill.status='awaiting-sanction';bill.sanctionAt=city.minute-1;
+  bill.status='awaiting-sanction';bill.sanctionAt=city.minute+360;
   p.council.hourly();assert.equal(bill.status,'awaiting-sanction');
   assert(city.mayorAction('sanction',{billId:bill.id}));assert.equal(p.ensureWorksBudget(),before+10000);
 });

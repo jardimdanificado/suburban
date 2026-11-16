@@ -98,12 +98,15 @@ test('desktop reuses the local orders window, keeps inspector access, and toolba
   desktop.armMayorPlot({mode:'rally'});assert(desktop.mayorMapClick({x:10,y:11}));
   assert.deepEqual(desktop.active.mayorTarget,{kind:'rally',point:{x:10.5,y:11.5}});
   const bill=city.mayorAction('bill',{type:'worksTransfer',value:10000});assert(bill);bill.status='awaiting-sanction';
-  desktop.hidden=true;desktop.syncMayorDecisionWindows();
+  let paused=false;desktop.controls={isPaused:()=>paused,setPaused:value=>{paused=value;}};
+  desktop.hidden=true;desktop.syncMayorDecisionWindows();assert(!paused,'council windows do not pause simulation');
   assert.equal(desktop.active.mayorDecisionKey,`bill:${bill.id}`);assert(!desktop.close(desktop.manager.active.id));
   assert(city.mayorAction('sanction',{billId:bill.id}));desktop.syncMayorDecisionWindows();
   desktop.syncMayorNotices();const notice=desktop.manager.find('page:mayor-notice');
   if(notice){const id=notice.state.mayorNoticeId;desktop.close(notice.id);assert(desktop.mayorReadNotices.has(id));}
-  let paused=false;desktop.controls={isPaused:()=>paused,setPaused:value=>{paused=value;}};
+  const expiring=city.mayorAction('bill',{type:'worksBudget',value:100000});assert(expiring);expiring.status='awaiting-sanction';expiring.sanctionAt=city.minute+1;
+  desktop.syncMayorDecisionWindows();const expiringWindow=desktop.manager.active.id;assert(!paused);
+  city.update(.25);desktop.syncMayorDecisionWindows();assert(!desktop.manager.find(expiringWindow));assert(expiring.tacitSanction);assert(!paused);
   city.mayorCampaign.governmentConfirmedKey=null;city.update(0);desktop.syncMayorDecisionWindows(paused);
   assert(paused);const required=desktop.manager.active;assert(required.state.mayorDecisionKey.startsWith('government:'));
   assert(!desktop.close(required.id));desktop.hidden=true;desktop.syncMayorDecisionWindows(paused);assert(!desktop.hidden);
