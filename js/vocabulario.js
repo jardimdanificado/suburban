@@ -385088,9 +385088,30 @@ export function* iterarPalavrasClassificadas(){for(const word of vocabulario.pal
 const aliasesTema={arte:'educacao_cultura',cultura:'educacao_cultura',educacao:'educacao_cultura',educação:'educacao_cultura',politica:'politica',política:'politica',emprego:'trabalho',habitacao:'moradia',habitação:'moradia',aluguel:'moradia',saúde:'saude',health:'saude',alimentação:'alimentacao',transporte:'mobilidade',justica:'seguranca_justica',justiça:'seguranca_justica',segurança:'seguranca_justica',ambiente:'meio_ambiente',natureza:'meio_ambiente',substância:'substancias',substâncias:'substancias',esporte:'esportes_lazer',esportes:'esportes_lazer',lazer:'esportes_lazer',família:'familia',cotidiano:'cotidiano',moda:'moda',cidade:'cidade',economia:'economia'};
 const escolhe=(list,random)=>list[Math.floor(Math.max(0,Math.min(.999999999,random()))*list.length)];
 function escolheLexema(list,random){
-  if(list.length<2)return list[0];const weights=list.map(item=>{const word=typeof item==='string'?item:item.word,quality=typeof item==='string'?1:item.weight||1;return quality*Math.pow(.67,Math.max(0,word.length-6));}),total=weights.reduce((sum,value)=>sum+value,0);let roll=random()*total;for(let i=0;i<list.length;i++){roll-=weights[i];if(roll<=0)return list[i];}return list.at(-1);
+  if(list.length<2)return list[0];const weights=list.map(item=>{const word=typeof item==='string'?item:item.word,quality=typeof item==='string'?1:item.weight||1;return quality*Math.pow(.78,Math.max(0,word.length-7))*(.7+random()*.6);}),total=weights.reduce((sum,value)=>sum+value,0);let roll=random()*total;for(let i=0;i<list.length;i++){roll-=weights[i];if(roll<=0)return list[i];}return list.at(-1);
 }
 const artigosFrase={m:['o','um','os','uns'],f:['a','uma','as','umas']};
+const determinantesFrase={
+  m:{demonstrativo:[['este','estes'],['esse','esses'],['aquele','aqueles']],possessivo:[['meu','meus'],['seu','seus'],['nosso','nossos']],quantificador:[['todo','todos'],['algum','alguns'],['outro','outros']]},
+  f:{demonstrativo:[['esta','estas'],['essa','essas'],['aquela','aquelas']],possessivo:[['minha','minhas'],['sua','suas'],['nossa','nossas']],quantificador:[['toda','todas'],['alguma','algumas'],['outra','outras']]}
+};
+const ADVERBIOS_COMUNS=['sempre','nunca','agora','aqui','ali','longe','perto','bem','mal','muito','pouco','também','ainda','já','hoje','ontem','amanhã','cedo','tarde','talvez','assim','rapidamente','lentamente','claramente','realmente','principalmente','geralmente','constantemente','novamente'];
+const ADVERBIOS_GRAU=new Set(['muito','bem','realmente','quase','bastante','tão'].map(normalizaLexema));
+const PREPOSICOES_COMPLEMENTO=['com','sem','para','sobre','contra','entre','até','desde','após'];
+const PREPOSICOES_ADJUNTO=['com','sem','para','em','sobre','contra','entre','até','após','por'];
+const INTROS_FRASE=['Hoje','Amanhã','Na vida comum','No caminho','Com o tempo','Em cada bairro','Nos últimos anos','Na prática','Ao longo dos anos','Segundo moradores'];
+const PERIFRASES=[
+  {aux:'estar',forma:'gerundio'},
+  {aux:'ter',forma:'participio'},
+  {aux:'poder',forma:'infinitivo'},
+  {aux:'querer',forma:'infinitivo'},
+  {aux:'dever',forma:'infinitivo'},
+  {aux:'saber',forma:'infinitivo'},
+  {aux:'costumar',forma:'infinitivo'},
+  {aux:'começar',forma:'infinitivo',particula:'a '},
+  {aux:'continuar',forma:'infinitivo'}
+];
+const VERBOS_AUXILIARES=new Set(['ser','estar','ter','haver','poder','querer','dever','saber','costumar','começar','continuar','precisar','deixar','fazer'].map(normalizaLexema));
 let indicePalavrasPorTema=null;
 const bancosGramaticais=new Map();
 function palavrasDoTema(theme){
@@ -385100,7 +385121,7 @@ function palavrasDoTema(theme){
 }
 function bancoGramatical(theme){
   const themes=[...new Set(Array.isArray(theme)?theme:[theme])],cacheKey=themes.join('|');if(bancosGramaticais.has(cacheKey))return bancosGramaticais.get(cacheKey);
-  const nouns=new Map(),verbs=new Set(),adjectives=new Set(),validWord=/^[\p{L}]+(?:[-'][\p{L}]+)*$/u;
+  const nouns=new Map(),verbs=new Set(),adjectives=new Set(),adverbs=new Set(ADVERBIOS_COMUNS.map(normalizaLexema)),validWord=/^[\p{L}]+(?:[-'][\p{L}]+)*$/u;
   const sources=themes.length===1?palavrasDoTema(themes[0]):[...new Set(themes.flatMap(palavrasDoTema))];for(const source of sources){
     if(!validWord.test(source)||source.includes('-'))continue;const info=classificarPalavraCompleta(source),rawLemma=normalizaLexema(info.lema||source),singular=normalizaLexema(converterParaSingular(rawLemma)),knownSingular=catalogoSet().has(singular),pluralForm=/(?:ões|ães|ãos|ns|ais|eis|ois|uis|as|os|es|res|zes)$/u.test(rawLemma),word=knownSingular||pluralForm?singular:rawLemma;if(word.length<3||word.length>18)continue;
     const proper=info.classes.includes('substantivo próprio provável');
@@ -385110,8 +385131,10 @@ function bancoGramatical(theme){
     }
     const verb=normalizaLexema(source);if(info.classes.includes('verbo')&&!verb.includes('-')&&conjugarVerbo(verb,{tempo:'presente',pessoa:3}))verbs.add(verb);
     if(info.classes.includes('adjetivo')&&!proper)adjectives.add(word);
+    if(info.classes.includes('advérbio')&&word.length<=18)adverbs.add(word);
   }
-  const bank={nouns:[...nouns.values()],verbs:[...verbs],adjectives:[...adjectives]};bancosGramaticais.set(cacheKey,bank);return bank;
+  for(const word of adjetivosLexicais)if(word.length<=14)adjectives.add(word);
+  const bank={nouns:[...nouns.values()],verbs:[...verbs],adjectives:[...adjectives],adverbs:[...adverbs]};bancosGramaticais.set(cacheKey,bank);return bank;
 }
 function pluralizarFrase(word){
   if(/ção$/u.test(word))return word.slice(0,-3)+'ções';if(/são$/u.test(word))return word.slice(0,-3)+'sões';
@@ -385119,25 +385142,81 @@ function pluralizarFrase(word){
   if(/ão$/u.test(word)){for(const ending of ['ões','ãos','ães']){const candidate=word.slice(0,-2)+ending;if(catalogoSet().has(normalizaLexema(candidate)))return candidate;}return word;}
   return pluralRegular(word);
 }
-function sintagmaNominal(item,bank,random){
-  const wantsPlural=random()<.2,pluralForm=pluralizarFrase(item.word),plural=wantsPlural&&pluralForm!==item.word,gender=item.gender==='feminino'?'f':'m',definite=random()<.68,article=artigosFrase[gender][definite?(plural?2:0):(plural?3:1)],noun=plural?pluralForm:item.word;
-  let phrase=`${article} ${noun}`;
-  if(bank.adjectives.length&&random()<.16){const adjective=escolheLexema(bank.adjectives,random);let form=adjective;if(gender==='f'&&/o$/u.test(form))form=form.slice(0,-1)+'a';else if(gender==='m'&&/a$/u.test(form)&&!/(?:ista|eza)$/u.test(form))form=form.slice(0,-1)+'o';if(plural)form=pluralizarFrase(form);phrase+=` ${form}`;}
-  return {phrase,plural};
+function formaAdjetivo(adjective,gender,plural){
+  let form=normalizaLexema(adjective);
+  if(gender==='f'&&/o$/u.test(form)&&!/(?:ista|eza)$/u.test(form))form=form.slice(0,-1)+'a';
+  else if(gender==='m'&&/a$/u.test(form)&&!/(?:ista|eza|á|ã)$/u.test(form))form=form.slice(0,-1)+'o';
+  return plural?pluralizarFrase(form):form;
 }
-function montarProposicao(bank,random){
-  const subjectItem=escolheLexema(bank.nouns,random),otherNouns=bank.nouns.filter(item=>item.word!==subjectItem.word),objectItem=otherNouns.length?escolheLexema(otherNouns,random):subjectItem,subject=sintagmaNominal(subjectItem,bank,random),verb=bank.verbs.length?escolheLexema(bank.verbs,random):'ser',timeRoll=random(),time=timeRoll<.62?'presente':timeRoll<.82?'pretérito-perfeito':timeRoll<.94?'futuro':'condicional',conjugated=conjugarVerbo(verb,{tempo:time,pessoa:subject.plural?6:3});
-  if(!bank.verbs.length&&bank.adjectives.length)return `${subject.phrase} ${conjugated} ${escolhe(bank.adjectives,random)}`;
-  const object=sintagmaNominal(objectItem,bank,random),prepositions=['com','sem','para','por','em','sobre','contra'],intro=random()<.2?`${escolhe(['Hoje','Amanhã','Na vida comum','No caminho','Com o tempo','Em cada bairro'],random)}, `:random()<.12?`Entre ${sintagmaNominal(escolheLexema(bank.nouns,random),bank,random).phrase} e ${sintagmaNominal(escolheLexema(bank.nouns,random),bank,random).phrase}, `:'',tail=random()<.34?` ${escolhe(prepositions,random)} ${sintagmaNominal(escolheLexema(bank.nouns,random),bank,random).phrase}`:'',construction=random();
-  let clause;if(construction<.18){const subjunctive=conjugarVerbo(verb,{tempo:'subjuntivo-presente',pessoa:subject.plural?6:3});clause=`Que ${subject.phrase} ${subjunctive} ${object.phrase}${tail}`;}else if(construction<.34)clause=`${object.phrase}, ${subject.phrase} ${conjugated}${tail}`;else clause=`${subject.phrase} ${conjugated} ${object.phrase}${tail}`;
-  return `${intro}${clause}`;
+function contrair(preposicao,phrase){
+  const word=phrase.split(' ')[0],contractions={de:{o:'do',a:'da',os:'dos',as:'das'},em:{o:'no',a:'na',os:'nos',as:'nas'},por:{o:'pelo',a:'pela',os:'pelos',as:'pelas'},a:{o:'ao',a:'à',os:'aos',as:'às'}},form=contractions[preposicao]?.[word];
+  return form?form+phrase.slice(word.length):`${preposicao} ${phrase}`;
+}
+function formaParticipio(verb,gender,plural){
+  let form=conjugarVerbo(verb,{tempo:'participio'})||`${verb}ado`;
+  if(gender==='f'&&/o$/u.test(form))form=form.slice(0,-1)+'a';
+  return plural?pluralizarFrase(form):form;
+}
+function determinanteVariado(gender,plural,random){
+  const forms=determinantesFrase[gender],roll=random(),group=roll<.45?forms.demonstrativo:roll<.75?forms.possessivo:forms.quantificador;
+  return escolhe(group,random)[plural?1:0];
+}
+function sintagmaNominal(item,bank,random,{level='variada'}={}){
+  const wantsPlural=random()<.22,pluralForm=pluralizarFrase(item.word),plural=wantsPlural&&pluralForm!==item.word,gender=item.gender==='feminino'?'f':'m',noun=plural?pluralForm:item.word,definite=random()<(level==='simples'?.7:.62);
+  let phrase=`${artigosFrase[gender][definite?(plural?2:0):(plural?3:1)]} ${noun}`;
+  if(level==='complexa'&&random()<.14)phrase=`${determinanteVariado(gender,plural,random)} ${noun}`;
+  if(bank.adjectives.length&&random()<(level==='simples'?.18:.3)){
+    const adjective=formaAdjetivo(escolheLexema(bank.adjectives,random),gender,plural),degrees=level==='simples'?[]:bank.adverbs.filter(word=>ADVERBIOS_GRAU.has(word));
+    phrase+=` ${degrees.length&&random()<.24?`${escolhe(degrees,random)} ` :''}${adjective}`;
+  }
+  return {phrase,plural,gender,noun};
+}
+function temposFrase(level,random){
+  const roll=random();if(level==='simples')return roll<.7?'presente':roll<.88?'pretérito-perfeito':'pretérito-imperfeito';
+  return roll<.4?'presente':roll<.58?'pretérito-imperfeito':roll<.74?'pretérito-perfeito':roll<.88?'futuro':'condicional';
+}
+function montarVerbo(verb,pessoa,tempo,random,level){
+  const conjugated=conjugarVerbo(verb,{tempo,pessoa})||conjugarVerbo(verb,{tempo:'presente',pessoa})||verb;
+  if(level==='simples'||random()>=.24)return conjugated;
+  const perifrase=escolhe(PERIFRASES,random),aux=conjugarVerbo(perifrase.aux,{tempo,pessoa})||conjugarVerbo(perifrase.aux,{tempo:'presente',pessoa});if(!aux)return conjugated;
+  const forma=perifrase.forma==='gerundio'?(conjugarVerbo(verb,{tempo:'gerundio'})||`${verb}ando`):perifrase.forma==='participio'?(conjugarVerbo(verb,{tempo:'participio'})||`${verb}ado`):verb;
+  return `${aux} ${perifrase.particula||''}${forma}`;
+}
+function montarProposicao(bank,random,{level='variada',subjuntivo=false,introduzir=true}={}){
+  const mainPool=bank.verbs.filter(verb=>!VERBOS_AUXILIARES.has(verb)),verbPool=mainPool.length?mainPool:bank.verbs;
+  const subjectItem=escolheLexema(bank.nouns,random),others=bank.nouns.filter(item=>item.word!==subjectItem.word),objectItem=others.length?escolheLexema(others,random):subjectItem;
+  const subject=sintagmaNominal(subjectItem,bank,random,{level}),object=sintagmaNominal(objectItem,bank,random,{level}),verb=verbPool.length?escolheLexema(verbPool,random):'ser',pessoa=subject.plural?6:3,tempo=subjuntivo?'subjuntivo-presente':temposFrase(level,random);
+  const vp=montarVerbo(verb,pessoa,tempo,random,subjuntivo?'simples':level),negation=!subjuntivo&&level!=='simples'&&random()<.12?'não ':'';
+  const adverb=!subjuntivo&&level!=='simples'&&bank.adverbs.length&&random()<.26?`${escolheLexema(bank.adverbs,random)} `:'',verbalGroup=`${adverb}${negation}${vp}`;
+  const tail=level==='complexa'&&random()<.18?` ${contrair(escolhe(PREPOSICOES_ADJUNTO,random),sintagmaNominal(escolheLexema(bank.nouns,random),bank,random,{level:'simples'}).phrase)}`:'',construction=level==='simples'?.85:random();
+  let clause;
+  if(subjuntivo)clause=`${subject.phrase} ${verbalGroup} ${object.phrase}${tail}`;
+  else if(construction<.1&&level!=='simples')clause=`${conjugarVerbo('haver',{tempo,pessoa:3})||'há'} ${object.phrase}${tail}`;
+  else if(construction<.2&&level!=='simples')clause=`${subject.phrase} ${conjugarVerbo('ser',{tempo,pessoa})||'é'} ${formaParticipio(verb,subject.gender,subject.plural)} ${contrair('por',object.phrase)}${tail}`;
+  else if(construction<.36)clause=`${object.phrase}, ${subject.phrase} ${verbalGroup}${tail}`;
+  else if(construction<.5&&level!=='simples')clause=`${subject.phrase} ${verbalGroup} ${contrair(escolhe(PREPOSICOES_COMPLEMENTO,random),object.phrase)}${tail}`;
+  else clause=`${subject.phrase} ${verbalGroup} ${object.phrase}${tail}`;
+  return `${introduzir&&level!=='simples'&&random()<.12?`${escolhe(INTROS_FRASE,random)}, `:''}${clause}`;
 }
 export function gerarFrase({tema=null,random=Math.random,complexidade='variada'}={}){
   if(typeof random!=='function')throw new TypeError('random precisa ser uma função');
   const requested=(Array.isArray(tema)?tema:[tema||'cotidiano']).map(value=>normalizaLexema(value)),themes=[...new Set(requested.map(value=>aliasesTema[value]||value))];if(themes.some(theme=>!temasLexicais[theme]))throw new RangeError(`Tema desconhecido: ${tema}`);
   const bank=bancoGramatical(themes);if(!bank.nouns.length)throw new RangeError(`Os temas ${themes.join(', ')} não têm substantivos classificados suficientes para formar uma frase`);
-  const capitalize=text=>text.charAt(0).toLocaleUpperCase('pt-BR')+text.slice(1);let sentence=montarProposicao(bank,random);
-  const joiners=[' e ','; ainda assim, ','. Ao mesmo tempo, ',', porque ',', enquanto ',', quando ',', por isso, '];if(complexidade==='complexa'&&random()<.58||complexidade==='variada'&&random()<.2)sentence+=`${escolhe(joiners,random)}${montarProposicao(bank,random)}`;
+  const level=complexidade==='simples'?'simples':complexidade==='complexa'?'complexa':'variada';
+  const capitalize=text=>text.charAt(0).toLocaleUpperCase('pt-BR')+text.slice(1);let sentence=montarProposicao(bank,random,{level});
+  const groups=[
+    {joiners:[' e ','; ',', e '],subjuntivo:false},
+    {joiners:[' mas ',' porém, ',' contudo, ',' todavia, ',' ainda assim, '],subjuntivo:false},
+    {joiners:[' porque ',' já que ',' pois ',' por isso, ',' assim, '],subjuntivo:false},
+    {joiners:[' quando ',' enquanto ',' sempre que '],subjuntivo:false},
+    {joiners:[' se ',' caso ',' desde que ',' embora ',' antes que '],subjuntivo:true},
+    {joiners:['. Além disso, ','. Ao mesmo tempo, ',': '],subjuntivo:false}
+  ];
+  const extras=level==='simples'?0:level==='complexa'?(random()<.45?2:1):(random()<.34?1:0);
+  for(let i=0;i<extras;i++){
+    const group=escolhe(groups,random),clause=montarProposicao(bank,random,{level,subjuntivo:group.subjuntivo,introduzir:false});
+    sentence+=`${escolhe(group.joiners,random)}${clause}`;
+  }
   return `${capitalize(sentence)}.`;
 }
 export function gerarFraseTematica(tema,{random=Math.random,complexidade='variada'}={}){
