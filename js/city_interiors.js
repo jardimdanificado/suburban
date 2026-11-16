@@ -136,6 +136,24 @@ export function outdoorCellReady(city,c,b,u,adjacent=false){
  c.action='Deslocando-se até a célula de atividade';return false;
 }
 export function syncCitizenInterior(city,c){
+ if(c.task==='party-meeting'&&c.partyMeeting){
+  const target=city.society.citizen(c.partyMeeting.targetId);
+  if(!target||target.entity.destroyed||target.custody||city.minute>=c.partyMeeting.until||city.urgentNeed(c)){c.task=null;c.targetId=null;c.path=[];c.partyMeeting=null;return exit(city,c);}
+  const location=target.indoorLocation,site=location&&city.building(location.buildingId);
+  if(c.indoorLocation&&(c.indoorLocation.buildingId!==site?.id||!site))return exit(city,c);
+  if(c.path.length)return false;
+  if(site){
+   const room=city.units.get(location.unitId||location.targetUnitId);
+   if(!room||!activityRoomReady(city,c,site,room,room.roomType))return false;
+   const own=c.indoorLocation;if(!own||own.exiting||own.path.length)return false;
+   if(Math.hypot(own.position.x-location.position.x,own.position.y-location.position.y)<=1.5)return true;
+   const destinations=[[1,0],[-1,0],[0,1],[0,-1]].map(([x,y])=>({x:location.position.x+x,y:location.position.y+y,z:location.position.z}));
+   const path=destinations.map(point=>interiorRoute(city.building(site.officeTenantOf)||site,own.position,point)).find(path=>path!==null);
+   if(path===undefined)return false;own.path=path;own.phase=path.length?'walking':'using';return !path.length;
+  }
+  if(Math.hypot(c.entity.x-target.entity.x,c.entity.y-target.entity.y)>1.5){const path=city.findPath(c.entity,target.entity);if(path!==null)c.path=path;return false;}return true;
+ }
+
  if(c.playerControlled&&c.indoorLocation&&!c.indoorLocation.exiting&&['player-enter','player-explore'].includes(c.task))return !c.indoorLocation.path?.length;
  if(c.funeralInterior&&c.task==='funeral')return !c.indoorLocation?.path?.length;
  const task=c.workMeal?'workmeal':c.task,s=c.indoorLocation,queued=!!c.serviceQueue&&c.serviceQueue.buildingId===c.targetId&&c.serviceQueue.kind===task;

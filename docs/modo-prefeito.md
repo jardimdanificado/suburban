@@ -67,3 +67,13 @@ Em **Configurações → Interface → Pausar em projetos da Câmara**, ative ou
 O modo partidário permite escolher um partido ativo ao começar. Perder a prefeitura não encerra a partida: o jogador continua na oposição. A derrota ocorre quando o partido deixa de existir por liquidação ou incorporação.
 
 A janela Partido e bancada reúne caixa, filiados, representação, orientação de voto e votos individuais nos projetos em tramitação. A orientação pode ser favorável, contrária ou livre; decisões individuais têm prioridade. Eleições e propaganda continuam disponíveis na oposição. Ordens executivas e gastos municipais exigem que o partido controle a prefeitura; governos adversários mantêm sua agenda automática.
+
+## Imprensa e influência
+
+Em Campanha, o seletor separa imprensa, atividades de rua e propaganda eleitoral. O partido pode solicitar entrevista ou debate numa redação ativa, inclusive fora de eleições. Convites eleitorais aceitam recusa e escolha de representante. Cada fala exige escolher abordagem, tom e proposta; participantes percorrem o caminho até a redação. O desempenho deixa memórias na audiência, com influência eleitoral e perda de força ao longo do tempo.
+
+Influência e empresas reúne três áreas:
+
+- Órgãos públicos: inscrição de filiados no recrutamento de polícia, IML e tribunal, ou indicação política quando o partido governa. A indicação ocupa vaga real, exige habilitação e recursos e gera caso de favorecimento. A função de juiz ou investigador em cada processo continua seguindo a designação da instituição.
+- Empresas dos filiados: aportes com dinheiro do proprietário, preços de venda, salários, contratação manual ou automática, aprovação de candidatos inscritos e demissões. A propriedade é validada novamente em cada ordem.
+- Planos clandestinos: planejar, cancelar e executar desvios, favorecimento empresarial, repasses clandestinos, participação financeira em esquemas existentes e tentativas de suborno de investigadores, juízes, peritos e testemunhas. Planejar não movimenta dinheiro. Executar usa contas reais e os sistemas de corrupção, provas, investigação e julgamento. Encontros podem ser encaminhados com deslocamento físico; o suborno continua exigindo proximidade e fase adequada do processo. A pessoa pode recusar e denunciar.

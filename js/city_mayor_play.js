@@ -1,3 +1,4 @@
+import {renderPartyMedia,partyMediaEvents} from './city_party_media.js';
 import {renderPartyActivities} from './city_party_player.js';
 import {MAYOR_CHALLENGES,challengeValue} from './city_mayor_challenges.js';
 import {publicProjects} from './city_mayor_campaign.js';
@@ -6,11 +7,12 @@ import {formatMoney as money} from './city_ui_format.js';
 import {MANAGEMENT_THEME as T} from './management_ui.js';
 
 export const mayorPlaying = city => city.mayorCampaign?.mode==='play'&&city.mayorCampaign.status==='active';
-export const MAYOR_DESKS = {party:'Partido e bancada',agenda:'Central do partido',campaign:'Campanha eleitoral',challenges:'Compromissos públicos',build:'Obras e território',operations:'Serviços municipais',cabinet:'Gabinete',policies:'Políticas públicas',council:'Decisões da Câmara',orders:'Ordens emitidas'};
+export const MAYOR_DESKS = {network:'Influência, instituições e empresas',party:'Partido e bancada',agenda:'Central do partido',campaign:'Campanha eleitoral',challenges:'Compromissos públicos',build:'Obras e território',operations:'Serviços municipais',cabinet:'Gabinete',policies:'Políticas públicas',council:'Decisões da Câmara',orders:'Ordens emitidas'};
 
 /** Actionable notices are derived from the current simulation, never from invented missions. */
 export function mayorDecisions(city) {
   const tasks=[],gov=city.politics;
+  for(const {media} of partyMediaEvents(city))if(['scheduled','live'].includes(media.status))tasks.push({id:`media:${media.startedAt}:${media.id}`,title:media.playerAccepted?'Preparar fala na imprensa':'Convite da imprensa',text:`${media.hostName}: ${media.topic}`,desk:'campaign',section:'press'});
   if(gov.partyOfId(city.economy.mayorId)?.id!==city.mayorCampaign?.partyId)return tasks;
   for(const bill of gov.council.bills.filter(b=>b.status==='awaiting-sanction'&&city.minute<(b.sanctionAt??Infinity)))tasks.push({id:`bill:${bill.id}`,title:'Sanção ou veto',text:bill.title,desk:'council',billId:bill.id});
   const conditions=city.welfare.conditions();
@@ -166,7 +168,10 @@ export function renderMayorElection(ui,p){
   p.kv('Caixa partidário',money(city.politics.partyAccount(party).balance));
   p.note('Propaganda usa dinheiro do partido, materiais, trabalhadores e caminhos reais. O tesouro não financia a campanha.');
   ui.selectControl(p,'Controle da campanha',[['automatic','Organização automática'],['manual','Eu escolho os atos e materiais']],s.campaignControl||'automatic',mode=>mayorOrder(ui,'campaignControl',{mode}));
-  renderPartyActivities(ui,p,(action,options)=>mayorOrder(ui,action,options));
+  const section=['press','outreach','propaganda'].includes(ui.mayorSection)?ui.mayorSection:'press';
+  ui.selectControl(p,'Área da campanha',[['press','Imprensa e debates'],['outreach','Atividades e filiação'],['propaganda','Propaganda eleitoral']],section,value=>{ui.mayorSection=value;});
+  if(section==='press'){renderPartyMedia(ui,p,(action,options)=>mayorOrder(ui,action,options));return;}
+  if(section==='outreach'){renderPartyActivities(ui,p,(action,options)=>mayorOrder(ui,action,options));return;}
   if(e?.status!=='campaign'){p.note('Não há eleição em campanha. Prepare serviços e compromissos para a próxima votação.');return;}
   const n=e.candidates.find(n=>n.partyId===s.partyId);
   p.kv('Votação',`Em ${Math.max(0,(e.voteAt-city.minute)/1440).toFixed(1)} dias`);

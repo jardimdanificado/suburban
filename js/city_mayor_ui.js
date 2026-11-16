@@ -1,3 +1,4 @@
+import {renderPartyNetwork} from './city_party_network.js';
 import {renderPartyActivities} from './city_party_player.js';
 import {mayorDecisions,mayorOrder,renderMayorChallenges,renderMayorElection,MAYOR_DESKS} from './city_mayor_play.js';
 import {OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
@@ -51,8 +52,10 @@ export function renderMayorCampaign(ui,p) {
   if(s.mode!=='play'){p.note('Campanha encerrada pelo jogador. A cidade voltou à simulação autônoma.');return;}
   const governing=gov.partyOfId(city.economy.mayorId)?.id===s.partyId;
   p.status(governing?'PARTIDO NO GOVERNO':'PARTIDO NA OPOSIÇÃO',`${gov.council.members.filter(m=>m.partyId===s.partyId).length} vereadores · ${gov.party(s.partyId)?.memberIds.length||0} filiados`);
+  p.button('INFLUÊNCIA E EMPRESAS',()=>ui.host?.openMayorDesk('network'));
   p.buttons([{label:'PARTIDO E BANCADA',click:()=>ui.host?.openMayorDesk('party')},{label:'CAMPANHA',click:()=>ui.host?.openMayorDesk('campaign')}]);
   const view=ui.mayorView||'party';
+  if(view==='network'){renderPartyNetwork(ui,p,act);return;}
   if(view==='party'||!governing&&!['campaign','orders','council'].includes(view)){
     const party=gov.party(s.partyId);
     p.kv('Caixa partidário',money(gov.partyAccount(party).balance));

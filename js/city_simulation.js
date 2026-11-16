@@ -1254,6 +1254,7 @@ export class CitySimulation {
     if(['paint-purchase','paint-delivery'].includes(c.task)){this.paint.arrive(c);return;}
     if(c.task==='research'){this.politics.getResearch().fieldWork(c);return;}
     if(c.task==='interview'){this.politics.getResearch().respondentWait(c);return;}
+    if(c.task==='party-meeting'){c.action='Em encontro político';return;}
     if(c.task==='campaign-media'){c.action='Participando presencialmente de debate ou entrevista no jornal';return;}
     if(c.task==='vote'){this.politics.voting.arrive(c);return;}
     if(c.task==='campaign'){this.politics.campaigns.arrive(c);return;}
