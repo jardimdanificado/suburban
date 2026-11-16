@@ -5,11 +5,12 @@ import {formatMoney as money} from './city_ui_format.js';
 import {MANAGEMENT_THEME as T} from './management_ui.js';
 
 export const mayorPlaying = city => city.mayorCampaign?.mode==='play'&&city.mayorCampaign.status==='active';
-export const MAYOR_DESKS = {agenda:'Central da prefeitura',campaign:'Campanha eleitoral',challenges:'Compromissos públicos',build:'Obras e território',operations:'Serviços municipais',cabinet:'Gabinete',policies:'Políticas públicas',council:'Decisões da Câmara',orders:'Ordens emitidas'};
+export const MAYOR_DESKS = {party:'Partido e bancada',agenda:'Central do partido',campaign:'Campanha eleitoral',challenges:'Compromissos públicos',build:'Obras e território',operations:'Serviços municipais',cabinet:'Gabinete',policies:'Políticas públicas',council:'Decisões da Câmara',orders:'Ordens emitidas'};
 
 /** Actionable notices are derived from the current simulation, never from invented missions. */
 export function mayorDecisions(city) {
   const tasks=[],gov=city.politics;
+  if(gov.partyOfId(city.economy.mayorId)?.id!==city.mayorCampaign?.partyId)return tasks;
   for(const bill of gov.council.bills.filter(b=>b.status==='awaiting-sanction'&&city.minute<(b.sanctionAt??Infinity)))tasks.push({id:`bill:${bill.id}`,title:'Sanção ou veto',text:bill.title,desk:'council',billId:bill.id});
   const conditions=city.welfare.conditions();
   if(conditions.foodDays<2)tasks.push({id:'food',title:'Abastecimento em risco',text:`Reserva de alimentos: ${Number(conditions.foodDays||0).toFixed(1)} dias.`,desk:'operations',section:'programs',action:'restock',label:'ENCOMENDAR ALIMENTOS'});

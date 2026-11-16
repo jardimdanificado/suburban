@@ -57,7 +57,7 @@ import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=game-approac
 import { renderWorldManagement } from './city_world_ui.js?v=world-management-9';
 export const money = formatMoney;
 export const TABS = [
-  ['mayor', 'MODO PREFEITO', 'CAMPANHA', 'Governo indireto, obras e permanência do partido no poder.'],
+  ['mayor', 'MODO PARTIDÁRIO', 'CAMPANHA', 'Controle do partido, bancada, eleições e governo.'],
   ['family', 'MINHA FAMÍLIA', 'CAMPANHA', 'Trabalho, negócios, contratos e legado familiar.'],
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
   ['government', 'GOVERNO', 'CIDADE', 'Prefeito, patrimônio público e orçamento municipal.'],
@@ -83,7 +83,7 @@ export const VIEWS = {
   market: [['overview','PANORAMA'],['shares','AÇÕES'],['people','PESSOAS'],['companies','EMPRESAS'],['locations','LOCALIZAÇÕES'],['goods','MERCADO'],['sales','VENDAS'],['analysis','ANÁLISE DE DEMANDA']],
   economy: [['overview','EMPRESAS'],['vacancies','VAGAS'],['applications','SELEÇÕES'],['workers','FUNCIONÁRIOS'],['analysis','ANÁLISE']],
   city: [['overview', 'PANORAMA'], ['needs', 'NECESSIDADES'], ['activity', 'ATIVIDADE'], ['services','SAÚDE E LAZER'], ['analysis','ANÁLISE DE NECESSIDADES'], ['nature','VEGETAÇÃO']],
-  government: [['overview', 'PREFEITURA'], ['elections','POLÍTICA'], ['identity','IDENTIDADE'], ['contracts', 'CONTRATOS'], ['finance', 'TESOURO'], ['world', 'TERRENO']],
+  government: [['overview', 'PREFEITURA'], ['elections','POLÍTICA'], ['identity','IDENTIDADE'], ['contracts', 'CONTRATOS'], ['finance', 'TESOURO']],
   land: [['plots', 'TERRENOS'], ['projects', 'OBRAS']],
   production: [['stocks', 'ESTOQUES'], ['demand', 'DEMANDAS'], ['flow', 'MOVIMENTAÇÕES'], ['lighting','ILUMINAÇÃO'],['analysis','ANÁLISE DAS CADEIAS']],
   transport: [['active', 'FRETES'], ['imports','DEPÓSITO DE IMPORTAÇÃO'], ['informal','BICOS'], ['finished', 'ENCERRADOS'], ['vehicles','FROTA'], ['parking','BICICLETÁRIOS'], ['rentals','ALUGUEL'], ['models','MODELOS']],
@@ -988,12 +988,12 @@ export class CityUI {
       renderGovernmentDashboard(this,p);
 
       if(!this.host)for(const [title,items] of [['GESTÃO',[['Avaliação do governo','approval'],['Promessa e plano de governo','promises'],['Governo e regras','overview']]],['INSTITUIÇÕES',[['Partidos','parties'],['Câmara e projetos','council'],['Institutos de pesquisa','institutes']]],['REGULAÇÃO',[['Substâncias e licenças','substances']]],['ELEIÇÕES',[['Campanha','campaign'],['Pesquisas eleitorais','polls'],['Resultados','results']]],['FISCALIZAÇÃO',[['Escândalos e investigações','scandals']]]]){p.heading(title);p.links(items.map(([label,politicsTab])=>({label,click:()=>this.openPanel({views:{government:'elections'},politicsTab})})));}
-      if(!this.host){p.heading('ADMINISTRAÇÃO');p.links([['Contratos','contracts'],['Tesouro e política monetária','finance'],['Terreno e geração','world']].map(([label,view])=>({label,click:()=>this.showView(view)})));}
+      if(!this.host){p.heading('ADMINISTRAÇÃO');p.links([['Contratos','contracts'],['Tesouro e política monetária','finance']].map(([label,view])=>({label,click:()=>this.showView(view)})));}
       if(hall)p.button('DOSSIÊ DA PREFEITURA',()=>this.openBuilding(hall.id));
     } else if(view==='contracts'){p.heading('CONTRATOS MUNICIPAIS');this.contracts(p,this.cachedList(`municipal-contracts:${this.contractPlotId||'all'}`,()=>city.development.projects.filter(o=>this.contractPlotId?o.plotId===this.contractPlotId:o.accountId==='treasury').slice().sort((a,b)=>Number(a.cancelled||a.status==='completed')-Number(b.cancelled||b.status==='completed')||Number(b.status==='blocked')-Number(a.status==='blocked')||b.startedAt-a.startedAt)));}
     else if(view==='finance'){renderFiscalReport(this,p);this.monetaryPolicy(p);p.heading('MOVIMENTAÇÕES DO TESOURO');p.metrics([['DISPONÍVEL',money(city.treasury),C.gold]]);this.journal(p,'treasury');}
     else {
-      this.worldGeneration(p);
+      renderGovernmentDashboard(this,p);
     }
   }
   worldGeneration(p) {

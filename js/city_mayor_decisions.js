@@ -4,7 +4,8 @@ export function pendingMayorDecisions(city){
   const rows=[];
   if(s.governmentReview)rows.push({key:`government:${s.governmentReview.key}`,kind:'government',title:s.governmentReview.initial?'Assumir a prefeitura':'Formar o novo governo'});
   if(s.programReview)rows.push({key:`program:${s.programReview.key}`,kind:'program',title:'Escolher promessas de campanha'});
-  for(const bill of city.politics.council.bills)if(bill.status==='awaiting-sanction'&&city.minute<(bill.sanctionAt??Infinity))rows.push({key:`bill:${bill.id}`,kind:'bill',billId:bill.id,title:'Projeto aprovado: sanção ou veto'});
+  for(const bill of city.politics.council.bills)if(city.politics.partyOfId(city.economy.mayorId)?.id===s.partyId&&bill.status==='awaiting-sanction'&&city.minute<(bill.sanctionAt??Infinity))rows.push({key:`bill:${bill.id}`,kind:'bill',billId:bill.id,title:'Projeto aprovado: sanção ou veto'});
+  for(const bill of city.politics.council.bills)if(city.politics.partyOfId(city.economy.mayorId)?.id===s.partyId&&bill.status==='rejected'&&city.minute<(bill.forceSanctionAt??-Infinity))rows.push({key:`bill:${bill.id}`,kind:'bill',billId:bill.id,title:'Projeto recusado: forçar sanção ou manter rejeição'});
   return rows;
 }
 export const mayorDecisionBlocked=city=>pendingMayorDecisions(city).some(d=>d.kind!=='bill'||city.mayorPauseForCouncilBills===true);
@@ -14,12 +15,12 @@ function choices(city,person,party,existing=[]){
 }
 export function syncMayorReviews(city){
   const s=city.mayorCampaign,p=city.politics,term=p.mandates.current,mayor=city.society.citizen(city.economy.mayorId);
-  if(!mayor||mayor.political?.partyId!==s.partyId)return;
-  for(const bill of p.council.bills)if(bill.status==='awaiting-sanction'&&city.minute>=bill.sanctionAt){
+  const governing=mayor?.political?.partyId===s.partyId;
+  for(const bill of p.council.bills)if(governing&&bill.status==='awaiting-sanction'&&city.minute>=bill.sanctionAt){
     bill.sanctionedAt=city.minute;bill.tacitSanction=true;p.council.execute(bill);
   }
-  const key=`${term?.id??p.termNumber}:${mayor.id}`;
-  if(s.governmentConfirmedKey!==key&&s.governmentReview?.key!==key){
+  const key=`${term?.id??p.termNumber}:${mayor?.id}`;
+  if(governing&&s.governmentConfirmedKey!==key&&s.governmentReview?.key!==key){
     s.governmentReview={key,termId:term?.id,mayorId:mayor.id,initial:s.governmentConfirmedKey==null,choices:choices(city,mayor,p.party(s.partyId),term?.promises||[]),selected:(term?.promises||[]).map(pr=>pr.metric).slice(0,3)};
   }
   const election=p.active,n=election?.candidates?.find(n=>n.partyId===s.partyId);

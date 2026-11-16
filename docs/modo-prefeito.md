@@ -60,3 +60,10 @@ Cada projeto aprovado que aguarda sanção abre uma janela com autor, votação 
 As decisões pendentes e a seleção de promessas são salvas na cidade. A pausa também bloqueia minutos e avanço rápido no worker. Ao terminar a última decisão, o jogo retoma se estava rodando; uma pausa manual anterior é preservada. Avisos informativos usam janelas comuns e podem ser dispensados sem interromper a simulação.
 
 Em **Configurações → Interface → Pausar em projetos da Câmara**, ative ou desative a pausa específica para sanção e veto. A opção começa desativada e fica salva nas preferências. Ativada, o jogo pausa enquanto houver projeto dentro do prazo; desativada, o tempo segue e prevalece a aprovação da Câmara ao vencer o prazo sem veto. A opção não altera as pausas de posse e programa eleitoral.
+
+
+## Controle partidário
+
+O modo partidário permite escolher um partido ativo ao começar. Perder a prefeitura não encerra a partida: o jogador continua na oposição. A derrota ocorre quando o partido deixa de existir por liquidação ou incorporação.
+
+A janela Partido e bancada reúne caixa, filiados, representação, orientação de voto e votos individuais nos projetos em tramitação. A orientação pode ser favorável, contrária ou livre; decisões individuais têm prioridade. Eleições e propaganda continuam disponíveis na oposição. Ordens executivas e gastos municipais exigem que o partido controle a prefeitura; governos adversários mantêm sua agenda automática.

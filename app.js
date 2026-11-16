@@ -71,6 +71,11 @@ export const mainMenu = new MainMenu({
   onStartGame: () => startOrResumeGame(),
   onPlayGame: () => gameUI.choose(),
   onMayorGame: () => {startOrResumeGame();cityUI.openModule('mayor');},
+  onEndGame: () => {
+    if(playing(city))gameUI.act('simulation');
+    if(city.mayorCampaign?.mode==='play')city.mayorAction('observe');
+    cityUI.closeAll(true);
+  },
   onStartNewCity: (params) => startNewCity(params),
   onOpenNewGame: () => {
     if (typeof cityUI !== 'undefined') {

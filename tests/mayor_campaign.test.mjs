@@ -146,19 +146,20 @@ test('municipal firms, offices, programs, upkeep and paving are playable orders'
   assert.doesNotThrow(()=>city.mayorAction('rally'));
 });
 
-test('same-party succession continues; opposing takeover ends once and freezes until observation',()=>{
+test('succession and opposition continue; liquidation freezes until observation',()=>{
   const city=start(),p=city.politics,partyId=city.mayorCampaign.partyId;
   const successor=city.citizens.find(c=>c.id!==city.economy.mayorId&&city.society.isAdult(c));
   p.initializeCitizen(successor);successor.political.partyId=partyId;
   p.takeOffice(successor,'Teste de sucessão');assert.equal(city.mayorCampaign.status,'active');
   const other=p.parties.find(p=>p.id!==partyId&&p.active);successor.political.partyId=other.id;
-  p.syncGoverningFlag();assert.equal(city.mayorCampaign.status,'defeated');
+  p.syncGoverningFlag();assert.equal(city.mayorCampaign.status,'active');
+  p.party(partyId).active=false;updateMayorCampaign(city);assert.equal(city.mayorCampaign.status,'defeated');
   const orders=city.mayorCampaign.orders.length,minute=city.minute,ended=city.mayorCampaign.endedAt;
   updateMayorCampaign(city);city.update(10);city.stepMinute();
   assert.equal(city.minute,minute);assert.equal(city.mayorCampaign.endedAt,ended);
   assert(!city.mayorAction('fund',{buildingId:city.buildings[0].id,amount:100}));assert.equal(city.mayorCampaign.orders.length,orders);
   assert(city.mayorAction('observe'));city.update(.25);assert.equal(city.minute,minute+1);
-  assert(!city.mayorAction('start'));
+  assert(city.mayorAction('start'));
 });
 
 test('campaign and command methods survive state serialization; UI renders every view',()=>{

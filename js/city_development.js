@@ -150,7 +150,7 @@ export class CityDevelopment {
     return result;
   }
   planPublicWorks() {
-    if(this.city.mayorCampaign?.mode==='play')return;
+    if((this.city.mayorCampaign?.mode==='play'&&this.city.politics.partyOfId(this.city.economy.mayorId)?.id===this.city.mayorCampaign.partyId))return;
     const city = this.city, hall = city.buildings.find(b => b.type === 'townhall' && !b.entity.destroyed);
     if(hall&&this.clientCitizen('treasury'))city.officialJournal?.ensure();
     if (!hall || !this.clientCitizen('treasury') || city.treasury < city.currency.price(100000)) return;

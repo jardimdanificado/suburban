@@ -175,6 +175,10 @@ export class CityCouncil {
     if(eligible.some(c=>c.playerControlled&&typeof bill.playerVotes?.[c.id]!=='boolean')){bill.waitingForPlayerVote=true;return;}
     bill.waitingForPlayerVote=false;
     bill.eligibleWeight=eligible.reduce((n,c)=>n+this.weight(c.id),0);
+    const control=this.city.mayorCampaign;
+    if(control?.mode==='play'&&control.status==='active'&&['yes','no'].includes(control.voteStance)){
+      bill.playerVotes??={};for(const c of eligible)if(c.political.partyId===control.partyId&&typeof bill.playerVotes[c.id]!=='boolean')bill.playerVotes[c.id]=control.voteStance==='yes';
+    }
     bill.votes=eligible.map(c=>({citizenId:c.id,name:c.entity.properties.name,partyId:c.political.partyId,weight:this.weight(c.id),...(typeof bill.playerVotes?.[c.id]==='boolean'?{yes:bill.playerVotes[c.id],reason:'Voto declarado pelo jogador'}:this.preference(c,bill))}));
     bill.yes=bill.votes.filter(v=>v.yes).reduce((n,v)=>n+v.weight,0);bill.no=bill.votes.filter(v=>!v.yes).reduce((n,v)=>n+v.weight,0);
     const supermajority=override||['impeach','convict','confidence'].includes(bill.type),threshold=supermajority?Math.ceil(bill.eligibleWeight*2/3):Math.floor(bill.eligibleWeight/2)+1;
@@ -182,6 +186,7 @@ export class CityCouncil {
     this.city.log(`${bill.title}: ${bill.status==='approved'?'aprovado':'rejeitado'}, ${bill.yes} a ${bill.no}; quorum ${presentWeight}/${totalWeight} (mínimo ${requiredQuorum}); presentes aptos: ${bill.eligibleWeight}, votos exigidos: ${threshold}.`,'government',bill.votes.map(v=>v.citizenId),{kind:'bill-voted',partyIds:[...new Set(bill.votes.map(v=>v.partyId).filter(id=>id!=null))],billId:bill.id,buildingId:bill.plenaryBuildingId,present:bill.attendance.length,absent:bill.absences.length,participationWeight:presentWeight,totalChamberWeight:totalWeight,requiredQuorum,eligibleWeight:bill.eligibleWeight,yes:bill.yes,no:bill.no,threshold,parentEventId:bill.eventId});
     this.city.politics.standing.legislativeOpinion(bill,override);
     if(['impeach','convict'].includes(bill.type))syncCorruptionVotes(this.city.politics,this.city.politics.scandals.find(s=>s.id===bill.payload.caseId));
+    if(bill.status==='rejected')bill.forceSanctionAt=this.city.minute+360;
     if(bill.status==='approved'){if(override||['impeach','convict','confidence','arrestAuthorization','releasePrisoner'].includes(bill.type)){bill.vetoOverridden=override;this.execute(bill);}else{bill.status='awaiting-sanction';bill.sanctionAt=this.city.minute+360;}}
   }
   transferFirm(bill,nationalize) {
@@ -312,7 +317,7 @@ export class CityCouncil {
       if(bill.status==='proposed'&&city.minute>=bill.voteAt)this.vote(bill);
       else if(bill.status==='awaiting-secretary-review'&&city.minute>=bill.reviewAt){this.execute(bill);}
       else if(bill.status==='awaiting-sanction'&&city.minute>=bill.sanctionAt){if(reviewSecretaryVetoes(p,bill))continue;const mayor=city.society.citizen(city.economy.mayorId),opposed=mayor&&!this.preference(mayor,bill).yes,powerBill=['mayorElectionSystem','secretaryElection','councilRate','councilSeats','councilBudget','mayorBudget'].includes(bill.type),canVeto=powerBill||bill.agendaTermId!==p.mandates.current?.id;
-        if(city.mayorCampaign?.mode==='play'){bill.sanctionedAt=city.minute;bill.tacitSanction=true;this.execute(bill);continue;}
+        if((city.mayorCampaign?.mode==='play'&&city.politics.partyOfId(city.economy.mayorId)?.id===city.mayorCampaign.partyId)){bill.sanctionedAt=city.minute;bill.tacitSanction=true;this.execute(bill);continue;}
         if(mayor?.playerControlled)continue;
         if(canVeto&&opposed&&(mayor.traits?.ambition??.5)>.72&&city.random()<(powerBill?.035:.055))p.vetoBill(bill.id);else this.execute(bill);}
       else if(bill.status==='vetoed'&&city.minute>=bill.overrideAt)this.vote(bill,true);

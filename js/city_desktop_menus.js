@@ -12,7 +12,7 @@ export function desktopMenus(d){
       item('Mundo, comércio e migração',()=>d.openModule('world')),
       item('Opções',()=>d.controls.options?.()),
       item('Editor de mapa',()=>d.controls.editor?.()),
-      item('Terreno, semente e geração',()=>d.openDestination('government','world')),
+      item('Novo Mundo…',()=>d.openNewGame()),
       item('Centralizar câmera',()=>d.controls.center?.()),
       item(d.controls.freeCameraActive?.()?'Sair da câmera livre':'Câmera livre',()=>d.controls.observe?.(d.controls.freeCameraActive?.()?'off':'free'),{checked:()=>!!d.controls.freeCameraActive?.()}),
       separator,

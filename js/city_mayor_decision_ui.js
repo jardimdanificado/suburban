@@ -20,14 +20,19 @@ export function renderMayorDecision(ui,p){
     const bill=city.politics.council.bills.find(b=>b.id===decision.billId);
     p.heading(bill.title);p.kv('Autor',bill.authorName||'Câmara municipal');
     p.kv('Votos',`${bill.yes??bill.votes.filter(v=>v.yes).reduce((sum,v)=>sum+(v.weight||1),0)} favoráveis · ${bill.no??bill.votes.filter(v=>!v.yes).reduce((sum,v)=>sum+(v.weight||1),0)} contrários (peso parlamentar)`);
-    p.kv('Prazo restante',`${Math.max(0,((bill.sanctionAt??city.minute)-city.minute)/60).toFixed(1)} horas da cidade`);
+    p.kv('Prazo restante',`${Math.max(0,((bill.status==='rejected'?bill.forceSanctionAt:bill.sanctionAt??city.minute)-city.minute)/60).toFixed(1)} horas da cidade`);
     if(bill.previousValue!=null)p.kv('Regra atual',billValue(city,bill,bill.previousValue));
     if(bill.payload.value!=null)p.kv('Proposta',billValue(city,bill,bill.payload.value));
     if(bill.payload.mode)p.kv('Sistema proposto',({appointed:'Nomeação pelo prefeito',council:'Eleição pela Câmara',direct:'Eleição popular'})[bill.payload.mode]||bill.payload.mode);
     if(bill.payload.buildingType)p.kv('Obra proposta',city.buildingTypes[bill.payload.buildingType]?.label||bill.payload.buildingType);
     if(bill.payload.buildingId)p.kv('Imóvel',city.building(bill.payload.buildingId)?.entity.properties.name||'Imóvel indisponível');
+    if(bill.status==='rejected'){
+      p.note('A Câmara recusou este projeto. Você pode forçar sua execução dentro do prazo. Sem resposta, permanece a rejeição.');
+      p.buttons([{label:'FORÇAR SANÇÃO',click:()=>mayorOrder(ui,'forceSanction',{billId:bill.id})},{label:'MANTER REJEIÇÃO',click:()=>mayorOrder(ui,'acceptRejection',{billId:bill.id})}]);
+    }else{
     p.note((ui.host?.controls.pauseForCouncilBills?.()??city.mayorPauseForCouncilBills===true)?'A pausa para projetos da Câmara está ativada nas configurações. Sancione, vete ou desative a opção para continuar.':'O jogo continua durante o prazo de veto. Sem resposta, o projeto recebe sanção tácita e esta janela fecha. O veto pode ser derrubado pela Câmara.');
     p.buttons([{label:'SANCIONAR AGORA',click:()=>mayorOrder(ui,'sanction',{billId:bill.id})},{label:'VETAR PROJETO',click:()=>mayorOrder(ui,'veto',{billId:bill.id})}]);
+    }
     p.windowLink('LER PROJETO COMPLETO',()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'council',councilView:'bills',billId:bill.id,recordWindow:true}));
     return;
   }

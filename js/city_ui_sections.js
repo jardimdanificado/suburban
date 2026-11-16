@@ -4,7 +4,7 @@ const details={profile:'Perfil',botany:'Ficha botânica',skills:'Trabalho',resum
 export function sectionTitle(state){
   if(state.tab==='mayor')return 'Modo prefeito';
   if(state.tab==='family')return 'Minha família';
-  if(state.tab==='newgame'||state.tab==='new-game')return 'Novo Jogo';
+  if(state.tab==='newgame'||state.tab==='new-game')return 'Novo Mundo…';
   if(state.tab==='economy'&&!state.selected&&state.employmentCompanyId!=null)return `Trabalho · ${state.city.building(state.employmentCompanyId)?.entity.properties.name||'Empresa'}${state.employmentCitizenId!=null?' · Candidatura':''}`;
   if(state.tab==='party-organization')return state.partyProposalId?`Fundação partidária #${state.partyProposalId}`:state.partyOrganizationView==='membership'?'Campanhas de filiação':'Registro de partidos';
   if(state.tab==='land'&&state.recordWindow)return `Terreno ${state.selectedPlotId}`;

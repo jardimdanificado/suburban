@@ -178,8 +178,8 @@ test('MainMenu draws all screens with ManagementCanvasUI primitives without erro
   assert.doesNotThrow(() => menu.draw(mockUi));
   assert(mockUi.regions.length > 0, "Should register interactive buttons");
 
-  // Verify that TITLE screen has 'Novo Jogo…', 'Opções…', '×' and no 'Cenários' or 'Editor'
-  assert(mockUi.regions.some(r => r.label === 'Novo Jogo…'), "TITLE should have 'Novo Jogo…'");
+  // Verify that TITLE screen has 'Novo Mundo…', 'Opções…', '×' and no 'Cenários' or 'Editor'
+  assert(mockUi.regions.some(r => r.label === 'Novo Mundo…'), "TITLE should have 'Novo Mundo…'");
   assert(mockUi.regions.some(r => r.label === 'Opções…'), "TITLE should have 'Opções…'");
   assert(mockUi.regions.some(r => r.label === '×'), "TITLE should always have close button '×'");
   assert.equal(mockUi.regions.some(r => r.label.includes('Cenários')), false, "No button should mention Cenários");
@@ -188,7 +188,7 @@ test('MainMenu draws all screens with ManagementCanvasUI primitives without erro
   // Verify clicking Novo Jogo triggers onOpenNewGame
   let newGameClicked = false;
   menu.onOpenNewGame = () => { newGameClicked = true; };
-  const njBtn = mockUi.regions.find(r => r.label === 'Novo Jogo…');
+  const njBtn = mockUi.regions.find(r => r.label === 'Novo Mundo…');
   njBtn.onClick();
   assert.equal(newGameClicked, true);
 
@@ -270,7 +270,7 @@ test('CityDesktop.openNewGame opens a dedicated Novo Jogo window without opening
 
   const win = desktop.manager.find('tool:newgame');
   assert(win, 'tool:newgame window was opened');
-  assert.equal(win.title, 'Novo Jogo');
+  assert.equal(win.title, 'Novo Mundo…');
   assert.notEqual(win.id, 'module:government');
 
   // Verify worldGeneration method exists and runs

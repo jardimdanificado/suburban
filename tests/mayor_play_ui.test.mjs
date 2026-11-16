@@ -100,7 +100,7 @@ test('desktop reuses the local orders window, keeps inspector access, and toolba
   const bill=city.mayorAction('bill',{type:'worksTransfer',value:10000});assert(bill);bill.status='awaiting-sanction';
   let paused=false;desktop.controls={isPaused:()=>paused,setPaused:value=>{paused=value;}};
   desktop.hidden=true;desktop.syncMayorDecisionWindows();assert(!paused,'council windows do not pause simulation');
-  assert.equal(desktop.active.mayorDecisionKey,`bill:${bill.id}`);assert(!desktop.close(desktop.manager.active.id));
+  assert.equal(desktop.active.mayorDecisionKey,`bill:${bill.id}`);assert(desktop.close(desktop.manager.active.id));desktop.syncMayorDecisionWindows();assert(!desktop.manager.windows.some(w=>w.state.mayorDecisionKey===`bill:${bill.id}`));
   assert(city.mayorAction('sanction',{billId:bill.id}));desktop.syncMayorDecisionWindows();
   desktop.syncMayorNotices();const notice=desktop.manager.find('page:mayor-notice');
   if(notice){const id=notice.state.mayorNoticeId;desktop.close(notice.id);assert(desktop.mayorReadNotices.has(id));}

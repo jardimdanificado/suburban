@@ -13,7 +13,7 @@ import {CRIME_TYPES} from './city_justice.js?v=citizen-access-1';
 import {canFarmVertically} from './city_farm_layout.js';
 const day = minute => `dia ${Math.floor(minute/1440)+1}`;
 const names = {build:'Obra',priority:'Prioridade',fund:'Custeio',service:'Serviço',bill:'Proposta',decree:'Decreto',appoint:'Nomeação',dismiss:'Exoneração',nationalize:'Estatização',privatize:'Privatização',road:'Acesso viário',expand:'Ampliação',lighting:'Iluminação pública',restock:'Alimentos públicos',firm:'Empresa municipal',office:'Andar municipal',housing:'Habitação social',paving:'Pavimentação',roadRepair:'Conservação viária',maintain:'Manutenção predial',offerShares:'Oferta de participações',dividend:'Resultado de estatal',marketRecovery:'Recuperação de mercado',rentVoucher:'Vale-aluguel',housingCredit:'Crédito habitacional',equityLoan:'Crédito de participação',rally:'Bandeiraço',sanction:'Sanção',veto:'Veto',start:'Início'};
-const tabs=[['agenda','SITUAÇÃO'],['build','OBRAS'],['operations','CUSTEIO'],['cabinet','GABINETE'],['policies','POLÍTICAS'],['council','CÂMARA'],['orders','ORDENS']];
+const tabs=[['party','PARTIDO'],['campaign','CAMPANHA'],['agenda','SITUAÇÃO'],['build','OBRAS'],['operations','CUSTEIO'],['cabinet','GABINETE'],['policies','POLÍTICAS'],['council','CÂMARA'],['orders','ORDENS']];
 const billStates={'awaiting-secretary-review':'Decreto em análise','superseded':'Substituído','awaiting-session':'Aguardando plenário',dismissed:'Arquivado','awaiting-sanction':'Aguardando sanção',vetoed:'Vetado','veto-maintained':'Veto mantido',proposed:'Em discussão',approved:'Aprovado',executing:'Em execução',executed:'Executado',rejected:'Rejeitado'};
 function pager(ui,p,rows,key,size=6){
   if(rows.length<=size)return rows;
@@ -25,33 +25,57 @@ const policyValue=(spec,value)=>{if(typeof spec.default==='boolean')return value
 export function renderMayorCampaign(ui,p) {
   const city=ui.city,s=city.mayorCampaign,gov=city.politics;
   const act=(action,options={})=>mayorOrder(ui,action,options);
-  if(!ui.mayorDesk)p.heading('MODO PREFEITO · GOVERNO INDIRETO');
-  if(!s){
+  if(!ui.mayorDesk)p.heading('MODO PARTIDÁRIO');
+  if(!s||s.mode!=='play'&&s.status!=='defeated'){
     const mayor=city.society.citizen(city.economy.mayorId),party=gov.party(mayor?.political?.partyId);
-    p.note('Assuma a prefeitura atual. Nomeie secretários, emita decretos, proponha leis, contraia obras e serviços; cidadãos e empresas executam o trabalho real.');
-    p.kv('Prefeito',mayor?.entity.properties.name||'Aguardando posse');
-    p.kv('Seu partido',party?.name||'Aguardando filiação');
-    p.note('Mantenha este partido na prefeitura. A troca por outro partido, inclusive por sucessão ou afastamento, encerra a campanha.');
-    p.note('A agenda automática de governo e a expansão pública automática cedem as escolhas ao jogador. Serviços correntes, empresas privadas, Câmara e eleições continuam funcionando.');
-    p.note('Não há capital extra. Obras usam a verba aprovada; serviços, custeio e ligações viárias usam o tesouro. A escolha do terreno segue o planejamento existente.');
-    p.button('ASSUMIR A PREFEITURA',()=>act('start'));
+    const parties=gov.parties.filter(row=>row.active&&!row.retiring);
+    const chosen=parties.find(row=>row.id===ui.startPartyId)||party||parties[0];
+    p.heading('MODO PARTIDÁRIO');
+    p.note('Controle seu partido no governo ou na oposição. A partida termina somente se o partido for liquidado.');
+    if(chosen){
+      ui.selectControl(p,'Partido inicial',parties.map(row=>[row.id,`${row.short} · ${row.name}`]),chosen.id,value=>{ui.startPartyId=Number(value);});
+      p.kv('Filiados',chosen.memberIds.length);p.kv('Bancada',gov.council.members.filter(m=>m.partyId===chosen.id).length);
+      p.button('CONTROLAR ESTE PARTIDO',()=>act('start',{partyId:chosen.id}));
+    }
     return;
   }
   if(!ui.mayorDesk){p.kv('Partido da campanha',s.partyName);p.kv('Prefeito em exercício',city.society.citizen(city.economy.mayorId)?.entity.properties.name||'Sucessão em andamento');}
   if(s.status==='defeated'){
     p.status('DERROTA',s.reason);
-    p.note(`Campanha de ${day(s.startedAt)} até ${day(s.endedAt)}. A simulação para ao perder a prefeitura.`);
+    p.note(`Campanha de ${day(s.startedAt)} até ${day(s.endedAt)}. O partido foi liquidado.`);
     if(s.mode==='play')p.button('ENCERRAR CAMPANHA E OBSERVAR A CIDADE',()=>act('observe'));
     else p.note('Campanha encerrada. A cidade voltou à simulação autônoma. Crie outra cidade para jogar novamente.');
     return;
   }
   if(s.mode!=='play'){p.note('Campanha encerrada pelo jogador. A cidade voltou à simulação autônoma.');return;}
-  const view=ui.mayorView||'agenda';
+  const governing=gov.partyOfId(city.economy.mayorId)?.id===s.partyId;
+  p.status(governing?'PARTIDO NO GOVERNO':'PARTIDO NA OPOSIÇÃO',`${gov.council.members.filter(m=>m.partyId===s.partyId).length} vereadores · ${gov.party(s.partyId)?.memberIds.length||0} filiados`);
+  p.buttons([{label:'PARTIDO E BANCADA',click:()=>ui.host?.openMayorDesk('party')},{label:'CAMPANHA',click:()=>ui.host?.openMayorDesk('campaign')}]);
+  const view=ui.mayorView||'party';
+  if(view==='party'||!governing&&!['campaign','orders','council'].includes(view)){
+    const party=gov.party(s.partyId);
+    p.kv('Caixa partidário',money(gov.partyAccount(party).balance));
+    p.note('A orientação vale para votações futuras. Votos individuais definidos abaixo têm prioridade.');
+    ui.selectControl(p,'Orientação da bancada',[['free','Voto livre'],['yes','Aprovar propostas'],['no','Rejeitar propostas']],s.voteStance||'free',stance=>act('partyStance',{stance}));
+    p.windowLink('ORGANIZAÇÃO E FILIADOS',()=>ui.host?.openParty(s.partyId));
+    p.windowLink('PROPOR LEIS NA CÂMARA',()=>ui.host?.openMayorDesk('council'));
+    p.heading('VOTAÇÕES EM ABERTO');
+    const bills=gov.council.bills.filter(b=>['awaiting-session','proposed','vetoed'].includes(b.status));
+    for(const bill of pager(ui,p,bills,'partyBillPage',4)){
+      p.heading(bill.title);
+      p.buttons([{label:'BANCADA: SIM',click:()=>act('partyVote',{billId:bill.id,stance:'yes'})},{label:'BANCADA: NÃO',click:()=>act('partyVote',{billId:bill.id,stance:'no'})},{label:'LIBERAR',click:()=>act('partyVote',{billId:bill.id,stance:'free'})}]);
+      for(const member of gov.council.members.filter(m=>m.partyId===s.partyId))ui.selectControl(p,`${bill.id} · ${member.name}`,[['free','Seguir orientação'],['yes','Sim'],['no','Não']],typeof bill.playerVotes?.[member.citizenId]==='boolean'?(bill.playerVotes[member.citizenId]?'yes':'no'):'free',stance=>act('partyVote',{billId:bill.id,citizenId:member.citizenId,stance}));
+      p.windowLink('LER PROJETO',()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'council',councilView:'bills',billId:bill.id}));
+    }
+    if(!bills.length)p.note('Nenhum projeto aguardando votação. Prepare a campanha e acompanhe os filiados.');
+    return;
+  }
+
   if(ui.mayorDesk){
     p.heading(MAYOR_DESKS[view]||'Prefeitura');
     p.note(`Tesouro ${money(city.treasury)} · obras ${money(gov.ensureWorksBudget())}`);
   }else{
-    p.status('MANTENHA O PARTIDO NO PODER',`Avaliação ${Math.round(gov.approval)}/100 · votação ${gov.nextElectionAt==null?'sem data':day(gov.nextElectionAt)}`);
+    p.status('CONSTRUA A FORÇA DO PARTIDO',`Avaliação ${Math.round(gov.approval)}/100 · votação ${gov.nextElectionAt==null?'sem data':day(gov.nextElectionAt)}`);
     p.links(tabs.map(([id,label])=>({label,selected:view===id,click:()=>{if(ui.host?.openMayorDesk)ui.host.openMayorDesk(id);else{ui.mayorView=id;ui.resetScroll();}}})));
   }
   if(view==='challenges'){renderMayorChallenges(ui,p);

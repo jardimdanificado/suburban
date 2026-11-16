@@ -10,7 +10,7 @@ import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js?v=favorite-window-icons-3';
 import {clipCanvasRegion} from './canvas_widgets.js';
 
-export const CITY_WINDOWS=[['mayor','Modo prefeito'],['city','Cidade'],['government','Governo'],['people','Cidadãos'],['land','Terrenos e obras'],['buildings','Imóveis'],['economy','Empresas'],['market','Mercado e riquezas'],['production','Produção'],['transport','Transportes'],['world','Mundo e rotas'],['urban-art','Arte urbana'],['safety','Segurança'],['forensics','IML e corpos'],['justice','Justiça'],['custody','Prisões'],['sanitation','Saneamento'],['publications','Jornais e livros'],['corruption','Corrupção'],['log','Histórico'],['favorites','Favoritos'],['custom-history','Histórico personalizado'],['map','Mapa da cidade']];
+export const CITY_WINDOWS=[['mayor','Modo Partidário'],['city','Cidade'],['government','Governo'],['people','Cidadãos'],['land','Terrenos e obras'],['buildings','Imóveis'],['economy','Empresas'],['market','Mercado e riquezas'],['production','Produção'],['transport','Transportes'],['world','Mundo e rotas'],['urban-art','Arte urbana'],['safety','Segurança'],['forensics','IML e corpos'],['justice','Justiça'],['custody','Prisões'],['sanitation','Saneamento'],['publications','Jornais e livros'],['corruption','Corrupção'],['log','Histórico'],['favorites','Favoritos'],['custom-history','Histórico personalizado'],['map','Mapa da cidade']];
 const sizes={mayor:[660,640],family:[650,640],market:[700,500],party:[560,570],contract:[530,500],'poll-response':[560,560],'party-organization':[560,500],election:[610,510],publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],world:[570,540],'urban-art':[650,500],safety:[670,520],forensics:[650,520],justice:[700,540],custody:[640,520],sanitation:[570,450],log:[530,450],favorites:[460,420],'custom-history':[370,270],newgame:[400,470]};
 const intersects=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 
@@ -91,7 +91,8 @@ export class CityDesktop {
     if(code==='Enter'||code==='Space'){this.activateMenu(items[this.menuIndex>=0?this.menuIndex:available[0]]);return true;}return false;
   }
   openParty(id){const party=this.city.politics.party(id);if(!party)return;const state=this.create(`party:${id}`,'party',{title:`${party.short} · ${party.name}`,kind:'section'});state.partyId=id;return state;}
-  openMayorDesk(view='agenda',section=null){
+  openMayorDesk(view='party',section=null){
+    if(view==='council')this.dismissedMayorBills?.clear();
     const id=`mayor-desk:${view}`,state=this.create(id,'mayor',{title:MAYOR_DESKS[view]||'Prefeitura',kind:'page'});
     const window=this.manager.find(id);if(!this.manager.saved.has(id)){window.w=540;window.h=view==='challenges'?380:view==='campaign'?460:520;this.manager.constrain(window);}
     state.mayorView=view;state.mayorDesk=true;if(section)state.mayorSection=section;
@@ -156,7 +157,7 @@ export class CityDesktop {
       this.hidden=false;
       return existing.state;
     }
-    const state=this.create('tool:newgame','newgame',{title:'Novo Jogo',kind:'section'});
+    const state=this.create('tool:newgame','newgame',{title:'Novo Mundo…',kind:'section'});
     state.onClose=()=>{
       if(this.controls.hasActiveGame&&!this.controls.hasActiveGame()){
         this.controls.mainMenu?.();
@@ -207,7 +208,13 @@ export class CityDesktop {
   }
   setPlotSelection(id){if(mayorPlaying(this.city))return this.openMayorTarget({kind:'plot',id});const state=this.create(`plot:${id}`,'land',{title:`Terreno ${id}`,kind:'section'});state.selectedPlotId=id;state.recordWindow=true;state.setView('plots');return state;}
   toggle(){if(!this.manager.windows.length){this.openModule('city');return;}this.hidden=!this.hidden;this.element.hidden=this.hidden;}
-  close(id){if(this.manager.find(id)?.state.mayorDecisionKey&&pendingMayorDecisions(this.city).some(d=>d.key===this.manager.find(id).state.mayorDecisionKey))return null;const w=this.manager.close(id);if(w){w.state.onClose?.();w.state.element.remove?.();w.state.visible=false;}return w;}
+  close(id){
+    const key=this.manager.find(id)?.state.mayorDecisionKey;
+    const decision=key&&pendingMayorDecisions(this.city).find(d=>d.key===key);
+    if(decision&&decision.kind!=='bill')return null;
+    if(decision){this.dismissedMayorBills??=new Set();this.dismissedMayorBills.add(key);}
+    const w=this.manager.close(id);if(w){w.state.onClose?.();w.state.element.remove?.();w.state.visible=false;}return w;
+  }
   closeAll(all=false){for(const w of [...this.manager.windows])if(all||!w.pinned)this.close(w.id);}
   pointerDown(x,y){
     if(this.menuOpen){const b=this.menuBounds,toolbarButton=this.menuBarRegions?.some(r=>r.onClick&&x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h);if(toolbarButton||b&&x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h)return false;this.closeMenu();this.menuDismissGesture=true;return true;}
@@ -256,7 +263,7 @@ export class CityDesktop {
       {label:'Busca geral · Ctrl+K',icon:'search',w:36,click:()=>this.openGlobalSearch()},
       {label:`${activeCityName} · Mundo e rotas marítimas`,buttonLabel:activeCityName,icon:'map',w:worldButtonWidth,click:()=>{this.closeMenu();this.openModule('world');},selected:!this.hidden&&!!this.manager.find('module:world')},
       ...controls.map(([icon,label,click,selected])=>({icon,label,click:()=>{this.closeMenu();click?.();},selected,w:29})),
-      ...CITY_WINDOWS.filter(([tab])=>tab!=='world'&&(!mayorPlaying(this.city)||['mayor','city','people','production','transport','map'].includes(tab))).map(([tab,label])=>({label:tab==='mayor'&&mayorPlaying(this.city)?`Decisões (${mayorDecisions(this.city).length})`:label,icon:tab,w:29,click:()=>{this.closeMenu();if(tab==='mayor'&&mayorPlaying(this.city))this.openMayorDesk('agenda');else this.toggleModule(tab);},selected:!this.hidden&&!!this.manager.find(`module:${tab}`)})),
+      ...CITY_WINDOWS.filter(([tab])=>tab!=='world'&&(!mayorPlaying(this.city)||['mayor','city','people','production','transport','map'].includes(tab))).map(([tab,label])=>({label:tab==='mayor'&&mayorPlaying(this.city)?`Decisões (${mayorDecisions(this.city).length})`:label,icon:tab,w:29,click:()=>{this.closeMenu();if(tab==='mayor'&&mayorPlaying(this.city))this.openMayorDesk('party');else this.toggleModule(tab);},selected:!this.hidden&&!!this.manager.find(`module:${tab}`)})),
       ...(mayorPlaying(this.city)?[
         ['build','land','Construir'],['operations','sanitation','Serviços'],['cabinet','people','Gabinete'],['policies','politics','Políticas'],['campaign','elections','Campanha'],['challenges','current','Compromissos']
       ].map(([view,icon,label])=>({label,icon,w:29,click:()=>{this.closeMenu();this.openMayorDesk(view);},selected:!this.hidden&&this.manager.active?.id===`mayor-desk:${view}`})):[]),
@@ -291,7 +298,7 @@ export class CityDesktop {
     ui.button(w.x+w.w-83,w.y+2,20,18,w.pinned?'●':'○',()=>this.manager.pin(w.id),{selected:w.pinned});ui.regions.at(-1).label=`Fixar: ${title}`;
     ui.button(w.x+w.w-62,w.y+2,20,18,w.shaded?'▣':'−',()=>this.manager.shade(w.id));ui.regions.at(-1).label=`Recolher: ${title}`;
     ui.button(w.x+w.w-41,w.y+2,20,18,w.maximized?'↙':'↗',()=>this.manager.maximize(w.id));ui.regions.at(-1).label=`Ampliar: ${title}`;
-    if(!w.state.mayorDecisionKey){ui.button(w.x+w.w-20,w.y+2,18,18,'×',()=>this.close(w.id));ui.regions.at(-1).label=`Fechar: ${title} (também com botão direito)`;}
+    if(!w.state.mayorDecisionKey||pendingMayorDecisions(this.city).some(d=>d.key===w.state.mayorDecisionKey&&d.kind==='bill')){ui.button(w.x+w.w-20,w.y+2,18,18,'×',()=>this.close(w.id));ui.regions.at(-1).label=`Fechar: ${title} (também com botão direito)`;}
     if(!w.shaded){const previousState=ui.windowState;ui.windowState=w.state;w.state.windowLinks=[];try{if(w.state.tab==='map')this.drawMap(ui,w);else w.state.drawFloating(ui,w);}finally{ui.windowState=previousState;}if(w.state.openCurrentInWindow&&w.state.tab!=='map'){ui.button(w.x+w.w-177,w.y+w.h-20,154,18,'DESTACAR ABA ↗',()=>w.state.openCurrentInWindow());ui.regions.at(-1).label='Abrir aba atual em outra janela';}if(!w.maximized){const handle=this.manager.resizeHandle(w);ctx.fillStyle=T.muted;for(let i=0;i<3;i++)ctx.fillRect(handle.x+handle.w-3-i*4,handle.y+handle.h-3-i*4,2,2+i*4);ui.regions.push({...handle,label:`Redimensionar: ${title}`,onClick:null});}ui.text(w.pinned?'Fixada':'',w.x+6,w.y+w.h-17,T.muted);}
     else {w.state.element.hidden=true;w.state.zones=[];}
   }
@@ -317,6 +324,7 @@ export class CityDesktop {
       if(resume&&this.city.mayorCampaign?.status!=='defeated')this.controls.setPaused?.(false);
     }
     for(const decision of shown){
+      if(decision.kind==='bill'&&this.dismissedMayorBills?.has(decision.key))continue;
       const id=`page:mayor-decision:${decision.key}`;
       if(!this.manager.find(id)){
         const state=this.openPage(`mayor-decision:${decision.key}`,{title:decision.title,width:decision.kind==='bill'?480:580,height:decision.kind==='bill'?360:560,draw:(p,ui)=>renderMayorDecision(ui,p)});

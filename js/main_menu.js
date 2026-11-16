@@ -61,6 +61,7 @@ export class MainMenu {
     onStartGame,
     onPlayGame,
     onMayorGame,
+    onEndGame,
     onStartNewCity,
     onOpenNewGame,
     onOpenOptions
@@ -73,6 +74,7 @@ export class MainMenu {
     this.onStartGame = onStartGame;
     this.onPlayGame = onPlayGame;
     this.onMayorGame = onMayorGame;
+    this.onEndGame = onEndGame;
     this.onStartNewCity = onStartNewCity;
     this.onOpenNewGame = onOpenNewGame;
     this.onOpenOptions = onOpenOptions;
@@ -117,6 +119,7 @@ export class MainMenu {
 
   close() {
     this.active = false;
+    if(this.modeInputRoot)this.modeInputRoot.hidden=true;
     this.hasActiveGame = true;
     this.dragGesture = null;
   }
@@ -209,6 +212,8 @@ export class MainMenu {
 
   startSelectedMode() {
     this.gameModeOpen = false;
+    if(this.sessionActive){this.close();return this.onStartGame?.();}
+    this.sessionActive=true;
     if (this.gameMode === 'character') return this.onPlayGame?.();
     this.close();
     if (this.gameMode === 'party') return this.onMayorGame?.();
@@ -250,6 +255,7 @@ export class MainMenu {
   }
 
   draw(ui) {
+    if(this.modeInputRoot)this.modeInputRoot.hidden=!this.active||this.screen!=='TITLE';
     if (!this.active) return;
     this.regions = [];
 
@@ -291,8 +297,8 @@ export class MainMenu {
   drawOpenTTDMainMenu(ui, width, height, isMobile) {
     const ctx = ui.ctx;
 
-    const winW = Math.min(340, width - 24);
-    const winH = this.gameModeOpen ? 278 : 194;
+    const winW = Math.min(360, width - 24);
+    const winH = this.sessionActive ? 158 : 128;
 
     // Initialize or constrain window position
     if (this.windowPos.x === null || this.windowPos.y === null) {
@@ -335,26 +341,34 @@ export class MainMenu {
     const btnH = 26;
 
     const modes = [['simulation','Modo Simulação'],['party','Modo Partidário'],['character','Modo Personagem(Experimental)']];
-    ui.text('Modo de jogo', btnX, btnY + 4, T.ink);
-    btnY += 20;
-    ui.button(btnX, btnY, btnW, btnH, `${modes.find(([id]) => id === this.gameMode)[1]} ▾`, () => {
-      this.gameModeOpen = !this.gameModeOpen;
-    });
-    btnY += 30;
-    if (this.gameModeOpen) {
-      for (const [id,label] of modes) {
-        ui.button(btnX, btnY, btnW, 24, label, () => {
-          this.gameMode = id;
-          this.gameModeOpen = false;
-        }, {selected:this.gameMode === id});
-        btnY += 28;
+    if(typeof document!=='undefined'&&document.createElement){
+      if(!this.modeInput){
+        this.modeInputRoot=document.createElement('div');
+        this.modeInputRoot.className='city-inputs';
+        Object.assign(this.modeInputRoot.style,{position:'fixed',inset:'0',zIndex:'30',pointerEvents:'none'});
+        this.modeInput=document.createElement('select');
+        this.modeInput.setAttribute('aria-label','Modo de jogo');
+        for(const [value,label] of modes){const option=document.createElement('option');option.value=value;option.textContent=label;this.modeInput.append(option);}
+        this.modeInput.onchange=()=>{this.gameMode=this.modeInput.value;};
+        this.modeInputRoot.append(this.modeInput);document.body.append(this.modeInputRoot);
       }
+      this.modeInputRoot.hidden=!!this.sessionActive;
+      const canvas=document.querySelector('#canvas-ui'),rect=canvas?.getBoundingClientRect?.();
+      const sx=rect?rect.width/width:1,sy=rect?rect.height/height:1;
+      Object.assign(this.modeInput.style,{left:`${(rect?.left||0)+btnX*sx}px`,top:`${(rect?.top||0)+btnY*sy}px`,width:`${(btnW-102)*sx}px`,height:`${btnH*sy}px`});
+      if(document.activeElement!==this.modeInput)this.modeInput.value=this.gameMode;
     }
-    ui.button(btnX, btnY, btnW, btnH, this.hasActiveGame ? '▶ Continuar' : '▶ Iniciar', () => this.startSelectedMode(), {selected:true});
+    ui.button(this.sessionActive?btnX:btnX+btnW-96, btnY, this.sessionActive?btnW:96, btnH, this.sessionActive ? '▶ Continuar' : '▶ Iniciar', () => this.startSelectedMode(), {selected:true});
     btnY += 30;
 
+    if(this.sessionActive){
+      ui.button(btnX,btnY,btnW,btnH,'Encerrar jogo',()=>{
+        this.onEndGame?.();this.sessionActive=false;this.hasActiveGame=false;this.open();
+      });
+      btnY+=30;
+    }
     // Button: Novo Jogo…
-    ui.button(btnX, btnY, btnW, btnH, 'Novo Jogo…', () => {
+    ui.button(btnX, btnY, btnW, btnH, 'Novo Mundo…', () => {
       this.close();
       if (typeof this.onOpenNewGame === 'function') {
         this.onOpenNewGame();
@@ -369,6 +383,7 @@ export class MainMenu {
         this.onOpenOptions();
       }
     });
+
   }
 
   /**
@@ -404,7 +419,7 @@ export class MainMenu {
     ctx.font = ui.font(1, true);
     ctx.textBaseline = 'middle';
     ctx.fillStyle = T.captionInk;
-    ctx.fillText('Novo Jogo · Terreno e geração', mx + 10, my + 13);
+    ctx.fillText('Novo Mundo · Terreno e geração', mx + 10, my + 13);
     ctx.restore();
 
     // Close button (×)

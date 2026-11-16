@@ -16,7 +16,7 @@ export class CityGovernmentAgenda {
   proposal(term,execution,type,payload,title){
     const p=this.city.politics;
     const mayor=this.city.society.citizen(this.city.economy.mayorId);
-    if(mayor&&!mayor.playerControlled&&this.city.mayorCampaign?.mode!=='play'&&!decreeError(p,type,payload,mayor.id)){
+    if(mayor&&!mayor.playerControlled&&!(this.city.mayorCampaign?.mode==='play'&&p.partyOfId(this.city.economy.mayorId)?.id===this.city.mayorCampaign.partyId)&&!decreeError(p,type,payload,mayor.id)){
       const decree=p.issueDecree(type,payload,mayor.id);if(decree&&typeof decree==='object'){decree.agendaTermId=term.id;decree.promiseMetric=term.promises[0].metric;this.record(term,execution,`${term.mayorName} emitiu decreto: ${title}.`,{billId:decree.id,action:'decree'});return decree;}
     }
     const matching=p.council.bills.find(b=>pending(b)&&b.type===type&&(type!=='salesTax'||b.payload.category===payload.category)&&(type==='build'||payload.value==null||b.payload.value===payload.value)&&(type!=='build'||b.payload.buildingType===payload.buildingType&&(payload.buildingType!=='farm'||(b.payload.crop||'milho')===(payload.crop||'milho'))));
@@ -75,7 +75,7 @@ export class CityGovernmentAgenda {
     }
   }
   hourly(force=false){
-    if(this.city.mayorCampaign?.mode==='play')return;
+    if((this.city.mayorCampaign?.mode==='play'&&this.city.politics.partyOfId(this.city.economy.mayorId)?.id===this.city.mayorCampaign.partyId))return;
     const city=this.city,p=city.politics,term=p.mandates.current,pr=term?.promises[0];if(!pr||term.endedAt!=null)return;
     const period=`${term.id}:${Math.floor(city.minute/360)}`;if(!force&&this.lastPeriod===period)return;this.lastPeriod=period;
     this.execute(term,pr);

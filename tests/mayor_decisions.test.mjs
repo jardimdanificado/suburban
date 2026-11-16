@@ -118,3 +118,33 @@ test('project link opens the council bill detail',()=>{
   renderMayorDecision(ui,p);links.find(link=>link.label==='LER PROJETO COMPLETO').click();
   assert.equal(destination.tab,'government');assert.equal(destination.views.government,'elections');assert.equal(destination.politicsTab,'council');assert.equal(destination.billId,bill.id);
 });
+
+test('rejected bills allow forced sanction only within the deadline and retain council votes',()=>{
+ const city=start();confirm(city);
+ const bill=city.mayorAction('bill',{type:'worksTransfer',value:10000});bill.status='rejected';bill.forceSanctionAt=city.minute+360;bill.votes=[{yes:false,weight:1,partyId:city.mayorCampaign.partyId}];
+ assert(pendingMayorDecisions(city).some(row=>row.billId===bill.id));
+ assert(city.mayorAction('forceSanction',{billId:bill.id}));assert(bill.forcedSanction);assert.notEqual(bill.status,'rejected');assert.equal(bill.votes[0].yes,false);
+ const next=city.mayorAction('bill',{type:'worksBudget',value:100000});next.status='rejected';next.forceSanctionAt=city.minute;
+ assert(!city.mayorAction('forceSanction',{billId:next.id}));assert.equal(next.status,'rejected');assert(!pendingMayorDecisions(city).some(row=>row.billId===next.id));
+ next.forceSanctionAt=city.minute+360;assert(city.mayorAction('acceptRejection',{billId:next.id}));assert.equal(next.status,'rejected');assert(!pendingMayorDecisions(city).some(row=>row.billId===next.id));
+});
+
+test('party control survives loss of the mayor and ends only on liquidation',()=>{
+ const city=start();confirm(city);const gov=city.politics,s=city.mayorCampaign;
+ const mayor=city.society.citizen(city.economy.mayorId),other=gov.parties.find(p=>p.active&&p.id!==s.partyId);assert(other);
+ mayor.political.partyId=other.id;updateMayorCampaign(city);assert.equal(s.status,'active');assert.equal(s.inGovernment,false);
+ assert.equal(s.governmentReview,null);assert(!city.mayorAction('decree',{type:'tax',payload:{value:.1}}));
+ assert(city.mayorAction('partyStance',{stance:'no'}));assert.equal(s.voteStance,'no');
+ gov.party(s.partyId).active=false;updateMayorCampaign(city);assert.equal(s.status,'defeated');assert.match(s.reason,/liquidado/);
+});
+
+test('player chooses an opposition party and assigns only its own council votes',()=>{
+ const city=setup({starter:true,population:24}),gov=city.politics;
+ const party=gov.parties.find(p=>p.active&&p.id!==gov.partyOfId(city.economy.mayorId)?.id);assert(party);
+ assert(city.mayorAction('start',{partyId:party.id}));assert.equal(city.mayorCampaign.partyId,party.id);assert.equal(city.mayorCampaign.governmentReview,undefined);
+ const member=gov.council.members[0];assert(member);member.partyId=party.id;
+ const bill={id:99991,status:'proposed',playerVotes:{}};gov.council.bills.push(bill);
+ assert(city.mayorAction('partyVote',{billId:bill.id,citizenId:member.citizenId,stance:'yes'}));assert.equal(bill.playerVotes[member.citizenId],true);
+ assert(city.mayorAction('partyVote',{billId:bill.id,citizenId:member.citizenId,stance:'free'}));assert.equal(bill.playerVotes[member.citizenId],undefined);
+ bill.status='executed';assert(!city.mayorAction('partyVote',{billId:bill.id,stance:'no'}));
+});
