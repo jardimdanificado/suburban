@@ -13,6 +13,10 @@ const GRAPHICS = [
   { key: "nightLightLimit", label: "LUZES NOTURNAS", values: [32, 64, 128, 256].map(v => [v, `${v}`]), default: 32, graphic: true },
   effect("normalMaps", "NORMAL MAPS", BOOL, true),
 ];
+const AUDIO = [
+  { key: "musicMuted", label: "MUTE", values: BOOL, default: false },
+  { key: "musicVolume", label: "VOLUME DA MUSICA", values: [0, 0.1, 0.25, 0.5, 0.75, 1].map(v => [v, `${v * 100}%`]), default: 0.5 },
+];
 const TIME = [{key:"fastForwardEnabled",label:"MODOS FF",values:BOOL,default:false}];
 const INTERFACE = [{key:'pauseForCouncilBills',label:'PAUSAR EM PROJETOS DA CÂMARA',values:BOOL,default:false},{key:'showInterventions',label:'CONTROLES DE INTERVENÇÃO',values:BOOL,default:true}];
 const EFFECTS = [
@@ -28,8 +32,9 @@ const EFFECTS = [
   effect("contrast", "CONTRASTE", [0.5, 0.75, 1, 1.25, 1.5].map(v => [v, `${v}`]), 1),
 ];
 export class OptionsPanel {
-  constructor({ renderer, time, step, storage = null, onTimeChange = () => {} }) {
+  constructor({ renderer, time, step, storage = null, music = null, onTimeChange = () => {} }) {
     this.renderer = renderer;
+    this.music = music;
     this.time = time;
     this.onTimeChange = onTimeChange;
     this.step = step;
@@ -40,7 +45,7 @@ export class OptionsPanel {
     this.maxScroll = 0;
     this.bounds = null;
     this.values = {};
-    this.items = [...GRAPHICS, ...EFFECTS, ...INTERFACE, ...TIME].map(item => item.key === "nightLightLimit" && Number.isFinite(renderer.nightLightLimitCeiling)
+    this.items = [...GRAPHICS, ...EFFECTS, ...INTERFACE, ...TIME, ...AUDIO].map(item => item.key === "nightLightLimit" && Number.isFinite(renderer.nightLightLimitCeiling)
       ? { ...item, values: item.values.filter(([value]) => value <= renderer.nightLightLimitCeiling) }
       : item);
     for (const item of this.items) if (!item.values.length) item.values = [[32, "32"]];
@@ -59,7 +64,9 @@ export class OptionsPanel {
     const item = this.items.find(row => row.key === key);
     if (!item || !item.values.some(([v]) => v === value)) return false;
     const r = this.renderer;
-    if (key === "fastForwardEnabled") { this.time.setFastForwardEnabled(value); this.onTimeChange(this.time); }
+    if (key === "musicMuted") this.music?.setMuted(value);
+    else if (key === "musicVolume") this.music?.setVolume(value);
+    else if (key === "fastForwardEnabled") { this.time.setFastForwardEnabled(value); this.onTimeChange(this.time); }
     else if (item.graphic) r.setGraphicOptions({ [key]: value });
     else if (key === "terrainOptimizations") r.setTerrainOptimizations(value);
     else if (key === "resolution") r.setResolutionScale(value);
@@ -102,12 +109,12 @@ export class OptionsPanel {
     if (!effectsAvailable && this.tab === "VISUAL") this.tab = "GRAPHICS";
     const tabs = [["GRAPHICS", "GRAFICOS"]];
     if (effectsAvailable) tabs.push(["VISUAL", "EFEITOS"]);
-    tabs.push(["TIME", "TEMPO"], ["INTERFACE", "INTERFACE"]);
+    tabs.push(["TIME", "TEMPO"], ["INTERFACE", "INTERFACE"], ["AUDIO", "AUDIO"]);
     tabs.forEach(([id, label], i) => {
       const bw = Math.floor((w - 32) / tabs.length);
       ui.button(x + 8 + i * (bw + 4), y + 30, bw, 24, label, () => { this.tab = id; this.scroll = 0; }, { selected: this.tab === id });
     });
-    const rows = this.tab === "INTERFACE" ? INTERFACE : this.tab === "GRAPHICS" ? this.items.filter(item => GRAPHICS.some(graphic => graphic.key === item.key)) : this.items.filter(item => EFFECTS.some(effect => effect.key === item.key));
+    const rows = this.tab === "AUDIO" ? AUDIO : this.tab === "INTERFACE" ? INTERFACE : this.tab === "GRAPHICS" ? this.items.filter(item => GRAPHICS.some(graphic => graphic.key === item.key)) : this.items.filter(item => EFFECTS.some(effect => effect.key === item.key));
     const contentY = y + 62, bottom = y + h - (floating?40:6);
     const first = ui.regions.length;
     ui.ctx.save(); ui.ctx.beginPath(); ui.ctx.rect(x + 4, contentY, w - 8, Math.max(0, bottom - contentY)); ui.ctx.clip();
@@ -129,7 +136,7 @@ export class OptionsPanel {
       const headingHeight = this.tab === "VISUAL" ? 0 : 22;
       this.maxScroll = Math.max(0, rows.length * 30 + headingHeight - (bottom - contentY));
       this.scroll = Math.min(this.scroll, this.maxScroll);
-      if (headingHeight) ui.text("AJUSTES DO RENDERIZADOR 3D", x + 12, contentY + 4 - this.scroll, "#3cbcfc");
+      if (headingHeight) ui.text(this.tab === "AUDIO" ? "MUSICA" : "AJUSTES DO RENDERIZADOR 3D", x + 12, contentY + 4 - this.scroll, "#3cbcfc");
       rows.forEach((row, i) => {
         const ry = contentY + headingHeight + i * 30 - this.scroll;
         if (ry + 30 < contentY || ry > bottom) return;

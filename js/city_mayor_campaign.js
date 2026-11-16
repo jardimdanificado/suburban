@@ -1,3 +1,4 @@
+import {partyActivity} from './city_party_player.js';
 import {syncMayorReviews,selectReviewPromises,confirmMayorReview,selectReviewCandidate} from './city_mayor_decisions.js';
 import {acceptMayorChallenge,updateMayorChallenges} from './city_mayor_challenges.js';
 import {OFFICE_ONLY_TYPES,officeFloors,createMunicipalOffice} from './city_offices.js?v=office-demand-rollout-1';
@@ -295,12 +296,14 @@ export function mayorAction(city,action,options={}) {
   if(!mayorMode(city))return city.fail('A campanha foi encerrada. Crie outra cidade para jogar novamente.');
   updateMayorCampaign(city);
   if(s.status!=='active')return city.fail('O partido foi liquidado. A campanha terminou.');
-  const partyActions=new Set(['reviewCandidate','reviewVice','reviewPromises','confirmReview','campaignControl','campaignMaterial','rally','bill','partyVote','partyStance']);
+  const partyActions=new Set(['reviewCandidate','reviewVice','reviewPromises','confirmReview','campaignControl','campaignMaterial','rally','bill','partyVote','partyStance','partyActivity']);
   if(p.partyOfId(city.economy.mayorId)?.id!==s.partyId&&(!partyActions.has(action)||['reviewPromises','confirmReview'].includes(action)&&options.kind==='government'))return city.fail('Esta decisão exige que seu partido governe a prefeitura.');
   const mayor=city.society.citizen(city.economy.mayorId);
   if(!mayor||mayor.entity.destroyed)return city.fail('Aguarde a posse do prefeito.');
   let result,details={};
-  if(action==='partyStance'){
+  if(action==='partyActivity'){
+    result=partyActivity(city,options);
+  }else if(action==='partyStance'){
     if(!['yes','no','free'].includes(options.stance))return city.fail('Orientação inválida.');
     s.voteStance=options.stance;result=true;
   }else if(action==='partyVote'){
@@ -489,7 +492,7 @@ export function mayorAction(city,action,options={}) {
     details={billId:bill.id};
   }else return city.fail('Ordem de prefeito desconhecida.');
   if(!result)return result;
-  const label={partyVote:'definir voto da bancada',partyStance:'orientar a bancada',forceSanction:'forçar sanção de projeto recusado',acceptRejection:'manter rejeição da Câmara',reviewCandidate:'escolher candidato a prefeito',reviewVice:'escolher candidato a vice',reviewPromises:'escolher promessas',confirmReview:'confirmar decisões de governo',challenge:'assumir compromisso público',campaignControl:'definir controle da campanha',campaignMaterial:'contratar propaganda partidária',pauseWork:'alterar execução de obra',build:'contratar obra',priority:'alterar prioridade',fund:'destinar custeio',service:'contratar serviço',bill:'encaminhar proposta à Câmara',decree:'emitir decreto',appoint:'nomear secretário',dismiss:'exonerar secretário',nationalize:'encaminhar estatização',privatize:'encaminhar privatização',road:'contratar acesso viário',expand:'contratar ampliação',firm:'abrir empresa municipal',office:'instalar atividade em andar municipal',housing:'contratar habitação social',paving:'priorizar pavimentação',roadRepair:'conservar vias',maintain:'contratar manutenção predial',offerShares:'ofertar participações dentro da cota',dividend:'transferir resultado de estatal',marketRecovery:'recuperar mercado local',rentVoucher:'conceder vale-aluguel',housingCredit:'conceder crédito habitacional',equityLoan:'conceder crédito de participação em estatal',lighting:'instalar iluminação pública',restock:'comprar alimentos para refeições públicas',rally:'realizar bandeiraço',sanction:'sancionar projeto',veto:'vetar projeto'}[action];
+  const label={partyActivity:'organizar atividade partidária',partyVote:'definir voto da bancada',partyStance:'orientar a bancada',forceSanction:'forçar sanção de projeto recusado',acceptRejection:'manter rejeição da Câmara',reviewCandidate:'escolher candidato a prefeito',reviewVice:'escolher candidato a vice',reviewPromises:'escolher promessas',confirmReview:'confirmar decisões de governo',challenge:'assumir compromisso público',campaignControl:'definir controle da campanha',campaignMaterial:'contratar propaganda partidária',pauseWork:'alterar execução de obra',build:'contratar obra',priority:'alterar prioridade',fund:'destinar custeio',service:'contratar serviço',bill:'encaminhar proposta à Câmara',decree:'emitir decreto',appoint:'nomear secretário',dismiss:'exonerar secretário',nationalize:'encaminhar estatização',privatize:'encaminhar privatização',road:'contratar acesso viário',expand:'contratar ampliação',firm:'abrir empresa municipal',office:'instalar atividade em andar municipal',housing:'contratar habitação social',paving:'priorizar pavimentação',roadRepair:'conservar vias',maintain:'contratar manutenção predial',offerShares:'ofertar participações dentro da cota',dividend:'transferir resultado de estatal',marketRecovery:'recuperar mercado local',rentVoucher:'conceder vale-aluguel',housingCredit:'conceder crédito habitacional',equityLoan:'conceder crédito de participação em estatal',lighting:'instalar iluminação pública',restock:'comprar alimentos para refeições públicas',rally:'realizar bandeiraço',sanction:'sancionar projeto',veto:'vetar projeto'}[action];
   const suffix=action==='appoint'?` ${details.officeShort}: ${city.society.citizen(details.citizenId)?.entity.properties.name||''}.`:action==='dismiss'?` ${details.officeShort}.`:'';
   record(city,action,`Ordem de governo: ${label}.${suffix}`,details);
   return result;

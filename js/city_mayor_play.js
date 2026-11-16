@@ -1,3 +1,4 @@
+import {renderPartyActivities} from './city_party_player.js';
 import {MAYOR_CHALLENGES,challengeValue} from './city_mayor_challenges.js';
 import {publicProjects} from './city_mayor_campaign.js';
 import {OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
@@ -165,6 +166,7 @@ export function renderMayorElection(ui,p){
   p.kv('Caixa partidário',money(city.politics.partyAccount(party).balance));
   p.note('Propaganda usa dinheiro do partido, materiais, trabalhadores e caminhos reais. O tesouro não financia a campanha.');
   ui.selectControl(p,'Controle da campanha',[['automatic','Organização automática'],['manual','Eu escolho os atos e materiais']],s.campaignControl||'automatic',mode=>mayorOrder(ui,'campaignControl',{mode}));
+  renderPartyActivities(ui,p,(action,options)=>mayorOrder(ui,action,options));
   if(e?.status!=='campaign'){p.note('Não há eleição em campanha. Prepare serviços e compromissos para a próxima votação.');return;}
   const n=e.candidates.find(n=>n.partyId===s.partyId);
   p.kv('Votação',`Em ${Math.max(0,(e.voteAt-city.minute)/1440).toFixed(1)} dias`);

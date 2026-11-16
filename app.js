@@ -13,7 +13,8 @@ import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
 import { SimulationTime, FF_SPEED, FF_LOD_SPEED, FF2_SPEED } from "./js/simulation_time.js?v=ff3-ff4-steps-1";
-import { OptionsPanel } from "./js/options.js?v=ff-toggle-terrain-default-on-1";
+import { OptionsPanel } from "./js/options.js?v=music-1";
+import { MusicPlayer } from "./js/music.js";
 import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
 import { WorldNetClient, WorldNetCoordinator } from './js/world_net.js?v=world-net-1';
 
@@ -60,7 +61,12 @@ worldNetCoordinator.client = worldNet;
 renderer3D.worldCoordinator = worldNetCoordinator;
 let optionStorage = null;
 try { optionStorage = window.localStorage; } catch {}
-export const options = new OptionsPanel({ renderer: renderer3D, time, step: stepSimulation, storage: optionStorage });
+const music = new MusicPlayer();
+export const options = new OptionsPanel({ renderer: renderer3D, time, step: stepSimulation, storage: optionStorage, music });
+music.start();
+for (const type of ["pointerdown", "keydown"]) {
+  window.addEventListener(type, () => music.start(), { capture: true });
+}
 export const editor = new MapEditor({ world, entities, destroyEntity });
 export const mainMenu = new MainMenu({
   world,

@@ -1,3 +1,4 @@
+import {renderPartyActivities} from './city_party_player.js';
 import {mayorDecisions,mayorOrder,renderMayorChallenges,renderMayorElection,MAYOR_DESKS} from './city_mayor_play.js';
 import {OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
 import {publicProjects,municipalFirmType,municipalOfficeVacancies} from './city_mayor_campaign.js';
@@ -59,6 +60,7 @@ export function renderMayorCampaign(ui,p) {
     ui.selectControl(p,'Orientação da bancada',[['free','Voto livre'],['yes','Aprovar propostas'],['no','Rejeitar propostas']],s.voteStance||'free',stance=>act('partyStance',{stance}));
     p.windowLink('ORGANIZAÇÃO E FILIADOS',()=>ui.host?.openParty(s.partyId));
     p.windowLink('PROPOR LEIS NA CÂMARA',()=>ui.host?.openMayorDesk('council'));
+    renderPartyActivities(ui,p,act);
     p.heading('VOTAÇÕES EM ABERTO');
     const bills=gov.council.bills.filter(b=>['awaiting-session','proposed','vetoed'].includes(b.status));
     for(const bill of pager(ui,p,bills,'partyBillPage',4)){
