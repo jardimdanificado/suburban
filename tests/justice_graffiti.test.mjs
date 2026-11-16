@@ -2,7 +2,7 @@ import {gerarFraseTematica} from '../js/gerador_frases.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CityJustice} from '../js/city_justice.js';
-import {nearbyGraffitiSurfaces,graffitiSurfaceVertices,graffitiSurfaceExists,graffitiCameraFocus,fitGraffitiToWall} from '../js/city_graffiti_surfaces.js';
+import {nearbyGraffitiSurfaces,graffitiSurfaceVertices,graffitiSurfaceExists,graffitiCameraFocus,fitGraffitiToWall,graffitiWallHasWindow} from '../js/city_graffiti_surfaces.js';
 import {CityStateGraph} from '../js/city_state.js';
 import {setup} from './helpers/city.mjs';
 import {renderUrbanArt} from '../js/city_justice_ui.js';
@@ -123,19 +123,24 @@ test('fecal protest missions also generate their text through the vocabulary gra
   assert.equal(citizen.graffitiMission.message,`${expected} · Prefeitura`);
 });
 
-test('wall graffiti clears ground-floor windows on every facade and repositions saved paint',()=>{
- const {city,citizen,justice}=fixture();const building=city.buildings[0];building.terrain={base:1.16};building.door=null;
+test('wall graffiti fills solid walls and clears only actual ground-floor windows',()=>{
+ const {city,citizen,justice}=fixture();const building=city.buildings[0];building.terrain={base:1.16};building.door=null;building.type='townhall';
+ building.units=[{id:1,x:0,y:0,z:0,hasWindow:true},{id:2,x:1,y:0,z:0,hasWindow:true},{id:3,x:0,y:1,z:0,hasWindow:true},{id:4,x:1,y:1,z:0,hasWindow:true}];
  const wall=nearbyGraffitiSurfaces(city,{entity:{x:5,y:5}},8).filter(s=>s.surface==='wall');
  assert.deepEqual(new Set(wall.map(s=>s.side)),new Set([0,1,2,3]));
  for(const support of wall){
   assert(support.position.z-support.height/2>building.terrain.base);
-  assert(support.position.z+support.height/2<building.terrain.base+.49,'paint must stay below the window frame');
+  if(graffitiWallHasWindow(building,support))assert(support.position.z+support.height/2<building.terrain.base+.49,'paint must stay below the window frame');
+  else assert.equal(support.height,1.64,'solid walls use the whole ground-floor height');
  }
- const support=wall[0];support.position.z=building.terrain.base+.65;support.height=.65;
+ assert(wall.some(s=>graffitiWallHasWindow(building,s)));assert(wall.some(s=>!graffitiWallHasWindow(building,s)));
+ const support=wall.find(s=>graffitiWallHasWindow(building,s));support.position.z=building.terrain.base+.65;support.height=.65;
  const piece={entity:{destroyed:false},support};justice.art=[piece];const revision=justice.artRevision;
  justice.updateStreetGraffitiSupports();assert.equal(piece.entity.destroyed,false);
  assert(support.position.z+support.height/2<building.terrain.base+.49);
  assert.equal(justice.artRevision,revision+1);assert.equal(fitGraffitiToWall(city,support),false);
+ for(const unit of building.units)unit.hasWindow=false;
+ assert(fitGraffitiToWall(city,support));assert.equal(support.height,1.64);
 });
 
 test('moderate-risk citizens can paint by day and repeat after a day, but not while busy',()=>{
@@ -160,4 +165,19 @@ test('political graffiti carries its named target, party and known scandal throu
  justice.updateGraffitiMission(citizen);const art=justice.art[0];
  assert.equal(art.subjectId,9);assert.equal(art.partyId,2);assert.equal(art.corruptionCaseId,17);
  assert.equal(art.politicalKind,'corruption');assert.equal(art.layers[0].message,art.message);
+});
+
+test('a blocked approach does not destroy paint while its physical wall remains',()=>{
+ const {city,justice}=fixture();const support=nearbyGraffitiSurfaces(city,{entity:{x:4.5,y:3.5}}).find(s=>s.surface==='wall');
+ const piece={entity:{destroyed:false},support};justice.art=[piece];
+ city.buildings.push({id:20,entity:{x:Math.floor(support.approach.x),y:Math.floor(support.approach.y)},width:1,depth:1});
+ justice.updateStreetGraffitiSupports();assert.equal(piece.entity.destroyed,false);
+ city.buildings[0].entity.destroyed=true;justice.updateStreetGraffitiSupports();assert.equal(piece.entity.destroyed,true);
+});
+
+test('destroyed catalogue entries cannot move the camera',()=>{
+ const {city,piece}=fixture();piece.entity.destroyed=true;piece.damageHistory=[];city.justice.labelArt=()=> 'uma pichação';
+ const records=[],camera=[],panel=new Proxy({record:(...args)=>records.push(args)},{get:(target,key)=>target[key]||(()=>{})});
+ renderUrbanArt({city,view:()=> 'damage',matches:()=>true,camera:(...args)=>camera.push(args),host:{setSelection:()=>{}}},panel);
+ const row=records.find(([title])=>title.includes(piece.message));assert(row);row[2]?.();assert.deepEqual(camera,[]);
 });

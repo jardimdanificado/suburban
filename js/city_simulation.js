@@ -876,13 +876,15 @@ export class CitySimulation {
   assignHousingAndJobs() { this.economy.assignHomes(); this.economy.hire(); }
   _ensureBlockedGrid() {
     const width = this.world.width, height = this.world.height, obsRev = this.obstacleRevision || 0, occSize = this.occupied.size;
-    const blockedRevision = `${width}:${height}:${obsRev}:${occSize}`;
+    const blockedRevision = `${width}:${height}:${obsRev}:${occSize}:${this.nature?.plants.size||0}:${this.furniture?.benches.length||0}`;
     if (!this._pathBlockedGrid || this._pathBlockedRevision !== blockedRevision) {
       const grid = new Uint8Array(width * height);
       for (const cell of this.occupied) {
         const comma = cell.indexOf(','), cx = Number(cell.slice(0, comma)), cy = Number(cell.slice(comma + 1));
         if (cx >= 0 && cy >= 0 && cx < width && cy < height) grid[cy * width + cx] = 1;
       }
+      for(const plant of this.nature?.plants.values()||[])if(!plant.entity.destroyed&&plant.entity.properties.tree)grid[plant.y*width+plant.x]=1;
+      for(const bench of this.furniture?.benches||[])grid[Math.floor(bench.y)*width+Math.floor(bench.x)]=1;
       this._pathBlockedGrid = grid;
       this._pathBlockedRevision = blockedRevision;
     }

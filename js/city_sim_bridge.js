@@ -37,20 +37,26 @@ function renderSegmentWalkable(world,ax,ay,bx,by,allowWater=false,occupied=null)
   }
   return true;
 }
+function citizenMotionObstacles(sample){
+  const city=sample.city;if(!city?._ensureBlockedGrid)return city?.occupied;
+  sample.collisionGrid=city._ensureBlockedGrid();sample.collisionWidth=city.world.width;
+  return sample.collisionTiles??={has(key){const comma=key.indexOf(','),x=Number(key.slice(0,comma)),y=Number(key.slice(comma+1));return sample.collisionGrid[y*sample.collisionWidth+x]===1;}};
+}
 export function sampleCitizenMotion(world,sample,now,smoothMovement=true){
   if(sample.citizen?.playerControlled){
     // The player must not inherit the 180 ms observation buffer used by NPCs.
     sample.entity.x=sample.to.x;sample.entity.y=sample.to.y;if(sample.points)sample.points.length=0;return true;
   }
+  const obstacles=citizenMotionObstacles(sample);
   if(smoothMovement&&sample.points?.length&&!sample.citizen?.boatClass){
-    const city=sample.city,occupied=city?.occupied;
-    if(sample.clearWorld!==world||sample.clearTerrain!==world.revision||sample.clearObstacles!==city?.obstacleRevision||sample.clearSize!==occupied?.size){
-      sample.clearWorld=world;sample.clearTerrain=world.revision;sample.clearObstacles=city?.obstacleRevision;sample.clearSize=occupied?.size;
+    const city=sample.city,occupied=obstacles;
+    if(sample.clearWorld!==world||sample.clearTerrain!==world.revision||sample.clearObstacles!==city?.obstacleRevision||sample.clearSize!==city?.occupied?.size){
+      sample.clearWorld=world;sample.clearTerrain=world.revision;sample.clearObstacles=city?.obstacleRevision;sample.clearSize=city?.occupied?.size;
       sample.motionRevision=(sample.motionRevision||0)+1;
     }
-    sample.segmentClear??=((a,b)=>renderSegmentWalkable(sample.clearWorld,a.x,a.y,b.x,b.y,false,sample.city?.occupied));
+    sample.segmentClear??=((a,b)=>renderSegmentWalkable(sample.clearWorld,a.x,a.y,b.x,b.y,false,sample.collisionTiles||sample.city?.occupied));
     sample.cornerClear??=((a,b,c)=>{
-      const world=sample.clearWorld,occupied=sample.city?.occupied,margin=.28;
+      const world=sample.clearWorld,occupied=sample.collisionTiles||sample.city?.occupied,margin=.28;
       const x0=Math.floor(Math.min(a.x,b.x,c.x)-margin),x1=Math.floor(Math.max(a.x,b.x,c.x)+margin);
       const y0=Math.floor(Math.min(a.y,b.y,c.y)-margin),y1=Math.floor(Math.max(a.y,b.y,c.y)+margin);
       for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)if(occupied?.has(`${x},${y}`)||!terrainWalkable(world,x,y)||!canStep(world,Math.floor(b.x),Math.floor(b.y),x,y))return false;
@@ -69,14 +75,14 @@ export function sampleCitizenMotion(world,sample,now,smoothMovement=true){
   // Most worker updates move a citizen within the same tile. The current tile
   // is already known to be walkable, so avoid sampling its terrain repeatedly
   // on every motion packet and render frame.
-  if(Math.floor(x)===Math.floor(tx)&&Math.floor(y)===Math.floor(ty)){
+  if(Math.floor(x)===Math.floor(tx)&&Math.floor(y)===Math.floor(ty)&&!obstacles?.has(`${Math.floor(tx)},${Math.floor(ty)}`)){
     sample.entity.x=tx;sample.entity.y=ty;sample.blockedSince=null;sample.points.length=0;return true;
   }
-  if(renderSegmentWalkable(world,x,y,tx,ty,!!sample.citizen?.boatClass)){
+  if(renderSegmentWalkable(world,x,y,tx,ty,!!sample.citizen?.boatClass,obstacles)){
     sample.entity.x=tx;sample.entity.y=ty;sample.blockedSince=null;sample.points.length=0;return true;
   }
   sample.blockedSince??=now;
-  if(now-sample.blockedSince>=600&&terrainWalkable(world,Math.floor(tx),Math.floor(ty))){sample.entity.x=tx;sample.entity.y=ty;sample.points.length=0;sample.blockedSince=null;return true;}
+  if(now-sample.blockedSince>=600&&terrainWalkable(world,Math.floor(tx),Math.floor(ty))&&!obstacles?.has(`${Math.floor(tx)},${Math.floor(ty)}`)){sample.entity.x=tx;sample.entity.y=ty;sample.points.length=0;sample.blockedSince=null;return true;}
   return false;
 }
 function renderIndoorPosition(c,position){

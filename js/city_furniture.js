@@ -1,6 +1,6 @@
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=fast-speeds-1';
-import {ROAD_TILES,tileAt,surfaceElevation} from './city_terrain.js?v=entrance-retaining-clearance-1';
+import {ROAD_TILES,tileAt,surfaceElevation,terrainWalkable} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {roadRetainingFaces} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
 import {TILE_SAND,TILE_WATER} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 const BEACH_LEISURE_OCCUPANCY=new WeakMap();
@@ -74,7 +74,7 @@ export class CityFurniture{
   if((this.benchLayoutVersion||0)<6){const beachIds=new Set(this.benches.filter(b=>b.kind==='beach_chair'||b.kind==='beach_ground').map(b=>b.id));for(const c of city.citizens)if(c.seatId&&beachIds.has(Number(c.seatId.split(':')[0]))){this.release(c);if(c.task==='sit'){c.task=null;c.path=[];}}this.benches=this.benches.filter(b=>!beachIds.has(b.id));this.benchLayoutVersion=6;}
   // Streets can be paved beneath a bench after it was placed. Road tiles remain
   // walkable, so walkability alone does not detect that stale placement.
-  const removed=new Set(this.benches.filter(b=>{const x=Math.floor(b.x),y=Math.floor(b.y);return !city.walkable(x,y)||ROAD_TILES.has(tileAt(city.world,x,y));}).map(b=>b.id));if(removed.size){for(const c of city.citizens)if(c.seatId&&removed.has(Number(c.seatId.split(':')[0]))){this.release(c);c.path=[];if(c.task==='sit')c.task=null;}this.benches=this.benches.filter(b=>!removed.has(b.id));}
+  const removed=new Set(this.benches.filter(b=>{const x=Math.floor(b.x),y=Math.floor(b.y);return !terrainWalkable(city.world,x,y)||city.occupied.has(`${x},${y}`)||city.nature?.tiles?.has(`${x},${y}`)||ROAD_TILES.has(tileAt(city.world,x,y));}).map(b=>b.id));if(removed.size){for(const c of city.citizens)if(c.seatId&&removed.has(Number(c.seatId.split(':')[0]))){this.release(c);c.path=[];if(c.task==='sit')c.task=null;}this.benches=this.benches.filter(b=>!removed.has(b.id));city.obstacleRevision=(city.obstacleRevision||0)+1;}
   for(const bench of this.benches)bench.angle=furnitureFacingAngle(city,bench);
   for(const b of city.buildings)if(b.type==='farm'&&!b.farmSoilReady)cultivateFarmTerrain(city,b);
   for(const b of city.buildings)for(const p of [b.door,...(b.accessPath||[])])candidates.set(`${Math.floor(p.x)},${Math.floor(p.y)}`,p);
@@ -84,10 +84,10 @@ export class CityFurniture{
    const rx=Math.floor(p.x),ry=Math.floor(p.y);if(!ROAD_TILES.has(tileAt(city.world,rx,ry)))continue;
    for(const [dx,dy]of [[1,0],[-1,0],[0,1],[0,-1]]){const x=rx+dx,y=ry+dy,tile=tileAt(city.world,x,y);
     const occupiedByBuilding=city.buildings.some(b=>x>=b.entity.x&&x<b.entity.x+b.width&&y>=b.entity.y&&y<b.entity.y+b.depth);
-    if(tile===TILE_SAND||!city.walkable(x,y)||ROAD_TILES.has(tile)||city.occupied.has(`${x},${y}`)||occupiedByBuilding||this.benches.some(b=>Math.hypot(b.x-x-.5,b.y-y-.5)<5)||city.buildings.some(b=>Math.hypot(b.door.x-x-.5,b.door.y-y-.5)<1.5))continue;
+    if(tile===TILE_SAND||!city.walkable(x,y)||ROAD_TILES.has(tile)||city.occupied.has(`${x},${y}`)||city.nature?.tiles?.has(`${x},${y}`)||occupiedByBuilding||this.benches.some(b=>Math.hypot(b.x-x-.5,b.y-y-.5)<5)||city.buildings.some(b=>Math.hypot(b.door.x-x-.5,b.door.y-y-.5)<1.5))continue;
     // Keep the complete bench footprint inside this single non-road tile.
     // Fixed benches face the street; beach gear belongs to each visitor.
-    const bench={id:this.nextId++,x:x+.5,y:y+.5,angle:Math.atan2(-dx,-dy),kind:'bench',seats:[null,null],builtAt:city.minute};bench.angle=furnitureFacingAngle(city,bench);this.benches.push(bench);break;
+    const bench={id:this.nextId++,x:x+.5,y:y+.5,angle:Math.atan2(-dx,-dy),kind:'bench',seats:[null,null],builtAt:city.minute};bench.angle=furnitureFacingAngle(city,bench);this.benches.push(bench);city.obstacleRevision=(city.obstacleRevision||0)+1;break;
    }if(this.benches.length>=limit)break;
   }
  }
@@ -102,7 +102,9 @@ export class CityFurniture{
     bench.seats[slot]=c.id;c.seatId=`${bench.id}:${slot}`;return {bench,point,path};}
   }return null;
  }
- seatPoint(b,slot){const offset=b.kind==='bench'?(slot===0?-.18:.18):0;return {x:b.x+Math.cos(b.angle)*offset,y:b.y-Math.sin(b.angle)*offset};}
+ seatPosePoint(b,slot){const offset=b.kind==='bench'?(slot===0?-.18:.18):0;return {x:b.x+Math.cos(b.angle)*offset,y:b.y-Math.sin(b.angle)*offset};}
+ // Walking stops in front of the collider; only the seated render pose occupies the bench.
+ seatPoint(b,slot){const point=this.seatPosePoint(b,slot);return {x:point.x+Math.sin(b.angle)*.72,y:point.y+Math.cos(b.angle)*.72};}
  queueSeat(c,b){const seat=this.claimBench(c,b.door,10);if(!seat)return false;const distance=Math.hypot(c.entity.x-seat.point.x,c.entity.y-seat.point.y);if(distance>.15&&!c.path.length)c.path=seat.path||this.city.findPath(c.entity,seat.point)||[];return true;}
  waitForInputs(c,b,reason='Aguardando matéria-prima'){
   const city=this.city,resume=c.task,seat=this.claimBench(c,c.entity,14);c.workWait={employerId:b.id,resume,retryAt:city.minute+12,reason};c.task='work-wait';c.targetId=b.id;
@@ -145,7 +147,7 @@ export class CityFurniture{
   if(c.workWait&&c.task!=='work-wait')c.workWait=null;
   if(c.task==='beach_leisure'&&c.beachLeisure){const beach=c.beachLeisure,arrived=!c.path.length&&Math.hypot(c.entity.x-beach.x,c.entity.y-beach.y)<.2,chair=beach.kind==='beach_chair';c.seated=arrived&&chair;c.furnitureUse=arrived?{id:`beach:${c.id}`,type:beach.kind,label:chair?'Cadeira de praia pessoal':'Descanso na areia',seated:c.seated,pose:chair?'seated':'ground_sit'}:null;c.action=arrived?'Descansando na praia':'Indo montar as coisas na praia';c.facingTarget={x:c.entity.x+Math.sin(beach.angle),y:c.entity.y+Math.cos(beach.angle)};return;}
   if(!c.seatId&&!c.indoorLocation){if(c.seated||c.furnitureUse){c.seated=false;c.furnitureUse=null;}return;}
-  if(c.seatId){const allowedTask=SEAT_TASKS.has(c.task),waitingForService=!!c.serviceQueue?.buildingId;if((!allowedTask&&!waitingForService)||c.entity.destroyed){this.release(c);return;}const [id,slot]=seatIdParts(c.seatId),b=this.benches.find(b=>b.id===id),point=b&&this.seatPoint(b,slot);c.seated=!!point&&!c.path.length&&Math.hypot(c.entity.x-point.x,c.entity.y-point.y)<.14;if(c.seated){const beach=BEACH_SEATS.has(b.kind),groundPose=b.kind==='beach_ground'?(b.id%2?'ground_sit':'lying'):null;c.furnitureUse={id:`bench:${c.seatId}`,type:'bench',label:b.kind==='beach_chair'?'Cadeira de praia':b.kind==='beach_ground'?'Descanso na praia':'Banco',seated:true,...(groundPose?{pose:groundPose}:{})};c.facingTarget={x:c.entity.x+Math.sin(b.angle),y:c.entity.y+Math.cos(b.angle)};c.action=c.task==='work-wait'?'Aguardando sentado':b.kind==='beach_chair'?'Descansando na cadeira de praia':b.kind==='beach_ground'?(groundPose==='lying'?'Deitado na areia':'Sentado na areia'):'Descansando sentado no banco';}return;}
+  if(c.seatId){const allowedTask=SEAT_TASKS.has(c.task),waitingForService=!!c.serviceQueue?.buildingId;if((!allowedTask&&!waitingForService)||c.entity.destroyed){this.release(c);return;}const [id,slot]=seatIdParts(c.seatId),b=this.benches.find(b=>b.id===id),point=b&&this.seatPoint(b,slot);c.seated=!!point&&!c.path.length&&Math.hypot(c.entity.x-point.x,c.entity.y-point.y)<.14;if(c.seated){const beach=BEACH_SEATS.has(b.kind),groundPose=b.kind==='beach_ground'?(b.id%2?'ground_sit':'lying'):null;c.furnitureUse={id:`bench:${c.seatId}`,type:'bench',posePoint:{...this.seatPosePoint(b,slot),z:surfaceElevation(this.city.world,b.x,b.y)-surfaceElevation(this.city.world,c.entity.x,c.entity.y)},label:b.kind==='beach_chair'?'Cadeira de praia':b.kind==='beach_ground'?'Descanso na praia':'Banco',seated:true,...(groundPose?{pose:groundPose}:{})};c.facingTarget={x:c.entity.x+Math.sin(b.angle),y:c.entity.y+Math.cos(b.angle)};c.action=c.task==='work-wait'?'Aguardando sentado':b.kind==='beach_chair'?'Descansando na cadeira de praia':b.kind==='beach_ground'?(groundPose==='lying'?'Deitado na areia':'Sentado na areia'):'Descansando sentado no banco';}return;}
   const s=c.indoorLocation,u=this.city.units.get(s?.unitId),b=this.city.building(s?.buildingId),previousUse=c.furnitureUse;c.seated=false;c.furnitureUse=null;
   if(c.task==='outdoor_leisure'&&c.outdoorLeisure&&b?.id===c.outdoorLeisure.buildingId&&!s.exiting&&!s.path?.length){const visit=c.outdoorLeisure,position=visit.position||s.position,center={x:b.entity.x+b.width/2,y:b.entity.y+b.depth/2};c.seated=true;c.furnitureUse={id:`${visit.spaceId}:seat:${visit.slot}`,type:'chair',label:visit.kind==='balcony'?'Cadeira da varanda':'Cadeira da cobertura',seated:true,pose:'seated',slot:visit.slot,posePoint:{x:position.x,y:position.y,z:position.z??s.position?.z??0}};c.facingTarget=center;return;}
   if(!s||s.exiting||s.path?.length||!u||!b)return;

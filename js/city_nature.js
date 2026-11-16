@@ -27,7 +27,7 @@ export class CityNature {
   }
   available(x, y, species, buildingId = null, ignorePlantId = null) {
     const city = this.city, key = `${x},${y}`, spec = PLANT_SPECIES[species];
-    if (!spec || !spec.terrain.includes(tileAt(city.world,x,y)) || ROAD_TILES.has(tileAt(city.world,x,y)) || city.world.hasSidewalk?.(x,y) || city.cardboardShelters?.has(key) || city.occupied.has(key) || this.tiles.has(key) && this.tiles.get(key) !== ignorePlantId) return false;
+    if (!spec || !spec.terrain.includes(tileAt(city.world,x,y)) || ROAD_TILES.has(tileAt(city.world,x,y)) || city.world.hasSidewalk?.(x,y) || city.cardboardShelters?.has(key) || city.occupied.has(key) || city.furniture?.benches.some(b=>Math.floor(b.x)===x&&Math.floor(b.y)===y) || this.tiles.has(key) && this.tiles.get(key) !== ignorePlantId) return false;
     if (city.development.plots.some(p => (buildingId == null || p.buildingId !== buildingId) && x >= p.x && x < p.x+p.width && y >= p.y && y < p.y+p.depth)) return false;
     if (city.development.projects.some(p => !p.cancelled && p.status !== 'completed' && p.path?.some(t => Math.floor(t.x) === x && Math.floor(t.y) === y))) return false;
     if ([...city.lighting.sites.values()].some(p => p.status !== 'cancelled' && Math.floor(p.x) === x && Math.floor(p.y) === y)) return false;
@@ -40,7 +40,7 @@ export class CityNature {
     const entity = city.createEntity({x,y,properties:{name:spec.label,species,tree:spec.tree??(spec.wood>0),render:{color:spec.color,size:mature?(spec.renderSize||1):.3,skin:'feature_tree_full.png'}}});
     const plant = { id:entity.id,entity,species,x,y,buildingId,form:spec.form||(spec.tree||spec.wood>0?'tree':'flowering'),scientific:spec.scientific||'',visualScale:0.76+scaleSeed*0.52,plantedAt:city.minute-(mature?spec.grow:0),stage:mature?'mature':'seedling' };
     entity.properties.cityPlant = plant;
-    this.plants.set(plant.id,plant); this.tiles.set(`${x},${y}`,plant.id);this.scheduleGrowth(plant); city.structureRevision++;
+    this.plants.set(plant.id,plant); this.tiles.set(`${x},${y}`,plant.id);this.scheduleGrowth(plant); city.structureRevision++;city.obstacleRevision=(city.obstacleRevision||0)+1;
     return plant;
   }
   normalizePlantSpecies(plant) {
@@ -97,7 +97,7 @@ export class CityNature {
     this.seeds.push({x,y,species,buildingId,parentEventId,dueAt:this.city.minute+NATURE_RULES.germinationMinutes}); return true;
   }
   remove(plant, reason, details={}) {
-    plant.entity.destroyed=true;this.plants.delete(plant.id);this.tiles.delete(`${plant.x},${plant.y}`);this.city.structureRevision++;
+    plant.entity.destroyed=true;this.plants.delete(plant.id);this.tiles.delete(`${plant.x},${plant.y}`);this.city.structureRevision++;this.city.obstacleRevision=(this.city.obstacleRevision||0)+1;
     this.city.world.removeSidewalk?.(plant.x,plant.y);
     const label=this.normalizePlantSpecies(plant)?.label||'Vegetação';
     return this.city.log(`${label}: ${reason}.`,'nature',[],{kind:'plant-removed',plantId:plant.id,buildingId:plant.buildingId,...details});
@@ -164,7 +164,7 @@ export class CityNature {
     }
     const destination=job.stage==='return'?b.door:job;
     if(Math.hypot(c.entity.x-destination.x,c.entity.y-destination.y)>1.2){
-      const path=city.findPath(c.entity,destination);
+      const path=job.stage==='cut'?this.interactionPath(c,destination):city.findPath(c.entity,destination);
       if(path===null){c.action='Sem caminho para a atividade florestal';if(!job.load){c.forestryJob=null;b.forestryBlockedUntil=city.minute+60;}return false;}
       c.path=path;c.action=job.stage==='return'?'Levando madeira à silvicultura':job.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore';return true;
     }
@@ -209,9 +209,16 @@ export class CityNature {
     if(!FARM_CROPS[good]||FARM_CROPS[good].nonFood||!(c.inventory?.[good]>0)||c.custody||c.sleep?.active)return false;
     c.inventory[good]--;this.city.economy.consumed[good]=(this.city.economy.consumed[good]||0)+1;this.city.economy.recordGoods('wild-food-consumed',good,1,c.id,null);c.needs.food=Math.min(100,c.needs.food+18);return true;
   }
+  interactionPath(c,point){
+    const city=this.city,x=Math.floor(point.x),y=Math.floor(point.y);
+    if(city.walkable(x,y))return city.findPath(c.entity,point);
+    const approaches=[[0,1],[1,0],[0,-1],[-1,0]].map(([dx,dy])=>({x:x+dx+.5,y:y+dy+.5})).sort((a,b)=>Math.hypot(a.x-c.entity.x,a.y-c.entity.y)-Math.hypot(b.x-c.entity.x,b.y-c.entity.y));
+    for(const approach of approaches){if(!city.walkable(Math.floor(approach.x),Math.floor(approach.y)))continue;const path=city.findPath(c.entity,approach);if(path!==null)return path;}
+    return null;
+  }
   routeGather(c,plant,good){
     if(!plant||!this.stock(plant,good)||plant.buildingId||citizenFree(c)<1||c.custody||c.sleep?.active)return false;
-    const point={x:plant.x+.5,y:plant.y+.5},path=this.city.findPath(c.entity,point);if(path===null)return false;
+    const point={x:plant.x+.5,y:plant.y+.5},path=this.interactionPath(c,point);if(path===null)return false;
     c.forageJob={plantId:plant.id,good,progress:0};c.task='forage';c.targetId=null;c.path=path;c.action='Indo colher uma planta silvestre';return true;
   }
   sell(c,b,good,quantity=1){

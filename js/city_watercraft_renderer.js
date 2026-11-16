@@ -57,7 +57,6 @@ function makeBoatModel(THREE,kind){
     const yard=new THREE.Mesh(new THREE.CylinderGeometry(.018,.018,sailWidth,5),dark);yard.rotation.z=Math.PI/2;yard.position.set(0,.3+height*.55,z+.05);group.add(yard);
   };
   if(kind!=='canoe'){mast(length*.05,1.45,kind==='cargo'?.88:.7);if(kind==='cargo'||kind==='ferry')mast(length*.3,1.05,.58);}
-  if(kind==='cargo')for(const [x,z,color]of [[-.21,.55,0xb66f43],[.21,.55,0xc5a56a],[-.21,.82,0x637b7d],[.21,.82,0xb75b49]]){const crate=new THREE.Mesh(new THREE.BoxGeometry(.32,.22,.23),boatMaterial(THREE,'metal',color));crate.position.set(x,.39,z);crate.castShadow=true;group.add(crate);}
   if(kind==='canoe'||kind==='launch')for(const z of [-length*.22,length*.2]){const seat=new THREE.Mesh(new THREE.BoxGeometry(width*.78,.055,.1),dark);seat.position.set(0,.31,z);group.add(seat);}
   if(kind!=='canoe'){
     for(const x of [-width*.48,width*.48])for(const z of [-length*.25,length*.22]){

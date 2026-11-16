@@ -1,0 +1,23 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Postura nos bancos</title>
+<style>body{margin:0;font:16px system-ui;background:#b4c3b2}header{position:absolute;top:12px;left:12px;background:#fffe;padding:12px}button{margin:4px;padding:8px}</style>
+<header><div id="status">Carregando…</div><button id="side">Vista lateral</button><button id="rear">Vista traseira</button></header>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {CityCitizenModels} from '../js/city_citizen_models.js';
+import {furnitureModel} from '../js/city_furniture_models.js';
+const status=document.querySelector('#status');
+try{
+ const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);document.body.append(renderer.domElement);
+ const scene=new THREE.Scene();scene.background=new THREE.Color(0xb4c3b2);scene.add(new THREE.HemisphereLight(0xffffff,0x667755,2));
+ const light=new THREE.DirectionalLight(0xffffff,2);light.position.set(3,5,4);scene.add(light);
+ const ground=new THREE.Mesh(new THREE.PlaneGeometry(8,8),new THREE.MeshLambertMaterial({color:0x7b8665}));ground.rotation.x=-Math.PI/2;ground.position.y=-.01;scene.add(ground);
+ const bench=furnitureModel(THREE,{type:'bench',colonialStyle:3});bench.position.y=.02;scene.add(bench);
+ const group=new THREE.Group();scene.add(group);const models=new CityCitizenModels(THREE,group);await models.loading;if(!models.ready)throw Error(models.error);
+ const entity={id:1,x:-.18,y:.72,properties:{render:{color:0x668d55},citizen:{task:'sit',path:[],seated:true,furnitureUse:{type:'bench',seated:true,posePoint:{x:-.18,y:0,z:0}},facingTarget:{x:-.18,y:1.72}}}};
+ const camera=new THREE.OrthographicCamera(-1.25*innerWidth/innerHeight,1.25*innerWidth/innerHeight,1.25,-1.25,.1,100);
+ function view(x,y,z){camera.position.set(x,y,z);camera.lookAt(0,.4,0);}
+ view(3,1.1,1);document.querySelector('#side').onclick=()=>view(3,1.1,1);document.querySelector('#rear').onclick=()=>view(2,2,-3);
+ function render(){models.begin(1/60,1);models.add(entity,0);models.end();renderer.render(scene,camera);requestAnimationFrame(render);}render();
+ status.textContent='Banco real e modelo sentado do jogo';
+}catch(error){status.textContent=error.stack;}
+</script>

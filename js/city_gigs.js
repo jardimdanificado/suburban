@@ -175,7 +175,7 @@ export class CityGigs{
    if(dirtyFrontage&&this.createCleaningOrder(owner,b.id,{scope:'frontage'})){posted++;continue;}
    if((b.repairNeeded||b.condition<70)&&this.createRepairOrder(owner,b.id))posted++;
   }
-  for(const piece of city.justice?.art||[]){if(posted>=4)break;if(piece.entity.destroyed||!piece.layers.length||city.minute-(piece.lastDefacedAt??city.minute)<60)continue;if(city.justice.requestArtworkCleaning(piece.id))posted++;}
+  for(const piece of city.justice?.art||[]){if(posted>=4)break;if(piece.entity.destroyed||!piece.layers.length||city.minute-(piece.lastDefacedAt??city.minute)<(piece.support?.kind==='street-graffiti'?3*1440:60))continue;if(city.justice.requestArtworkCleaning(piece.id))posted++;}
  }
  updateMinute(){
   const city=this.city;for(const job of this.jobs)if(job.artwork?.kind==='flags')job.artwork.kind='banner';if(city.profileDiagnostics)this.lastSpontaneousArtworkProfile=null;

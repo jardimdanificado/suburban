@@ -211,7 +211,9 @@ function performGameAction(city,action,options={}){
     case 'gather':{
       const plant=city.nature.plants.get(options.plantId),good=options.good;
       if(!plant||plant.entity.destroyed||plant.buildingId||!city.nature.productsForFood(good)||!city.nature.stock(plant,good))return city.fail('Essa planta não possui alimento silvestre disponível.');
-      return route(city,c,{x:plant.x+.5,y:plant.y+.5},'gather',null,{plantId:plant.id,good,progress:0});
+      const path=city.nature.interactionPath(c,{x:plant.x+.5,y:plant.y+.5});
+      if(path===null)return city.fail('Não há acesso livre à planta.');
+      return route(city,c,path.at(-1)||c.entity,'gather',null,{plantId:plant.id,good,progress:0});
     }
     case 'sleep':{
       const home=city.housing.home(c),building=home&&city.building(home.buildingId);

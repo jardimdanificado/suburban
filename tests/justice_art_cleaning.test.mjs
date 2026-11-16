@@ -48,3 +48,14 @@ test('unfunded owner cannot create a free cleaning job',()=>{
   const {justice,city,art,vandalize}=fixture();vandalize('Pixo');city.accounts.get('citizen:1').balance=100;
   assert.equal(justice.requestArtworkCleaning(art.id),false);assert.equal(city.gigs.jobs.length,0);assert.equal(art.layers.length,1);
 });
+
+test('automatic street paint cleaning waits three days while manual cleaning remains available',()=>{
+ const {city,art,vandalize,justice}=fixture();
+ city.politics={officeHolder:()=>false};city.sanitation={streetFeces:new Map()};
+ art.support={kind:'street-graffiti',surface:'wall',approach:{x:2.5,y:2.5}};
+ vandalize('Pixo duradouro');city.minute=art.lastDefacedAt+3*1440-1;
+ city.gigs.postNeededWork();assert.equal(city.gigs.jobs.length,0);
+ city.minute++;city.gigs.postNeededWork();assert.equal(city.gigs.jobs.length,1);
+ assert.equal(city.gigs.jobs[0].artId,art.id);
+ assert.equal(justice.requestArtworkCleaning(art.id),false,'a second order must not duplicate the existing job');
+});
