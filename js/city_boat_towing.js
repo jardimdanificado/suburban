@@ -176,6 +176,7 @@ export function releaseLocalBoatTrip(city,person,cancel=false){
  if(person.boatTowService){const resume=person.boatTowService;if(person.task==='boat-tow-service'){person.task=resume.task;person.targetId=resume.targetId;}person.boatTowService=null;}
  person.localBoatTrip=null;person.boatClass=null;person.boatVehicleId=null;person.ridingVehicleId=null;person.ridingVehicleKind=null;person.towedBoatId=null;person.towBikeId=null;
  if(cancel||trip.cancelAtShore){person.path=[];person.task=null;}
+ if(trip.relocation&&!cancel&&!trip.cancelAtShore){const resume=trip.relocation;person.task=resume.task;person.targetId=resume.targetId;person.path=resume.goal?city.findPath(person.entity,resume.goal)||[]:[];}
 }
 function startTrip(city,person,plan){
  const boat=city.vehicles.units.get(plan.boatId),bike=plan.bikeId!=null?city.vehicles.units.get(plan.bikeId):null;
@@ -215,6 +216,7 @@ export function advanceLocalBoatTrip(city,person,dt){
   if(len<=travel+.00001){from.x=point.x;from.y=point.y;person.path.shift();if(mode==='pickup')trip.pickedUp=true;}
   person.entity.x=from.x;person.entity.y=from.y;
   person.boatClass=null;person.boatVehicleId=null;person.ridingVehicleId=null;person.ridingVehicleKind=null;person.towedBoatId=null;person.towBikeId=null;
+  if(mode==='walkAfter'&&bike){position(city,bike,from.x,from.y,angle);bike.ferrying=false;bike.towedBoatId=null;}
   if((mode==='cycle'||mode==='pickup')&&bike){position(city,bike,from.x,from.y,angle);person.ridingVehicleId=bike.id;person.ridingVehicleKind=bike.good;}
   if(trip.pickedUp&&['tow','sail','pickup'].includes(mode)){
    position(city,boat,from.x,from.y,angle);

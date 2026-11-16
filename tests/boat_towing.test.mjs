@@ -136,3 +136,33 @@ test('a marginal water shortcut keeps the direct land journey',()=>{
  assert.ok(seaSeconds<landSeconds&&seaSeconds>landSeconds*.9,`${seaSeconds} / ${landSeconds}`);
  assert.equal(planBoatTrip(city,person.entity,goal,{groundPath:ground,maxSeconds:landSeconds}),null);
 });
+
+test('commute demand dispatches a healthy boat from another lake and launches it physically',async()=>{
+ const {dispatchBoatRelocations}=await import('../js/city_boat_relocation.js');
+ const {city,person,boat,cycle}=fixture({boatOnLand:false});
+ for(let y=0;y<24;y++)for(let x=12;x<18;x++)city.world.map[y*32+x]=TILE_WATER;
+ for(let y=3;y<7;y++)for(let x=3;x<7;x++)city.world.map[y*32+x]=TILE_WATER;
+ boat.x=4.5;boat.y=6.5;person.entity.x=10.5;
+ person.task='work';person.targetId=17;person.jobId=17;
+ const goal={x:23.5,y:12.5},job={id:17,active:true,door:goal,accountId:'job',entity:{destroyed:false}};
+ city.building=id=>id===17?job:null;city.buildings=[job];city.minute=480;
+ const operator={id:8,accountId:boat.ownerAccountId,businessIds:[],entity:{x:7.5,y:12.5,properties:{}},task:null,path:[]};operator.entity.properties.citizen=operator;
+ person.accountId='commuter';city.citizens.push(operator);city.society.citizen=id=>city.citizens.find(c=>c.id===id);
+ const before={x:boat.x,y:boat.y};
+ job.active=false;assert.equal(dispatchBoatRelocations(city),false,'no real commute means no relocation');job.active=true;
+ const destination=job.door;job.door={x:11.5,y:12.5};assert.equal(dispatchBoatRelocations(city),false,'a short walk does not create crossing demand');job.door=destination;
+ cycle.driverId=99;assert.equal(dispatchBoatRelocations(city),false,'a busy bicycle cannot tow');cycle.driverId=null;
+ operator.accountId='unrelated';assert.equal(dispatchBoatRelocations(city),false,'unrelated operators cannot take the hull');operator.accountId=boat.ownerAccountId;
+ operator.sleep={active:true};assert.equal(dispatchBoatRelocations(city),false,'sleeping operators remain asleep');operator.sleep.active=false;
+ assert.equal(dispatchBoatRelocations(city),true);
+ assert.equal(boat.condition,100);assert.equal(operator.task,'boat-relocation');
+ assert.deepEqual({x:boat.x,y:boat.y},before,'dispatch reserves the real hull without moving it');
+ assert.equal(dispatchBoatRelocations(city),false,'one lake must not receive duplicate dispatches');
+ const {modes,positions}=finish(city,operator);assert.ok(modes.has('tow'));assert.ok(modes.has('sail'));
+ let previous=before;for(const point of positions){assert.ok(Math.hypot(point.x-previous.x,point.y-previous.y)<=.05*4*1.15+.001);previous=point;}
+ assert.equal(city.world.getTile(Math.floor(boat.x),Math.floor(boat.y)),TILE_WATER);
+ assert.ok(boat.x>=12&&boat.x<18);assert.ok(city.walkable(Math.floor(operator.entity.x),Math.floor(operator.entity.y)));
+ assert.ok(Math.hypot(cycle.x-operator.entity.x,cycle.y-operator.entity.y)<.01);
+ assert.equal(operator.task,null);assert.equal(boat.driverId,null);assert.equal(cycle.driverId,null);
+ const crossing=city.findPath(person.entity,goal);assert.equal(crossing?.[0]?.boatPlan?.boatId,boat.id);
+});

@@ -594,10 +594,6 @@ root.addEventListener("wheel", (event) => {
 }, { passive: false });
 
 window.addEventListener("keydown", (event) => {
-  // Consume native key repeat on the game surface, including keys without
-  // bindings. Keep dispatching controls so held movement and menus still work.
-  const typing=/^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName)||event.target?.isContentEditable;
-  if(event.repeat&&!typing&&!event.ctrlKey&&!event.metaKey&&!event.altKey)event.preventDefault();
   if(gameUI.active){if(gameUI.key(event,true))event.preventDefault();return;}
   if (mainMenu.isActive()) {
     if (event.code === 'Escape' && cityUI?.visible && cityUI?.manager?.windows?.length > 0) {
