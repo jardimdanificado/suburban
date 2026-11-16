@@ -23,6 +23,8 @@ export class CharacterGameUI {
   }
   get active(){return this.choosing||playing(this.getCity());}
   async act(action,options={}){
+    if(action==='walk'&&this.destinationVehicleId!=null){options={...options,vehicleId:this.destinationVehicleId};action='ride-vehicle';this.destinationVehicleId=null;}
+    if(['simulation','stop','start','switch'].includes(action)||action==='input'&&(options.x||options.y))this.destinationVehicleId=null;
     this.worldMenu=null;const result=await this.command(action,options);
     if(result?.ok===false){this.message=result.message||'Ação indisponível.';this.messageUntil=performance.now()+5000;}
     if(result?.ok!==false&&['start','resume','switch'].includes(action)){
@@ -80,47 +82,97 @@ export class CharacterGameUI {
     if(target){this.selectTarget(target);this.dossier(target);return true;}
     if(notify){this.message='Aproxime-se para interagir. Use WASD para explorar.';this.messageUntil=performance.now()+3000;}return false;
   }
-  openWorldMenu(entityId,point,x,y){
+  worldTarget(entityId,point){
+    const city=this.getCity(),c=controlledCitizen(city);
+    const known=this.visibleTargets(Infinity).find(t=>t.entityId===entityId&&entityId!=null);if(known)return known;
+    const building=city.buildings.find(b=>!b.entity.destroyed&&(b.entity.id===entityId||!(entityId>=0)&&point&&point.x>=b.entity.x&&point.x<b.entity.x+b.width&&point.y>=b.entity.y&&point.y<b.entity.y+b.depth));
+    if(building)return {kind:'building',id:building.id,entityId:building.entity.id,point:building.door,label:building.entity.properties.name||city.buildingTypes[building.type]?.label||'Construção'};
+    const vehicle=[...city.vehicles.units.values()].find(v=>!v.scrapped&&!v.entity?.destroyed&&v.entity?.id===entityId);
+    if(vehicle)return {kind:'vehicle',id:vehicle.id,entityId:vehicle.entity.id,point:vehicle.entity,label:vehicle.entity.properties.name||city.economy.goods[vehicle.good].label};
+    if(!(entityId>=0)&&point&&!c.indoorLocation){const plot=city.development.plots.find(p=>!p.buildingId&&point.x>=p.x&&point.x<p.x+p.width&&point.y>=p.y&&point.y<p.y+p.depth);if(plot)return {kind:'plot',id:plot.id,entityId:null,point:plot.door,label:`Terreno ${plot.id}`};}
+    return null;
+  }
+  openWorldMenu(entityId,point,x,y,{unitId=null}={}){
     const city=this.getCity(),c=controlledCitizen(city);if(!playing(city)||!c||c.entity.destroyed)return false;
-    const self=entityId===c.entity.id,target=self?{kind:'self',id:c.id,entityId,label:name(c)}:this.visibleTargets(Infinity).find(t=>t.entityId===entityId);
+    const self=entityId===c.entity.id,target=self?{kind:'self',id:c.id,entityId,label:name(c)}:this.worldTarget(entityId,point);
     if(target&&!self)this.selectTarget(target);
-    this.contextOpen=false;this.worldMenu={entityId:target?entityId:null,self,point:point&&{x:point.x+.5,y:point.y+.5},x,y,index:0,offset:0};return true;
+    this.contextOpen=false;this.worldMenu={entityId:target?.entityId??null,plotId:target?.kind==='plot'?target.id:null,self,unitId,point:point&&{x:point.x+.5,y:point.y+.5},x,y,index:0,offset:0,quantity:1,amount:10000};return true;
+  }
+  contextChoice(target,choice,values){
+    if(choice.action==='family'){this.toggle('family');return;}
+    this.act('approach-interact',{kind:target.kind,targetId:target.id,choice:choice.id,...(choice.context?{values}:{})});
   }
   worldMenuItems(){
     const menu=this.worldMenu;if(!menu)return null;
     const city=this.getCity(),c=controlledCitizen(city);if(!playing(city)||!c||c.entity.destroyed)return null;
-    const target=menu.self?{kind:'self',id:c.id,label:name(c)}:menu.entityId!=null?this.visibleTargets(Infinity).find(t=>t.entityId===menu.entityId):null;
-    if(menu.entityId!=null&&!target)return null;
-    const items=[],add=(label,click,disabled=false,danger=false)=>items.push({label,click,disabled,danger});
-    if(menu.self){
-      add('Ver personagem',()=>this.openPanel('profile'));add('Abrir mochila',()=>this.openPanel('inventory'));add('Descansar',()=>this.act('rest'));add('Interromper ação',()=>this.act('stop'));add('Vida e gestão',()=>this.openPanel('actions'));
-    }else if(target){
-      for(const choice of interactionOptions(city,target))add(choice.label,()=>choice.action==='family'?this.toggle('family'):this.act('approach-interact',{kind:target.kind,targetId:target.id,choice:choice.id}));
-      if(target.kind==='building'){const b=city.building(target.id),tab=b?.type==='bank'?'bank':b?.ownerId===c.id?'business':'trade';add('Vida e gestão',()=>this.openActions(tab,{seller:target.id,business:target.id,bank:target.id,exploreBuilding:target.id}));add('Explorar interiores',()=>this.openActions('explore',{exploreBuilding:target.id}));}
-      if(target.kind==='vehicle')add('Usar veículo',()=>this.openActions('vehicles',{vehicle:target.id}));
-      if(target.kind==='person')add('Relações e presentes',()=>this.openActions('social',{socialPerson:target.id}));
-      if(target.kind==='object'){add('Recolher uma unidade',()=>this.act('pickup-good',{entityId:target.id,quantity:1}));add('Vida e gestão',()=>this.openActions('items'));}
-      if(target.kind==='person')add('Atacar',()=>this.act('approach-interact',{kind:'person',targetId:target.id,choice:'attack'}),false,true);
-      if(!c.indoorLocation&&target.point)add('Aproximar-se',()=>this.act('walk',target.point));
-      add('Selecionar alvo',()=>this.selectTarget(target));add('Examinar',()=>this.dossier(target));
+    const target=menu.self?{kind:'self',id:c.id,label:name(c)}:menu.entityId!=null?this.worldTarget(menu.entityId,null):menu.plotId!=null?(()=>{const plot=city.development.plots.find(p=>p.id===menu.plotId&&!p.buildingId);return plot&&{kind:'plot',id:plot.id,label:`Terreno ${plot.id}`,point:plot.door};})():null;
+    if((menu.entityId!=null||menu.plotId!=null)&&!target)return null;
+    const values={context:true,quantity:menu.quantity,amount:menu.amount,unitId:menu.unitId};
+    const items=[],inputs=new Set(),add=(label,click,disabled=false,danger=false,confirm=false)=>items.push({label,click,disabled,danger,confirm});
+    if(menu.confirmation)return {label:target?.label||'Chão',detail:'Confirme a ação',inputs,items:[{label:`Confirmar: ${menu.confirmation.label}`,click:menu.confirmation.click,danger:true},{label:'Voltar',click:()=>{this.worldMenu={...menu,confirmation:null,index:0,offset:0};}},{label:'Cancelar',click:()=>{}}]};
+    const destination=target?.kind==='building'?target.point:menu.point||target?.point;
+    if(!menu.self&&destination&&!c.indoorLocation){
+      if(this.destinationVehicleId!=null)add('Viajar até aqui com o veículo escolhido',()=>this.act('walk',destination));
+      else add('Andar até aqui',()=>this.act('walk',destination));
     }
-    if(menu.point&&!c.indoorLocation)add('Caminhar até aqui',()=>this.act('walk',menu.point));
+    if(target?.kind==='building'&&c.indoorLocation?.buildingId===target.id){const unit=city.units.get(menu.unitId);if(unit?.buildingId===target.id&&unit.roomType!=='cell')add(`Andar até aqui · andar ${unit.z+1}`,()=>this.act('explore-room',{unitId:unit.id}));}
+    if(menu.self){
+      add('Ver personagem',()=>this.openPanel('profile'));add('Abrir mochila',()=>this.openPanel('inventory'));add('Descansar',()=>this.act('rest'));add('Interromper ação',()=>this.act('stop'));
+      for(const [index,g]of (c.wardrobe||[]).entries())if(!g.discarded)add(`Vestir ${g.piece}`,()=>this.act('wear',{index}));
+      for(const [good,n]of Object.entries(c.inventory||{}))if(n>0&&city.economy.goods[good]){
+        if(['cesta','carrinho','porrete','barra_ferro','faca','garrucha'].includes(good))add(`Equipar ${city.economy.goods[good].label.toLowerCase()}`,()=>this.act('equip',{good}));
+        inputs.add('quantity');add(`Largar ${menu.quantity} ${city.economy.goods[good].label.toLowerCase()}`,()=>this.act('drop-good',{good,quantity:menu.quantity}),!Number.isSafeInteger(menu.quantity)||menu.quantity<1||menu.quantity>999);
+      }
+      if(c.ridingVehicleId||c.mobilityTrip||c.localBoatTrip||c.sharedBoatRide)add('Desembarcar quando seguro',()=>this.act('leave-vehicle'));
+    }else if(target?.kind==='plot'){
+      const plot=city.development.plots.find(p=>p.id===target.id);
+      if(plot.forSale&&plot.ownerId!==c.accountId)add(`Comprar terreno · ${formatMoney(plot.price)}`,()=>this.act('buy-plot',{plotId:plot.id}),false,false,true);
+      if(plot.projectId){const project=city.development.projects.find(p=>p.id===plot.projectId&&!p.cancelled&&p.status!=='completed');if(project&&(project.accountId===c.accountId||project.builderId===c.jobId))add('Trabalhar nesta obra',()=>this.act('work-project',{projectId:project.id}));}
+      if(plot.ownerId===c.accountId&&!plot.projectId)add('Planejar construção neste terreno',()=>this.openActions('property',{plot:plot.id}));
+    }else if(target){
+      for(const choice of interactionOptions(city,target,c,values).filter(choice=>!choice.id.startsWith('room:'))){if(choice.input)inputs.add(choice.input);add(choice.label,()=>this.contextChoice(target,choice,values),choice.disabled||false,false,choice.confirm);}
+      if(target.kind==='building'){
+        const b=city.building(target.id);
+        if(b?.ownerId===c.id)add('Administrar esta empresa',()=>this.openActions('business',{business:b.id}));
+      }
+      if(target.kind==='vehicle'){
+        const v=city.vehicles.units.get(target.id),accounts=[c.accountId,...c.businessIds.map(id=>city.building(id)?.accountId)];
+        if(v&&!v.active){const seller=city.buildings.find(b=>b.accountId===v.holderAccountId&&b.active);if(seller)add(`Comprar ${city.economy.goods[v.good].label.toLowerCase()} · ${formatMoney(city.vehicles.vehiclePrice(v))}`,()=>this.act('buy-vehicle',{buildingId:seller.id,vehicleId:v.id}),false,false,true);}
+        if(v?.active&&accounts.includes(city.vehicles.accessAccount(v)))add('Viajar com este veículo · escolher destino',()=>{this.destinationVehicleId=v.id;this.message='Clique no chão para escolher o destino da viagem. Esc cancela.';this.messageUntil=performance.now()+7000;});
+      }
+      if(target.kind==='person')add('Atacar',()=>this.act('approach-interact',{kind:'person',targetId:target.id,choice:'attack'}),false,true);
+      add('Examinar',()=>this.dossier(target));
+    }
     add('Cancelar',()=>{});
-    return {label:target?.label||'Chão',items};
+    return {label:target?.label||'Chão',detail:target?targetKindLabel(target):'Escolha o destino',inputs,items};
   }
+  hideContextInputs(){for(const input of Object.values(this.contextInputs||{}))input.hidden=true;}
   runWorldMenuItem(item){
     if(!item||item.disabled)return;
-    this.worldMenu=null;item.click();
+    if(item.confirm){this.worldMenu.confirmation=item;this.worldMenu.index=this.worldMenu.offset=0;this.hideContextInputs();return;}
+    this.worldMenu=null;this.hideContextInputs();item.click();
+  }
+  contextInput(key,label,value,x,y,w){
+    this.contextInputs??={};let input=this.contextInputs[key];
+    if(!input){input=document.createElement('input');input.type='number';input.setAttribute('aria-label',label);input.min=key==='quantity'?'1':'0.01';input.max=key==='quantity'?'999':'10000000';input.step=key==='quantity'?'1':'0.01';
+      input.addEventListener('pointerdown',e=>e.stopPropagation?.());
+      input.addEventListener('input',()=>{if(this.worldMenu){const n=Number(input.value);this.worldMenu[key]=key==='amount'?Math.round(n*100):n;this.worldMenu.index=this.worldMenu.offset=0;}});
+      input.addEventListener('keydown',e=>{if(e.code==='Escape'){this.worldMenu=null;this.hideContextInputs();input.blur?.();e.stopPropagation?.();}});
+      this.element.append(input);this.contextInputs[key]=input;
+    }
+    if(input.contextMenu!==this.worldMenu){input.contextMenu=this.worldMenu;input.value=String(key==='amount'?value/100:value);}
+    Object.assign(input.style,{left:`${x}px`,top:`${y}px`,width:`${w}px`,zIndex:10000});input.hidden=false;
   }
   drawWorldMenu(ui){
-    const data=this.worldMenuItems(),menu=this.worldMenu;if(!data){this.worldMenu=null;return;}
-    const width=Math.min(ui.width-8,Math.max(220,...data.items.map(item=>ui.textWidth(item.label)+40))),rows=Math.max(1,Math.floor((ui.height-this.desktop.manager.top-this.desktop.manager.bottom-52)/25)),visible=Math.min(rows,data.items.length),height=49+visible*25;
+    this.hideContextInputs();const data=this.worldMenuItems(),menu=this.worldMenu;if(!data){this.worldMenu=null;return;}
+    const fields=data.inputs.size>0,header=fields?76:46,width=Math.min(ui.width-8,Math.max(fields?300:220,ui.textWidth(data.label)+24,...data.items.map(item=>ui.textWidth(item.label)+40))),rows=Math.max(1,Math.floor((ui.height-this.desktop.manager.top-this.desktop.manager.bottom-header-6)/25)),visible=Math.min(rows,data.items.length),height=header+3+visible*25;
     const x=Math.max(4,Math.min(menu.x,ui.width-width-4)),y=Math.max(this.desktop.manager.top,Math.min(menu.y,ui.height-this.desktop.manager.bottom-height));
-    menu.index=Math.min(menu.index,data.items.length-1);menu.offset=Math.max(0,Math.min(menu.offset,data.items.length-visible));menu.bounds={x,y,w:width,h:height,rows:visible,total:data.items.length};
+    menu.index=Math.max(0,Math.min(menu.index,data.items.length-1));menu.offset=Math.max(0,Math.min(menu.offset,data.items.length-visible));menu.bounds={x,y,w:width,h:height,header,rows:visible,total:data.items.length};
     bevel(ui.ctx,x,y,width,height,{fill:T.paper});ui.regions.push({x,y,w:width,h:height,onClick:null});
-    bevel(ui.ctx,x+3,y+3,width-6,20,{fill:T.header});ui.text(ui.fitText('Escolha uma opção'+(data.items.length>visible?' · role para mais':''),width-18),x+9,y+7,T.captionInk);ui.text(ui.fitText(data.label,width-18),x+9,y+27,T.muted);
+    bevel(ui.ctx,x+3,y+3,width-6,20,{fill:T.header});ui.text(ui.fitText(data.label,width-18),x+9,y+7,T.captionInk);ui.text(ui.fitText(data.detail+(data.items.length>visible?' · role para mais':''),width-18),x+9,y+27,T.muted);
+    if(fields){let left=x+9;const fieldWidth=(width-26)/data.inputs.size;for(const key of data.inputs){const title=key==='amount'?'Valor R$':'Quantidade';ui.text(title,left,y+49,T.muted);this.contextInput(key,title,menu[key],left+76,y+45,fieldWidth-80);left+=fieldWidth+8;}}
     for(let row=0;row<visible;row++){
-      const index=menu.offset+row,item=data.items[index],label=ui.fitText(item.label+(item.disabled?' · fora de alcance':''),width-24),py=y+46+row*25,hover=ui.pointer&&ui.pointer.x>=x+4&&ui.pointer.x<x+width-4&&ui.pointer.y>=py&&ui.pointer.y<py+23;
+      const index=menu.offset+row,item=data.items[index],label=ui.fitText(item.label,width-24),py=y+header+row*25,hover=ui.pointer&&ui.pointer.x>=x+4&&ui.pointer.x<x+width-4&&ui.pointer.y>=py&&ui.pointer.y<py+23;
       ui.button(x+4,py,width-8,23,label,()=>this.runWorldMenuItem(item),{selected:!item.disabled&&(menu.keyboard?menu.index===index:hover),danger:item.danger&&!item.disabled});
       const region=ui.regions.at(-1);Object.assign(region,{role:'menuitem',disabled:item.disabled});
       if(item.disabled){bevel(ui.ctx,x+4,py,width-8,23,{fill:T.paper});ui.text(label,x+10,py+5,T.muted);}
@@ -160,6 +212,7 @@ export class CharacterGameUI {
       if(this.getCity().characterGame.autonomous){this.keys.clear();if(down&&movingCodes.includes(event.code)){this.message='Desligue a rotina automática na barra inferior para usar WASD.';this.messageUntil=performance.now()+3000;}return true;}
       if(down&&!this.keys.has(event.code)){this.keys.add(event.code);this.contextOpen=false;this.worldMenu=null;this.input();}else if(!down&&this.keys.delete(event.code))this.input();return true;
     }
+    if(down&&event.code==='Escape'&&this.destinationVehicleId!=null){this.destinationVehicleId=null;return true;}
     if(!down||event.repeat||event.metaKey||event.altKey)return false;
     const actions={KeyG:()=>this.toggle('actions'),KeyO:()=>this.onSettings(),KeyL:()=>this.onCameraLock(),KeyZ:()=>this.onCamera(),KeyC:()=>this.toggle('profile'),KeyV:()=>this.toggle('activity'),KeyT:()=>this.toggle('targets'),KeyB:()=>this.toggle('interactions'),KeyE:()=>this.interact(),KeyI:()=>this.toggle('inventory'),KeyH:()=>this.toggle('body'),KeyU:()=>this.toggle('family'),KeyJ:()=>this.toggle('journal'),KeyP:()=>{this.onPause();},KeyX:()=>{this.keys.clear();this.act('stop');},KeyR:()=>this.act('rest'),KeyF:()=>this.attack(),Space:()=>this.onPause(),Digit1:()=>this.act('eat'),Digit2:()=>this.act('drink'),Escape:()=>{if(this.contextOpen){this.contextOpen=false;}else if(this.desktop.manager.windows.length)this.desktop.close(this.desktop.manager.activeId);else this.toggle('menu');},KeyQ:()=>{
       const targets=this.targets(),index=targets.findIndex(t=>`${t.kind}:${t.id}`===this.targetKey),target=targets[(index+1)%targets.length];if(target)this.selectTarget(target);
@@ -181,7 +234,7 @@ export class CharacterGameUI {
   }
   pointerMove(x,y){
     const menu=this.worldMenu;
-    if(menu){menu.keyboard=false;const b=menu.bounds,row=b&&Math.floor((y-b.y-46)/25);if(b&&x>=b.x&&x<=b.x+b.w&&row>=0&&row<b.rows)menu.index=menu.offset+row;return true;}
+    if(menu){menu.keyboard=false;const b=menu.bounds,row=b&&Math.floor((y-b.y-b.header)/25);if(b&&x>=b.x&&x<=b.x+b.w&&row>=0&&row<b.rows)menu.index=menu.offset+row;return true;}
     return this.desktop.pointerMove(x,y);
   }
   pointerUp(x,y,button,ui){
@@ -191,7 +244,7 @@ export class CharacterGameUI {
   draw(ui,now=performance.now()){
     const city=this.getCity(),s=city.characterGame,c=controlledCitizen(city),isPlaying=playing(city);
     this.desktop.city=city;this.element.hidden=!this.active;
-    if(!this.active){this.desktop.tooltipElement.hidden=true;return;}
+    if(!this.active){this.desktop.tooltipElement.hidden=true;this.hideContextInputs();return;}
     const manager=this.desktop.manager;manager.bottom=4;
     if(isPlaying&&!this.choosing)this.bottomBar(ui,city,c);
     if(isPlaying&&!this.choosing)this.launcher(ui);else manager.top=12;
@@ -211,7 +264,8 @@ export class CharacterGameUI {
       ui.regions.push({x:0,y:0,w:ui.width,h:ui.height,onClick:null});
     }
     manager.viewport(ui.width,ui.height);this.desktop.tooltip=null;this.desktop.draw(ui);
-    if(isPlaying&&!this.choosing)this.drawWorldMenu(ui);
+    this.hideContextInputs();
+    if(isPlaying&&!this.choosing){if(this.worldMenu)for(const window of manager.windows)for(const input of window.state?.inputs||[])input.hidden=true;this.drawWorldMenu(ui);}
   }
   bottomBar(ui,city,c){
     const s=city.characterGame,controls=[];

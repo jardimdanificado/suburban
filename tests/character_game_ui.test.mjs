@@ -144,7 +144,7 @@ test('right-click person menu approaches distant targets and opens dossiers only
 test('right-click ground menu sends one movement order and outside dismissal never clicks through',async()=>{
  const h=harness();await h.start();h.game.desktop.closeAll(true);const c=h.city.society.citizen(h.city.characterGame.citizenId);c.indoorLocation=null;
  h.game.openWorldMenu(-1,{x:5,y:6},500,300);h.draw();const before=h.calls.length;assert(h.game.pointerDown(900,400,0,h.ui));h.game.pointerUp(900,400,0,h.ui);assert.equal(h.calls.length,before);assert.equal(h.game.worldMenu,null);
- h.game.openWorldMenu(-1,{x:5,y:6},500,300);h.draw();h.click('Caminhar até aqui');await Promise.resolve();assert.equal(h.calls.length,before+1);assert.deepEqual(h.calls.at(-1),['walk',{x:5.5,y:6.5}]);assert.equal(h.game.worldMenu,null);
+ h.game.openWorldMenu(-1,{x:5,y:6},500,300);h.draw();h.click('Andar até aqui');await Promise.resolve();assert.equal(h.calls.length,before+1);assert.deepEqual(h.calls.at(-1),['walk',{x:5.5,y:6.5}]);assert.equal(h.game.worldMenu,null);
 });
 
 test('context menus fit the viewport, support keyboard and cancel when targets disappear',async()=>{
@@ -201,4 +201,46 @@ test('life and management stays within mobile and desktop viewports',async()=>{
    for(const region of h.ui.regions)if(region.w>0&&region.h>0){assert(region.x>=0&&region.y>=0,`${tab}: negative widget`);assert(region.x+region.w<=width+1,`${tab}: widget exceeds width`);assert(region.y+region.h<=height+1,`${tab}: widget exceeds height`);}
   }
  }
+});
+
+test('structure context identifies the clicked building, falls back to its footprint and walks to its entrance',async()=>{
+ const h=harness();await h.start();h.game.desktop.closeAll(true);const c=h.city.society.citizen(h.city.characterGame.citizenId),b=h.city.buildings.find(b=>b.type==='townhall');c.indoorLocation=null;b.entity.properties.name='Mercado da esquina';
+ h.game.openWorldMenu(-1,{x:b.entity.x,y:b.entity.y},500,300);h.text.length=0;h.draw();assert.equal(h.game.worldMenuItems().label,'Mercado da esquina');assert(h.text.includes('Mercado da esquina'));assert.equal(h.game.worldMenuItems().items[0].label,'Andar até aqui');
+ h.click('Andar até aqui');await Promise.resolve();assert.deepEqual(h.calls.at(-1),['walk',b.door]);assert.equal(h.game.desktop.manager.windows.length,0);
+});
+
+test('context purchase uses the clicked stock, editable quantity and physical arrival without opening management',async()=>{
+ const h=harness();await h.start();h.game.desktop.closeAll(true);const c=h.city.society.citizen(h.city.characterGame.citizenId),b=h.city.buildings.find(b=>b.type==='townhall');c.indoorLocation=null;c.entity.x=b.door.x+6;c.entity.y=b.door.y;b.inventory.madeira=4;c.inventory.madeira=0;c.balance=20000;
+ h.game.openWorldMenu(b.entity.id,null,200,160);h.draw();const input=h.game.contextInputs.quantity;assert(input&&!input.hidden);input.value='2';input.handlers.input();h.draw();const row=h.game.worldMenuItems().items.find(i=>i.label.startsWith('Comprar 2 madeira'));assert(row);const cash=c.balance;h.game.runWorldMenuItem(row);await Promise.resolve();assert.equal(h.game.desktop.manager.windows.length,0);assert.equal(c.balance,cash);assert.equal(b.inventory.madeira,4);assert.equal(h.city.characterGame.intent.kind,'approach');assert(h.game.contextInputs.quantity.hidden);
+ c.path=[];Object.assign(c.entity,b.door);const {characterMinute}=await import('../js/character_game.js');characterMinute(h.city,c);assert.equal(c.inventory.madeira,2);assert.equal(b.inventory.madeira,2);assert(c.balance<cash);
+});
+
+test('bank context accepts an exact amount, deposits in the clicked bank and closes native fields',async()=>{
+ const h=harness(390,844);await h.start();h.game.desktop.closeAll(true);const c=h.city.society.citizen(h.city.characterGame.citizenId),b=h.city.bank.available()[0];c.indoorLocation=null;Object.assign(c.entity,b.door);c.balance=20000;
+ h.game.openWorldMenu(b.entity.id,null,389,843);h.draw();const input=h.game.contextInputs.amount;assert(input&&!input.hidden);input.value='12.34';input.handlers.input();h.draw();const row=h.game.worldMenuItems().items.find(i=>i.label.startsWith('Depositar'));assert(row.label.includes('12,34'));const before=c.balance;h.game.runWorldMenuItem(row);await Promise.resolve();assert.equal(c.balance,before-1234);assert.equal(h.city.bank.deposits.get(`deposit:${b.id}:${c.accountId}`).balance,1234);assert(input.hidden);assert.equal(h.game.desktop.manager.windows.length,0);
+});
+
+test('context native fields stay bounded, reject invalid quantities and hide on escape and target removal',async()=>{
+ const h=harness(390,844);await h.start();h.game.desktop.closeAll(true);const c=h.city.society.citizen(h.city.characterGame.citizenId),b=h.city.buildings.find(b=>b.type==='townhall');c.indoorLocation=null;b.inventory.madeira=3;
+ h.game.openWorldMenu(b.entity.id,null,389,843);h.draw();const input=h.game.contextInputs.quantity;assert(!input.hidden);const x=parseFloat(input.style.left),y=parseFloat(input.style.top),w=parseFloat(input.style.width);assert(x>=0&&x+w<=390&&y>=h.game.desktop.manager.top&&y+20<=844-h.game.desktop.manager.bottom);
+ input.value='-2';input.handlers.input();h.draw();const row=h.game.worldMenuItems().items.find(i=>i.label.startsWith('Comprar')&&i.label.includes('madeira'));assert(row.disabled);const before=h.calls.length;h.game.runWorldMenuItem(row);assert.equal(h.calls.length,before);
+ input.handlers.keydown({code:'Escape'});assert.equal(h.game.worldMenu,null);assert(input.hidden);
+ h.game.openWorldMenu(b.entity.id,null,50,90);h.draw();b.entity.destroyed=true;h.draw();assert.equal(h.game.worldMenu,null);assert(input.hidden);
+});
+
+test('clicked interior room exposes its own floor and walking command without a room selector',async()=>{
+ const h=harness();await h.start();h.game.desktop.closeAll(true);const c=h.city.society.citizen(h.city.characterGame.citizenId),b=h.city.buildings.find(b=>b.floors>1),u=b.units.find(u=>u.z>0&&u.roomType!=='cell');assert(u);c.indoorLocation={buildingId:b.id,position:{x:b.entity.x+.5,y:b.entity.y+.5,z:0},floor:0,path:[]};
+ h.game.openWorldMenu(b.entity.id,null,250,100,{unitId:u.id});h.draw();assert.equal(h.game.worldMenuItems().label,b.entity.properties.name);const row=h.game.worldMenuItems().items.find(i=>i.label===`Andar até aqui · andar ${u.z+1}`);assert(row);h.game.runWorldMenuItem(row);await Promise.resolve();assert.deepEqual(h.calls.at(-1),['explore-room',{unitId:u.id}]);assert.equal(h.game.desktop.manager.windows.length,0);
+});
+
+test('vehicle context chooses a destination with the next ground click instead of coordinate forms',async()=>{
+ const h=harness();await h.start();h.game.desktop.closeAll(true);const c=h.city.society.citizen(h.city.characterGame.citizenId),v=h.city.vehicles.createBoatVehicle('canoe');v.ownerAccountId=c.accountId;c.indoorLocation=null;
+ h.game.openWorldMenu(v.entity.id,null,20,90);const row=h.game.worldMenuItems().items.find(i=>i.label.startsWith('Viajar com este veículo'));assert(row);h.game.runWorldMenuItem(row);assert.equal(h.game.destinationVehicleId,v.id);assert.equal(h.game.desktop.manager.windows.length,0);
+ await h.game.act('walk',{x:5.5,y:6.5});assert.deepEqual(h.calls.at(-1),['ride-vehicle',{x:5.5,y:6.5,vehicleId:v.id}]);assert.equal(h.game.destinationVehicleId,null);
+ h.game.openWorldMenu(v.entity.id,null,20,90);h.game.runWorldMenuItem(h.game.worldMenuItems().items.find(i=>i.label.startsWith('Viajar com este veículo')));h.game.key({code:'Escape'});assert.equal(h.game.destinationVehicleId,null);
+});
+
+test('context relationship actions confirm in place and never open a social management panel',async()=>{
+ const h=harness();await h.start();h.game.desktop.closeAll(true);const c=h.city.society.citizen(h.city.characterGame.citizenId),person=h.city.citizens.find(p=>p!==c&&h.city.society.isAdult(p)&&!h.city.society.related(c,p));c.indoorLocation=person.indoorLocation=null;Object.assign(person.entity,{x:c.entity.x,y:c.entity.y});c.partnerId=person.id;person.partnerId=c.id;
+ h.game.openWorldMenu(person.entity.id,null,20,90);const row=h.game.worldMenuItems().items.find(i=>i.label==='Terminar relacionamento');assert(row);const before=h.calls.length;h.game.runWorldMenuItem(row);assert.equal(h.calls.length,before);assert.equal(h.game.desktop.manager.windows.length,0);const confirm=h.game.worldMenuItems().items.find(i=>i.label.startsWith('Confirmar:'));assert(confirm);h.game.runWorldMenuItem(confirm);await Promise.resolve();assert.equal(h.calls.at(-1)[1].choice,'separate');assert.equal(h.game.worldMenu,null);
 });

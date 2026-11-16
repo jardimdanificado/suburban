@@ -1,3 +1,4 @@
+import {mayorPlaying,mayorTargetAt,renderMayorTarget,drawMayorDock,MAYOR_DESKS} from './city_mayor_play.js';
 import {speedLabel} from './simulation_time.js?v=ff3-ff4-steps-1';
 import {CityGlobalSearch} from './city_global_search.js?v=regional-supply-17';
 import {desktopMenus} from './city_desktop_menus.js?v=custom-history-filters-1';
@@ -88,6 +89,27 @@ export class CityDesktop {
     if(code==='Enter'||code==='Space'){this.activateMenu(items[this.menuIndex>=0?this.menuIndex:available[0]]);return true;}return false;
   }
   openParty(id){const party=this.city.politics.party(id);if(!party)return;const state=this.create(`party:${id}`,'party',{title:`${party.short} · ${party.name}`,kind:'section'});state.partyId=id;return state;}
+  openMayorDesk(view='agenda',section=null){
+    const id=`mayor-desk:${view}`,state=this.create(id,'mayor',{title:MAYOR_DESKS[view]||'Prefeitura',kind:'page'});
+    const window=this.manager.find(id);if(!this.manager.saved.has(id)){window.w=540;window.h=520;this.manager.constrain(window);}
+    state.mayorView=view;state.mayorDesk=true;if(section)state.mayorSection=section;
+    state.resetScroll();state.visible=true;this.hidden=false;this.element.hidden=false;
+    return state;
+  }
+  openMayorTarget(target){
+    const state=this.openPage('mayor-target',{title:'Ordens no local',width:380,height:420,draw:(p,ui)=>renderMayorTarget(ui,p)});
+    state.mayorTarget=target;state.notice='';state.resetScroll();this.hidden=false;this.element.hidden=false;
+    return state;
+  }
+  inspectMayorEntity(entity){this.setSelection(entity,null,{inspect:true});}
+  armMayorPlot(options={}){this.mayorMapOrder=options;this.hidden=true;this.element.hidden=true;}
+  mayorMapClick(tile){
+    if(!mayorPlaying(this.city))return false;
+    const target=mayorTargetAt(this.city,tile);if(!target)return false;
+    const state=this.openMayorTarget(target);
+    if(target.kind==='plot'&&this.mayorMapOrder){state.mayorBuildingType=this.mayorMapOrder.type;state.mayorCrop=this.mayorMapOrder.crop;state.mayorPlacement={...this.mayorMapOrder};this.mayorMapOrder=null;}
+    return true;
+  }
   openContract(id){const project=this.city.development.projects.find(p=>p.id===id);if(!project)return;const state=this.create(`contract:${id}`,'contract',{title:`Contrato · ${project.name}`,kind:'section'});state.projectId=id;return state;}
   openElection(id,view='count'){
     const gov=this.city.politics,e=[gov.active,gov.lastResult,...gov.elections].find(e=>e?.id===id);if(!e)return;
@@ -164,7 +186,11 @@ export class CityDesktop {
   navigate(tab){return this.openModule(tab);}
   setView(id){this.active?.setView?.(id);}
   setFilter(id){this.active?.setFilter?.(id);}
-  setSelection(entity,unitId=null){
+  setSelection(entity,unitId=null,{inspect=false}={}){
+    if(!inspect&&mayorPlaying(this.city)&&entity){
+      const building=entity.properties?.cityBuilding,person=entity.properties?.citizen;
+      if(building||person){this.lastSelected=entity;return this.openMayorTarget({kind:building?'building':'person',id:(building||person).id});}
+    }
     for(const window of this.manager.windows)window.state.selectedProjectId=null;
     if(!entity)this.lastSelected=null;
     if(entity?.properties?.worldVessel){const selection=entity.properties.worldVessel,spec=selection.vessel?.classId||'barco',state=this.create(`world-vessel:${selection.key}`,'transport',{title:`Embarcação ${spec} · em trânsito`,entity,kind:'dossier'});state.worldVesselSelection=selection;this.lastSelected=entity;return;}
@@ -175,7 +201,7 @@ export class CityDesktop {
     const state=this.create(`${citizen?'person':'building'}:${entity.id}`,citizen?'people':'buildings',{title:entity.properties.name,entity,unitId,kind:'dossier'});
     if(unitId){state.unitId=unitId;state.detailTab='units';}this.lastSelected=entity;
   }
-  setPlotSelection(id){const state=this.create(`plot:${id}`,'land',{title:`Terreno ${id}`,kind:'section'});state.selectedPlotId=id;state.recordWindow=true;state.setView('plots');return state;}
+  setPlotSelection(id){if(mayorPlaying(this.city))return this.openMayorTarget({kind:'plot',id});const state=this.create(`plot:${id}`,'land',{title:`Terreno ${id}`,kind:'section'});state.selectedPlotId=id;state.recordWindow=true;state.setView('plots');return state;}
   toggle(){if(!this.manager.windows.length){this.openModule('city');return;}this.hidden=!this.hidden;this.element.hidden=this.hidden;}
   close(id){const w=this.manager.close(id);if(w){w.state.onClose?.();w.state.element.remove?.();w.state.visible=false;}return w;}
   closeAll(all=false){for(const w of [...this.manager.windows])if(all||!w.pinned)this.close(w.id);}
@@ -201,6 +227,7 @@ export class CityDesktop {
     if(!this.visible)return false;const w=this.manager.at(x,y);return w?!w.shaded&&(w.state.scrollAt(x,y,delta)||true):false;
   }
   key(event){
+    if(event.code==='Escape'&&this.mayorMapOrder){this.mayorMapOrder=null;return true;}
     if(this.menuKey(event))return true;
     if(event.code==='KeyC'&&!event.repeat){this.openModule('city');return true;}
     if(event.code==='Tab'&&this.manager.windows.length>1){this.manager.raise((event.shiftKey?this.manager.windows.at(-2):this.manager.windows[0]).id);return true;}
@@ -215,6 +242,7 @@ export class CityDesktop {
   drawChrome(ui,{clockText='',paused=false,speed=1,effectiveSpeed=null,renderMode='3d'}={}){
     if(this.city.mayorCampaign?.mode==='play'&&this.manager.find('tool:editor'))this.close('tool:editor');
     if(this.city.mayorCampaign?.mode==='play'&&this.city.mayorCampaign.status==='defeated'&&!this.mayorDefeatShown){this.mayorDefeatShown=true;this.hidden=false;this.element.hidden=false;this.openModule('mayor');}
+    if(mayorPlaying(this.city)&&this.mayorSession!==this.city.mayorCampaign){this.mayorSession=this.city.mayorCampaign;this.closeAll(true);this.hidden=true;this.element.hidden=true;}
     this.chromeState={clockText,paused,speed,renderMode};this.menuGroups??=desktopMenus(this);this.tooltip=null;this.menuAnchors=[];
     const activeWorldCity=this.worldCoordinator?.cities.get(this.worldCoordinator.activeCityId),activeCityName=activeWorldCity?.city?.municipalIdentity?.name||this.city?.municipalIdentity?.name||activeWorldCity?.metadata?.name||'Cidade',worldButtonWidth=Math.min(160,Math.max(82,ui.textWidth(activeCityName)+34));
     let x=4,barY=2;const controls=[[paused?'play':'pause',paused?'Continuar':'Pausar',this.controls.pause,paused],['fast',`Velocidade ${speedLabel(speed)}${speed>=128?' · simulação muito reduzida':speed>=64?' · avanço com detalhe reduzido':''}`,this.controls.speed,false]];
@@ -222,12 +250,12 @@ export class CityDesktop {
       {label:'Busca geral · Ctrl+K',icon:'search',w:36,click:()=>this.openGlobalSearch()},
       {label:`${activeCityName} · Mundo e rotas marítimas`,buttonLabel:activeCityName,icon:'map',w:worldButtonWidth,click:()=>{this.closeMenu();this.openModule('world');},selected:!this.hidden&&!!this.manager.find('module:world')},
       ...controls.map(([icon,label,click,selected])=>({icon,label,click:()=>{this.closeMenu();click?.();},selected,w:29})),
-      ...CITY_WINDOWS.filter(([tab])=>tab!=='world').map(([tab,label])=>({label,icon:tab,w:29,click:()=>{this.closeMenu();this.toggleModule(tab);},selected:!this.hidden&&!!this.manager.find(`module:${tab}`)})),
+      ...CITY_WINDOWS.filter(([tab])=>tab!=='world'&&(!mayorPlaying(this.city)||['mayor','city','people','production','transport','map'].includes(tab))).map(([tab,label])=>({label,icon:tab,w:29,click:()=>{this.closeMenu();if(tab==='mayor'&&mayorPlaying(this.city))this.openMayorDesk('agenda');else this.toggleModule(tab);},selected:!this.hidden&&!!this.manager.find(`module:${tab}`)})),
       ...this.menuGroups.map(g=>({id:g.id,label:g.label,icon:g.id==='tools'?'settings':'windows',w:36,click:()=>this.toggleMenu(g.id),selected:this.menuOpen&&this.menuId===g.id}))
     ];
     const placed=[];for(const entry of entries){if(x>4&&x+entry.w>ui.width-4){x=4;barY+=30;}placed.push({...entry,x,y:barY});x+=entry.w+2;}
     for(const rowY of new Set(placed.map(entry=>entry.y))){const row=placed.filter(entry=>entry.y===rowY),end=Math.max(...row.map(entry=>entry.x+entry.w)),offset=Math.max(0,Math.floor((ui.width-end-4)/2));for(const entry of row)entry.x+=offset;}
-    const barHeight=barY+32;this.manager.top=barHeight;this.manager.viewport(ui.width,ui.height);bevel(ui.ctx,0,0,ui.width,barHeight,{fill:T.face});
+    const dockStart=ui.regions.length,barHeight=drawMayorDock(this,ui,barY+32),dockRegions=ui.regions.splice(dockStart);this.manager.top=barHeight;this.manager.viewport(ui.width,ui.height);bevel(ui.ctx,0,0,ui.width,barY+32,{fill:T.face});
     // Registered after window content as well, so the menu bar remains above all panels.
     const barRegion={x:0,y:0,w:ui.width,h:barHeight,onClick:null};this.menuBarRegions=[barRegion];ui.regions.push(barRegion);
     for(const entry of placed){ui.button(entry.x,entry.y,entry.w,28,'',entry.click||(()=>{}),{selected:entry.selected});
@@ -236,6 +264,7 @@ export class CityDesktop {
       if(ui.pointer?.x>=entry.x&&ui.pointer.x<entry.x+entry.w&&ui.pointer.y>=entry.y&&ui.pointer.y<entry.y+28)this.tooltip={text:entry.id?`${entry.label} ▾`:entry.label,x:entry.x,y:barHeight+3};
       ui.regions.at(-1).label=entry.id?`${entry.label} — menu`:entry.label;this.menuBarRegions.push(ui.regions.at(-1));
     }
+    ui.regions.push(...dockRegions);this.menuBarRegions.push(...dockRegions);
     const y=ui.height-27;bevel(ui.ctx,0,y,ui.width,27,{fill:T.face});const s=this.city.stats(),cash=money(this.city.treasury),cashW=Math.min(190,ui.width*.42,Math.max(120,ui.textWidth(cash)+26)),dateW=Math.min(225,ui.width-cashW-12,Math.max(120,ui.textWidth(clockText)+24));
     bevel(ui.ctx,3,y+3,dateW,21,{inset:true,fill:T.paper});ui.text(ui.fitText(clockText,dateW-14),10,y+7,T.ink);
     const right=ui.width-cashW-3;bevel(ui.ctx,right,y+3,cashW,21,{inset:true,fill:T.paper});const shownCash=ui.fitText(cash,cashW-16);ui.text(shownCash,right+cashW-ui.textWidth(shownCash)-8,y+7,T.ink);

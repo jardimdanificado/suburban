@@ -1,3 +1,4 @@
+import {playerContextOptions} from './character_context_options.js';
 import {waterIndex} from './city_water.js';
 import {controlledCitizen,relatives} from './character_game.js';
 
@@ -37,7 +38,7 @@ export function nearbyTargets(city,c=controlledCitizen(city),radius=INTERACTION_
   for(const other of city.citizens)if(other!==c&&alive(other.entity)&&samePlace(c,other))add('person',other.id,other.entity,other.entity,other.entity.properties.name);
   return targets.sort((a,b)=>a.distance-b.distance||a.id-b.id);
 }
-export function interactionOptions(city,target,c=controlledCitizen(city)){
+export function interactionOptions(city,target,c=controlledCitizen(city),values={}){
   if(!target||!c)return [];
   const choices=[];
   const add=(id,label,action,options={})=>choices.push({id,label,action,options});
@@ -53,6 +54,7 @@ export function interactionOptions(city,target,c=controlledCitizen(city)){
     const b=city.building(target.id);if(!b?.active)return [];
     const buildingId=b.id,meal=city.economy.mealOffer(b,c),home=city.housing.home(c);
     if(!c.indoorLocation&&entryRoom(city,b,c))add('enter','Entrar','enter',{buildingId});
+    else if(values?.context&&!c.indoorLocation&&b.constructionKind!=='open-air')choices.push({id:'force-enter',label:'Entrar sem autorização · sujeito à lei',action:'enter',options:{buildingId,force:true},context:true,confirm:true});
     if(c.indoorLocation?.buildingId===buildingId)add('exit','Sair do prédio','exit');
     if(meal)add('meal',`${meal.price?'Comprar':'Receber'} refeição${meal.price?` · ${(meal.price/100).toFixed(2)}`:''}`,'service',{kind:'meal',buildingId});
     if(['townhall','utility','popular_refectory'].includes(b.type))add('water','Encher garrafa','service',{kind:'water',buildingId});
@@ -65,5 +67,5 @@ export function interactionOptions(city,target,c=controlledCitizen(city)){
     for(const good of Object.keys(c.inventory||{}))if(c.inventory[good]>0&&city.nature.productsForFood(good)&&['market','greengrocer','bakery','townhall'].includes(b.type))add(`sell:${good}`,`Vender ${city.economy.goods[good].label.toLowerCase()}`,'sell',{buildingId,good});
     for(const h of city.housing.homes.values())if(h.buildingId===buildingId&&city.housing.units(h).every(u=>u.forRent&&!u.tenantId))add(`rent:${h.id}`,`Alugar abrigo · ${(city.housing.rent(h,c)/100).toFixed(2)}/dia`,'home',{homeId:h.id});
   }
-  return choices;
+  return values?.context?[...choices.filter(choice=>choice.action!=='sell'),...playerContextOptions(city,target,c,values)]:choices;
 }

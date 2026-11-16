@@ -1,3 +1,4 @@
+import {drawMayorPlots} from './js/city_mayor_play.js';
 import {CharacterGameUI} from './js/character_game_ui.js';
 import {playing,controlledCitizen,movementVector} from './js/character_game.js';
 import { FreeCameraTouchControls } from './js/free_camera_touch_controls.js';
@@ -475,7 +476,7 @@ function onPointerUp(event) {
   }
   if(playing(city)){
     if(pointerDown&&Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)<6){
-      if(event.button===2){const rect=root.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;gameUI.openWorldMenu(renderer3D.getEntityAtScreen(event.clientX,event.clientY,entities,world),mapTileAt(x,y),x,y);pointerDown=lastPointer=null;cameraLookDrag=false;return;}
+      if(event.button===2){const rect=root.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;gameUI.openWorldMenu(renderer3D.getEntityAtScreen(event.clientX,event.clientY,entities,world),mapTileAt(x,y),x,y,{unitId:renderer3D.selectedCityUnitId});pointerDown=lastPointer=null;cameraLookDrag=false;return;}
       if(event.button===0&&gameUI.combat){gameUI.attack(renderer3D.getEntityAtScreen(event.clientX,event.clientY,entities,world));pointerDown=lastPointer=null;return;}
       if(event.button!==0){pointerDown=lastPointer=null;return;}
       if(gameUI.inspect(renderer3D.getEntityAtScreen(event.clientX,event.clientY,entities,world),false)){pointerDown=lastPointer=null;cameraLookDrag=false;return;}
@@ -536,7 +537,7 @@ function onPointerUp(event) {
       selectEntity(entities.find((entity) => entity.id === id) || null, renderer3D.selectedCityUnitId);
       if (id == null || id === -1) {
         const tile = mapTileAt(x, y), lot = tile && city.development.plots.find(p => !p.buildingId && tile.x >= p.x && tile.x < p.x + p.width && tile.y >= p.y && tile.y < p.y + p.depth);
-        if (lot) cityUI.setPlotSelection(lot.id);
+        if (!cityUI.mayorMapClick(tile)&&lot) cityUI.setPlotSelection(lot.id);
       }
     }
   }
@@ -723,6 +724,7 @@ function frame(now) {
     });
     legacyUI.ctx.restore();
   }
+  drawMayorPlots(cityUI,legacyUI,(x,y)=>renderer3D.projectWorldToScreen(x,y,renderer3D.getSurfaceElevation(world.map,x,y)+0.08));
   renderUI(legacyUI, api);
 
   cityUI.element.hidden = gameUI.active||!cityUI.visible;

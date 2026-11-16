@@ -298,7 +298,7 @@ export function mayorAction(city,action,options={}) {
   if(action==='build'){
     if(OFFICE_ONLY_TYPES.has(options.type))return city.fail('Esta atividade precisa de um andar empresarial; a contratação direta deste modo atende instalações próprias.');
     const vertical=options.type==='farm'&&options.vertical===true?true:null,floors=Number.isInteger(options.floors)?options.floors:null;
-    result=p.startPublicWork(options.type,options.crop||'milho',{vertical,floors});
+    result=p.startPublicWork(options.type,options.crop||'milho',{vertical,floors,plotId:options.plotId??null});
     if(!result)return result;
     details={projectId:result.id};
   }else if(action==='priority'){

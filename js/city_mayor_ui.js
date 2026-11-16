@@ -1,3 +1,4 @@
+import {mayorDecisions,mayorOrder,MAYOR_DESKS} from './city_mayor_play.js';
 import {OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
 import {publicProjects,municipalFirmType,municipalOfficeVacancies} from './city_mayor_campaign.js';
 import {describePromise} from './city_mandates.js';
@@ -23,12 +24,8 @@ function pager(ui,p,rows,key,size=6){
 const policyValue=(spec,value)=>{if(typeof spec.default==='boolean')return value?'Ativada':'Desativada';return spec.step<1?`${(Number(value)*100).toFixed(1)}%`:String(Math.round(Number(value)));};
 export function renderMayorCampaign(ui,p) {
   const city=ui.city,s=city.mayorCampaign,gov=city.politics;
-  const act=(action,options={})=>{
-    const result=city.mayorAction(action,options);
-    ui.notice=result?'Ordem enviada. Confira a execução e os recursos disponíveis.':city.lastError||'Ordem não concluída.';
-    return result;
-  };
-  p.heading('MODO PREFEITO · GOVERNO INDIRETO');
+  const act=(action,options={})=>mayorOrder(ui,action,options);
+  if(!ui.mayorDesk)p.heading('MODO PREFEITO · GOVERNO INDIRETO');
   if(!s){
     const mayor=city.society.citizen(city.economy.mayorId),party=gov.party(mayor?.political?.partyId);
     p.note('Assuma a prefeitura atual. Nomeie secretários, emita decretos, proponha leis, contraia obras e serviços; cidadãos e empresas executam o trabalho real.');
@@ -40,8 +37,7 @@ export function renderMayorCampaign(ui,p) {
     p.button('ASSUMIR A PREFEITURA',()=>act('start'));
     return;
   }
-  p.kv('Partido da campanha',s.partyName);
-  p.kv('Prefeito em exercício',city.society.citizen(city.economy.mayorId)?.entity.properties.name||'Sucessão em andamento');
+  if(!ui.mayorDesk){p.kv('Partido da campanha',s.partyName);p.kv('Prefeito em exercício',city.society.citizen(city.economy.mayorId)?.entity.properties.name||'Sucessão em andamento');}
   if(s.status==='defeated'){
     p.status('DERROTA',s.reason);
     p.note(`Campanha de ${day(s.startedAt)} até ${day(s.endedAt)}. A simulação para ao perder a prefeitura.`);
@@ -50,26 +46,42 @@ export function renderMayorCampaign(ui,p) {
     return;
   }
   if(s.mode!=='play'){p.note('Campanha encerrada pelo jogador. A cidade voltou à simulação autônoma.');return;}
-  p.status('MANTENHA O PARTIDO NO PODER',`Avaliação do governo: ${Math.round(gov.approval)} / 100 · próxima votação: ${gov.nextElectionAt==null?'aguardando calendário':day(gov.nextElectionAt)}`);
-  p.kv('Tesouro / reserva municipal',`${money(city.treasury)} / ${money(city.fiscal.reserve())}`);
-  p.kv('Verba de obras',money(gov.ensureWorksBudget()));
   const view=ui.mayorView||'agenda';
-  p.links(tabs.map(([id,label])=>({label,selected:view===id,click:()=>{ui.mayorView=id;ui.resetScroll();}})));
+  if(ui.mayorDesk){
+    p.heading(MAYOR_DESKS[view]||'Prefeitura');
+    p.note(`Tesouro ${money(city.treasury)} · obras ${money(gov.ensureWorksBudget())}`);
+  }else{
+    p.status('MANTENHA O PARTIDO NO PODER',`Avaliação ${Math.round(gov.approval)}/100 · votação ${gov.nextElectionAt==null?'sem data':day(gov.nextElectionAt)}`);
+    p.links(tabs.map(([id,label])=>({label,selected:view===id,click:()=>{if(ui.host?.openMayorDesk)ui.host.openMayorDesk(id);else{ui.mayorView=id;ui.resetScroll();}}})));
+  }
   if(view==='agenda'){
+    p.note('Clique nos imóveis e moradores do mapa para dar ordens no local. Feche as janelas para acompanhar a cidade.');
+    p.buttons([{label:'VOLTAR AO MAPA',click:()=>{if(ui.host){ui.host.hidden=true;ui.host.element.hidden=true;}}},{label:'ACOMPANHAR OBRAS',click:()=>ui.host?.openMayorDesk('build','queue')}]);
+    p.buttons([{label:'CÂMARA E ORÇAMENTO',click:()=>ui.host?.openMayorDesk('council')},{label:'HISTÓRICO DE ORDENS',click:()=>ui.host?.openMayorDesk('orders')}]);
+    p.heading('DECISÕES PENDENTES');
+    const tasks=mayorDecisions(city);
+    if(!tasks.length)p.note('Nenhuma decisão urgente. Acompanhe as obras e prepare a próxima eleição.');
+    for(const task of pager(ui,p,tasks,'mayorDecisionPage',4)){
+      p.status(task.title,task.text);
+      if(task.billId!=null)p.buttons([{label:'SANCIONAR',click:()=>act('sanction',{billId:task.billId})},{label:'VETAR',click:()=>act('veto',{billId:task.billId})}]);
+      else if(task.target)p.button('VER GARGALO',()=>ui.host?.openMayorTarget(task.target));
+      else{
+        if(task.action)p.button(task.label,()=>act(task.action));
+        p.button('ANALISAR',()=>ui.host?.openMayorDesk(task.desk,task.section));
+      }
+    }
     p.heading('COMPROMISSOS DO MANDATO');
     for(const promise of gov.mandates.current?.promises||[])p.note(describePromise(promise));
-    const conditions=city.welfare.conditions();
-    p.kv('Moradores sem casa',String(conditions.homeless));
-    p.kv('Reserva de alimentos',`${Number(conditions.foodDays||0).toFixed(1)} dias`);
-    p.kv('Obras públicas pendentes',String(publicProjects(city).length));
-    p.kv('Secretarias com titular',`${(gov.secretaries||[]).filter(row=>city.society.citizen(row.citizenId)).length}/${SECRETARIATS.length}`);
-    p.kv('Próximo decreto',city.minute>=gov.decreeReadyAt()?'Disponível agora':day(gov.decreeReadyAt()));
-    p.note('GABINETE nomeia a equipe; POLÍTICAS reúne tributos, regulação, leis e identidade; CÂMARA cuida da verba de obras, sanções e veto. Obras herdadas e projetos aprovados continuam sendo executados.');
-    p.windowLink('PRODUÇÃO E ABASTECIMENTO',()=>ui.openPanel({tab:'production'}));
     p.windowLink('AVALIAÇÃO DO GOVERNO',()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'approval'}));
     p.windowLink('CAMPANHA E ELEIÇÕES',()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'campaign'}));
+    p.windowLink('PRODUÇÃO E ABASTECIMENTO',()=>ui.openPanel({tab:'production'}));
     p.button('ENCERRAR CAMPANHA E VOLTAR À SIMULAÇÃO',()=>act('observe'));
   }else if(view==='build'){
+    const choices=[['new', 'Nova obra'], ['queue', 'Acompanhar e priorizar obras'], ['access', 'Ligar imóvel à malha viária'], ['expand', 'Ampliar imóveis públicos'], ['firm', 'Abrir empresa municipal'], ['offices', 'Ocupar andar empresarial'], ['programs', 'Habitação, vias e iluminação']];
+    const section=choices.some(([id])=>id===ui.mayorSection)?ui.mayorSection:'new';
+    ui.selectControl(p,'Escolher tarefa de obras',choices,section,value=>{ui.mayorSection=value;});
+
+    if(section==='new'){
     const types=Object.entries(city.buildingTypes).filter(([id])=>!['townhall','mint','council_chamber'].includes(id)&&!OFFICE_ONLY_TYPES.has(id));
     const type=ui.mayorBuildingType||'popular_housing',crop=ui.mayorCrop||'milho',vertical=type==='farm'&&ui.mayorVertical===true&&canFarmVertically(crop),floors=ui.mayorFloors||3;
     ui.selectControl(p,'mayor-building',types.map(([id,spec])=>[id,spec.label]),type,value=>{ui.mayorBuildingType=value;});
@@ -81,8 +93,11 @@ export function renderMayorCampaign(ui,p) {
         if(vertical)p.buttons([{label:'ANDAR −',click:()=>{ui.mayorFloors=Math.max(2,floors-1);}},{label:'ANDAR +',click:()=>{ui.mayorFloors=Math.min(8,floors+1);}}]);
       }else p.note('Árvores e palmeiras exigem uma fazenda ao ar livre.');
     }
-    p.button('CONTRATAR COM A VERBA DE OBRAS',()=>act('build',{type,crop,...(vertical?{vertical:true,floors}: {})}));
+    p.button('ESCOLHER TERRENO NO MAPA',()=>ui.host?.armMayorPlot({type,crop,...(vertical?{vertical:true,floors}: {})}));
+    p.button('CONTRATAR EM LOCAL AUTOMÁTICO',()=>act('build',{type,crop,...(vertical?{vertical:true,floors}: {})}));
     p.note('O município procura terreno acessível. A contratação pode aguardar caixa, construtora ou terreno. Materiais e trabalho não são instantâneos.');
+    }
+    if(section==='queue'){
     p.heading('FILA DE OBRAS PÚBLICAS');
     const projects=publicProjects(city),page=Math.min(ui.mayorWorkPage||0,Math.max(0,Math.ceil(projects.length/8)-1));
     if(projects.length>8)p.buttons([{label:'ANTERIORES',click:()=>{ui.mayorWorkPage=Math.max(0,page-1);}},{label:'PRÓXIMAS',click:()=>{ui.mayorWorkPage=page+1;}}]);
@@ -91,6 +106,8 @@ export function renderMayorCampaign(ui,p) {
       p.buttons([[10,'BAIXA'],[100,'NORMAL'],[200,'URGENTE']].map(([value,label])=>({label,selected:project.priority===value,click:()=>act('priority',{projectId:project.id,value})})));
     }
     if(!projects.length)p.note('Nenhuma obra pública pendente.');
+    }
+    if(section==='access'){
     p.heading('ACESSO VIÁRIO');
     p.note('Contrate a pavimentação até a prefeitura com o tesouro. A obra exige pedra, trabalho e rota real; preserva a reserva municipal.');
     const canCheckAccess=typeof city.world?.getTile==='function';
@@ -100,6 +117,8 @@ export function renderMayorCampaign(ui,p) {
       p.button('CONTRATAR ACESSO',()=>act('road',{buildingId:b.id}));
     }
     if(!detached.length)p.note(canCheckAccess?'Todos os imóveis cadastrados já têm acesso pavimentado.':'Consulta de acesso indisponível neste estado da cidade.');
+    }
+    if(section==='expand'){
     p.heading('AMPLIAÇÃO');
     const hall=city.townhall();
     if(hall)p.record(hall.entity.properties.name,`${hall.floors} pavimentos · ampliação direta`,()=>ui.openBuilding(hall.id));
@@ -109,6 +128,8 @@ export function renderMayorCampaign(ui,p) {
       p.record(b.entity.properties.name,`${b.floors} pavimentos · ${b.units.length} espaços`,()=>ui.openBuilding(b.id));
       p.buttons([{label:'AMPLIAR +1',click:()=>act('expand',{buildingId:b.id,floors:1})},{label:'AMPLIAR +2',click:()=>act('expand',{buildingId:b.id,floors:2})}]);
     }
+    }
+    if(section==='firm'){
     p.heading('OBRAS POR CONTA DO TESOURO');
     p.note('O governo autônomo abre empresas, instala atividades em andares municipais, planeja habitação, pavimenta, conserva vias e repara imóveis com o tesouro, preservando a reserva municipal. Estes comandos fazem o mesmo manualmente.');
     const firmSpecs=Object.entries(city.buildingTypes).filter(([id])=>municipalFirmType(city,id));
@@ -125,6 +146,8 @@ export function renderMayorCampaign(ui,p) {
     }
     p.button('ABRIR EMPRESA MUNICIPAL',()=>act('firm',{type:firmType,crop:firmCrop,...(firmVertical?{vertical:true,floors:firmFloors}: {})}));
     p.note('A empresa nasce pública, com terreno, obra, materiais e capital de operação pagos pelo tesouro. A reserva municipal é preservada e a operação depende de trabalhadores.');
+    }
+    if(section==='offices'){
     p.heading('EMPRESARIAL MUNICIPAL');
     const officeType=ui.mayorOfficeType||'newsroom',vacancies=municipalOfficeVacancies(city).filter(v=>ui.matches(v.tower.entity.properties.name));
     ui.selectControl(p,'mayor-office-type',[...OFFICE_ONLY_TYPES].map(type=>[type,city.buildingTypes[type]?.label||type]),officeType,value=>{ui.mayorOfficeType=value;});
@@ -133,6 +156,8 @@ export function renderMayorCampaign(ui,p) {
       p.button(`INSTALAR ${(city.buildingTypes[officeType]?.label||officeType).toUpperCase()} AQUI`,()=>act('office',{type:officeType,towerId:vacancy.tower.id,floor:vacancy.floor}));
     }
     if(!vacancies.length)p.note('Nenhum andar público vago. Construa um empresarial municipal ou aguarde um andar ser liberado.');
+    }
+    if(section==='programs'){
     p.heading('PROGRAMAS DE INFRAESTRUTURA');
     p.buttons([{label:'HABITAÇÃO SOCIAL (DEMANDA REAL)',click:()=>act('housing')},{label:'PAVIMENTAÇÃO PRIORITÁRIA',click:()=>act('paving')},{label:'CONSERVAR VIAS DANIFICADAS',click:()=>act('roadRepair')},{label:'INSTALAR ILUMINAÇÃO PÚBLICA',click:()=>act('lighting')}]);
     p.note('Habitação amplia ou constrói conforme moradores sem casa. A pavimentação prioriza circulação e liga imóveis; a conservação recupera trechos danificados. Todas dependem de construtora, materiais e caixa após a reserva.');
@@ -142,7 +167,13 @@ export function renderMayorCampaign(ui,p) {
       p.button('CONTRATAR REPARO PREVENTIVO',()=>act('maintain',{buildingId:b.id}));
     }
     if(!upkeep.length)p.note('Nenhum imóvel municipal abaixo de 95% de conservação.');
+    }
   }else if(view==='operations'){
+    const choices=[['services', 'Custeio e serviços por imóvel'], ['shares', 'Participações e resultados'], ['programs', 'Alimentação e proteção social']];
+    const section=choices.some(([id])=>id===ui.mayorSection)?ui.mayorSection:'services';
+    ui.selectControl(p,'Escolher tarefa de serviços',choices,section,value=>{ui.mayorSection=value;});
+
+    if(section==='services'){
     p.note('Custeio sai do tesouro e preserva a reserva municipal. A folha e os serviços correntes continuam nos fluxos existentes.');
     const buildings=city.buildings.filter(b=>(city.fiscal.municipal(b)||b.id===city.townhall()?.id)&&ui.matches(b.entity.properties.name));
     const page=Math.min(ui.mayorCompanyPage||0,Math.max(0,Math.ceil(buildings.length/6)-1));
@@ -154,6 +185,8 @@ export function renderMayorCampaign(ui,p) {
     }
     p.heading('SERVIÇOS CONTRATADOS');
     for(const job of city.gigs.jobs.filter(j=>j.payerAccountId==='treasury'&&['open','working'].includes(j.status)).slice(-12))p.note(`#${job.id} · ${job.kind||job.scope} · ${job.status} · ${Math.floor(job.progress||0)}/${job.required}`);
+    }
+    if(section==='shares'){
     p.heading('PARTICIPAÇÕES MUNICIPAIS');
     const quota=privatizationQuota(city);
     p.kv('Cota diária de privatização',`${(gov.policy.dailyPrivatizationLimit??7).toFixed(1)}%`);
@@ -168,6 +201,8 @@ export function renderMayorCampaign(ui,p) {
       if(publicPoints>0)p.buttons([{label:'OFERTAR 5% HOJE',click:()=>act('offerShares',{buildingId:b.id,percent:5})},{label:'OFERTAR 10% HOJE',click:()=>act('offerShares',{buildingId:b.id,percent:10})}]);
       if(city.fiscal.municipal(b))p.button('TRANSFERIR RESULTADO AO TESOURO',()=>act('dividend',{buildingId:b.id}));
     }
+    }
+    if(section==='programs'){
     p.heading('PROGRAMAS MUNICIPAIS');
     p.note('O governo autônomo executa estes programas sem passar pela Câmara. Aqui o prefeito escolhe o beneficiário elegível; todo valor sai do tesouro após a reserva municipal.');
     const markets=city.economy.businesses.filter(b=>b.active&&!b.entity.destroyed&&b.type==='market'&&((b.financialDistressDays||0)>0||b.balance<city.currency.price(5000)));
@@ -186,10 +221,13 @@ export function renderMayorCampaign(ui,p) {
     p.note('O crédito habitacional escolhe comprador empregado, imóvel privado à venda e banco; a entrada é subsidiada e o financiamento é real. O crédito de participação empresta ao morador para comprar 5% de uma estatal, com devolução descontada do saldo.');
     const loans=(gov.stateEquityLoans||[]).filter(loan=>loan.remaining>0);
     if(loans.length)p.note(`Créditos de participação em aberto: ${loans.length} · saldo ${money(loans.reduce((sum,loan)=>sum+loan.remaining,0))}`);
+    }
   }else if(view==='cabinet'){
     p.note('Secretarias nomeadas respondem ao prefeito e podem vetar medidas pendentes da própria área. Prefeito, vice e vereadores não acumulam pasta. A administração revisa as vagas diariamente; nomeie um substituto para escolher agora.');
     const rows=(gov.secretaries||[]).map(row=>({...row,office:SECRETARIATS.find(office=>office.id===row.officeId)}));
-    p.table([{label:'Pasta',weight:1.6},{label:'Responsável',weight:2},{label:'Capacidade'},{label:'Escolha',weight:1.6}],rows.map(row=>({cells:[row.office?.short||row.officeId,city.society.citizen(row.citizenId)?.entity.properties.name||row.citizenName||'Cargo vago',Math.round(row.skill||0),SECRETARY_ELECTION_MODES[row.mode||gov.policy.secretaryElectionModes?.[row.officeId]||'appointed']]})));
+    if(ui.mayorCabinetOverview)p.table([{label:'Pasta',weight:1.6},{label:'Responsável',weight:2},{label:'Capacidade'},{label:'Escolha',weight:1.6}],rows.map(row=>({cells:[row.office?.short||row.officeId,city.society.citizen(row.citizenId)?.entity.properties.name||row.citizenName||'Cargo vago',Math.round(row.skill||0),SECRETARY_ELECTION_MODES[row.mode||gov.policy.secretaryElectionModes?.[row.officeId]||'appointed']]})));
+    p.button(ui.mayorCabinetOverview?'OCULTAR QUADRO DE SECRETARIAS':'VER QUADRO DE SECRETARIAS',()=>{ui.mayorCabinetOverview=!ui.mayorCabinetOverview;});
+    if(ui.mayorCandidateId)p.button('MOSTRAR TODOS OS CANDIDATOS',()=>{ui.mayorCandidateId=null;});
     const officeId=ui.mayorOffice||'finance',office=SECRETARIATS.find(item=>item.id===officeId)||SECRETARIATS[0],row=rows.find(item=>item.officeId===office.id),holder=city.society.citizen(row?.citizenId),mode=gov.policy.secretaryElectionModes?.[office.id]||'appointed';
     p.buttons(SECRETARIATS.map(item=>({label:item.short.toUpperCase(),selected:item.id===office.id,click:()=>{ui.mayorOffice=item.id;ui.resetScroll();}})));
     p.heading(office.name);
@@ -202,7 +240,7 @@ export function renderMayorCampaign(ui,p) {
     }else{
       if(holder)p.button('EXONERAR',()=>act('dismiss',{officeId:office.id}));
       p.heading('CANDIDATOS');
-      const candidates=(gov.secretaryCandidates?.(office)||[]).filter(c=>ui.matches(c.name));
+      const candidates=(gov.secretaryCandidates?.(office)||[]).filter(c=>ui.matches(c.name)&&(!ui.mayorCandidateId||c.citizenId===ui.mayorCandidateId));
       const shown=pager(ui,p,candidates,`mayor-candidates-${office.id}`,5);
       for(const candidate of shown)p.button(`${candidate.name} · ${Math.round(candidate.skill)}/100`,()=>act('appoint',{officeId:office.id,citizenId:candidate.citizenId}));
       if(!candidates.length)p.note('Nenhum morador elegível, livre de mandato e de outra pasta.');
@@ -220,22 +258,29 @@ export function renderMayorCampaign(ui,p) {
     const section=ui.mayorPolicyView||'tax';
     p.links([['tax','TRIBUTOS'],['labor','PREÇOS'],['social','SOCIAL'],['order','ORDEM'],['transport','TRANSPORTE'],['economy','ECONOMIA'],['elections','ELEIÇÕES'],['justice','JUSTIÇA'],['identity','IDENTIDADE']].map(([id,label])=>({label,selected:section===id,click:()=>{ui.mayorPolicyView=id;ui.resetScroll();}})));
     if(section==='tax'){
+      const taxView=ui.mayorTaxView||'income';
+      ui.selectControl(p,'Tributo a revisar',[['income','Renda e empresas'],['sectors','Impostos por ramo'],['trade','Tarifas de comércio']],taxView,value=>{ui.mayorTaxView=value;});
+      if(taxView==='income'){
+
       p.heading('IMPOSTO SALARIAL');p.kv('Alíquota efetiva',`${(city.taxRate*100).toFixed(0)}%`);
       p.buttons([{label:'−2 P.P.',click:()=>apply('tax',{value:Math.max(MINIMUM_WAGE_TAX_RATE,Math.round((city.taxRate-.02)*100)/100)})},{label:'+2 P.P.',click:()=>apply('tax',{value:Math.min(.5,Math.round((city.taxRate+.02)*100)/100)})}]);
       p.heading('IMPOSTO EMPRESARIAL');p.kv('Alíquota efetiva',`${(gov.policy.businessTax*100).toFixed(0)}%`);
       p.buttons([{label:'−2 P.P.',click:()=>apply('businessTax',{value:Math.max(MINIMUM_BUSINESS_TAX_RATE,Math.round((gov.policy.businessTax-.02)*100)/100)})},{label:'+2 P.P.',click:()=>apply('businessTax',{value:Math.min(.5,Math.round((gov.policy.businessTax+.02)*100)/100)})}]);
+      }else if(taxView==='sectors'){
       p.heading('IMPOSTO POR RAMO');
       for(const [category,spec] of pager(ui,p,Object.entries(TAX_CATEGORIES),'mayorTaxPage',6)){
         const base=baseTaxRate(city,category),effective=taxRate(city,category);
         p.kv(spec.label,`${(effective*100).toFixed(1)}% efetiva · ${(base*100).toFixed(1)}% de base`);
         p.buttons([{label:'−2 P.P.',click:()=>apply('salesTax',{category,value:Math.max(spec.rate,Math.round((base-.02)*100)/100)})},{label:'+2 P.P.',click:()=>apply('salesTax',{category,value:Math.min(.5,Math.round((base+.02)*100)/100)})}]);
       }
+      }else{
       p.heading('TARIFAS DE COMÉRCIO');
       const goods=Object.entries(city.economy.goods).sort((a,b)=>a[1].label.localeCompare(b[1].label,'pt-BR'));
       for(const [good,spec] of pager(ui,p,goods,'mayorTradePage',6)){
         const importRate=gov.policy.importTaxes?.[good]??0,exportRate=gov.policy.exportTaxes?.[good]??0;
         p.kv(spec.label,`Importação ${(importRate*100).toFixed(0)}% · exportação ${(exportRate*100).toFixed(0)}%`);
         p.buttons([{label:'IMPORTAR −5',click:()=>apply('tradeTax',{good,importRate:Math.max(0,Math.round((importRate-.05)*100)/100),exportRate})},{label:'IMPORTAR +5',click:()=>apply('tradeTax',{good,importRate:Math.min(1,Math.round((importRate+.05)*100)/100),exportRate})},{label:'EXPORTAR −5',click:()=>apply('tradeTax',{good,importRate,exportRate:Math.max(0,Math.round((exportRate-.05)*100)/100)})},{label:'EXPORTAR +5',click:()=>apply('tradeTax',{good,importRate,exportRate:Math.min(1,Math.round((exportRate+.05)*100)/100)})}]);
+      }
       }
     }else if(section==='labor'){
       p.heading('SALÁRIO MÍNIMO');

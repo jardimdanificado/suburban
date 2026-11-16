@@ -822,7 +822,9 @@ O desgaste permanente usa um atlas separado na GPU, sem leitura de volta para a 
 
 ### Vida e gestão no modo jogável
 
-Durante o controle de um personagem, pressione **G** ou abra **Vida e gestão** no menu do jogador. As abas permitem:
+Durante o controle de um personagem, clique com o botão direito na estrutura, pessoa, objeto ou terreno. O menu mostra o nome do alvo e oferece **Andar até aqui**, serviços, compras, vendas e outras ações disponíveis. Quantidade e valor podem ser ajustados no próprio menu; o personagem se desloca antes de executar uma ação presencial. Para viajar em um veículo próprio, escolha-o no menu contextual e clique no chão para definir o destino.
+
+Pressione **G** para abrir **Vida e gestão** quando precisar configurar detalhes da administração. As abas permitem:
 
 - Comprar, vender, presentear, guardar, largar e recolher mercadorias; escolher roupas e equipamentos; fabricar com insumos próprios na oficina onde trabalha.
 - Comprar terrenos e moradias; contratar construção, ampliação, reforma e demolição; instalar ou retirar móveis adicionais.

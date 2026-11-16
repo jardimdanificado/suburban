@@ -137,17 +137,18 @@ function performGameAction(city,action,options={}){
   switch(action){
     case 'approach-interact':{
       const target=nearbyTargets(city,c,Infinity,{inspectable:true}).find(t=>t.id===options.targetId&&t.kind===options.kind);
+      const values=options.values||{};
       const attack=options.kind==='person'&&options.choice==='attack';
-      if(!target||!attack&&!interactionOptions(city,target,c).some(choice=>choice.id===options.choice&&choice.action!=='family'))return city.fail('Essa interação não está disponível.');
+      if(!target||!attack&&!interactionOptions(city,target,c,values).some(choice=>choice.id===options.choice&&choice.action!=='family'&&!choice.disabled))return city.fail('Essa interação não está disponível.');
       const reach=attack?1.6:1.8;
-      if(target.distance<=reach)return gameAction(city,attack?'attack':'interact',attack?{citizenId:target.id}:{kind:target.kind,targetId:target.id,choice:options.choice});
+      if(target.distance<=reach)return gameAction(city,attack?'attack':'interact',attack?{citizenId:target.id}:{kind:target.kind,targetId:target.id,choice:options.choice,values});
       if(c.indoorLocation)return city.fail('Aproxime-se do alvo dentro do prédio para interagir.');
-      return route(city,c,target.point,'approach',target.id,{targetKind:target.kind,choice:options.choice,nextPathAt:city.minute+2});
+      return route(city,c,target.point,'approach',target.id,{targetKind:target.kind,choice:options.choice,interactionValues:values,nextPathAt:city.minute+2});
     }
     case 'interact':{
       const target=nearbyTargets(city,c).find(t=>t.id===options.targetId&&t.kind===options.kind);
       if(!target)return city.fail('Aproxime-se para interagir.');
-      const choice=interactionOptions(city,target,c).find(choice=>choice.id===options.choice);
+      const choice=interactionOptions(city,target,c,options.values||{}).find(choice=>choice.id===options.choice&&!choice.disabled);
       if(!choice||choice.action==='family')return city.fail('Essa interação não está disponível.');
       return gameAction(city,choice.action,choice.options);
     }
@@ -265,10 +266,10 @@ export function characterMinute(city,c){
   }
   if(intent.kind==='approach'){
     const target=nearbyTargets(city,c,Infinity,{inspectable:true}).find(t=>t.id===intent.targetId&&t.kind===intent.targetKind),attack=intent.targetKind==='person'&&intent.choice==='attack';
-    if(!target||!attack&&!interactionOptions(city,target,c).some(choice=>choice.id===intent.choice&&choice.action!=='family')){finish(city,c,'O alvo ou a ação não está mais disponível.');return true;}
+    if(!target||!attack&&!interactionOptions(city,target,c,intent.interactionValues||{}).some(choice=>choice.id===intent.choice&&choice.action!=='family'&&!choice.disabled)){finish(city,c,'O alvo ou a ação não está mais disponível.');return true;}
     if(target.distance<=(attack?1.6:1.8)){
       stop(city,c);
-      const ok=gameAction(city,attack?'attack':'interact',attack?{citizenId:target.id}:{kind:target.kind,targetId:target.id,choice:intent.choice});
+      const ok=gameAction(city,attack?'attack':'interact',attack?{citizenId:target.id}:{kind:target.kind,targetId:target.id,choice:intent.choice,values:intent.interactionValues});
       if(!ok)finish(city,c,city.lastError||'Não foi possível executar a ação.');return true;
     }
     if(!c.path.length||city.minute>=intent.nextPathAt&&distance(target.point,intent.point)>1.2){

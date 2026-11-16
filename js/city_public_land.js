@@ -18,9 +18,17 @@ function spiral(index,cx,cy){
   return edge===0?{x:cx-r+n,y:cy-r}:edge===1?{x:cx+r,y:cy-r+n}:edge===2?{x:cx+r-n,y:cy+r}:{x:cx-r,y:cy+r-n};
 }
 /** Validate existing land first; targeted, bounded searches do not depend on catalogue quotas. */
-export function findPublicBuildingSite(dev,type,{allowPurchase=true,kind=null}={}){
+export function findPublicBuildingSite(dev,type,{allowPurchase=true,kind=null,plotId=null}={}){
   const city=dev.city;if(!city.buildingTypes[type])return null;
   const vertical=type==='farm'&&kind==='building',category=type==='farm'&&!vertical?'farm':mines.has(type)?'quarry':'urban',report={type,category,checked:0,created:false,reason:''};dev.publicLandReport=report;
+  if(plotId!==null){
+    const lot=dev.plots.find(lot=>lot.id===plotId);
+    if(!lot||!compatible(dev,lot,type,vertical)){report.reason='O terreno escolhido está ocupado ou é incompatível com esta obra.';return null;}
+    if(lot.ownerId!=='treasury'&&(!allowPurchase||!lot.forSale||!Number.isSafeInteger(lot.price)||lot.price<=0||!city.accounts.has(lot.ownerId))){report.reason='O terreno escolhido não está disponível para compra municipal.';return null;}
+    const site=fit(dev,lot,type,vertical);
+    report.checked=1;report.reason=site?'Terreno escolhido validado.':'O terreno escolhido não tem acesso ou espaço para esta obra.';
+    return site;
+  }
   const centerPoint=city.world.spawnCenter||city.spawn,distance=lot=>Math.hypot(lot.x-centerPoint.x,lot.y-centerPoint.y);
   const vacant=dev.plots.filter(lot=>compatible(dev,lot,type,vertical));
   if(dev.compactPlanning)vacant.sort((a,b)=>distance(a)-distance(b)||a.width*a.depth-b.width*b.depth);
