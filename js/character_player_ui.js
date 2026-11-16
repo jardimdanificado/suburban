@@ -227,13 +227,15 @@ export function drawPlayerActions(game,p,state){
       for(const bill of city.politics.council.bills.filter(b=>['awaiting-session','proposed','vetoed'].includes(b.status))){p.note(`${bill.title} · ${bill.playerVotes?.[c.id]===true?'Seu voto: sim':bill.playerVotes?.[c.id]===false?'Seu voto: não':'Seu voto pendente'}`);p.buttons([{label:'Votar sim',click:()=>act('council-vote',{billId:bill.id,yes:true})},{label:'Votar não',click:()=>act('council-vote',{billId:bill.id,yes:false})}]);}
     }
     p.heading('Propostas à Câmara');
-    const bills=[['tax','Imposto pessoal'],['businessTax','Imposto empresarial'],['minimumWage','Salário mínimo'],['welfare','Assistência social'],['worksBudget','Orçamento de obras'],['worksTransfer','Transferência para obras'],['build','Construção pública'],['cleanRecord','Ficha limpa'],['parliamentaryImmunity','Imunidade parlamentar']];
+    const bills=[['tax','Imposto pessoal'],['businessTax','Imposto empresarial'],['minimumWage','Salário mínimo'],['welfare','Assistência social'],['worksBudget','Orçamento de obras'],['worksTransfer','Transferência para obras'],['build','Construção pública'],['cleanRecord','Ficha limpa'],['parliamentaryImmunity','Imunidade parlamentar'],['mayorDecreeDays','Dias entre decretos'],['impeachmentCooldownElections','Eleições entre impeachments']];
     const type=choose(p,state,'billType','Tipo de proposta',bills.map(([id,label])=>({id,label})),form.billType);
     const value=number(p,state,'billValue','Valor da proposta (alíquota em fração; dinheiro em centavos)',.1,{min:0,step:.01});
     const buildingType=type==='build'?choose(p,state,'publicType','Tipo de obra pública',Object.entries(city.buildingTypes).filter(([id])=>!['townhall','mint','council_chamber'].includes(id)).map(([id,s])=>({id,label:s.label})),form.publicType):null;
     p.note('Somente seu mandato autoriza propostas, veto ou contratação. A Câmara mantém votação, orçamento e execução.');
     p.button('Apresentar proposta',()=>act('bill',{type,payload:type==='build'?{buildingType}:['cleanRecord','parliamentaryImmunity'].includes(type)?{value:value!==0}:{value}}));
     if(c.id===city.economy.mayorId){
+      p.note(`Decreto sem votação: um a cada ${city.politics.policy.mayorDecreeDays??3} dias; próximo direito no minuto ${city.politics.decreeReadyAt()}. Não permite ampliar poderes do prefeito.`);
+      p.button('Implementar por decreto',()=>act('decree',{type,payload:type==='build'?{buildingType}:['cleanRecord','parliamentaryImmunity'].includes(type)?{value:value!==0}:{value}}));
       p.heading('Administração municipal');const publicType=choose(p,state,'mayorWorkType','Obra pública',Object.entries(city.buildingTypes).filter(([id])=>!['townhall','mint','council_chamber'].includes(id)).map(([id,s])=>({id,label:s.label})),form.mayorWorkType),floors=number(p,state,'publicFloors','Andares da obra pública',1,{max:8});
       p.button('Contratar obra com orçamento público',()=>act('public-work',{type:publicType,floors}));
       const amount=number(p,state,'worksAmount','Transferência solicitada em centavos',10000);p.button('Solicitar verba à Câmara',()=>act('works-transfer',{amount}));

@@ -1,7 +1,8 @@
+import {decreeError} from './city_executive_powers.js';
 import {approvalReport} from './city_political_institutions.js';
 import {reviewGovernmentResponse} from './city_government_response.js';
 const live=b=>b&&!b.entity.destroyed;
-const pending=b=>['awaiting-session','proposed','awaiting-sanction','approved','executing','vetoed'].includes(b.status);
+const pending=b=>['awaiting-session','proposed','awaiting-sanction','approved','executing','awaiting-secretary-review','vetoed'].includes(b.status);
 const buildingFor={housed:'popular_housing',publicHomes:'popular_housing',publicMeals:'popular_refectory',kitchens:'kitchen',stateFirms:'utility',publicJobs:'carrier',employed:'carrier',smallFirms:'artisan',clean:'cleaner',hygiene:'cleaner',cleaners:'cleaner',health:'clinic',clinics:'clinic',water:'utility',waterWorks:'utility',rest:'leisure',parks:'leisure',carriers:'carrier',deliveries:'carrier',builders:'builder',cultivatedTrees:'forestry',woodStock:'forestry',paperStock:'paper_mill',publishedTexts:'publisher',readers:'publisher',literacy:'publisher',artisans:'artisan',equipped:'artisan',savers:'bank',banks:'bank',paidLoans:'bank',recycling:'composting',waste:'waste_collector',oilMills:'mill',sunflowerFarms:'farm'};
 const supplyChains={paperStock:['forestry','paper_mill'],publishedTexts:['forestry','paper_mill','publisher'],readers:['forestry','paper_mill','publisher'],literacy:['forestry','paper_mill','publisher'],equipped:['forestry','artisan'],artisans:['forestry','artisan'],recycling:['waste_collector','composting'],waste:['waste_collector','composting'],lamps:['farm','mill','lamp_service'],oilReserve:['farm','mill','lamp_service']};
 import {initializeEquity,offerShares,buyShares,equityValue} from './city_equity.js?v=daily-mayor-privatization-2';
@@ -13,7 +14,12 @@ export class CityGovernmentAgenda {
     execution.actions.push({minute:this.city.minute,description,eventId:event.id,...details});if(execution.actions.length>48)execution.actions.shift();return event;
   }
   proposal(term,execution,type,payload,title){
-    const p=this.city.politics,matching=p.council.bills.find(b=>pending(b)&&b.type===type&&(type!=='salesTax'||b.payload.category===payload.category)&&(type==='build'||payload.value==null||b.payload.value===payload.value)&&(type!=='build'||b.payload.buildingType===payload.buildingType&&(payload.buildingType!=='farm'||(b.payload.crop||'milho')===(payload.crop||'milho'))));
+    const p=this.city.politics;
+    const mayor=this.city.society.citizen(this.city.economy.mayorId);
+    if(mayor&&!mayor.playerControlled&&this.city.mayorCampaign?.mode!=='play'&&!decreeError(p,type,payload,mayor.id)){
+      const decree=p.issueDecree(type,payload,mayor.id);if(decree&&typeof decree==='object'){decree.agendaTermId=term.id;decree.promiseMetric=term.promises[0].metric;this.record(term,execution,`${term.mayorName} emitiu decreto: ${title}.`,{billId:decree.id,action:'decree'});return decree;}
+    }
+    const matching=p.council.bills.find(b=>pending(b)&&b.type===type&&(type!=='salesTax'||b.payload.category===payload.category)&&(type==='build'||payload.value==null||b.payload.value===payload.value)&&(type!=='build'||b.payload.buildingType===payload.buildingType&&(payload.buildingType!=='farm'||(b.payload.crop||'milho')===(payload.crop||'milho'))));
     if(matching){matching.agendaTermId=term.id;matching.promiseMetric=term.promises[0].metric;if(!execution.actions.some(a=>a.billId===matching.id))this.record(term,execution,`A gestão passou a acompanhar: ${matching.title}.`,{billId:matching.id,action:'follow-bill'});return matching;}
     if(p.council.bills.filter(b=>b.agendaTermId===term.id&&pending(b)).length>=2){execution.blocked='Aguardando os projetos prioritários já encaminhados à Câmara.';return null;}
     const author=p.council.people().find(c=>c.political.partyId===term.partyId)||p.council.people()[0];if(!author){execution.blocked='Câmara sem vereador disponível para apresentar o projeto.';return null;}

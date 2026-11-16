@@ -10,7 +10,7 @@ import {roomFurniture} from './city_furniture_catalog.js';
 import {samePlace} from './character_interactions.js';
 import {beginPlayerDemolition,playerPropertyAccount} from './city_player_property.js';
 
-export const PLAYER_ACTIONS=new Set(['buy-clothes','hire-applicant','marry','buy-good','sell-good','give-good','store-good','take-good','drop-good','pickup-good','equip','unequip','wear','craft','buy-plot','build','expand','repair','demolish','furnish','unfurnish','found-business','fund-business','employment','dismiss','price','buy-stock','buy-shares','offer-shares','buy-home','bank-deposit','bank-withdraw','bank-loan','bank-repay','buy-vehicle','ride-vehicle','leave-vehicle','flirt','propose','separate','plan-child','leave-job','political-ambition','join-party','bill','veto','public-work','works-transfer','work-project','attend-council','council-vote','sanction']);
+export const PLAYER_ACTIONS=new Set(['buy-clothes','hire-applicant','marry','buy-good','sell-good','give-good','store-good','take-good','drop-good','pickup-good','equip','unequip','wear','craft','buy-plot','build','expand','repair','demolish','furnish','unfurnish','found-business','fund-business','employment','dismiss','price','buy-stock','buy-shares','offer-shares','buy-home','bank-deposit','bank-withdraw','bank-loan','bank-repay','buy-vehicle','ride-vehicle','leave-vehicle','flirt','propose','separate','plan-child','leave-job','political-ambition','join-party','bill','decree','secretary-veto','veto','public-work','works-transfer','work-project','attend-council','council-vote','sanction']);
 export const PLAYER_FURNITURE={chair:{label:'Cadeira',seated:true},table:{label:'Mesa'},sofa:{label:'Sofá',seated:true},chest:{label:'Baú',storage:'clothes'},fridge:{label:'Geladeira',storage:'food'},bed:{label:'Cama',sleeping:true}};
 const live=b=>b&&!b.entity?.destroyed;
 const free=holder=>{if(holder.entity?.properties?.citizen)holder.inventoryCapacity??=carryCapacity(holder);return inventoryFree(holder);};
@@ -235,8 +235,12 @@ export function playerAction(city,c,action,o,{stop,route}){
       const party=city.politics.party(o.partyId);if(!party?.active||city.politics.officeHolder(c))return fail(city,'Escolha um partido ativo enquanto estiver sem mandato.');
       return city.politics.join(c,party,'Filiação escolhida pelo jogador')||fail(city,'A filiação não está disponível neste momento.');
     }
+    case 'decree':
+      if(c.id!==city.economy.mayorId)return fail(city,'Somente o prefeito em exercício pode emitir decreto.');
+      return city.politics.issueDecree(o.type,o.payload||{},c.id);
+    case 'secretary-veto':return city.politics.secretaryVeto(o.billId,c.id);
     case 'bill':
-      if(!city.politics.council.members.some(m=>m.citizenId===c.id)&&!(c.id===city.economy.mayorId&&['worksBudget','worksTransfer'].includes(o.type)))return fail(city,'Conquiste o mandato exigido para apresentar esta proposta.');
+      if(!city.politics.council.members.some(m=>m.citizenId===c.id)&&!(c.id===city.economy.mayorId&&['worksBudget','worksTransfer','mayorDecreeDays','impeachmentCooldownElections'].includes(o.type)))return fail(city,'Conquiste o mandato exigido para apresentar esta proposta.');
       return city.politics.submitBill(o.type,o.payload||{},c.id);
     case 'sanction':{
       const bill=city.politics.council.bills.find(b=>b.id===o.billId);
