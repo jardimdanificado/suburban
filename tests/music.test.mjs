@@ -59,3 +59,21 @@ test('audio settings restore, apply immediately, and persist', () => {
   assert.equal(audio.volume, 0.75);
   assert.equal(JSON.parse(saved).musicVolume, 0.75);
 });
+
+test('default timer uses the global receiver required by browser timers', () => {
+  const original = globalThis.setTimeout;
+  let delay;
+  globalThis.setTimeout = function (_callback, milliseconds) {
+    if (this !== globalThis) throw new TypeError('Illegal invocation');
+    delay = milliseconds;
+  };
+  try {
+    const audio = audioStub();
+    const music = new MusicPlayer({ audio, random: () => 0 });
+    audio.listeners.ended();
+    assert.equal(delay, 7 * 60_000);
+    assert.equal(music.waiting, true);
+  } finally {
+    globalThis.setTimeout = original;
+  }
+});

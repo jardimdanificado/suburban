@@ -1,7 +1,7 @@
 export const MUSIC_TRACKS = ["data/music/suburban.mp3"];
 
 export class MusicPlayer {
-  constructor({ audio = new Audio(), tracks = MUSIC_TRACKS, random = Math.random, schedule = setTimeout } = {}) {
+  constructor({ audio = new Audio(), tracks = MUSIC_TRACKS, random = Math.random, schedule = (callback, delay) => globalThis.setTimeout(callback, delay) } = {}) {
     this.audio = audio;
     this.tracks = tracks;
     this.random = random;
