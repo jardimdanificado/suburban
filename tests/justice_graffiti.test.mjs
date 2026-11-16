@@ -2,7 +2,7 @@ import {gerarFraseTematica} from '../js/gerador_frases.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CityJustice} from '../js/city_justice.js';
-import {nearbyGraffitiSurfaces,graffitiSurfaceVertices,graffitiSurfaceExists,graffitiCameraFocus} from '../js/city_graffiti_surfaces.js';
+import {nearbyGraffitiSurfaces,graffitiSurfaceVertices,graffitiSurfaceExists,graffitiCameraFocus,fitGraffitiToWall} from '../js/city_graffiti_surfaces.js';
 import {CityStateGraph} from '../js/city_state.js';
 import {setup} from './helpers/city.mjs';
 import {renderUrbanArt} from '../js/city_justice_ui.js';
@@ -27,9 +27,9 @@ test('off-duty citizens paint a real surface without reading or defacing an artw
   assert.equal(justice.considerAutonomousGraffiti(citizen),false);
 });
 
-test('failed chance retries after four hours, without a week-long lockout',()=>{
+test('failed chance retries after one hour, without a week-long lockout',()=>{
   const {city,justice,citizen,piece}=fixture();city.random=()=>.5;
-  assert.equal(justice.considerAutonomousGraffiti(citizen,piece),false);city.random=()=>.05;city.minute+=239;
+  assert.equal(justice.considerAutonomousGraffiti(citizen,piece),false);city.random=()=>.05;city.minute+=59;
   assert.equal(justice.considerAutonomousGraffiti(citizen,piece),false);city.minute++;
   assert.equal(justice.considerAutonomousGraffiti(citizen,piece),true);
 });
@@ -121,4 +121,28 @@ test('fecal protest missions also generate their text through the vocabulary gra
   assert(justice.considerFecesGraffiti());
   const expected=gerarFraseTematica(['cidade','moradia','alimentacao','politica'],{random:()=>.05,complexidade:'simples'});
   assert.equal(citizen.graffitiMission.message,`${expected} · Prefeitura`);
+});
+
+test('wall graffiti clears ground-floor windows on every facade and repositions saved paint',()=>{
+ const {city,citizen,justice}=fixture();const building=city.buildings[0];building.terrain={base:1.16};building.door=null;
+ const wall=nearbyGraffitiSurfaces(city,{entity:{x:5,y:5}},8).filter(s=>s.surface==='wall');
+ assert.deepEqual(new Set(wall.map(s=>s.side)),new Set([0,1,2,3]));
+ for(const support of wall){
+  assert(support.position.z-support.height/2>building.terrain.base);
+  assert(support.position.z+support.height/2<building.terrain.base+.49,'paint must stay below the window frame');
+ }
+ const support=wall[0];support.position.z=building.terrain.base+.65;support.height=.65;
+ const piece={entity:{destroyed:false},support};justice.art=[piece];const revision=justice.artRevision;
+ justice.updateStreetGraffitiSupports();assert.equal(piece.entity.destroyed,false);
+ assert(support.position.z+support.height/2<building.terrain.base+.49);
+ assert.equal(justice.artRevision,revision+1);assert.equal(fitGraffitiToWall(city,support),false);
+});
+
+test('moderate-risk citizens can paint by day and repeat after a day, but not while busy',()=>{
+ const {city,justice,citizen}=fixture();citizen.traits={honesty:.3,riskTolerance:.55};citizen.skills.artistic=5;
+ city.hour=12;city.random=()=>.1;citizen.lastGraffitiAt=city.minute-1439;
+ assert.equal(justice.considerAutonomousGraffiti(citizen),false);city.minute++;
+ assert.equal(justice.considerAutonomousGraffiti(citizen),true);
+ citizen.graffitiMission=null;citizen.task='work';city.minute+=60;
+ assert.equal(justice.considerAutonomousGraffiti(citizen),false);
 });

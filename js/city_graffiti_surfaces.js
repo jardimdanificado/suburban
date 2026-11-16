@@ -7,6 +7,15 @@ const edges=[{dx:0,dy:-1,rotation:Math.PI},{dx:1,dy:0,rotation:Math.PI/2},{dx:0,
 const inside=(b,x,y)=>!b.entity.destroyed&&x>=b.entity.x&&x<b.entity.x+b.width&&y>=b.entity.y&&y<b.entity.y+b.depth;
 const publicGround=(city,x,y)=>terrainWalkable(city.world,x,y)&&!city.buildings.some(b=>inside(b,x+.5,y+.5));
 
+// Ground-floor windows begin at .56; leave clearance below their frames.
+export function fitGraffitiToWall(city,support){
+  if(support?.kind!=='street-graffiti'||support.surface!=='wall')return false;
+  const b=city.building(support.buildingId);if(!b||b.entity.destroyed)return false;
+  const base=b.terrain?.base??surfaceElevation(city.world,support.position.x,support.position.y),z=base+.25,height=.42;
+  if(support.position.z===z&&support.height===height)return false;
+  support.position={...support.position,z};support.height=height;return true;
+}
+
 // Search only nearby surfaces. Every candidate includes a separate standing point:
 // paint belongs on the surface, while the person must remain on reachable ground.
 export function nearbyGraffitiSurfaces(city,c,radius=4){
@@ -43,9 +52,9 @@ export function nearbyGraffitiSurfaces(city,c,radius=4){
         const x=b.entity.x+(horizontal?offset:side===1?b.width:0),y=b.entity.y+(horizontal?side===2?b.depth:0:offset),approach={x:x+edge.dx*.5,y:y+edge.dy*.5};
         if(b.door&&Math.hypot(approach.x-b.door.x,approach.y-b.door.y)<.9)continue;
         if(!publicGround(city,Math.floor(approach.x),Math.floor(approach.y)))continue;
-        const base=b.terrain?.base??surfaceElevation(world,x,y),standing=surfaceElevation(world,approach.x,approach.y),z=Math.max(base+.65,standing+.5);
-        if(z>base+1.3||z-standing>1.4)continue;
-        add('wall',`wall:${b.id}:${side}:${offset}`,{x:x+edge.dx*.025,y:y+edge.dy*.025,z},approach,{buildingId:b.id,side,rotation:edge.rotation,width:.86,height:.65});
+        const base=b.terrain?.base??surfaceElevation(world,x,y),standing=surfaceElevation(world,approach.x,approach.y),z=base+.25;
+        if(z-standing<.05||z-standing>1.4)continue;
+        add('wall',`wall:${b.id}:${side}:${offset}`,{x:x+edge.dx*.025,y:y+edge.dy*.025,z},approach,{buildingId:b.id,side,rotation:edge.rotation,width:.86,height:.42});
       }
     }
   }

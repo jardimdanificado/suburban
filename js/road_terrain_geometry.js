@@ -206,12 +206,13 @@ export function roadRetainingFaces(world,x,y,ownsSharedBoundary=null){
       if(Math.max(Math.abs(deltaA),Math.abs(deltaB))<.015)continue;
       const cuts=deltaA*deltaB<0?[0,deltaA/(deltaA-deltaB),1]:[0,1];
       for(let i=1;i<cuts.length;i++){
-        const from=cuts[i-1],to=cuts[i],a=surfaceA+(otherA-surfaceA)*from,b=surfaceA+(otherA-surfaceA)*to,c=surfaceB+(otherB-surfaceB)*from,d=surfaceB+(otherB-surfaceB)*to;
+        const from=cuts[i-1],to=cuts[i],a=surfaceA+(surfaceB-surfaceA)*from,b=surfaceA+(surfaceB-surfaceA)*to,c=otherA+(otherB-otherA)*from,d=otherA+(otherB-otherA)*to;
         faces.push({side,from,to,ax:x+ax+(bx-ax)*from,ay:y+ay+(by-ay)*from,bx:x+ax+(bx-ax)*to,by:y+ay+(by-ay)*to,lowA:Math.min(a,c),lowB:Math.min(b,d),highA:Math.max(a,c),highB:Math.max(b,d)});
       }
       continue;
     }
-    const waterOrVoid=neighbor===TILE_WATER||neighbor===TILE_VOID,base=neighbor===TILE_WATER?WATER_LEVEL:waterOrVoid?0.08:null,groundA=base??terrainCornerHeight(world,x+ax,y+ay),groundB=base??terrainCornerHeight(world,x+bx,y+by),surfaceA=surface[edge.a],surfaceB=surface[edge.b];
+    const stone=terrainTileSurfaceCorners(world,nx,ny),opposite=side===0?[3,2]:side===1?[0,3]:side===2?[0,1]:[1,2];
+    const waterOrVoid=neighbor===TILE_WATER||neighbor===TILE_VOID,base=neighbor===TILE_WATER?WATER_LEVEL:waterOrVoid?0.08:null,groundA=base??stone?.[opposite[0]]??terrainCornerHeight(world,x+ax,y+ay),groundB=base??stone?.[opposite[1]]??terrainCornerHeight(world,x+bx,y+by),surfaceA=surface[edge.a],surfaceB=surface[edge.b];
     const deltaA=groundA-surfaceA,deltaB=groundB-surfaceB;
     if(Math.max(Math.abs(deltaA),Math.abs(deltaB))<.02)continue;
     const cuts=deltaA*deltaB<0?[0,deltaA/(deltaA-deltaB),1]:[0,1];

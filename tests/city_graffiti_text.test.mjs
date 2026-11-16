@@ -25,3 +25,32 @@ test('protest vocabulary reflects known needs and preserves the named target wit
   const long=graffitiMessage({random:seeded(9)},citizen,{protest:true,targetName:'Alvo '.repeat(100)});
   assert(long.length<=180);assert(long.endsWith('Alvo '.repeat(100).trim().slice(0,60)));
 });
+
+function politicalFixture(memory=null){
+ const target={id:9,political:{partyId:2},entity:{properties:{name:'Prefeito Fulano'}}};
+ const c={homeUnitId:1,political:{partyId:1,memories:memory?[memory]:[]}};
+ const city={random:()=>.1,politics:{parties:[{id:1,active:true,short:'PVA',number:23},{id:2,active:true,short:'PCC',number:45}],corruption:[{id:7,accusedId:9,proven:true}]},society:{citizen:id=>id===9?target:null}};
+ return {city,c};
+}
+
+test('political graffiti includes the author party and its actual number',()=>{
+ const {city,c}=politicalFixture();const message=graffitiMessage(city,c);
+ assert.match(message,/PVA · 23$/);assert(message.length<=180);
+ assert.doesNotMatch(message,/Fulano|ladrão|corrupto/,'undisclosed corruption must not leak into graffiti');
+});
+
+test('known proven corruption produces named accusations with the target party number',()=>{
+ const {city,c}=politicalFixture({kind:'proven-scandal',candidateId:9,partyId:2,caseId:7});
+ const message=graffitiMessage(city,c);assert.match(message,/Prefeito Fulano: ladrão · PCC 45$/);
+ assert(message.length<=180);
+});
+
+test('heard corruption rumors stay accusations rather than magically becoming known proof',()=>{
+ const {city,c}=politicalFixture({kind:'corruption-rumor',candidateId:9,partyId:2,caseId:7});
+ assert.match(graffitiMessage(city,c),/Fulano: ladrão\?/);
+});
+
+test('negative political memories can produce directed insults without alleging theft',()=>{
+ const {city,c}=politicalFixture({kind:'policy-reaction',candidateId:9,effect:-10});
+ const message=graffitiMessage(city,c);assert.match(message,/Fulano: safado/);assert.doesNotMatch(message,/ladrão|corrupto/);
+});

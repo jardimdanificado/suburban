@@ -1,5 +1,5 @@
-import {graffitiMessage} from './city_graffiti_text.js';
-import {nearbyGraffitiSurfaces,graffitiSurfaceExists,graffitiSurfaceLabel} from './city_graffiti_surfaces.js';
+import {graffitiContent} from './city_graffiti_text.js';
+import {nearbyGraffitiSurfaces,graffitiSurfaceExists,graffitiSurfaceLabel,fitGraffitiToWall} from './city_graffiti_surfaces.js';
 import {dispatchPoliceAudits,updatePoliceAudit} from './city_police_financial_audit.js';
 import {offerPoliceBribe,considerPoliceBribe,reopenBribedInvestigation} from './city_police_bribery.js';
 import {offerWitnessBribe,considerWitnessBribe,alterBribedTestimony} from './city_witness_bribery.js';
@@ -61,7 +61,7 @@ export class CityJustice {
     for(const [type,base]of Object.entries(BASE_PENAL_CODE)){const defaults={...base,fineOnly:false,politicalDisqualification:false,cleanRecordDisqualifying:false,recidivismSeverityBonus:0,cassation:true,cassationTrigger:'arrest'};this.policies.penalCode[type]??={...defaults};for(const [key,value]of Object.entries(defaults))this.policies.penalCode[type][key]??=value;}
     for(const record of this.cases){record.rule??={};if(record.rule.cassationTrigger==null)record.rule.cassationTrigger='arrest';if(record.originalRule?.cassationTrigger==null&&record.originalRule)record.originalRule.cassationTrigger='arrest';}
     this.migratePennantArtwork();
-    for(const piece of this.art){piece.layers??=[];piece.seenBy??={};piece.damaged??=0;piece.nextLayerId=Math.max(piece.nextLayerId||1,[...piece.layers,...(piece.removedLayers||[])].reduce((n,l)=>Math.max(n,l.id+1),1));}
+    for(const piece of this.art){if(fitGraffitiToWall(this.city,piece.support))this.artRevision++;piece.layers??=[];piece.seenBy??={};piece.damaged??=0;piece.nextLayerId=Math.max(piece.nextLayerId||1,[...piece.layers,...(piece.removedLayers||[])].reduce((n,l)=>Math.max(n,l.id+1),1));}
     if(this.artKnowledgePrivacyRevision!==1){
       const factIds=new Set(),artEventIds=new Set();for(const piece of this.art)for(const layer of [piece,...(piece.layers||[]),...(piece.removedLayers||[])]){if(layer.socialFactId!=null)factIds.add(layer.socialFactId);if(layer.eventId!=null)artEventIds.add(layer.eventId);}
       for(const entry of new Set([...(this.city.history?.entries||[]),...(this.city.events||[])])){
@@ -336,8 +336,11 @@ export class CityJustice {
     if(profile)this.lastMinuteProfile={...profile,...(this.lastMinuteProfile?.siteSearch?{siteSearch:this.lastMinuteProfile.siteSearch}:{})};
   }
   updateStreetGraffitiSupports(){
-    for(const piece of this.art)if(!piece.entity.destroyed&&piece.support?.kind==='street-graffiti'&&!graffitiSurfaceExists(this.city,piece.support)){
+    for(const piece of this.art){
+      if(!piece.entity.destroyed&&fitGraffitiToWall(this.city,piece.support))this.artRevision++;
+      if(!piece.entity.destroyed&&piece.support?.kind==='street-graffiti'&&!graffitiSurfaceExists(this.city,piece.support)){
       piece.entity.destroyed=true;piece.destroyedAt=this.city.minute;piece.supportLostAt=this.city.minute;this.artRevision++;
+      }
     }
   }
   updateSkybridgeArtSupport(){
@@ -802,13 +805,13 @@ export class CityJustice {
   }
   considerAutonomousGraffiti(c){
     const city=this.city;
-    if(!c||c.entity.destroyed||c.dead||c.custody||c.graffitiMission||c.task&&!['walk','leisure','social'].includes(c.task)||c.conversation||c.mobilityTrip||c.ridingVehicleId||c.indoorLocation||c.deliveryId||c.cleaningJobId||city.urgentNeed?.(c)||!city.society.isAdult(c)||(c.traits?.honesty??.5)>.12||(c.traits?.riskTolerance??.5)<.72||(c.skills?.artistic??0)<12||city.minute-(c.lastGraffitiAttemptAt??-Infinity)<240||city.minute-(c.lastGraffitiAt??-Infinity)<7*1440)return false;
-    c.lastGraffitiAttemptAt=city.minute;const darkness=city.hour<7||city.hour>=19;if(city.random()>(darkness?0.12:0.03))return false;
+    if(!c||c.entity.destroyed||c.dead||c.custody||c.graffitiMission||c.task&&!['walk','leisure','social'].includes(c.task)||c.conversation||c.mobilityTrip||c.ridingVehicleId||c.indoorLocation||c.deliveryId||c.cleaningJobId||city.urgentNeed?.(c)||!city.society.isAdult(c)||(c.traits?.honesty??.5)>.35||(c.traits?.riskTolerance??.5)<.5||(c.skills?.artistic??0)<4||city.minute-(c.lastGraffitiAttemptAt??-Infinity)<60||city.minute-(c.lastGraffitiAt??-Infinity)<1440)return false;
+    c.lastGraffitiAttemptAt=city.minute;const darkness=city.hour<7||city.hour>=19;if(city.random()>(darkness?0.35:0.12))return false;
     const targets=nearbyGraffitiSurfaces(city,c);let route=null;
     for(const support of targets){const path=city.findPath(c.entity,support.approach);if(path!==null){route={support,path};break;}}
     if(!route)return false;
-    const message=graffitiMessage(city,c);
-    c.graffitiMission={status:'to-surface',surface:route.support,message,startedAt:city.minute,completeAt:null,waitingReason:null};c.task='urban-graffiti';c.path=route.path;
+    const content=graffitiContent(city,c);
+    c.graffitiMission={status:'to-surface',surface:route.support,...content,startedAt:city.minute,completeAt:null,waitingReason:null};c.task='urban-graffiti';c.path=route.path;
     if(!c.path.length&&dist(c.entity,route.support.approach)>.1)c.path=[route.support.approach];
     c.targetId=null;c.action=`Indo pichar: ${graffitiSurfaceLabel(route.support).toLowerCase()}`;return true;
   }
@@ -823,8 +826,9 @@ export class CityJustice {
       const pile=piles[0],sites=city.buildings.filter(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&Math.hypot(b.door.x-pile.x,b.door.y-pile.y)<=8).map(building=>({building,point:city.gigs.frontagePoint(building)})).filter(site=>site.point&&city.findPath(c.entity,site.point)!==null).sort((a,b)=>Number(!a.building.municipal)-Number(!b.building.municipal)||Math.hypot(a.point.x-pile.x,a.point.y-pile.y)-Math.hypot(b.point.x-pile.x,b.point.y-pile.y));
       if(!sites.length)continue;
       const {building,point}=sites[0],path=city.findPath(c.entity,point),makeStatue=pile.pile.amount>=2&&(!c.homeUnitId||c.needs.food<24)&&city.random()<.25,owner=building.ownerId==null?null:city.society.citizen(building.ownerId),party=city.politics.parties.filter(item=>item.active).sort((a,b)=>a.id-b.id)[0],attackRoll=city.random(),attackParty=!!party&&attackRoll<.25,attackPerson=!attackParty&&owner&&attackRoll<.55,subjectId=attackPerson?owner.id:attackParty?(city.society.citizen(city.economy.mayorId)?.id??null):null,partyId=attackParty?party.id:null,targetName=attackParty?party.name:attackPerson?owner.entity.properties.name:building.municipal?'Prefeitura':city.economy.businesses.some(company=>company.id===building.id)?owner?.entity.properties.name||building.entity.properties.name:building.entity.properties.name;
+      const content=graffitiContent(city,c,{protest:true,targetName});
       const amount=makeStatue?2:1;if(pile.pile.amount<amount)continue;const reservation=`art:${c.id}`;pile.pile.jobId=reservation;
-      c.lastFecesGraffitiAt=city.minute;c.graffitiMission={status:makeStatue?'to-sculpture':'to-wall',material:'fezes',artKind:makeStatue?'statue':'graffiti',fecesSourceKey:pile.key,fecesReservation:reservation,fecesQuantity:amount,targetBuildingId:building.id,targetPoint:{x:point.x,y:point.y},message:graffitiMessage(city,c,{protest:true,targetName}),subjectId,partyId,startedAt:city.minute,completeAt:city.minute+(makeStatue?24:10),waitingReason:null};c.task='urban-graffiti';c.path=path||[];if(!c.path.length&&Math.hypot(c.entity.x-point.x,c.entity.y-point.y)>.1)c.path=[point];c.targetId=null;c.action=makeStatue?'Levando fezes para erguer uma escultura de protesto':'Recolhendo fezes para protestar na fachada';return true;
+      c.lastFecesGraffitiAt=city.minute;c.graffitiMission={status:makeStatue?'to-sculpture':'to-wall',material:'fezes',artKind:makeStatue?'statue':'graffiti',fecesSourceKey:pile.key,fecesReservation:reservation,fecesQuantity:amount,targetBuildingId:building.id,targetPoint:{x:point.x,y:point.y},subjectId,partyId,...content,startedAt:city.minute,completeAt:city.minute+(makeStatue?24:10),waitingReason:null};c.task='urban-graffiti';c.path=path||[];if(!c.path.length&&Math.hypot(c.entity.x-point.x,c.entity.y-point.y)>.1)c.path=[point];c.targetId=null;c.action=makeStatue?'Levando fezes para erguer uma escultura de protesto':'Recolhendo fezes para protestar na fachada';return true;
     }
     return false;
   }
@@ -837,7 +841,8 @@ export class CityJustice {
     if(mission.surface&&mission.completeAt==null){mission.status='painting';mission.completeAt=city.minute+Math.max(2,Math.round(12-(c.skills.artistic||0)*.08));}
     if(city.minute<mission.completeAt){c.action=mission.surface?`Pichando: ${graffitiSurfaceLabel(mission.surface).toLowerCase()}`:'Pichando uma obra urbana';return true;}
     if(mission.surface){
-      const support=mission.surface,point=support.position,art=this.createArtwork({kind:'graffiti',message:mission.message,creatorId:c.id,buildingId:support.buildingId??null,x:point.x,y:point.y,truth:null,color:0x222128,support});
+      const support=mission.surface,point=support.position,art=this.createArtwork({kind:'graffiti',message:mission.message,creatorId:c.id,buildingId:support.buildingId??null,x:point.x,y:point.y,truth:null,color:0x222128,support,subjectId:mission.subjectId??null,partyId:mission.partyId??null});
+      if(art&&mission.politicalKind){art.politicalKind=mission.politicalKind;art.corruptionCaseId=mission.corruptionCaseId??null;}
       const layer=art?this.defaceArtwork(art.id,c.id,mission.message,{truth:null,color:0x222128}):null;
       if(layer)c.lastGraffitiAt=city.minute;
       c.graffitiMission=null;c.task=null;c.path=[];c.targetId=null;c.action=layer?`Pichou: ${graffitiSurfaceLabel(support).toLowerCase()}`:'A pichação não foi concluída';return !!layer;

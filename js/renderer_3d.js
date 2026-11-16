@@ -74,10 +74,13 @@ const PAVED_ROAD_TILES=new Set([TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_STONE,TILE_
 const ROAD_SURFACE_TILES=new Set([TILE_ROAD_GRASS,TILE_ROAD_SAND,TILE_ROAD_HILL,...PAVED_ROAD_TILES]);
 function indoorCitizenVisibleFromOutside(renderer,location){
   if(!location||location.exiting||location.path?.length)return false;
-  if(location.roomType==='balcony'||location.roomType==='roof_terrace')return true;
   const city=renderer.cityDevelopment?.city,building=city?.building(location.buildingId),unit=location.unitId?city?.units?.get(location.unitId):null;
-  if(!building||!unit)return false;
-  const shellId=building.officeTenantOf||building.id,facade=renderer.cityMeshes?.get(shellId),cellKey=`${unit.x},${unit.y},${unit.z}`;
+  if(!building||building.entity?.destroyed)return false;
+  const shellId=building.officeTenantOf||building.id,facade=renderer.cityMeshes?.get(shellId);
+  if(!facade?.visible)return false;
+  if(location.roomType==='balcony'||location.roomType==='roof_terrace')return true;
+  if(!unit)return false;
+  const cellKey=`${unit.x},${unit.y},${unit.z}`;
   if(facade?.userData.balconyCellKeys?.has(cellKey))return true;
   if(!facade?.userData.windowCellKeys?.has(cellKey)||unit.windowStyle==='shuttered')return false;
   const floor=location.floor??unit.z;
@@ -7225,6 +7228,8 @@ export class RCT3DRenderer {
             if(neighborIsStone&&ny*this.mapWidth+nx<ty*this.mapWidth+tx)continue;
             const otherStone=neighborIsStone?terrainTileSurfaceVertices(world,nx,ny):null;
             const otherSurface=otherStone?null:streetSurfaceCorners(world,nx,ny);
+            // Paved streets own the complete retaining panel at this boundary.
+            if(otherSurface&&roadRailingAllowed(world,nx,ny))continue;
             const [otherIndexA,otherIndexB]=neighborEdgeIndices[edge.side];
             const offsetA=otherSurface?{x:0,z:0}:terrainVertexOffset(world,...edge.a),offsetB=otherSurface?{x:0,z:0}:terrainVertexOffset(world,...edge.b);
             const lowA=otherStone?.[otherIndexA]||[edge.a[0]+offsetA.x,otherSurface?otherSurface[otherIndexA]:terrainCornerHeight(world,...edge.a),edge.a[1]+offsetA.z];
@@ -7238,7 +7243,8 @@ export class RCT3DRenderer {
               const currentIsHigher=diffA+(diffB-diffA)*(from+to)*.5>=0;
               const upper0=currentIsHigher?upperA0:lowerA0,upper1=currentIsHigher?upperA1:lowerA1,lower0=currentIsHigher?lowerA0:upperA0,lower1=currentIsHigher?lowerA1:upperA1;
               if(Math.max(Math.hypot(upper0[0]-lower0[0],upper0[1]-lower0[1],upper0[2]-lower0[2]),Math.hypot(upper1[0]-lower1[0],upper1[1]-lower1[1],upper1[2]-lower1[2]))<.005)continue;
-              for(const point of [lower0,upper0,upper1,lower0,upper1,lower1]){wall.pos.push(...point);wall.uvs.push(along(point),point[1]);wall.colors.push(zoneMult*.88,zoneMult*.88,zoneMult*.88);}
+              const facePoints=edge.side===0||edge.side===1?[lower0,upper0,upper1,lower0,upper1,lower1]:[lower0,upper1,upper0,lower0,lower1,upper1];
+              for(const point of facePoints){wall.pos.push(...point);wall.uvs.push(along(point),point[1]);wall.colors.push(zoneMult*.88,zoneMult*.88,zoneMult*.88);}
             }
           }
         }

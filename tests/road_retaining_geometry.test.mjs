@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {roadSurfaceCorners,roadRetainingFaces,terrainCornerHeight,terrainSurfaceElevation} from '../js/road_terrain_geometry.js';
+import {roadSurfaceCorners,roadRetainingFaces,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,terrainTileSurfaceCorners} from '../js/road_terrain_geometry.js';
 import {surfaceElevation} from '../js/city_terrain.js';
-import {TILE_FLOOR,TILE_SAND,TILE_HILL,TILE_ROAD_GRASS,TILE_ROAD_GRASS_STONE,TILE_ROAD_HILL_STONE} from '../js/world_gen.js';
+import {TILE_FLOOR,TILE_STONE,TILE_SAND,TILE_HILL,TILE_ROAD_GRASS,TILE_ROAD_GRASS_STONE,TILE_ROAD_HILL_STONE} from '../js/world_gen.js';
 
 function fixture(){
   const world={width:12,height:10,revision:1,map:new Uint8Array(120).fill(TILE_FLOOR)};
@@ -109,4 +109,33 @@ test('unbuilt dirt roads follow natural slopes, and only paving creates the shel
   near(terrainSurfaceElevation(world,5.5,5.5),natural);
   assert.deepEqual(roadRetainingFaces(world,5,5),[]);
   road(world);assert(roadRetainingFaces(world,5,5).length>0);near(terrainSurfaceElevation(world,5.5,5.5),1.1);
+});
+
+
+test('retaining panels interpolate each street profile along the shared edge',()=>{
+  const world=fixture();
+  road(world);world.sidewalkTiles=new Set([4*world.width+5,4*world.width+6]);
+  for(let x=2;x<6;x++)world.setTile(x,3,TILE_ROAD_HILL_STONE);
+  world.setTile(5,5,TILE_FLOOR);
+  const edges=[[0,1],[1,2],[3,2],[0,3]],opposites=[[3,2],[0,3],[0,1],[1,2]],offsets=[[0,-1],[1,0],[0,1],[-1,0]];
+  let checked=0;
+  for(let y=0;y<world.height;y++)for(let x=0;x<world.width;x++){
+    const surface=streetSurfaceCorners(world,x,y);if(!surface)continue;
+    for(const face of roadRetainingFaces(world,x,y)){
+      const [dx,dy]=offsets[face.side],other=streetSurfaceCorners(world,x+dx,y+dy);if(!other)continue;
+      const [a,b]=edges[face.side],[c,d]=opposites[face.side];
+      for(const [t,low,high] of [[face.from,face.lowA,face.highA],[face.to,face.lowB,face.highB]]){
+        const first=surface[a]+(surface[b]-surface[a])*t,second=other[c]+(other[d]-other[c])*t;
+        near(low,Math.min(first,second));near(high,Math.max(first,second));
+      }
+      checked++;
+    }
+  }
+  assert(checked>0);
+});
+
+test('retaining walls meet the rendered stone shelf instead of averaged ground',()=>{
+  const world=fixture();road(world);world.setTile(5,4,TILE_STONE);
+  const stone=terrainTileSurfaceCorners(world,5,4),face=roadRetainingFaces(world,5,5).find(face=>face.side===0);
+  assert(face);near(face.highA,stone[3]);near(face.highB,stone[2]);
 });
