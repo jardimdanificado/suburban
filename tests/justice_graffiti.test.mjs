@@ -146,3 +146,18 @@ test('moderate-risk citizens can paint by day and repeat after a day, but not wh
  citizen.graffitiMission=null;citizen.task='work';city.minute+=60;
  assert.equal(justice.considerAutonomousGraffiti(citizen),false);
 });
+
+test('political graffiti carries its named target, party and known scandal through painting',()=>{
+ const {city,justice,citizen}=fixture();justice.art=[];
+ const target={id:9,entity:{properties:{name:'Prefeito Fulano'}},political:{partyId:2}};
+ city.society.citizen=id=>id===9?target:id===citizen.id?citizen:null;
+ city.politics={parties:[{id:2,active:true,short:'PCC',number:45}]};
+ citizen.political={memories:[{kind:'proven-scandal',candidateId:9,partyId:2,caseId:17}]};
+ assert.equal(justice.considerAutonomousGraffiti(citizen),true);
+ assert.match(citizen.graffitiMission.message,/Fulano: ladrão · PCC 45/);
+ const support=citizen.graffitiMission.surface;citizen.entity.x=support.approach.x;citizen.entity.y=support.approach.y;citizen.path=[];
+ justice.updateGraffitiMission(citizen);city.minute=citizen.graffitiMission.completeAt;
+ justice.updateGraffitiMission(citizen);const art=justice.art[0];
+ assert.equal(art.subjectId,9);assert.equal(art.partyId,2);assert.equal(art.corruptionCaseId,17);
+ assert.equal(art.politicalKind,'corruption');assert.equal(art.layers[0].message,art.message);
+});

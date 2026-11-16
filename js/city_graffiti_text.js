@@ -18,10 +18,10 @@ function politicalGraffiti(city,c){
       const insults=proven?['ladrão','corrupto','safado']:rumor?['ladrão?','corrupto?']:['safado','canalha','sem-vergonha'];
       const insult=insults[Math.floor(city.random()*insults.length)];
       return {subjectId:target.id,partyId:party?.id??null,politicalKind:proven?'corruption':rumor?'corruption-rumor':'political-insult',corruptionCaseId:memory.caseId??null,
-        targetName:`${target.entity.properties.name}: ${insult}${party?` · ${party.short||party.name} ${party.number}`:''}`};
+        targetName:`${String(target.entity.properties.name).slice(0,56)}: ${insult}${party?` · ${String(party.short||party.name).slice(0,20)} ${party.number}`:''}`};
     }
   }
-  if(own)return {subjectId:null,partyId:own.id,politicalKind:'party-support',targetName:`${own.short||own.name} · ${own.number}`};
+  if(own)return {subjectId:null,partyId:own.id,politicalKind:'party-support',targetName:`${String(own.short||own.name).slice(0,60)} · ${own.number}`};
   return null;
 }
 
