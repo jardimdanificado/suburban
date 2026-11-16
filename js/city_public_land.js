@@ -48,11 +48,18 @@ export function findPublicBuildingSite(dev,type,{allowPurchase=true,kind=null,pl
     }return null;
   };
   const anchors=dev.plots.filter(lot=>lot.buildingId||lot.projectId).sort((a,b)=>(dev.compactPlanning?1:-1)*(Math.hypot(a.x-center.x,a.y-center.y)-Math.hypot(b.x-center.x,b.y-center.y))).slice(0,24),frontiers=[];
-  for(const lot of anchors){const w=sizes[0][0],d=sizes[0][1],gap=dev.compactPlanning?1:2;for(const [x,y]of [[lot.x+lot.width+gap,lot.y],[lot.x-w-gap,lot.y],[lot.x,lot.y+lot.depth+gap],[lot.x,lot.y-d-gap],[lot.x+lot.width+gap,lot.y+lot.depth+gap],[lot.x-w-gap,lot.y-d-gap],[lot.x+lot.width+gap,lot.y-d-gap],[lot.x-w-gap,lot.y+lot.depth+gap]])frontiers.push({x,y});}
+  for(const lot of anchors){const w=sizes[0][0],d=sizes[0][1],gap=Math.max(2,dev.plotSpacing);for(const [x,y]of [[lot.x+lot.width+gap,lot.y],[lot.x-w-gap,lot.y],[lot.x,lot.y+lot.depth+gap],[lot.x,lot.y-d-gap],[lot.x+lot.width+gap,lot.y+lot.depth+gap],[lot.x-w-gap,lot.y-d-gap],[lot.x+lot.width+gap,lot.y-d-gap],[lot.x-w-gap,lot.y+lot.depth+gap]])frontiers.push({x,y});}
   for(let i=0;i<Math.min(64,frontiers.length);i++){const point=frontiers[(state.frontierCursor||0)%frontiers.length];state.frontierCursor=(state.frontierCursor||0)+1;attempts++;const site=attempt(point.x,point.y);if(site)return site;}
+  // Reach open land beyond the central catalogue before probing small gaps.
+  const spacedBudget=dev.compactPlanning?64:0,stride=Math.max(...sizes.map(([w,d])=>Math.max(w,d)))+dev.plotSpacing;
+  const spacedRadius=Math.ceil(Math.max(center.x,center.y,city.world.width-center.x,city.world.height-center.y)/stride),spacedTotal=(2*spacedRadius+1)**2;
+  for(let i=0;i<spacedBudget;i++){
+    const point=spiral((state.spacedCursor||0)%spacedTotal,0,0);state.spacedCursor=(state.spacedCursor||0)+1;attempts++;
+    const site=attempt(Math.floor(center.x)+point.x*stride,Math.floor(center.y)+point.y*stride);if(site)return site;
+  }
   // Unlike sparse angular rings, this fallback eventually visits every integer origin on the map.
   const cx=Math.floor(center.x),cy=Math.floor(center.y),radius=Math.max(cx,cy,city.world.width-cx,city.world.height-cy),total=(2*radius+1)**2;
-  for(let i=0;i<192;i++){const point=spiral(state.cursor%total,cx,cy);state.cursor=(state.cursor+1)%total;if(state.cursor===0)state.exhausted=true;attempts++;const site=attempt(point.x,point.y);if(site)return site;}
+  for(let i=0;i<192-spacedBudget;i++){const point=spiral(state.cursor%total,cx,cy);state.cursor=(state.cursor+1)%total;if(state.cursor===0)state.exhausted=true;attempts++;const site=attempt(point.x,point.y);if(site)return site;}
   report.attempts=attempts;state.reason=report.reason=state.exhausted?'Busca completa sem nova área pública compatível; aguardando liberação de espaço ou terreno anunciado para compra.':`Nenhum terreno compatível no catálogo; busca de novas áreas em andamento (${attempts} posições verificadas nesta etapa).`;return null;
 }
 export function acquirePublicBuildingSite(dev,site){

@@ -1,4 +1,4 @@
-import {graffitiSurfaceLabel} from './city_graffiti_surfaces.js';
+import {graffitiSurfaceLabel,graffitiCameraFocus} from './city_graffiti_surfaces.js';
 import {interventionButton,interventionButtons} from './city_context_actions.js';
 import {CRIME_TYPES,isOpenJusticeCase} from './city_justice.js?v=citizen-access-1';
 import {funeralSpec} from './city_funeral_services.js';
@@ -88,7 +88,7 @@ function caseCard(ui,p,record,{showActions=true}={}){
 export function renderUrbanArt(ui,p){
   const city=ui.city,j=city.justice,view=ui.view(),art=j.art.filter(a=>!a.entity.destroyed),layers=art.reduce((n,a)=>n+a.layers.length,0),orders=city.gigs.jobs.filter(x=>x.kind==='art-installation'&&['open','working'].includes(x.status)),cleaning=city.gigs.jobs.filter(x=>x.kind==='art-cleaning'&&['open','working'].includes(x.status)),graffiti=city.citizens.filter(c=>c.graffitiMission);
   const sponsorName=piece=>piece.sponsorId!=null?personName(city,piece.sponsorId):piece.sponsorAccountId==='treasury'?'Tesouro municipal':city.accountName(piece.sponsorAccountId)||'não identificado';
-  const locate=piece=>{if(piece?.entity&&ui.host){ui.host.setSelection(piece.entity);return;}const support=piece?.support;if(support?.kind==='interior-wall'){const building=city.building(support.buildingId),unit=city.units.get(support.unitId);if(building&&unit){ui.openBuilding?.(building.id);ui.camera(building.entity.x+unit.x+.5,building.entity.y+unit.y+.5);return;}}if(piece)ui.camera(piece.entity.x,piece.entity.y);};
+  const locate=piece=>{const support=piece?.support;if(support?.kind==='interior-wall'){const building=city.building(support.buildingId),unit=city.units.get(support.unitId);if(building&&unit){ui.openBuilding?.(building.id);ui.camera(building.entity.x+unit.x+.5,building.entity.y+unit.y+.5);return;}}if(piece){ui.camera(piece.entity.x,piece.entity.y,graffitiCameraFocus(support));if(piece.entity&&ui.host)ui.host.setSelection(piece.entity);}};
   p.metrics([['OBRAS ATIVAS',art.length,'#70c8dc'],['CAMADAS DE MENSAGEM',layers,'#e6ba63'],['ENCOMENDAS PENDENTES',orders.length,'#9b8bd8'],['LIMPEZAS PENDENTES',cleaning.length,'#81c98b']]);
   p.button('CRIAR ENCOMENDA ARTÍSTICA',()=>ui.openPanel({tab:'urban-art',views:{'urban-art':'create'}}));
   if(graffiti.length&&view!=='orders'){p.heading('PICHADORES EM AÇÃO');for(const c of graffiti)p.record(`${personName(city,c.id)} · ${c.action||'Pichação em andamento'}`,`${c.graffitiMission.message} · ${c.graffitiMission.surface?graffitiSurfaceLabel(c.graffitiMission.surface):c.graffitiMission.artId!=null?`obra #${c.graffitiMission.artId}`:buildingName(city,c.graffitiMission.targetBuildingId)} · iniciou ${stamp(c.graffitiMission.startedAt)}`,()=>ui.openCitizen(c.id));}

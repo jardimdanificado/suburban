@@ -8,7 +8,7 @@ import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=game-approach-camera-9";
 import { CityDesktop } from "./js/city_desktop.js?v=game-approach-camera-9";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=isometric-camera-rotation-11";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=street-graffiti-visible-1";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
@@ -594,6 +594,10 @@ root.addEventListener("wheel", (event) => {
 }, { passive: false });
 
 window.addEventListener("keydown", (event) => {
+  // Consume native key repeat on the game surface, including keys without
+  // bindings. Keep dispatching controls so held movement and menus still work.
+  const typing=/^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName)||event.target?.isContentEditable;
+  if(event.repeat&&!typing&&!event.ctrlKey&&!event.metaKey&&!event.altKey)event.preventDefault();
   if(gameUI.active){if(gameUI.key(event,true))event.preventDefault();return;}
   if (mainMenu.isActive()) {
     if (event.code === 'Escape' && cityUI?.visible && cityUI?.manager?.windows?.length > 0) {
@@ -803,10 +807,11 @@ export const cityUI = new CityDesktop({ city, root, select: selectEntity, contro
   observe:(mode,id)=>{if(mode==='third')renderer3D.setThirdPersonMode(true,id);else if(mode==='follow')renderer3D.setFollowCharacter(id);else if(mode==='free')renderer3D.setFreeCameraMode(true);else {renderer3D.setThirdPersonMode(false);renderer3D.setFollowCharacter(null);}},
   freeCameraActive:()=>renderer3D.isFirstPersonActive()&&(renderer3D.fpEntityId===null||renderer3D.fpEntityId===undefined),
   observation:()=>renderer3D.isPerspectiveActive()||renderer3D.followCharacterId!==null,
-}, camera(x, y) {
+}, camera(x, y, focus) {
   renderer3D.setThirdPersonMode(false);
   renderer3D.setFollowCharacter(null);
-  renderer3D.setCamera(x, y);
+  renderer3D.setCamera(x, y, focus?.zoom);
+  if(Number.isFinite(focus?.yaw))renderer3D.rotateIsometricCamera(focus.yaw-renderer3D.fixedRotationY);
 } });
 export const gameUI = new CharacterGameUI({root,getCity:()=>city,
   command:async(action,options)=>{

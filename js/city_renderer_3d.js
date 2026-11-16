@@ -276,11 +276,17 @@ function addVariedStatue(THREE,group,piece,stone){
   else{add(new THREE.CylinderGeometry(.28,.18,.28,7),stone,0,.2,0);add(new THREE.CylinderGeometry(.2,.27,.28,7),stone,0,.48,0,1,1,1,.2);add(new THREE.CylinderGeometry(.27,.18,.28,7),stone,0,.76,0,1,1,1,-.14);add(new THREE.SphereGeometry(.18,6,4),stone,0,1.04,0);}
 }
 function addStreetGraffiti(THREE,group,world,piece,face){
-  const canvas=document.createElement('canvas');canvas.width=512;canvas.height=256;
-  const ctx=canvas.getContext('2d');ctx.fillStyle=`#${(face.color??piece.color??0x222128).toString(16).padStart(6,'0')}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 52px sans-serif';
-  const words=String(face.message).split(/\s+/),lines=[];let line='';
-  for(const word of words){if(line&&ctx.measureText(`${line} ${word}`).width>470){lines.push(line);line=word;}else line=line?`${line} ${word}`:word;}if(line)lines.push(line);
-  const visible=lines.slice(0,4);visible.forEach((text,i)=>drawPixelText(ctx,text,256,128+(i-(visible.length-1)/2)*54,480));
+  const canvas=document.createElement('canvas');canvas.width=256;canvas.height=256;
+  const ctx=canvas.getContext('2d');ctx.fillStyle=`#${(face.color??piece.color??0x222128).toString(16).padStart(6,'0')}`;ctx.textAlign='center';ctx.textBaseline='middle';
+  // Fill the painted surface: a small caption disappears after retro downsampling.
+  const words=String(face.message).split(/\s+/);let lines=[];
+  for(let size=96;size>=16;size-=4){
+    ctx.font=`900 ${size}px sans-serif`;lines=[];let line='';
+    for(const word of words){if(line&&ctx.measureText(`${line} ${word}`).width>236){lines.push(line);line=word;}else line=line?`${line} ${word}`:word;}if(line)lines.push(line);
+    if(lines.length*size<=228)break;
+  }
+  const lineHeight=Math.min(228/Math.max(1,lines.length),96);
+  lines.forEach((text,i)=>drawPixelText(ctx,text,128,128+(i-(lines.length-1)/2)*lineHeight,236));
   const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;
   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(graffitiSurfaceVertices(world,piece.support),3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute([0,0,1,0,1,1,0,1],2));geometry.setIndex([0,1,2,0,2,3]);geometry.computeVertexNormals();
   const paint=new THREE.Mesh(geometry,new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide,transparent:true,alphaTest:.08,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}));group.add(paint);

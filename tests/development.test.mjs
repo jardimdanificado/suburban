@@ -173,7 +173,7 @@ test('an abandoned project releases its land, materials and escrow when its owne
 test('residential buildings can receive and store deliveries even though they are not active businesses', () => {
   const city = setup(), home = city.buildings.find(b => b.type === 'residential'), farm = city.economy.businesses.find(b => b.type === 'farm');
   farm.inventory.maca = 6; city.economy.produced.maca += 6;
-  assert(city.transfer(investor(city).accountId, home.accountId, 1000, 'Compra para depósito residencial'));
+  assert(city.transfer(investor(city).accountId, home.accountId, 10000, 'Compra para depósito residencial'));
   const s = city.logistics.order(farm, home, 'maca', 6, 100); assert(s); finishShipment(city, s);
   assert.equal(home.inventory.maca, 6); audit(city);
 });

@@ -1,7 +1,8 @@
+import {gerarFraseTematica} from '../js/gerador_frases.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CityJustice} from '../js/city_justice.js';
-import {nearbyGraffitiSurfaces,graffitiSurfaceVertices,graffitiSurfaceExists} from '../js/city_graffiti_surfaces.js';
+import {nearbyGraffitiSurfaces,graffitiSurfaceVertices,graffitiSurfaceExists,graffitiCameraFocus} from '../js/city_graffiti_surfaces.js';
 import {CityStateGraph} from '../js/city_state.js';
 import {setup} from './helpers/city.mjs';
 import {renderUrbanArt} from '../js/city_justice_ui.js';
@@ -17,7 +18,7 @@ function fixture(){
 test('off-duty citizens paint a real surface without reading or defacing an artwork',()=>{
   const {city,justice,citizen,piece}=fixture();justice.art=[];
   assert.equal(justice.considerAutonomousGraffiti(citizen),true);
-  const support=citizen.graffitiMission.surface;assert.equal(support.kind,'street-graffiti');assert.equal(citizen.graffitiMission.completeAt,null);
+  const support=citizen.graffitiMission.surface;assert.equal(support.kind,'street-graffiti');assert.equal(citizen.graffitiMission.completeAt,null);assert.equal(citizen.graffitiMission.message,gerarFraseTematica(['cidade'],{random:()=>.05,complexidade:'simples'}));
   citizen.entity.x=support.approach.x;citizen.entity.y=support.approach.y;citizen.path=[];
   justice.updateGraffitiMission(citizen);assert(citizen.graffitiMission.completeAt>city.minute);
   city.minute=citizen.graffitiMission.completeAt;
@@ -41,11 +42,11 @@ test('on-duty work, indoor activity and urgent needs still prevent street graffi
 
 test('graffiti catalogue shows overlay author and locates the tagged artwork',()=>{
   const {city,justice,piece}=fixture();piece.layers=[{id:1,kind:'graffiti',creatorId:1,message:'Meu pixo',minute:1440}];
-  const records=[],headings=[],selected=[];
+  const records=[],headings=[],selected=[],cameras=[];
   const panel=new Proxy({heading:title=>headings.push(title),record:(...args)=>records.push(args)},{get:(target,key)=>target[key]||(()=>{})});
-  renderUrbanArt({city,view:()=> 'overview',matches:()=>true,host:{setSelection:entity=>selected.push(entity)}},panel);
+  renderUrbanArt({city,view:()=> 'overview',matches:()=>true,camera:(...args)=>cameras.push(args),host:{setSelection:entity=>selected.push(entity)}},panel);
   assert(headings.includes('PICHAÇÕES'));const tag=records.find(([title,description])=>title.startsWith('Pichação · Artista')&&description.includes('Meu pixo'));
-  assert(tag);assert.match(tag[1],/Prédio/);tag[2]();assert.equal(selected[0],piece.entity);
+  assert(tag);assert.match(tag[1],/Prédio/);tag[2]();assert.equal(selected[0],piece.entity);assert.deepEqual(cameras[0].slice(0,2),[piece.entity.x,piece.entity.y]);
 });
 
 
@@ -97,4 +98,27 @@ test('surfaces occupied by art or another graffiti mission are not targets',()=>
   assert(!nearbyGraffitiSurfaces(city,citizen).some(s=>s.key===support.key));city.citizens.pop();
   justice.art.push({entity:{x:support.position.x,y:support.position.y},layers:[]});
   assert(!nearbyGraffitiSurfaces(city,citizen).some(s=>s.key===support.key));
+});
+
+
+test('street graffiti location zooms in and faces the painted side, including saved rotations',()=>{
+  for(const surface of ['wall','retaining','ground']){
+    const {city,piece}=fixture(),rotation=Math.PI;
+    piece.kind='graffiti';piece.support={kind:'street-graffiti',surface,rotation};piece.layers=[{id:1,creatorId:1,message:'Meu pixo',minute:1440}];
+    const records=[],actions=[],panel=new Proxy({record:(...args)=>records.push(args)},{get:(target,key)=>target[key]||(()=>{})});
+    renderUrbanArt({city,view:()=> 'overview',matches:()=>true,camera:(...args)=>actions.push(['camera',...args]),host:{setSelection:()=>actions.push(['selection'])}},panel);
+    records.find(([title])=>title.startsWith('Pichação · Artista'))[2]();
+    assert.deepEqual(actions[0],['camera',piece.entity.x,piece.entity.y,{zoom:8,...(surface!=='ground'?{yaw:rotation}:{})}]);assert.equal(actions[1][0],'selection');
+  }
+  assert.equal(graffitiCameraFocus({kind:'facade-banner'}),undefined);
+});
+
+test('fecal protest missions also generate their text through the vocabulary grammar',()=>{
+  const {city,justice,citizen}=fixture();citizen.homeUnitId=null;citizen.needs={food:20,health:90,safety:90,social:90};
+  city.buildings[0].door={x:4.5,y:3.5};city.buildings[0].municipal=true;
+  city.sanitation={streetFeces:new Map([['2,1',{amount:1,jobId:null}]])};
+  city.gigs.frontagePoint=()=>({x:4.5,y:3.5});city.politics={parties:[]};city.economy={businesses:[]};
+  assert(justice.considerFecesGraffiti());
+  const expected=gerarFraseTematica(['cidade','moradia','alimentacao','politica'],{random:()=>.05,complexidade:'simples'});
+  assert.equal(citizen.graffitiMission.message,`${expected} · Prefeitura`);
 });

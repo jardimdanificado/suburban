@@ -1,6 +1,7 @@
 import {surfaceElevation,tileAt,terrainWalkable} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {roadRetainingFaces} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
 
+export const graffitiCameraFocus=support=>support?.kind==='street-graffiti'?{zoom:8,...(support.surface!=='ground'?{yaw:support.rotation||0}:{})}:undefined;
 export const graffitiSurfaceLabel=support=>({wall:'Muro / parede externa',ground:'Chão',retaining:'Arrimo'})[support?.surface]||'Superfície urbana';
 const edges=[{dx:0,dy:-1,rotation:Math.PI},{dx:1,dy:0,rotation:Math.PI/2},{dx:0,dy:1,rotation:0},{dx:-1,dy:0,rotation:-Math.PI/2}];
 const inside=(b,x,y)=>!b.entity.destroyed&&x>=b.entity.x&&x<b.entity.x+b.width&&y>=b.entity.y&&y<b.entity.y+b.depth;

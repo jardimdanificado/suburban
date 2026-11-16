@@ -98,3 +98,15 @@ test('daily invitations stop when members change jobs',()=>{
  for(const c of f.citizens)c.jobId=null;
  f.city.minute=1020;dispatchRegularCrossings(f.city);assert.ok(f.citizens.every(c=>!c.path.length));
 });
+
+test('daily invitations retain useful shortcuts even when land connects the banks',()=>{
+ const f=fixture();
+ f.leader.path=planBoatTrip(f.city,f.leader.entity,f.goal);run(f);
+ // Open a distant land bridge; crossing the canal still saves the commute.
+ for(let x=12;x<18;x++)f.city.world.map[x]=0;
+ f.city.world.revision++;
+ f.city.minute=1020;dispatchRegularCrossings(f.city);
+ assert.ok(f.citizens.some(c=>c.path[0]?.boatPlan));
+ run(f);
+ assert.ok(f.citizens.every(c=>Math.hypot(c.entity.x-8.5,c.entity.y-12.5)<.01));
+});

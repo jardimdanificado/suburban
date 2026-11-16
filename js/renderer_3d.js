@@ -38,7 +38,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import {NightLighting} from "./night_lighting.js?v=local-night-lights-1";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=game-exterior-camera-9";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=street-graffiti-visible-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=head-flag-crown-1';
@@ -6753,10 +6753,12 @@ export class RCT3DRenderer {
       this._terrainFarmSignatureCache={city,structureRevision:city?.structureRevision||0,grassValue:grassExclusionSignature(city?.buildings||[])};
     }
     const footprint=cachedConstructionFootprint(this,this.cityDevelopment),siteCells=footprint.cells;
-    const grassSignature=`${this._terrainFarmSignatureCache.grassValue}|sites:${footprint.signature}`;
+    const groundPaint=(city?.justice?.art||[]).filter(piece=>!piece.entity.destroyed&&piece.support?.kind==='street-graffiti'&&piece.support.surface==='ground').map(piece=>`${piece.support.tileX},${piece.support.tileY}`).sort();
+    const grassSignature=`${this._terrainFarmSignatureCache.grassValue}|sites:${footprint.signature}|paint:${groundPaint.join(';')}`;
     if(this._grassCoverageCity!==city||this._grassCoverageSignature!==grassSignature){
       this._grassCoverageCity=city;this._grassCoverageSignature=grassSignature;
       this._grassExclusionCells=grassExclusionCells(city?.buildings||[],siteCells);
+      for(const cell of groundPaint)this._grassExclusionCells.add(cell);
       this._farmSoilCells=grassExclusionCells((city?.buildings||[]).filter(b=>b.type==='farm'&&b.constructionKind!=='building'),[]);
       this._grassChunkSignatures=null;this._farmChunkSignatures=null;
     }

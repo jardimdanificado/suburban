@@ -75,7 +75,7 @@ function crossingRoute(city,boat,bike,goal,{relocate=false,limitSeconds=Infinity
  if(target<0)return null;
  const path=[];let waterSteps=0;
  for(let key=target;key!==root;key=parents[key]){const cell=key%size,x=cell%width+.5,y=Math.floor(cell/width)+.5,isWater=water(city,x,y);if(isWater)waterSteps++;path.push({x,y,transportMode:isWater?'sail':towing?'tow':'walkAfter',...(isWater?{boatClass:boat.boatClass}:{})});}
- if(waterSteps>BOAT_CLASSES[boat.boatClass].maxWaterTiles)return null;
+ if(!relocate&&!waterSteps||waterSteps>BOAT_CLASSES[boat.boatClass].maxWaterTiles)return null;
  path.reverse();return {path,seconds:costs[target]};
 }
 function approaches(city,boat){
@@ -89,8 +89,9 @@ function computeBoatTrip(city,start,goal,{boat:fixedBoat=null,relocate=false,ser
  const accounts=boatAccessAccounts(city,person);if(serviceAccountId)accounts.add(serviceAccountId);
  const load=Math.max(1,person.deliveryLoad||city.logistics?.shipments?.find(s=>s.id===person.deliveryId)?.quantity||1);
  const units=[...(city.vehicles?.units?.values()||[])],bikes=units.filter(v=>!v.boatClass&&Number.isFinite(v.x)&&Number.isFinite(v.y)&&free(v)&&v.condition>15&&!v.passengerIds?.length&&accounts.has(v.possessorAccountId||v.ownerAccountId)&&['bicicleta','bicicleta_carga'].includes(v.good));
- const boats=(fixedBoat?[fixedBoat]:units.filter(v=>v.boatClass)).filter(v=>Number.isFinite(v.x)&&Number.isFinite(v.y)&&free(v)&&BOAT_CLASSES[v.boatClass]?.capacity>=load&&(v.condition??100)>0).sort((a,b)=>Math.hypot(a.x-start.x,a.y-start.y)-Math.hypot(b.x-start.x,b.y-start.y)).slice(0,8);
- let best=null,bestSeconds=maxSeconds;
+ const boats=(fixedBoat?[fixedBoat]:units.filter(v=>v.boatClass)).filter(v=>Number.isFinite(v.x)&&Number.isFinite(v.y)&&free(v)&&BOAT_CLASSES[v.boatClass]?.capacity>=load&&(v.condition??100)>0&&(water(city,v.x,v.y)||(accounts.has(v.ownerAccountId)||serviceAccountId)&&bikes.some(b=>BOAT_TOW_RULES[v.boatClass]?.bikes.includes(b.good)))).sort((a,b)=>Math.hypot(a.x-start.x,a.y-start.y)-Math.hypot(b.x-start.x,b.y-start.y)).slice(0,16);
+ // Connected journeys must save meaningful time, including boarding and launch delays.
+ let best=null,bestSeconds=groundPath?Math.min(maxSeconds,boatRouteTime(city,start,groundPath)*.9):maxSeconds;
  for(const boat of boats){
   const owned=accounts.has(boat.ownerAccountId),towBikes=owned||serviceAccountId?bikes.filter(b=>BOAT_TOW_RULES[boat.boatClass]?.bikes.includes(b.good)):[];
   for(const bike of [null,...towBikes]){

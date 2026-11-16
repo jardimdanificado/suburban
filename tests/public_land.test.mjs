@@ -34,7 +34,7 @@ test('executive construction uses the same validated search and finite works bud
 });
 
 test('gentle slopes can be registered as plots and used without flattening the terrain',()=>{
-  const city=setup({starter:true,population:48});hideEmptyLots(city);const spot=city.economy.locateBuilding('clinic')[0];assert(spot);for(let yy=spot.y;yy<spot.y+3;yy++)for(let xx=spot.x+2;xx<spot.x+4;xx++)city.world.setTile(xx,yy,9);
+  const city=setup({starter:true,population:48});hideEmptyLots(city);const spot=city.economy.locateBuilding('clinic').find(s=>!city.development.overlaps(s.x,s.y,4,3));assert(spot);for(let yy=spot.y;yy<spot.y+3;yy++)for(let xx=spot.x+2;xx<spot.x+4;xx++)city.world.setTile(xx,yy,9);
   const plot=city.development.createPlot(spot.x,spot.y,4,3);assert(plot);assert.equal(plot.level,null);const before=[];for(let yy=plot.y;yy<plot.y+plot.depth;yy++)for(let xx=plot.x;xx<plot.x+plot.width;xx++)before.push(city.world.getTile(xx,yy));const site=city.development.publicBuildingSite('clinic');assert.equal(site.lot.id,plot.id);
   const after=[];for(let yy=plot.y;yy<plot.y+plot.depth;yy++)for(let xx=plot.x;xx<plot.x+plot.width;xx++)after.push(city.world.getTile(xx,yy));assert.deepEqual(after,before);
 });

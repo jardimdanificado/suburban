@@ -1,5 +1,5 @@
 import {BOAT_CLASSES} from './boat_types.js?v=local-sea-travel-2';
-import {findTerrainPath,settlementConnected} from './city_terrain.js?v=entrance-retaining-clearance-1';
+import {findTerrainPath} from './city_terrain.js?v=entrance-retaining-clearance-1';
 
 export const CROSSING_RULES=Object.freeze({boardingSeconds:3,recruitRadius:10,maxCandidates:32,routeLimit:64});
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -172,8 +172,8 @@ export function dispatchRegularCrossings(city){
    const task=itinerary(city,c);if(!task)continue;
    // Only commute to an actually disconnected island; do not divert workers
    // onto an optional sightseeing trip when a direct walk is available.
+   // A connected destination also qualifies when findPath selects a faster crossing.
    const door=c.indoorLocation&&city.building(c.indoorLocation.buildingId)?.door,from=door?{...door,properties:{citizen:c}}:c.entity;
-   if(settlementConnected(city,from,task.goal)!==false)continue;
    const path=city.findPath(from,task.goal);budget--;if(!path?.[0]?.boatPlan)continue;
    c.task=task.task;c.targetId=task.targetId;c.path=path;c.action='Indo ao embarque do grupo diário';break;
   }

@@ -22,6 +22,7 @@ export const DEVELOPMENT_RULES = { landPerCell: 4000, stonePerCell: 2, laborPerC
 export class CityDevelopment {
   constructor(city) { this.city = city; this.plots = []; this.projects = []; this.nextPlotId = 1; this.nextProjectId = 1; this.plotOverlapBuckets = null; }
   get compactPlanning(){return Math.max(this.city.world.width,this.city.world.height)<256;}
+  get plotSpacing(){return this.compactPlanning?3:1;}
   publicBuildingSite(type,options={}){return findPublicBuildingSite(this,type,options);}
   acquirePublicSite(site){return acquirePublicBuildingSite(this,site);}
   clientCitizen(accountId) { return accountId === 'treasury' ? this.city.economy.citizen(this.city.economy.mayorId) : this.ownerCitizen(accountId); }
@@ -295,10 +296,13 @@ export class CityDevelopment {
     this.plots.push(lot); this.indexPlotForOverlap(lot); b.plotId = lot.id; return lot;
   }
   overlaps(x, y, width, depth, exceptId = null) {
-    const bucketSize=8,buckets=this.ensurePlotOverlapBuckets(),minX=Math.floor((x-1)/bucketSize),maxX=Math.floor((x+width)/bucketSize),minY=Math.floor((y-1)/bucketSize),maxY=Math.floor((y+depth)/bucketSize),checked=new Set();
+    // New parcels reserve opposing balconies plus passage. Existing titles keep
+    // their original clearance so saved property and contracted works stay usable.
+    const gap=exceptId===null?this.plotSpacing:1;
+    const bucketSize=8,buckets=this.ensurePlotOverlapBuckets(),minX=Math.floor((x-gap)/bucketSize),maxX=Math.floor((x+width+gap)/bucketSize),minY=Math.floor((y-gap)/bucketSize),maxY=Math.floor((y+depth+gap)/bucketSize),checked=new Set();
     for(let by=minY;by<=maxY;by++)for(let bx=minX;bx<=maxX;bx++)for(const p of buckets.get(`${bx},${by}`)||[]){
       if(checked.has(p))continue;checked.add(p);
-      if(p.id!==exceptId&&x-1<p.x+p.width&&x+width+1>p.x&&y-1<p.y+p.depth&&y+depth+1>p.y)return true;
+      if(p.id!==exceptId&&x-gap<p.x+p.width&&x+width+gap>p.x&&y-gap<p.y+p.depth&&y+depth+gap>p.y)return true;
     }
     return false;
   }
@@ -370,9 +374,21 @@ export class CityDevelopment {
         const angle=i*Math.PI/16,x=Math.floor(center.x+Math.cos(angle)*20),y=Math.floor(center.y+Math.sin(angle)*20);
         if(this.createPlot(x,y,8,8,{type:'farm'})){stock=supply();break;}
       }
+      // Prefer spaced sites across the available land before filling irregular gaps.
+      const stride=urbanSizes[0][0]+this.plotSpacing;
+      const gridRadius=Math.ceil(Math.max(center.x,center.y,this.city.world.width-center.x,this.city.world.height-center.y)/stride),gridTotal=(2*gridRadius+1)**2;
+      for(let i=0;i<budget*2&&stock.urban<count;i++){
+        const index=(this.compactSpacedPlotCursor||0)%gridTotal;this.compactSpacedPlotCursor=index+1;
+        const r=Math.ceil((Math.sqrt(index+1)-1)/2),side=r*2,offset=index-(2*r-1)**2,edge=Math.floor(offset/side),n=offset%side;
+        const point=!index?[0,0]:edge===0?[-r+n,-r]:edge===1?[r,-r+n]:edge===2?[r-n,r]:[-r,r-n];
+        const x=Math.floor(center.x)+point[0]*stride,y=Math.floor(center.y)+point[1]*stride;
+        if(x<1||y<1||x>=this.city.world.width-2||y>=this.city.world.height-2)continue;
+        for(const [w,d]of urbanSizes)if(this.createPlot(x,y,w,d)){stock=supply();break;}
+      }
+      if(stock.urban>=count&&stock.rural>=ruralTarget)return;
       // Scan every origin from the centre outward so small gaps stay usable.
       const radius=Math.max(center.x,center.y,this.city.world.width-center.x,this.city.world.height-center.y),total=(2*Math.ceil(radius)+1)**2;
-      for(let i=0;i<budget*4;i++){
+      for(let i=0;i<budget*2;i++){
         const index=(this.compactPlotCursor||0)%total;this.compactPlotCursor=index+1;
         const r=Math.ceil((Math.sqrt(index+1)-1)/2),side=r*2,offset=index-(2*r-1)**2,edge=Math.floor(offset/side),n=offset%side;
         const point=!index?[0,0]:edge===0?[-r+n,-r]:edge===1?[r,-r+n]:edge===2?[r-n,r]:[-r,r-n];

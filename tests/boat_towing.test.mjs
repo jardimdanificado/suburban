@@ -109,3 +109,30 @@ test('a queued trip rejects cargo that exceeds the reserved hull capacity',()=>{
  person.deliveryLoad=100;advanceLocalBoatTrip(city,person,.1);
  assert.equal(person.localBoatTrip,undefined);assert.equal(person.path.length,0);assert.equal(boat.driverId,undefined);
 });
+
+test('nearby unusable inland boats do not hide an owned towing rig',()=>{
+ const {city,person,boat,cycle,goal}=fixture();
+ const unavailable=Array.from({length:20},(_,i)=>({...boat,id:100+i,x:5.5,y:12.5,ownerAccountId:`other:${i}`}));
+ city.vehicles.units=new Map([...unavailable.map(v=>[v.id,v]),[boat.id,boat],[cycle.id,cycle]]);
+ const path=planBoatTrip(city,person.entity,goal);
+ person.path=path;
+ assert.equal(path?.[0]?.boatPlan?.boatId,boat.id);
+ assert.ok(path.some(p=>p.transportMode==='tow'));
+ finish(city,person);
+});
+
+test('a boat route must navigate rather than pick up a hull and walk along the same bank',()=>{
+ const {city,person}=fixture({boatOnLand:false,bike:false});person.entity.x=10.5;
+ assert.equal(planBoatTrip(city,person.entity,{x:11.5,y:12.5}),null);
+});
+
+test('a marginal water shortcut keeps the direct land journey',()=>{
+ const {city,person,boat}=fixture({boatOnLand:false,bike:false});
+ person.entity.x=10.5;person.entity.y=boat.y=10.5;
+ const goal={x:19.5,y:10.5},ground=city.findPath(person.entity,goal,{allowBoats:false});
+ const sailing=planBoatTrip(city,person.entity,goal),landSeconds=boatRouteTime(city,person.entity,ground);
+ assert.ok(sailing);
+ const seaSeconds=boatRouteTime(city,person.entity,sailing);
+ assert.ok(seaSeconds<landSeconds&&seaSeconds>landSeconds*.9,`${seaSeconds} / ${landSeconds}`);
+ assert.equal(planBoatTrip(city,person.entity,goal,{groundPath:ground,maxSeconds:landSeconds}),null);
+});
