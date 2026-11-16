@@ -1,0 +1,23 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Barcos: materiais e bandeiras</title>
+<style>body{margin:0;background:#aac6ce;font:14px system-ui}header{position:absolute;top:14px;left:18px;color:#203a43}canvas{display:block}</style>
+<header>Madeira, metal e tecido procedurais · Convés plano · Bandeira municipal e partidária menor<br><span id="status">Carregando…</span></header>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {syncCityWatercraft} from '../js/city_watercraft_renderer.js';
+const status=document.querySelector('#status');
+try{
+ const scene=new THREE.Scene();scene.background=new THREE.Color(0xaac6ce);
+ scene.add(new THREE.HemisphereLight(0xffffff,0x667c72,2));const light=new THREE.DirectionalLight(0xffe1b4,3);light.position.set(2,8,4);scene.add(light);
+ const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));document.body.append(renderer.domElement);
+ let shaderErrors=0;renderer.debug.onShaderError=()=>shaderErrors++;
+ const flag=(background,foreground,backgroundStyle)=>({background,foreground,backgroundStyle,colors:[background,foreground,foreground,foreground],texts:[],emblems:[]});
+ const owner={id:1,accountId:'person:1',entity:{x:0,y:0},political:{partyId:1}};
+ const boats=['canoe','launch','ferry','cargo'].map((boatClass,i)=>({id:i+1,boatClass,ownerAccountId:owner.accountId,x:(i-1.5)*3.8,y:0,angle:.2,active:true}));
+ const world={width:32,height:32,getTile:()=>2};
+ const city={id:'preview',world,worldPort:null,buildings:[],citizens:[owner],municipalIdentity:{flag:flag('#163d7b','#f5c64a','cross')},politics:{party:()=>({active:true,flag:flag('#b52c41','#fff3ce','diagonal')})},vehicles:{units:new Map(boats.map(b=>[b.id,b]))}};
+ const view={scene,waterTime:0,foliageAnimationTick:25};
+ const camera=new THREE.PerspectiveCamera(36,innerWidth/innerHeight,.1,100);camera.position.set(7,10,15);camera.lookAt(0,.3,0);
+ function draw(time){view.foliageAnimationTick=time/10;syncCityWatercraft(view,THREE,city,world);renderer.render(scene,camera);status.textContent=`${boats.length} classes · shaders: ${shaderErrors===0?'OK':'ERRO'}`;window.boatPreview={view,city,shaderErrors};requestAnimationFrame(draw);}
+ requestAnimationFrame(draw);
+}catch(error){status.textContent=error.stack;throw error;}
+</script></html>

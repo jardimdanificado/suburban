@@ -1,3 +1,5 @@
+import {syncBoatFlags} from './boat_flags.js';
+import {boatMaterial} from './boat_materials.js';
 import {waterWaveHeight} from './water_surface.js?v=shore-runup-2';
 import {BOAT_HULL_DIMENSIONS} from './boat_types.js?v=local-sea-travel-2';
 import {boatVisualPosition,hideLocalBoat} from './boat_visual_state.js';
@@ -17,7 +19,7 @@ function nearestShore(world,origin){
   }
   return best;
 }
-function disposeGroup(renderer,group){renderer.watercraftShadowDirty=true;renderer.scene.remove(group);group.traverse(object=>{object.geometry?.dispose();if(Array.isArray(object.material))object.material.forEach(material=>material.dispose());else object.material?.dispose();});}
+function disposeGroup(renderer,group){renderer.watercraftShadowDirty=true;renderer.scene.remove(group);group.traverse(object=>{object.geometry?.dispose();if(Array.isArray(object.material))object.material.forEach(material=>material.dispose());else {if(object.material?.userData?.boatFlag)object.material.map?.dispose();object.material?.dispose();}});}
 function makeDock(THREE,port){
   const group=new THREE.Group(),wood=new THREE.MeshLambertMaterial({color:dockWood}),dark=new THREE.MeshLambertMaterial({color:0x493a2b}),rope=new THREE.MeshLambertMaterial({color:ropeColor});
   const door=port.door||{x:port.x,y:port.y},berth=port.berth||{x:door.x,y:door.y+1},dx=berth.x-door.x,dy=berth.y-door.y;
@@ -31,14 +33,21 @@ function makeDock(THREE,port){
   return group;
 }
 function makeBoatModel(THREE,kind){
-  const spec=BOAT_CLASSES[kind],group=new THREE.Group(),hullMaterial=new THREE.MeshLambertMaterial({color:kind==='canoe'?0x795034:kind==='cargo'?0x824c3d:0x9b6448}),deckMaterial=new THREE.MeshLambertMaterial({color:spec.color}),dark=new THREE.MeshLambertMaterial({color:0x343d3a}),sailMaterial=new THREE.MeshLambertMaterial({color:kind==='cargo'?0xe8d2a3:0xf4ead0,side:THREE.DoubleSide});
+  const spec=BOAT_CLASSES[kind],group=new THREE.Group(),hullMaterial=boatMaterial(THREE,kind==='canoe'?'wood':'metal',kind==='canoe'?0xa47a48:kind==='cargo'?0x344b58:kind==='ferry'?0x246b72:0xeee7d4),deckMaterial=boatMaterial(THREE,'wood',0xc5a777),dark=boatMaterial(THREE,'metal',0x303c40),sailMaterial=boatMaterial(THREE,'cloth',0xf4ead0,{side:THREE.DoubleSide});
   const {length,width}=BOAT_HULL_DIMENSIONS[kind];
-  const hull=new THREE.Mesh(new THREE.CapsuleGeometry(width*.34,length*.34,3,8),hullMaterial);hull.rotation.x=Math.PI/2;hull.scale.set(1,.68,1);hull.position.y=.13;hull.castShadow=true;hull.receiveShadow=true;group.add(hull);
-  const deck=new THREE.Mesh(new THREE.BoxGeometry(width,.09,length*.8),deckMaterial);deck.position.y=.25;deck.castShadow=true;group.add(deck);
+  const outline=new THREE.Shape();outline.moveTo(0,length*.5);outline.lineTo(width*.38,length*.28);outline.lineTo(width*.5,length*.08);outline.lineTo(width*.5,-length*.36);outline.lineTo(width*.36,-length*.46);outline.lineTo(kind==='canoe'?0:-width*.36,-length*.46);outline.lineTo(-width*.5,-length*.36);outline.lineTo(-width*.5,length*.08);outline.lineTo(-width*.38,length*.28);outline.closePath();
+  const geometry=new THREE.ExtrudeGeometry(outline,{depth:.19,bevelEnabled:false,steps:1,curveSegments:12});geometry.rotateX(Math.PI/2);
+  const hull=new THREE.Mesh(geometry,hullMaterial);hull.position.y=.24;hull.castShadow=true;hull.receiveShadow=true;group.add(hull);
+  const deck=new THREE.Mesh(new THREE.ShapeGeometry(outline,12),deckMaterial);deck.rotation.x=-Math.PI/2;deck.rotation.z=Math.PI;deck.scale.set(.86,.9,1);deck.position.y=.245;deck.receiveShadow=true;group.add(deck);
   // A tapered bow and stern make the silhouette read as a boat from the high camera.
-  for(const [z,angle]of [[length*.48,1],[-length*.48,-1]]){const bow=new THREE.Mesh(new THREE.ConeGeometry(width*.36,length*.28,5),hullMaterial);bow.rotation.x=angle*Math.PI/2;bow.position.set(0,.14,z);bow.castShadow=true;group.add(bow);}
+  const rimPoints=outline.getPoints(48).map(p=>new THREE.Vector3(p.x,.28,p.y));
+  const rim=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rimPoints,true),64,.018,5,true),dark);group.add(rim);
+  if(kind==='canoe'){
+    const paddle=new THREE.Mesh(new THREE.BoxGeometry(.035,.035,length*.68),deckMaterial);paddle.position.set(width*.25,.34,0);paddle.rotation.y=.18;group.add(paddle);
+    const blade=new THREE.Mesh(new THREE.BoxGeometry(.13,.035,.32),deckMaterial);blade.position.set(width*.25+Math.sin(.18)*length*.29,.34,Math.cos(.18)*length*.29);blade.rotation.y=.18;group.add(blade);
+  }
   if(kind!=='canoe'){
-    const cabin=new THREE.Mesh(new THREE.BoxGeometry(kind==='cargo'?.68:.43,.34,kind==='cargo'?.62:.48),new THREE.MeshLambertMaterial({color:kind==='cargo'?0x554d42:0x414c4d}));cabin.position.set(0,.46,-length*.24);cabin.castShadow=true;group.add(cabin);
+    const cabin=new THREE.Mesh(new THREE.BoxGeometry(kind==='cargo'?.68:.43,.34,kind==='cargo'?.62:.48),boatMaterial(THREE,'metal',kind==='cargo'?0xe4dcc4:0xf2eee0));cabin.position.set(0,.46,-length*.24);cabin.castShadow=true;group.add(cabin);
     for(const x of [-.16,.16]){const window=new THREE.Mesh(new THREE.BoxGeometry(.08,.08,.025),new THREE.MeshLambertMaterial({color:0x9bd0d0,emissive:0x152829}));window.position.set(x,.53,-length*.24-.25);group.add(window);}
   }
   const mast=(z,height,sailWidth)=>{
@@ -48,8 +57,15 @@ function makeBoatModel(THREE,kind){
     const yard=new THREE.Mesh(new THREE.CylinderGeometry(.018,.018,sailWidth,5),dark);yard.rotation.z=Math.PI/2;yard.position.set(0,.3+height*.55,z+.05);group.add(yard);
   };
   if(kind!=='canoe'){mast(length*.05,1.45,kind==='cargo'?.88:.7);if(kind==='cargo'||kind==='ferry')mast(length*.3,1.05,.58);}
-  if(kind==='cargo')for(const [x,z,color]of [[-.21,.55,0xb66f43],[.21,.55,0xc5a56a],[-.21,.82,0x637b7d],[.21,.82,0xb75b49]]){const crate=new THREE.Mesh(new THREE.BoxGeometry(.32,.22,.23),new THREE.MeshLambertMaterial({color}));crate.position.set(x,.39,z);crate.castShadow=true;group.add(crate);}
+  if(kind==='cargo')for(const [x,z,color]of [[-.21,.55,0xb66f43],[.21,.55,0xc5a56a],[-.21,.82,0x637b7d],[.21,.82,0xb75b49]]){const crate=new THREE.Mesh(new THREE.BoxGeometry(.32,.22,.23),boatMaterial(THREE,'metal',color));crate.position.set(x,.39,z);crate.castShadow=true;group.add(crate);}
   if(kind==='canoe'||kind==='launch')for(const z of [-length*.22,length*.2]){const seat=new THREE.Mesh(new THREE.BoxGeometry(width*.78,.055,.1),dark);seat.position.set(0,.31,z);group.add(seat);}
+  if(kind!=='canoe'){
+    for(const x of [-width*.48,width*.48])for(const z of [-length*.25,length*.22]){
+      const fender=new THREE.Mesh(new THREE.CylinderGeometry(.035,.045,.16,8),dark);fender.position.set(x,.2,z);group.add(fender);
+      const post=new THREE.Mesh(new THREE.CylinderGeometry(.012,.012,.19,6),deckMaterial);post.position.set(x,.36,z);group.add(post);
+    }
+    for(const x of [-width*.48,width*.48]){const rail=new THREE.Mesh(new THREE.BoxGeometry(.018,.018,length*.54),deckMaterial);rail.position.set(x,.45,-length*.015);group.add(rail);}
+  }
   group.scale.setScalar(kind==='canoe'?1:spec.scale);group.updateMatrixWorld(true);group.userData.floatHeight=-new THREE.Box3().setFromObject(hull).min.y-.025;return group;
 }
 function makeCarriedCycle(THREE,good){
@@ -117,7 +133,7 @@ export function syncCityWatercraft(renderer,THREE,city,world){
     // position, making the ship appear to jump between that point and the port.
     const worldRepresentation=[...(coordinator?.vessels?.values?.()||[])].find(item=>item.homeCityId===(port?.cityId||city.id)&&item.localVehicleId===vessel.id);
     if(hideLocalBoat(worldRepresentation,liveVessels,vessel.driverId))continue;
-    const id=`city-vehicle:${vessel.id}`,group=boatVisual(renderer,THREE,id,vessel.boatClass),passenger=Number.isSafeInteger(vessel.transportCitizenId)?city.society?.citizen(vessel.transportCitizenId):null,carried=passenger?.ridingVehicleId?city.vehicles?.units?.get(passenger.ridingVehicleId):null;if(carried?.ferrying){group.userData.carriedCycle??=makeCarriedCycle(THREE,carried.good);group.userData.carriedCycle.visible=true;}else if(group.userData.carriedCycle)group.userData.carriedCycle.visible=false;seatedPeople(group,THREE,passenger?[passenger]:[]);const x=vessel.entity?.x??vessel.x,y=vessel.entity?.y??vessel.y;liveVessels.add(id);group.position.set(x,boatSurfaceY(renderer,world,x,y,group),y);group.rotation.y=vessel.angle||0;group.visible=true;
+    const id=`city-vehicle:${vessel.id}`,group=boatVisual(renderer,THREE,id,vessel.boatClass),passenger=Number.isSafeInteger(vessel.transportCitizenId)?city.society?.citizen(vessel.transportCitizenId):null,carried=passenger?.ridingVehicleId?city.vehicles?.units?.get(passenger.ridingVehicleId):null;if(carried?.ferrying){group.userData.carriedCycle??=makeCarriedCycle(THREE,carried.good);group.userData.carriedCycle.visible=true;}else if(group.userData.carriedCycle)group.userData.carriedCycle.visible=false;group.userData.flagVessel=vessel;seatedPeople(group,THREE,passenger?[passenger]:[]);const x=vessel.entity?.x??vessel.x,y=vessel.entity?.y??vessel.y;liveVessels.add(id);group.position.set(x,boatSurfaceY(renderer,world,x,y,group),y);group.rotation.y=vessel.angle||0;group.visible=true;
     const towBike=vessel.towedByVehicleId&&city.vehicles.units.get(vessel.towedByVehicleId);
     if(towBike){
       group.userData.towline??=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),new THREE.LineBasicMaterial({color:ropeColor}));
@@ -150,9 +166,10 @@ export function syncCityWatercraft(renderer,THREE,city,world){
   const people=city.citizens.filter(person=>!person.entity.destroyed&&person.boatClass&&!person.boatVehicleId&&person.entity.x>=0&&person.entity.y>=0),live=new Set();
   for(const person of people){const id=person.id,kind=person.boatClass;live.add(id);let group=renderer.boatCitizenVisuals.get(id);
     if(!group||group.userData.kind!==kind){if(group)disposeGroup(renderer,group);group=makeBoatModel(THREE,kind);group.userData.kind=kind;renderer.boatCitizenVisuals.set(id,group);renderer.scene.add(group);}
-    seatedPeople(group,THREE,[person]);const next=person.path?.[0],dx=next?next.x-person.entity.x:0,dy=next?next.y-person.entity.y:0;group.position.set(person.entity.x,boatSurfaceY(renderer,world,person.entity.x,person.entity.y,group),person.entity.y);group.visible=true;if(dx||dy)group.rotation.y=Math.atan2(dx,dy);
+    group.userData.flagOwner=person;seatedPeople(group,THREE,[person]);const next=person.path?.[0],dx=next?next.x-person.entity.x:0,dy=next?next.y-person.entity.y:0;group.position.set(person.entity.x,boatSurfaceY(renderer,world,person.entity.x,person.entity.y,group),person.entity.y);group.visible=true;if(dx||dy)group.rotation.y=Math.atan2(dx,dy);
   }
   for(const[id,group]of renderer.boatCitizenVisuals)if(!live.has(id)){disposeGroup(renderer,group);renderer.boatCitizenVisuals.delete(id);}
+  for(const group of [...renderer.portVesselVisuals.values(),...renderer.boatCitizenVisuals.values()])syncBoatFlags(renderer,THREE,city,group);
   for(const group of renderer.portVesselVisuals.values())trackShadowTransform(renderer,group);
   for(const group of renderer.boatCitizenVisuals.values())trackShadowTransform(renderer,group);
 

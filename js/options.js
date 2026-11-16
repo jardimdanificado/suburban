@@ -3,7 +3,7 @@ import { speedLabel } from "./simulation_time.js?v=ff3-ff4-steps-1";
 const BOOL = [[false, "OFF"], [true, "ON"]];
 const effect = (key, label, values, initial) => ({ key, label, values, default: initial, graphic: true });
 const GRAPHICS = [
-  { key: "resolution", label: "RESOLUCAO", values: [0.25, 0.5, 0.75, 1].map(v => [v, `${v * 100}%`]), default: 0.5 },
+  { key: "resolution", label: "RESOLUCAO", values: [0.25, 0.5, 0.75, 1].map(v => [v, `${v * 100}%`]), default: 0.25 },
   { key: "terrainOptimizations", label: "OTIMIZACOES DE TERRENO", values: BOOL, default: true },
   { key: "smoothMovement", label: "MOVIMENTO SUAVE", values: BOOL, default: true },
   { key: "shadows", label: "SOMBRAS", values: BOOL, default: true },
@@ -15,7 +15,7 @@ const GRAPHICS = [
 ];
 const AUDIO = [
   { key: "musicMuted", label: "MUTE", values: BOOL, default: false },
-  { key: "musicVolume", label: "VOLUME DA MUSICA", values: [0, 0.1, 0.25, 0.5, 0.75, 1].map(v => [v, `${v * 100}%`]), default: 0.5 },
+  { key: "musicVolume", label: "VOLUME DA MUSICA", values: [0, 0.1, 0.25, 0.5, 0.75, 1].map(v => [v, `${v * 100}%`]), default: 0.25 },
 ];
 const TIME = [{key:"fastForwardEnabled",label:"MODOS FF",values:BOOL,default:false}];
 const INTERFACE = [{key:'pauseForCouncilBills',label:'PAUSAR EM PROJETOS DA CÂMARA',values:BOOL,default:false},{key:'showInterventions',label:'CONTROLES DE INTERVENÇÃO',values:BOOL,default:true}];

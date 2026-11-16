@@ -1,3 +1,4 @@
+import {graffitiSurfaceLabel} from './city_graffiti_surfaces.js';
 import {renderMayorCampaign} from './city_mayor_ui.js';
 import {renderFamilyCampaign} from './city_family_ui.js';
 import {isVerticalFarm} from './city_farm_layout.js';
@@ -340,7 +341,7 @@ export class CityUI {
     contextActions(this,p,{artwork:piece});
     const city=this.city,justice=city.justice,artist=city.society.citizen(piece.creatorId),latest=piece.layers?.at(-1),support=piece.support;
     const type=justice.labelArt(piece.kind),material={pedra:'Pedra',argila:'Argila',ferro:'Ferro',aco:'Aço',ceramica:'Cerâmica',fezes:'Material orgânico'}[piece.materialUsed]||'Tinta';
-    const location=support?.kind==='facade-banner'?'Fachada':support?.kind==='interior-wall'?'Parede interna':support?.kind==='interior-floor'?'Interior do prédio':support?.kind==='window'?'Janela':support?.kind==='roof-terrace'?'Cobertura':support?.kind==='skybridge'?'Passarela elevada':piece.buildingId?`Prédio · ${city.building(piece.buildingId)?.entity.properties.name||'desconhecido'}`:'Espaço público';
+    const location=support?.kind==='street-graffiti'?graffitiSurfaceLabel(support):support?.kind==='facade-banner'?'Fachada':support?.kind==='interior-wall'?'Parede interna':support?.kind==='interior-floor'?'Interior do prédio':support?.kind==='window'?'Janela':support?.kind==='roof-terrace'?'Cobertura':support?.kind==='skybridge'?'Passarela elevada':piece.buildingId?`Prédio · ${city.building(piece.buildingId)?.entity.properties.name||'desconhecido'}`:'Espaço público';
     const locate=()=>{if(support?.kind==='interior-wall'){const building=city.building(support.buildingId),unit=city.units.get(support.unitId);if(building&&unit){this.openBuilding(building.id);this.camera(building.entity.x+unit.x+.5,building.entity.y+unit.y+.5);return;}}this.camera(piece.entity.x,piece.entity.y);};
     p.heading(`FICHA DA OBRA · ${type.toUpperCase()}`);p.heading('PRÉVIA VISUAL');
     const previewKey=`${piece.id}:${piece.kind}:${piece.layers?.length||0}:${latest?.message||piece.message}:${JSON.stringify(latest?.design||null)}:${JSON.stringify(latest?.narrative||null)}:${piece.color??''}:${piece.materialUsed||''}`;this.artworkPreviewCache??=new Map();let preview=this.artworkPreviewCache.get(previewKey);if(!preview){preview=document.createElement('canvas');preview.width=512;preview.height=256;drawArtworkPreview(preview.getContext('2d',{willReadFrequently:!!latest?.design||!!piece.design}),piece);this.artworkPreviewCache.clear();this.artworkPreviewCache.set(previewKey,preview);}
