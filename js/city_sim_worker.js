@@ -168,6 +168,8 @@ self.onmessage = ({ data }) => {
       paused = data.paused; speed = data.speed;
       observed=data.observed!==false;
       if(state){
+        const pauseBills=data.pauseForCouncilBills===true;
+        if(state.city.mayorPauseForCouncilBills!==pauseBills){state.city.mayorPauseForCouncilBills=pauseBills;dirty=true;}
         // Simulation LOD speed tiers apply to the observed city; a background
         // city nobody renders always runs the fast-forward deferral, cutting
         // the per-minute CPU of every resident pass without touching system

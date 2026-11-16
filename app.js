@@ -247,6 +247,7 @@ function togglePause() {
 }
 
 function advanceSimulation(dt) {
+  city.mayorPauseForCouncilBills=options.values.pauseForCouncilBills===true;
   city.fastForward = time.speed >= FF_LOD_SPEED;
   city.fastForward2 = time.speed >= FF2_SPEED;
   city.detailedInteriorBuildingId=renderer3D.cityInteriorView?.buildingId??null;
@@ -780,6 +781,7 @@ try { city.initialize(); } catch (error) {
 }
 export const cityUI = new CityDesktop({ city, root, select: selectEntity, controls: {
   interventionsVisible:()=>options.values.showInterventions!==false,
+  pauseForCouncilBills:()=>options.values.pauseForCouncilBills===true,
   mainMenu: openMainMenu,
   play:()=>gameUI.choose(),
   hasActiveGame: () => mainMenu.hasActiveGame,

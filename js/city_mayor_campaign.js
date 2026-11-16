@@ -1,4 +1,4 @@
-import {syncMayorReviews,selectReviewPromises,confirmMayorReview} from './city_mayor_decisions.js';
+import {syncMayorReviews,selectReviewPromises,confirmMayorReview,selectReviewCandidate} from './city_mayor_decisions.js';
 import {acceptMayorChallenge,updateMayorChallenges} from './city_mayor_challenges.js';
 import {OFFICE_ONLY_TYPES,officeFloors,createMunicipalOffice} from './city_offices.js?v=office-demand-rollout-1';
 import {SECRETARIATS, secretarySkillScore} from './city_secretariats.js';
@@ -299,7 +299,9 @@ export function mayorAction(city,action,options={}) {
   const mayor=city.society.citizen(city.economy.mayorId);
   if(!mayor||mayor.entity.destroyed)return city.fail('Aguarde a posse do prefeito.');
   let result,details={};
-  if(action==='reviewPromises'){
+  if(action==='reviewCandidate'||action==='reviewVice'){
+    result=selectReviewCandidate(city,options.citizenId,action==='reviewVice');
+  }else if(action==='reviewPromises'){
     if(!['government','program'].includes(options.kind))return city.fail('Revisão desconhecida.');
     const review=options.kind==='government'?s.governmentReview:s.programReview;
     const metrics=options.metric&&review?(review.selected.includes(options.metric)?review.selected.filter(m=>m!==options.metric):[...review.selected,options.metric]):options.metrics;
@@ -468,7 +470,7 @@ export function mayorAction(city,action,options={}) {
     details={billId:bill.id};
   }else return city.fail('Ordem de prefeito desconhecida.');
   if(!result)return result;
-  const label={reviewPromises:'escolher promessas',confirmReview:'confirmar decisões de governo',challenge:'assumir compromisso público',campaignControl:'definir controle da campanha',campaignMaterial:'contratar propaganda partidária',pauseWork:'alterar execução de obra',build:'contratar obra',priority:'alterar prioridade',fund:'destinar custeio',service:'contratar serviço',bill:'encaminhar proposta à Câmara',decree:'emitir decreto',appoint:'nomear secretário',dismiss:'exonerar secretário',nationalize:'encaminhar estatização',privatize:'encaminhar privatização',road:'contratar acesso viário',expand:'contratar ampliação',firm:'abrir empresa municipal',office:'instalar atividade em andar municipal',housing:'contratar habitação social',paving:'priorizar pavimentação',roadRepair:'conservar vias',maintain:'contratar manutenção predial',offerShares:'ofertar participações dentro da cota',dividend:'transferir resultado de estatal',marketRecovery:'recuperar mercado local',rentVoucher:'conceder vale-aluguel',housingCredit:'conceder crédito habitacional',equityLoan:'conceder crédito de participação em estatal',lighting:'instalar iluminação pública',restock:'comprar alimentos para refeições públicas',rally:'realizar bandeiraço',sanction:'sancionar projeto',veto:'vetar projeto'}[action];
+  const label={reviewCandidate:'escolher candidato a prefeito',reviewVice:'escolher candidato a vice',reviewPromises:'escolher promessas',confirmReview:'confirmar decisões de governo',challenge:'assumir compromisso público',campaignControl:'definir controle da campanha',campaignMaterial:'contratar propaganda partidária',pauseWork:'alterar execução de obra',build:'contratar obra',priority:'alterar prioridade',fund:'destinar custeio',service:'contratar serviço',bill:'encaminhar proposta à Câmara',decree:'emitir decreto',appoint:'nomear secretário',dismiss:'exonerar secretário',nationalize:'encaminhar estatização',privatize:'encaminhar privatização',road:'contratar acesso viário',expand:'contratar ampliação',firm:'abrir empresa municipal',office:'instalar atividade em andar municipal',housing:'contratar habitação social',paving:'priorizar pavimentação',roadRepair:'conservar vias',maintain:'contratar manutenção predial',offerShares:'ofertar participações dentro da cota',dividend:'transferir resultado de estatal',marketRecovery:'recuperar mercado local',rentVoucher:'conceder vale-aluguel',housingCredit:'conceder crédito habitacional',equityLoan:'conceder crédito de participação em estatal',lighting:'instalar iluminação pública',restock:'comprar alimentos para refeições públicas',rally:'realizar bandeiraço',sanction:'sancionar projeto',veto:'vetar projeto'}[action];
   const suffix=action==='appoint'?` ${details.officeShort}: ${city.society.citizen(details.citizenId)?.entity.properties.name||''}.`:action==='dismiss'?` ${details.officeShort}.`:'';
   record(city,action,`Ordem de governo: ${label}.${suffix}`,details);
   return result;

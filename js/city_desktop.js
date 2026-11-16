@@ -276,7 +276,7 @@ export class CityDesktop {
     const y=ui.height-27;bevel(ui.ctx,0,y,ui.width,27,{fill:T.face});const s=this.city.stats(),cash=money(this.city.treasury),cashW=Math.min(190,ui.width*.42,Math.max(120,ui.textWidth(cash)+26)),dateW=Math.min(225,ui.width-cashW-12,Math.max(120,ui.textWidth(clockText)+24));
     bevel(ui.ctx,3,y+3,dateW,21,{inset:true,fill:T.paper});ui.text(ui.fitText(clockText,dateW-14),10,y+7,T.ink);
     const right=ui.width-cashW-3;bevel(ui.ctx,right,y+3,cashW,21,{inset:true,fill:T.paper});const shownCash=ui.fitText(cash,cashW-16);ui.text(shownCash,right+cashW-ui.textWidth(shownCash)-8,y+7,T.ink);
-    const middle=right-dateW-12;if(middle>80){bevel(ui.ctx,dateW+6,y+3,middle,21,{inset:true,fill:T.paper});const effective=paused?'0.0× efetiva':Number.isFinite(effectiveSpeed)?`${effectiveSpeed.toFixed(1)}× efetiva`:'medindo…',status=mayorPlaying(this.city)?mayorStatus(this):middle<230?effective:`${s.population} habitantes · ${speedLabel(speed)} · ${effective} · ${this.manager.windows.length} janelas`;ui.text(ui.fitText(status,middle-12),dateW+12,y+7,paused?T.red:T.ink);}
+    const middle=right-dateW-12;if(middle>80){bevel(ui.ctx,dateW+6,y+3,middle,21,{inset:true,fill:T.paper});const effective=paused?'0.0× efetiva':Number.isFinite(effectiveSpeed)?`${effectiveSpeed.toFixed(1)}× efetiva`:'medindo…',status=mayorPlaying(this.city)?`${paused?'Pausado · ':''}${speedLabel(speed)} · ${mayorStatus(this)}`:middle<230?effective:`${s.population} habitantes · ${speedLabel(speed)} · ${effective} · ${this.manager.windows.length} janelas`;ui.text(ui.fitText(status,middle-12),dateW+12,y+7,paused?T.red:T.ink);}
 
   }
   frame(ui,w){
@@ -305,8 +305,9 @@ export class CityDesktop {
     if(!this.tooltipElement.hidden){const {text,x,y}=this.tooltip,w=Math.min(440,ui.width-8,Math.ceil(ui.textWidth(text))+18);this.tooltipElement.textContent=text;Object.assign(this.tooltipElement.style,{left:`${Math.max(4,Math.min(x,ui.width-w-4))}px`,top:`${Math.max(0,Math.min(y,ui.height-190))}px`,width:`${w}px`});}
   }
   syncMayorDecisionWindows(paused=false){
-    const pending=pendingMayorDecisions(this.city),required=pending.find(d=>d.kind!=='bill');
-    const shown=[...(required?[required]:[]),...pending.filter(d=>d.kind==='bill')],keys=new Set(shown.map(d=>d.key));
+    const pauseBills=this.controls.pauseForCouncilBills?.()??this.city.mayorPauseForCouncilBills===true;
+    const pending=pendingMayorDecisions(this.city),required=pending.find(d=>d.kind!=='bill'||pauseBills);
+    const shown=[...(required?[required]:[]),...pending.filter(d=>d.kind==='bill'&&d.key!==required?.key)],keys=new Set(shown.map(d=>d.key));
     for(const w of [...this.manager.windows])if(w.state.mayorDecisionKey&&!keys.has(w.state.mayorDecisionKey)){delete w.state.mayorDecisionKey;this.close(w.id);}
     if(required){
       this.mayorAutoPause??={resume:!(this.controls.isPaused?.()??paused)};

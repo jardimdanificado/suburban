@@ -14,7 +14,7 @@ const GRAPHICS = [
   effect("normalMaps", "NORMAL MAPS", BOOL, true),
 ];
 const TIME = [{key:"fastForwardEnabled",label:"MODOS FF",values:BOOL,default:false}];
-const INTERFACE = [{key:'showInterventions',label:'CONTROLES DE INTERVENÇÃO',values:BOOL,default:true}];
+const INTERFACE = [{key:'pauseForCouncilBills',label:'PAUSAR EM PROJETOS DA CÂMARA',values:BOOL,default:false},{key:'showInterventions',label:'CONTROLES DE INTERVENÇÃO',values:BOOL,default:true}];
 const EFFECTS = [
   { key: "postEffects", label: "POS EFEITOS", values: BOOL, default: true },
   effect("dofStrength", "PROFUNDIDADE", ["OFF", "LOW", "MED", "HIGH"].map(v => [v, v]), "HIGH"),

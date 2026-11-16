@@ -1,3 +1,4 @@
+import {CitySimulationBridge} from '../js/city_sim_bridge.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {setup,totalMoney} from './helpers/city.mjs';
@@ -79,4 +80,41 @@ test('veto deadline expires exactly, applies tacit sanction, and removes the pen
   assert(pendingMayorDecisions(city).some(d=>d.billId===bill.id));
   city.update(.25);assert.equal(city.minute,bill.sanctionAt);assert(bill.tacitSanction);assert.notEqual(bill.status,'awaiting-sanction');
   assert(!pendingMayorDecisions(city).some(d=>d.billId===bill.id));assert(!city.mayorAction('veto',{billId:bill.id}));
+});
+
+test('council-specific pause can be enabled and disabled while a bill is pending',()=>{
+ const city=start();confirm(city);
+ const bill=city.mayorAction('bill',{type:'worksTransfer',value:10000});bill.status='awaiting-sanction';bill.sanctionAt=city.minute+10;
+ city.mayorPauseForCouncilBills=true;const minute=city.minute;city.update(10);assert.equal(city.minute,minute);assert(mayorDecisionBlocked(city));
+ city.mayorPauseForCouncilBills=false;city.update(.25);assert.equal(city.minute,minute+1);assert.equal(bill.status,'awaiting-sanction');
+});
+
+test('changing the council pause option sends worker controls even when speed and pause are unchanged',()=>{
+ const messages=[],bridge={active:true,cityId:'test',city:{},time:{paused:false,speed:1},motionOptions:{pauseForCouncilBills:false},observed:true,worker:{postMessage:m=>messages.push(m)}};
+ CitySimulationBridge.prototype.control.call(bridge);assert.equal(messages.at(-1).pauseForCouncilBills,false);
+ bridge.motionOptions.pauseForCouncilBills=true;CitySimulationBridge.prototype.control.call(bridge);assert.equal(messages.length,2);assert.equal(messages.at(-1).pauseForCouncilBills,true);
+ bridge.motionOptions.pauseForCouncilBills=false;CitySimulationBridge.prototype.control.call(bridge);assert.equal(messages.length,3);assert.equal(messages.at(-1).pauseForCouncilBills,false);
+});
+
+test('party can choose an eligible ticket and update the election and council slate',()=>{
+  const city=start();confirm(city);const gov=city.politics,party=gov.party(city.mayorCampaign.partyId);
+  gov.termNumber=1;gov.policy.reelectionLimit=10;
+  const people=city.citizens.filter(c=>gov.eligible(c)).slice(0,4);
+  for(const c of people){gov.initializeCitizen(c);c.political.partyId=party.id;c.playerPoliticalAmbition=true;if(!party.memberIds.includes(c.id))party.memberIds.push(c.id);}
+  const eligible=people.filter(c=>gov.canRun(c,'mayor',true));assert(eligible.length>=3);
+  const [old,candidate,vice]=eligible,n={citizenId:old.id,name:old.entity.properties.name,partyId:party.id,partyNumber:party.number,viceId:null,vicePartyId:party.id,promises:gov.mandates.current.promises,platform:'social'};
+  gov.active={id:993,round:1,status:'campaign',candidates:[n],councilCandidates:[candidate,vice].map(c=>({citizenId:c.id,partyId:party.id,name:c.entity.properties.name})),coalitions:[],nominationReport:[{partyId:party.id,candidateId:old.id}],voteAt:city.minute+1440,events:[]};
+  updateMayorCampaign(city);assert(city.mayorAction('reviewCandidate',{citizenId:candidate.id}),city.lastError);assert(city.mayorAction('reviewVice',{citizenId:vice.id}),city.lastError);
+  assert(!city.mayorAction('reviewVice',{citizenId:candidate.id}));assert(city.mayorAction('confirmReview',{kind:'program'}),city.lastError);
+  assert.equal(n.citizenId,candidate.id);assert.equal(n.viceId,vice.id);assert.equal(gov.active.nominationReport[0].candidateId,candidate.id);
+  assert(!gov.active.councilCandidates.some(row=>row.citizenId===candidate.id||row.citizenId===vice.id));
+  updateMayorCampaign(city);assert.equal(city.mayorCampaign.programReview,null);
+});
+
+test('project link opens the council bill detail',()=>{
+  const city=start();confirm(city);const bill=city.mayorAction('bill',{type:'worksTransfer',value:10000});bill.status='awaiting-sanction';bill.sanctionAt=city.minute+10;
+  let destination;const ui={city,mayorDecisionKey:`bill:${bill.id}`,openPanel:options=>{destination=options;}};
+  const links=[],p=new Proxy({windowLink:(label,click)=>links.push({label,click})},{get:(o,k)=>o[k]||(()=>{})});
+  renderMayorDecision(ui,p);links.find(link=>link.label==='LER PROJETO COMPLETO').click();
+  assert.equal(destination.tab,'government');assert.equal(destination.views.government,'elections');assert.equal(destination.politicsTab,'council');assert.equal(destination.billId,bill.id);
 });

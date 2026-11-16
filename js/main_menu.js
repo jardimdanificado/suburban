@@ -80,6 +80,8 @@ export class MainMenu {
     this.active = true;
     this.hasActiveGame = false;
     this.screen = 'TITLE';
+    this.gameMode ??= 'simulation';
+    this.gameModeOpen = false;
 
     // World generation parameters
     this.selectedPreset = worldSettings.preset || 'archipelago';
@@ -109,6 +111,8 @@ export class MainMenu {
   open() {
     this.active = true;
     this.screen = 'TITLE';
+    this.gameMode ??= 'simulation';
+    this.gameModeOpen = false;
   }
 
   close() {
@@ -203,13 +207,20 @@ export class MainMenu {
     return this.pointerUp(x, y);
   }
 
+  startSelectedMode() {
+    this.gameModeOpen = false;
+    if (this.gameMode === 'character') return this.onPlayGame?.();
+    this.close();
+    if (this.gameMode === 'party') return this.onMayorGame?.();
+    return this.onStartGame?.();
+  }
+
   key(event) {
     if (!this.active) return false;
 
     if (event.code === 'Space' || event.code === 'Enter') {
       event.preventDefault();
-      this.close();
-      if (typeof this.onStartGame === 'function') this.onStartGame();
+      this.startSelectedMode();
       return true;
     }
     if (event.code === 'KeyN') {
@@ -280,8 +291,8 @@ export class MainMenu {
   drawOpenTTDMainMenu(ui, width, height, isMobile) {
     const ctx = ui.ctx;
 
-    const winW = Math.min(280, width - 24);
-    const winH = 184;
+    const winW = Math.min(340, width - 24);
+    const winH = this.gameModeOpen ? 278 : 194;
 
     // Initialize or constrain window position
     if (this.windowPos.x === null || this.windowPos.y === null) {
@@ -323,24 +334,23 @@ export class MainMenu {
     const btnX = winX + 8;
     const btnH = 26;
 
-    // Button: Continuar Cidade / Iniciar Cidade
-    if (this.hasActiveGame) {
-      ui.button(btnX, btnY, btnW, btnH, '▶ Continuar Cidade', () => {
-        this.close();
-        if (typeof this.onStartGame === 'function') this.onStartGame();
-      }, { selected: true });
-    } else {
-      ui.button(btnX, btnY, btnW, btnH, '▶ Iniciar Cidade', () => {
-        this.close();
-        if (typeof this.onStartGame === 'function') this.onStartGame();
-      }, { selected: true });
+    const modes = [['simulation','Modo Simulação'],['party','Modo Partidário'],['character','Modo Personagem(Experimental)']];
+    ui.text('Modo de jogo', btnX, btnY + 4, T.ink);
+    btnY += 20;
+    ui.button(btnX, btnY, btnW, btnH, `${modes.find(([id]) => id === this.gameMode)[1]} ▾`, () => {
+      this.gameModeOpen = !this.gameModeOpen;
+    });
+    btnY += 30;
+    if (this.gameModeOpen) {
+      for (const [id,label] of modes) {
+        ui.button(btnX, btnY, btnW, 24, label, () => {
+          this.gameMode = id;
+          this.gameModeOpen = false;
+        }, {selected:this.gameMode === id});
+        btnY += 28;
+      }
     }
-    btnY += 30;
-
-    ui.button(btnX, btnY, btnW, btnH, 'Jogar como personagem', () => this.onPlayGame?.());
-    btnY += 30;
-
-    ui.button(btnX, btnY, btnW, btnH, 'Jogar como prefeito', () => this.onMayorGame?.());
+    ui.button(btnX, btnY, btnW, btnH, this.hasActiveGame ? '▶ Continuar' : '▶ Iniciar', () => this.startSelectedMode(), {selected:true});
     btnY += 30;
 
     // Button: Novo Jogo…
@@ -400,6 +410,8 @@ export class MainMenu {
     // Close button (×)
     ui.button(mx + mw - 22, my + 3, 18, 18, '×', () => {
       this.screen = 'TITLE';
+    this.gameMode ??= 'simulation';
+    this.gameModeOpen = false;
     });
 
     let curY = my + 30;
@@ -465,6 +477,8 @@ export class MainMenu {
 
     ui.button(contentX + halfW + 6, curY, halfW, 24, 'Cancelar', () => {
       this.screen = 'TITLE';
+    this.gameMode ??= 'simulation';
+    this.gameModeOpen = false;
     });
   }
 

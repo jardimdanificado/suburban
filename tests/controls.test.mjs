@@ -221,3 +221,11 @@ test('time settings button exposes FF tiers and disables an active FF mode',()=>
  time.setSpeed(FF4_SPEED);
  clickToggle();assert.equal(time.fastForwardEnabled,false);assert.equal(time.speed,32);
 });
+
+test('council project pause defaults off and persists both toggle values',()=>{
+ let saved='{}';const storage={getItem:()=>saved,setItem:(_key,value)=>{saved=value;}};
+ const make=()=>new OptionsPanel({renderer:rendererMock(),time:new SimulationTime(),step(){},storage});
+ const panel=make();assert.equal(panel.values.pauseForCouncilBills,false);
+ assert(panel.apply('pauseForCouncilBills',true));assert.equal(make().values.pauseForCouncilBills,true);
+ assert(panel.apply('pauseForCouncilBills',false));assert.equal(make().values.pauseForCouncilBills,false);
+});

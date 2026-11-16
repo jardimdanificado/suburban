@@ -156,9 +156,10 @@ export class CitySimulationBridge {
   }
   control() {
     if (!this.active) return;
-    const { paused, speed } = this.time, detailBuildingId=this.city.detailedInteriorBuildingId??null, signature = `${paused}:${speed}:${detailBuildingId}:${this.observed}`;
+    const pauseForCouncilBills=this.motionOptions?.pauseForCouncilBills===true;
+    const { paused, speed } = this.time, detailBuildingId=this.city.detailedInteriorBuildingId??null, signature = `${paused}:${speed}:${detailBuildingId}:${this.observed}:${pauseForCouncilBills}`;
     if (signature !== this.controlSignature) {
-      this.controlSignature = signature; this.worker.postMessage({ type: 'control', cityId:this.cityId, paused, speed, detailBuildingId,observed:this.observed });
+      this.controlSignature = signature; this.worker.postMessage({ type: 'control', cityId:this.cityId, paused, speed, detailBuildingId,observed:this.observed,pauseForCouncilBills });
     }
   }
   setObserved(value){this.observed=!!value;this.control();}
