@@ -1,3 +1,4 @@
+import {mayorDecisionBlocked} from './city_mayor_decisions.js';
 import {mayorAction, updateMayorCampaign, mayorMode} from './city_mayor_campaign.js';
 import {populateFoundingCommunity} from './city_initial_relationships.js';
 import {gameAction,characterMinute,characterMovement,updateCharacterGame,isPlayedCitizen} from './character_game.js';
@@ -1236,7 +1237,7 @@ export class CitySimulation {
     if(c.task==='forage'||c.task==='forage-sale'){this.nature.perform(c);return;}
     if(c.task==='work-wait'){if(!c.seatId&&!syncCitizenInterior(this,c))return;this.furniture.advanceWait(c);return;}
     if(c.task==='market-vending'){const stall=streetMarketFor(this.economy,c);if(!stall){c.marketStall=null;c.task=null;c.targetId=null;c.path=[];c.action='Encerrando o mercado de rua';return;}if(this.urgentNeed(c)){c.task=null;c.targetId=null;c.path=[];return;}c.action=`Vendendo ${this.building(stall.businessId)?.entity.properties.name||'produtos'} na feira`;this.economy.practice(c,'commerce',1);return;}
-    if(c.task==='sit'){if(c.path.length)return;c.needs.leisure=clamp(c.needs.leisure+.7);c.action='Descansando sentado no banco';if(this.minute>=c.sitUntil||this.urgentNeed(c)){this.furniture.release(c);c.task=null;}return;}
+    if(c.task==='sit'){if(c.path.length)return;this.furniture.syncCitizen(c);if(!c.seatId){c.task=null;return;}if(!c.seated)return;if(c.sitStartedAt==null){c.sitStartedAt=this.minute;c.sitUntil=this.minute+30;}c.needs.leisure=clamp(c.needs.leisure+.7);c.action='Descansando sentado no banco';if(this.minute>=c.sitUntil||this.urgentNeed(c)){this.furniture.release(c);c.task=null;}return;}
     if(c.task==='beach_leisure'){
       const setup=c.beachLeisure;if(!setup){c.task=null;return;}
       if(c.path.length){c.action='Indo montar as coisas na praia';return;}
@@ -1272,7 +1273,7 @@ export class CitySimulation {
     if (c.task === 'construction') {
       const project = this.development.projects.find(p => p.id === c.workProjectId);
       const builder = this.building(project?.builderId);
-      if (!project || project.status === 'completed' || project.cancelled || this.hour < 8 || this.hour >= 17) { c.task = null; return; }
+      if (!project || project.paused || project.status === 'completed' || project.cancelled || this.hour < 8 || this.hour >= 17) { c.task = null; return; }
       if (builder && builder.ownerId !== c.id && (c.jobId !== builder.id || builder.balance < builder.wage)) { c.task = null; return; }
       if (this.development.work(project, c)) {
         if (builder && builder.ownerId !== c.id) this.payWage(c,builder,builder.wage);
@@ -1513,7 +1514,7 @@ export class CitySimulation {
   mayorAction(action, options = {}) { return mayorAction(this, action, options); }
   stepMinute() {
     updateMayorCampaign(this);
-    if(mayorMode(this)&&this.mayorCampaign.status==='defeated')return;
+    if(mayorMode(this)&&(this.mayorCampaign.status==='defeated'||mayorDecisionBlocked(this)))return;
     const profileStart=performance.now();let profileMark=profileStart;
     this._pathSearchProfile=this.profileDiagnostics?{minute:this.minute,searches:0,totalMs:0,maxMs:0,start:null,goal:null}:null;
     this.minute++;
@@ -1689,11 +1690,11 @@ export class CitySimulation {
   }
   update(dt) {
     updateMayorCampaign(this);
-    if(mayorMode(this)&&this.mayorCampaign.status==='defeated'){this.accumulator=0;return;}
+    if(mayorMode(this)&&(this.mayorCampaign.status==='defeated'||mayorDecisionBlocked(this))){this.accumulator=0;return;}
     const profileStart=performance.now();let profileMark=profileStart;
     // One simulation second = four city minutes; all systems share this clock.
     this.accumulator += dt * 4;
-    while (this.accumulator >= 1) { this.accumulator -= 1; this.stepMinute(); if(mayorMode(this)&&this.mayorCampaign.status==='defeated'){this.accumulator=0;break;} }
+    while (this.accumulator >= 1) { this.accumulator -= 1; this.stepMinute(); if(mayorMode(this)&&(this.mayorCampaign.status==='defeated'||mayorDecisionBlocked(this))){this.accumulator=0;break;} }
     const minuteStepsMs=performance.now()-profileMark;profileMark=performance.now();
     characterMovement(this,dt);
     const movers=this._movingCitizens||[];

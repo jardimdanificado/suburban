@@ -6,7 +6,7 @@ O objetivo é manter o partido na prefeitura. Outro integrante do mesmo partido 
 
 ## Decisões do jogador
 
-A campanha começa com o mapa livre. A barra da prefeitura mostra aprovação, prazo eleitoral, verba de obras e atalhos para **Construir**, **Serviços**, **Gabinete**, **Políticas** e **Decisões**. **Mapa** recolhe as janelas.
+A campanha começa com o mapa livre. Os atalhos de **Construir**, **Serviços**, **Gabinete**, **Políticas** e **Decisões** ficam na barra original de ícones. Aprovação, prazo eleitoral e verba de obras aparecem no rodapé. Use o controle de janelas existente para recolher os painéis.
 
 Clique em imóveis, moradores e canteiros para abrir ordens do local. Imóveis municipais permitem custeio, manutenção, limpeza e jardinagem; moradores permitem consultar ajuda habitacional e avaliar uma nomeação; obras permitem acompanhar materiais, trabalho e prioridade. O botão de inspeção abre o cadastro completo.
 
@@ -38,3 +38,23 @@ O estado da campanha e as ordens seguem o mesmo fluxo de sincronização do work
 ## Escopo desta versão
 
 O modo usa governo indireto e as filas existentes. Novas obras podem usar um lote existente escolhido no mapa ou a localização automática. Atividades de andar empresarial exigem um empresarial municipal com andar vago; o prefeito instala a atividade, mas não escolhe o layout do andar. Não há ferramenta para pintar áreas ou designar escavações manualmente. Prioridades não substituem necessidades urgentes, disponibilidade e regras das cadeias produtivas. Não há objetivo final de vitória: a campanha continua enquanto o partido permanecer na prefeitura.
+
+## Compromissos, avisos e campanha dirigida
+
+Os avisos aparecem em janelas móveis. **Revisar** abre a decisão correspondente; **Dispensar aviso** ou **×** fecha a janela. A central continua mostrando as pendências, mesmo depois de dispensadas. Leis, falta de comida, demanda habitacional, obras bloqueadas, baixa aprovação e eleições abertas usam o estado real da cidade.
+
+Em **Compromissos**, assuma uma meta de três dias: garantir dois dias de alimentos, reduzir em 25% a falta de moradia ou entregar mais uma obra pública. Só pode haver uma meta ativa, e cada tipo pode ser assumido uma vez por mandato. Acompanhe o progresso e abra a gestão responsável pelo botão **Trabalhar nesta meta**. Cumprir cria uma memória eleitoral positiva; deixar o prazo acabar cria uma memória negativa. Não há prêmio em dinheiro nem garantia de reeleição.
+
+Em **Campanha**, escolha organização automática ou controle manual dos atos e materiais do seu partido. O controle manual suspende a contratação automática desses materiais, o recrutamento automático de rua e os bandeiraços automáticos do partido; adversários continuam atuando. Durante a eleição, contrate panfletos, bandeiras, faixas ou pinturas autorizadas, acompanhando a execução e o gasto partidário. Cada material admite um contrato diário por candidatura, entre 7h e 22h. Trabalhador, estoque, caixa partidário, autorização e acesso continuam necessários. Bandeiraços podem usar um ponto escolhido no mapa, próximo de uma rua, respeitando a convocação por hora entre 7h e 20h.
+
+Abra um canteiro no mapa ou na fila para **Pausar obra** ou **Retomar obra**, consultar progresso e mudar prioridade. A pausa impede trabalho e conclusão; não desfaz pagamentos nem remessas contratadas. Os trabalhadores deixam a obra pausada e podem assumir outras tarefas. A escolha manual do terreno continua validando exatamente o lote selecionado.
+
+## Pausas para decisões do prefeito
+
+Ao assumir a prefeitura, a simulação pausa e abre **Assumir a prefeitura**. Escolha de uma a três promessas do catálogo real, revise as secretarias na segunda etapa e clique em **Confirmar governo e continuar**. As nomeações usam os requisitos e o sistema de escolha de cada pasta; cargos eleitos pela Câmara ou pelo povo mantêm suas regras. É possível manter os titulares atuais ao confirmar.
+
+Quando a apuração termina e o partido continua no poder, uma nova janela de formação do governo abre, inclusive em reeleições. O programa escolhido entra na avaliação do mandato. Se outro partido vencer, continua valendo a derrota da campanha. O início da campanha eleitoral também pausa para escolher até três promessas da candidatura própria antes da divulgação automática do programa.
+
+Cada projeto aprovado que aguarda sanção abre uma janela com autor, votação e prazo restante. **Sancionar agora** encaminha a execução imediatamente pelas regras vigentes; **Vetar projeto** registra o veto, sujeito à derrubada pela Câmara. Cada projeto tem sua janela, e a simulação continua durante o prazo de veto. Sem resposta até o prazo, ocorre sanção tácita e a janela fecha automaticamente. Apenas posse, formação do governo e escolha do programa eleitoral pausam a simulação; fechar ou recolher outras janelas não responde por você.
+
+As decisões pendentes e a seleção de promessas são salvas na cidade. A pausa também bloqueia minutos e avanço rápido no worker. Ao terminar a última decisão, o jogo retoma se estava rodando; uma pausa manual anterior é preservada. Avisos informativos usam janelas comuns e podem ser dispensados sem interromper a simulação.

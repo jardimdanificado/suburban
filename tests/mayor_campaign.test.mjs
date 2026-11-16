@@ -5,7 +5,7 @@ import {updateMayorCampaign,municipalOfficeVacancies} from '../js/city_mayor_cam
 import {TILE_FLOOR,TILE_ROAD_GRASS_STONE} from '../js/world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import {CityStateGraph,bindCityState} from '../js/city_state.js';
 import {renderMayorCampaign} from '../js/city_mayor_ui.js';
-const start=()=>{const city=setup({starter:true,population:24});assert(city.mayorAction('start'),city.lastError);return city;};
+const start=()=>{const city=setup({starter:true,population:24});assert(city.mayorAction('start'),city.lastError);assert(city.mayorAction('confirmReview',{kind:'government'}));return city;};
 
 test('mayor mode uses incumbent party without creating funds and rejects restart or competing modes',()=>{
   const city=setup({starter:true,population:24}),cash=totalMoney(city),treasury=city.treasury;

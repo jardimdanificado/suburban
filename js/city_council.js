@@ -312,7 +312,8 @@ export class CityCouncil {
       if(bill.status==='proposed'&&city.minute>=bill.voteAt)this.vote(bill);
       else if(bill.status==='awaiting-secretary-review'&&city.minute>=bill.reviewAt){this.execute(bill);}
       else if(bill.status==='awaiting-sanction'&&city.minute>=bill.sanctionAt){if(reviewSecretaryVetoes(p,bill))continue;const mayor=city.society.citizen(city.economy.mayorId),opposed=mayor&&!this.preference(mayor,bill).yes,powerBill=['mayorElectionSystem','secretaryElection','councilRate','councilSeats','councilBudget','mayorBudget'].includes(bill.type),canVeto=powerBill||bill.agendaTermId!==p.mandates.current?.id;
-        if(mayor?.playerControlled||city.mayorCampaign?.mode==='play')continue;
+        if(city.mayorCampaign?.mode==='play'){bill.sanctionedAt=city.minute;bill.tacitSanction=true;this.execute(bill);continue;}
+        if(mayor?.playerControlled)continue;
         if(canVeto&&opposed&&(mayor.traits?.ambition??.5)>.72&&city.random()<(powerBill?.035:.055))p.vetoBill(bill.id);else this.execute(bill);}
       else if(bill.status==='vetoed'&&city.minute>=bill.overrideAt)this.vote(bill,true);
       else if(bill.status==='executing'&&city.hour%6===0)this.execute(bill);

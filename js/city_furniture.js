@@ -91,7 +91,7 @@ export class CityFurniture{
    }if(this.benches.length>=limit)break;
   }
  }
- release(c){if(c.seatId){const [id,slot]=c.seatId.split(':').map(Number),b=this.benches.find(b=>b.id===id);if(b?.seats[slot]===c.id)b.seats[slot]=null;}c.seatId=null;c.seated=false;c.furnitureUse=null;}
+ release(c){if(c.seatId){const [id,slot]=c.seatId.split(':').map(Number),b=this.benches.find(b=>b.id===id);if(b?.seats[slot]===c.id)b.seats[slot]=null;}c.seatId=null;c.seated=false;c.furnitureUse=null;c.sitStartedAt=null;c.sitUntil=null;}
  claimBench(c,origin=c.entity,maxDistance=14){
   if(c.seatId){const [id,slot]=c.seatId.split(':').map(Number),bench=this.benches.find(b=>b.id===id);if(bench?.seats[slot]===c.id)return {bench,point:this.seatPoint(bench,slot)};}
   for(const bench of [...this.benches].sort((a,b)=>Math.hypot(a.x-origin.x,a.y-origin.y)-Math.hypot(b.x-origin.x,b.y-origin.y))){if(Math.hypot(bench.x-origin.x,bench.y-origin.y)>maxDistance)continue;
@@ -114,7 +114,7 @@ export class CityFurniture{
   // Leisure is low priority. Stagger the first route searches by citizen ID
   // so a fresh city does not send the whole population through A* at once.
   if(Math.abs(city.minute%5)!==Math.abs(c.id%5))return false;
-  const signature=`${Math.floor(c.entity.x)},${Math.floor(c.entity.y)}:${city.world.revision||0}:${city.obstacleRevision||0}:${city.structureRevision||0}:${this.benches.length}`;let failures=FAILED_LEISURE_ROUTES.get(this);if(!failures)FAILED_LEISURE_ROUTES.set(this,failures=new WeakMap());const failed=failures.get(c);if(failed?.signature===signature&&city.minute<failed.retryAt)return false;if(this.routeBeach(c)){failures.delete(c);return true;}const seat=this.claimBench(c,c.entity,10);if(!seat){failures.set(c,{signature,retryAt:city.minute+5});return false;}failures.delete(c);c.task='sit';c.targetId=null;c.path=seat.path||[];c.sitUntil=city.minute+30;c.action='Indo descansar no banco';return true;}
+  const signature=`${Math.floor(c.entity.x)},${Math.floor(c.entity.y)}:${city.world.revision||0}:${city.obstacleRevision||0}:${city.structureRevision||0}:${this.benches.length}`;let failures=FAILED_LEISURE_ROUTES.get(this);if(!failures)FAILED_LEISURE_ROUTES.set(this,failures=new WeakMap());const failed=failures.get(c);if(failed?.signature===signature&&city.minute<failed.retryAt)return false;if(this.routeBeach(c)){failures.delete(c);return true;}const seat=this.claimBench(c,c.entity,10);if(!seat){failures.set(c,{signature,retryAt:city.minute+5});return false;}failures.delete(c);c.task='sit';c.targetId=null;c.path=seat.path||[];c.sitStartedAt=null;c.sitUntil=null;c.action='Indo descansar no banco';return true;}
  routeBeach(c){
   const city=this.city,origin=c.entity,cx=Math.floor(origin.x),cy=Math.floor(origin.y),candidates=[];
   for(const tile of beachTileChunks(city,cx,cy)){

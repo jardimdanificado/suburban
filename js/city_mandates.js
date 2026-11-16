@@ -121,7 +121,7 @@ export class CityMandates {
       publicHomes,publicMeals,stateFirms,
       inflation:Math.abs(city.currency.dailyInflation*100),tax:city.taxRate*100,wage:city.politics.policy.minimumWage*60,deliveries,happiness:population.happiness/Math.max(1,people)};
   }
-  program(candidate,party,usedMetrics=[],base=this.metrics()) {
+  program(candidate,party,usedMetrics=[],base=this.metrics(),{choices=false}={}) {
     const profile=ideologicalProfile(party),e=profile.economy,green=profile.green,seed=candidate.id*31+this.city.politics.termNumber*17;
     const catalog=[
       ...Object.entries(TAX_CATEGORIES).map(([key,spec])=>[`salesTax_${key}`,`Reduzir imposto sobre ${spec.label.toLowerCase()}`,Math.max(0,base[`salesTax_${key}`]-2-seed%3)]),
@@ -160,7 +160,7 @@ export class CityMandates {
     const unused=viable.filter(([key])=>!usedMetrics.includes(key)),pool=unused.length?unused:viable;
     const ranked=pool.map(row=>({row,rank:this.city.random()*1.6+ideologicalPromiseWeight(profile,row[0])+(preferred.includes(row[0])?.7:0)+(green>.6&&environmental.includes(row[0])?.7:0)+(surveyPriority.has(row[0])?1.6:0)+(row[4]||0)})).sort((a,b)=>b.rank-a.rank);
     const ambition=Math.max(0,Math.min(1,.1+(candidate.traits?.ambition??.5)*.55+(1-(candidate.traits?.honesty??.5))*.2+this.city.random()*.35));
-    return ranked.slice(0,1).map(({row})=>{
+    return ranked.slice(0,choices?ranked.length:1).map(({row})=>{
       const [metric,title,target]=row;
       const spec=PROMISE_METRICS[metric],factor=.4+ambition*1.9;
       let adjusted=base[metric]+(target-base[metric])*factor;
@@ -173,7 +173,7 @@ export class CityMandates {
 
   start(mayor,party,promises=[],electionId=null) {
     this.finish();const base=this.metrics();
-    const term={id:this.nextId++,mayorId:mayor.id,mayorName:mayor.entity.properties.name,partyId:party.id,calendarRules:this.city.politics.termRules,startedAt:this.city.minute,endedAt:null,electionId,baseline:Object.freeze({...base}),latest:Object.freeze({...base}),checkpoints:[],promises:promises.slice(0,1).map(p=>({...p,baseline:base[p.metric],current:base[p.metric],progress:0,fulfilled:false})),score:0};
+    const term={id:this.nextId++,mayorId:mayor.id,mayorName:mayor.entity.properties.name,partyId:party.id,calendarRules:this.city.politics.termRules,startedAt:this.city.minute,endedAt:null,electionId,baseline:Object.freeze({...base}),latest:Object.freeze({...base}),checkpoints:[],promises:promises.slice(0,this.city.mayorCampaign?.mode==='play'&&party.id===this.city.mayorCampaign.partyId?3:1).map(p=>({...p,baseline:base[p.metric],current:base[p.metric],progress:0,fulfilled:false})),score:0};
     this.current=term;for(const c of this.city.citizens)if(!c.entity.destroyed){this.city.politics.initializeCitizen(c);captureGovernmentExperience(this.city,c,term.id);}this.terms.push(term);if(this.terms.length>32)this.terms.shift();this.lastDay=null;this.lastHour=null;this.update();return term;
   }
   update(force=false) {

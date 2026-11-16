@@ -38,12 +38,13 @@ export class CityCampaignMaterials {
     }
     return null;
   }
-  plan(e){
+  plan(e,{candidateId=null,kind:requestedKind=null}={}){
     const city=this.city;if(city.hour<7||city.hour>=22)return;
     const hour=Math.floor(city.minute/60);if(this.propertyFlagsHour!==hour){this.propertyFlagsHour=hour;planPropertyFlags(city,this,e);}
-    for(const n of e.candidates){const candidate=city.society.citizen(n.citizenId),party=city.politics.party(n.partyId);if(!live(candidate)||!party?.active)continue;if(n.campaignFinanceDay!==city.day){this.fund(n,e);n.campaignFinanceDay=city.day;}
+    for(const n of e.candidates){if(candidateId!==null?n.citizenId!==candidateId:city.mayorCampaign?.mode==='play'&&city.mayorCampaign.status==='active'&&n.partyId===city.mayorCampaign.partyId&&(city.mayorCampaign.campaignControl==='manual'||city.mayorCampaign.programReview?.candidateId===n.citizenId))continue;const candidate=city.society.citizen(n.citizenId),party=city.politics.party(n.partyId);if(!live(candidate)||!party?.active)continue;if(n.campaignFinanceDay!==city.day){this.fund(n,e);n.campaignFinanceDay=city.day;}
       const pool=city.citizens.filter(c=>live(c)&&!c.indoorLocation&&city.society.isAdult(c)&&c.id!==candidate.id&&!c.campaign&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.researchAssignment&&!c.deliveryId&&!c.cleaningJobId&&!c.workMeal&&!c.conversation&&!blocked.has(c.task)&&!city.urgentNeed(c));
       for(const kind of ['pamphlet','flag','banner','paint']){
+        if(requestedKind&&kind!==requestedKind)continue;
         if(this.missions.some(m=>m.electionId===e.id&&m.candidateId===n.citizenId&&m.kind===kind&&m.requestDay===city.day))continue;
         const neededGood={pamphlet:'panfletos',flag:'bandeiras',banner:'faixas',paint:'tinta'}[kind],hq=headquartersAccount(city.politics,party);if(!(hq.inventory[neededGood]>0)&&!city.economy.businesses.some(b=>(b.inventory[neededGood]||0)>0))continue;
         const worker=city.politics.campaigns.sample(pool.filter(c=>!c.campaign),8).sort((a,b)=>(b.skills.social||0)-(a.skills.social||0))[0];if(!worker)break;

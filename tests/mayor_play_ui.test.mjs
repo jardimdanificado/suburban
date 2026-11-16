@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {setup,totalMoney} from './helpers/city.mjs';
-import {mayorDecisions,mayorTargetAt,renderMayorTarget,drawMayorDock} from '../js/city_mayor_play.js';
+import {mayorDecisions,mayorTargetAt,renderMayorTarget,mayorStatus} from '../js/city_mayor_play.js';
 import {renderMayorCampaign} from '../js/city_mayor_ui.js';
 import {CityDesktop} from '../js/city_desktop.js';
 import {findPublicBuildingSite} from '../js/city_public_land.js';
-const start=()=>{const city=setup({starter:true,population:24});assert(city.mayorAction('start'),city.lastError);return city;};
+const start=()=>{const city=setup({starter:true,population:24});assert(city.mayorAction('start'),city.lastError);assert(city.mayorAction('confirmReview',{kind:'government'}));return city;};
 function page(){
   const buttons=[],headings=[];
   const p=new Proxy({button(label,click){buttons.push({label,click});},buttons(rows){buttons.push(...rows);},heading(text){headings.push(text);}}, {get:(object,key)=>object[key]||(()=>{})});
@@ -73,7 +73,7 @@ test('focused work sections preserve commands without stacking unrelated directo
   for(const taxView of ['income','sectors','trade']){ui.mayorView='policies';ui.mayorPolicyView='tax';ui.mayorTaxView=taxView;renderMayorCampaign(ui,page().p);}
 });
 
-test('desktop reuses the local orders window, keeps inspector access, and dock buttons remain clickable',t=>{
+test('desktop reuses the local orders window, keeps inspector access, and toolbar stays compact and clickable',t=>{
   const oldDocument=globalThis.document,oldWindow=globalThis.window;
   t.after(()=>{globalThis.document=oldDocument;globalThis.window=oldWindow;});
   const ctx=new Proxy({measureText:text=>({width:String(text).length*6})},{get:(object,key)=>object[key]||(()=>{})});
@@ -85,13 +85,29 @@ test('desktop reuses the local orders window, keeps inspector access, and dock b
   desktop.inspectMayorEntity(b.entity);assert(desktop.manager.windows.some(w=>w.state.selected===b.entity));
   const ui={ctx,width:1024,height:768,regions:[],pointer:{x:-1,y:-1},text(){},textWidth:text=>String(text).length*6,fitText:text=>text,button(x,y,w,h,label,onClick){this.regions.push({x,y,w,h,label,onClick});}};
   desktop.drawChrome(ui,{});
-  assert.equal(desktop.manager.windows.length,0,'campaign entry clears observer windows');
-  const construct=ui.regions.find(region=>region.label==='CONSTRUIR');assert(construct);
+  assert(desktop.manager.windows.every(w=>w.id==='page:mayor-notice'),'campaign entry clears observer windows');
+  const construct=ui.regions.find(region=>region.label==='Construir');assert(construct);
   const top=[...desktop.menuBarRegions].reverse().find(region=>construct.x+2>=region.x&&construct.x+2<=region.x+region.w&&construct.y+2>=region.y&&construct.y+2<=region.y+region.h);
-  assert.equal(top.onClick,construct.onClick);construct.onClick();assert.equal(desktop.active.mayorView,'build');assert.equal(desktop.active.mayorSection,'new');
+  assert.equal(top.onClick,construct.onClick);construct.onClick();assert.equal(desktop.active.mayorView,'build');assert.equal(desktop.manager.top,34);
   desktop.armMayorPlot({type:'clinic',crop:'milho'});assert(desktop.hidden);
   const lot=city.development.publicBuildingSite('clinic').lot;assert(desktop.mayorMapClick({x:lot.x,y:lot.y}));
   assert.equal(desktop.active.mayorTarget.id,lot.id);assert.equal(desktop.active.mayorBuildingType,'clinic');assert.equal(desktop.mayorMapOrder,null);
   assert(!desktop.hidden);
-  const small={...ui,width:360,regions:[]};const bottom=drawMayorDock(desktop,small,32);assert(bottom<190);assert.equal(small.regions.length,6);
+  assert.match(mayorStatus(desktop),/Aprovação/);
+  desktop.armMayorPlot({type:'clinic'});assert.match(mayorStatus(desktop),/Esc cancela/);
+  desktop.armMayorPlot({mode:'rally'});assert(desktop.mayorMapClick({x:10,y:11}));
+  assert.deepEqual(desktop.active.mayorTarget,{kind:'rally',point:{x:10.5,y:11.5}});
+  const bill=city.mayorAction('bill',{type:'worksTransfer',value:10000});assert(bill);bill.status='awaiting-sanction';
+  desktop.hidden=true;desktop.syncMayorDecisionWindows();
+  assert.equal(desktop.active.mayorDecisionKey,`bill:${bill.id}`);assert(!desktop.close(desktop.manager.active.id));
+  assert(city.mayorAction('sanction',{billId:bill.id}));desktop.syncMayorDecisionWindows();
+  desktop.syncMayorNotices();const notice=desktop.manager.find('page:mayor-notice');
+  if(notice){const id=notice.state.mayorNoticeId;desktop.close(notice.id);assert(desktop.mayorReadNotices.has(id));}
+  let paused=false;desktop.controls={isPaused:()=>paused,setPaused:value=>{paused=value;}};
+  city.mayorCampaign.governmentConfirmedKey=null;city.update(0);desktop.syncMayorDecisionWindows(paused);
+  assert(paused);const required=desktop.manager.active;assert(required.state.mayorDecisionKey.startsWith('government:'));
+  assert(!desktop.close(required.id));desktop.hidden=true;desktop.syncMayorDecisionWindows(paused);assert(!desktop.hidden);
+  assert(city.mayorAction('confirmReview',{kind:'government'}));desktop.syncMayorDecisionWindows(paused);assert(!paused);assert(!desktop.manager.find(required.id));
+  paused=true;city.mayorCampaign.governmentConfirmedKey=null;city.update(0);desktop.syncMayorDecisionWindows(paused);
+  assert(city.mayorAction('confirmReview',{kind:'government'}));desktop.syncMayorDecisionWindows(paused);assert(paused,'an existing manual pause is preserved');
 });

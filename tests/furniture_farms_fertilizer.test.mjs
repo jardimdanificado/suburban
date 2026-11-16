@@ -22,6 +22,16 @@ test('street benches reserve distinct seats and release them when the activity c
  const {city,c}=fixture(),other=city.citizens.find(p=>p!==c&&!city.politics.officeHolder(p));assert(city.furniture.benches.length>0);const first=city.furniture.claimBench(c,c.entity,Infinity),second=city.furniture.claimBench(other,c.entity,Infinity);assert(first&&second);assert.notEqual(c.seatId,other.seatId);
  c.task='sit';c.entity.x=first.point.x;c.entity.y=first.point.y;c.path=[];city.furniture.syncCitizen(c);assert(c.seated);c.task='walk';city.furniture.syncCitizen(c);assert.equal(c.seatId,null);assert.equal(c.seated,false);
 });
+test('bench rest lasts thirty minutes after arrival even when the walk takes longer',()=>{
+ const {city,c}=fixture();city.furniture.routeBeach=()=>false;
+ const bench=city.furniture.benches[0];c.entity.x=bench.x;c.entity.y=bench.y+1;c.needs.leisure=20;city.minute+=((c.id-city.minute)%5+5)%5;
+ assert(city.furniture.routeLeisure(c));assert(c.path.length);const destination=c.path.at(-1);
+ city.minute+=40;city.performTask(c);assert.equal(c.task,'sit');assert.equal(c.needs.leisure,20);
+ c.entity.x=destination.x;c.entity.y=destination.y;c.path=[];city.performTask(c);city.furniture.syncCitizen(c);
+ assert.equal(c.task,'sit');assert(c.seated);assert.equal(citizenAnimation(c,false),'sentado_no_banco');assert.equal(c.sitUntil,city.minute+30);
+ city.minute+=29;city.performTask(c);assert.equal(c.task,'sit');assert(c.seated);
+ city.minute++;city.performTask(c);assert.equal(c.task,null);assert.equal(c.seatId,null);assert.equal(c.seated,false);
+});
 test('a worker short of materials waits at a real bench or indoors and retries without losing the job',()=>{
  const {city,c}=fixture(),b=city.buildings.find(b=>b.type==='cycle_assembler');c.jobId=b.id;b.workers.push(c.id);for(const good in INDUSTRIES[b.type].inputs)b.inventory[good]=0;c.task='work';c.targetId=b.id;c.entity.x=b.door.x;c.entity.y=b.door.y;finishActivityRoute(city,c);city.performTask(c);assert.equal(c.task,'work-wait');assert.equal(c.workWait.employerId,b.id);assert(c.seatId||c.targetId===b.id);city.minute+=13;city.furniture.advanceWait(c);assert.equal(c.jobId,b.id);assert.equal(c.task,null);
 });

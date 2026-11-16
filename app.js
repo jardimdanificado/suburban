@@ -784,6 +784,7 @@ export const cityUI = new CityDesktop({ city, root, select: selectEntity, contro
   play:()=>gameUI.choose(),
   hasActiveGame: () => mainMenu.hasActiveGame,
   startNewCity: (params) => startNewCity(params),
+  setPaused:value=>{if(time.paused!==value)time.setPaused(value);},isPaused:()=>time.paused,
   pause:togglePause, speed:()=>time.cycleSpeed(), options:toggleOptions, editor:()=>cityUI.toggleTool("editor",editor),
   center:()=>{renderer3D.setThirdPersonMode(false);renderer3D.setFollowCharacter(null);renderer3D.setCamera(world.spawnCenter.x,world.spawnCenter.y);},
   observe:(mode,id)=>{if(mode==='third')renderer3D.setThirdPersonMode(true,id);else if(mode==='follow')renderer3D.setFollowCharacter(id);else if(mode==='free')renderer3D.setFreeCameraMode(true);else {renderer3D.setThirdPersonMode(false);renderer3D.setFollowCharacter(null);}},

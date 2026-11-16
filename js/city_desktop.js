@@ -1,4 +1,6 @@
-import {mayorPlaying,mayorTargetAt,renderMayorTarget,drawMayorDock,MAYOR_DESKS} from './city_mayor_play.js';
+import {pendingMayorDecisions} from './city_mayor_decisions.js';
+import {renderMayorDecision} from './city_mayor_decision_ui.js';
+import {mayorPlaying,mayorTargetAt,renderMayorTarget,mayorStatus,mayorDecisions,MAYOR_DESKS} from './city_mayor_play.js';
 import {speedLabel} from './simulation_time.js?v=ff3-ff4-steps-1';
 import {CityGlobalSearch} from './city_global_search.js?v=regional-supply-17';
 import {desktopMenus} from './city_desktop_menus.js?v=custom-history-filters-1';
@@ -91,7 +93,7 @@ export class CityDesktop {
   openParty(id){const party=this.city.politics.party(id);if(!party)return;const state=this.create(`party:${id}`,'party',{title:`${party.short} · ${party.name}`,kind:'section'});state.partyId=id;return state;}
   openMayorDesk(view='agenda',section=null){
     const id=`mayor-desk:${view}`,state=this.create(id,'mayor',{title:MAYOR_DESKS[view]||'Prefeitura',kind:'page'});
-    const window=this.manager.find(id);if(!this.manager.saved.has(id)){window.w=540;window.h=520;this.manager.constrain(window);}
+    const window=this.manager.find(id);if(!this.manager.saved.has(id)){window.w=540;window.h=view==='challenges'?380:view==='campaign'?460:520;this.manager.constrain(window);}
     state.mayorView=view;state.mayorDesk=true;if(section)state.mayorSection=section;
     state.resetScroll();state.visible=true;this.hidden=false;this.element.hidden=false;
     return state;
@@ -105,6 +107,7 @@ export class CityDesktop {
   armMayorPlot(options={}){this.mayorMapOrder=options;this.hidden=true;this.element.hidden=true;}
   mayorMapClick(tile){
     if(!mayorPlaying(this.city))return false;
+    if(this.mayorMapOrder?.mode==='rally'&&tile){this.mayorMapOrder=null;this.openMayorTarget({kind:'rally',point:{x:tile.x+.5,y:tile.y+.5}});return true;}
     const target=mayorTargetAt(this.city,tile);if(!target)return false;
     const state=this.openMayorTarget(target);
     if(target.kind==='plot'&&this.mayorMapOrder){state.mayorBuildingType=this.mayorMapOrder.type;state.mayorCrop=this.mayorMapOrder.crop;state.mayorPlacement={...this.mayorMapOrder};this.mayorMapOrder=null;}
@@ -118,9 +121,10 @@ export class CityDesktop {
   syncElectionNotices(){
     const gov=this.city.politics;
     if(this.lastElectionNoticeMinute!=null&&this.city.minute<this.lastElectionNoticeMinute){this.electionNotices.clear();this.lastElectionResultId=gov.lastResult?.id??null;}this.lastElectionNoticeMinute=this.city.minute;
-    const active=gov.active;
-    if(active){const view=['campaign','scheduled'].includes(active.status)?'polls':['voting','counting'].includes(active.status)?'count':null,key=`${active.id}:${view}`;if(view&&!this.electionNotices.has(key)){this.electionNotices.add(key);this.openElection(active.id,view);}}
-    if(gov.lastResult&&gov.lastResult.id!==this.lastElectionResultId){this.lastElectionResultId=gov.lastResult.id;this.openElection(gov.lastResult.id,'results');}
+    let opened=false;const active=gov.active;
+    if(active){const view=['campaign','scheduled'].includes(active.status)?'polls':['voting','counting'].includes(active.status)?'count':null,key=`${active.id}:${view}`;if(view&&!this.electionNotices.has(key)){this.electionNotices.add(key);this.openElection(active.id,view);opened=true;}}
+    if(gov.lastResult&&gov.lastResult.id!==this.lastElectionResultId){this.lastElectionResultId=gov.lastResult.id;this.openElection(gov.lastResult.id,'results');opened=true;}
+    const decision=pendingMayorDecisions(this.city)[0];if(opened&&decision)this.manager.raise(`page:mayor-decision:${decision.key}`);
   }
   openEvent(id,snapshot=null){const state=this.create(`event:${id}`,'event',{title:`Inspetor do evento #${id}`,kind:'inspector'});state.selectedEventId=id;state.eventSnapshot??=snapshot||this.city.history.get(id);return state;}
   openCorruption(id){if(id==null)return this.openModule('corruption');const state=this.create(`corruption:${id}`,'corruption-case',{title:`Corrupção · caso #${id}`,kind:'inspector'});state.corruptionCaseId=id;state.corruptionSnapshot??=this.city.politics.corruption.find(r=>r.id===id)||this.city.politics.scandals.find(r=>r.id===id);return state;}
@@ -203,7 +207,7 @@ export class CityDesktop {
   }
   setPlotSelection(id){if(mayorPlaying(this.city))return this.openMayorTarget({kind:'plot',id});const state=this.create(`plot:${id}`,'land',{title:`Terreno ${id}`,kind:'section'});state.selectedPlotId=id;state.recordWindow=true;state.setView('plots');return state;}
   toggle(){if(!this.manager.windows.length){this.openModule('city');return;}this.hidden=!this.hidden;this.element.hidden=this.hidden;}
-  close(id){const w=this.manager.close(id);if(w){w.state.onClose?.();w.state.element.remove?.();w.state.visible=false;}return w;}
+  close(id){if(this.manager.find(id)?.state.mayorDecisionKey&&pendingMayorDecisions(this.city).some(d=>d.key===this.manager.find(id).state.mayorDecisionKey))return null;const w=this.manager.close(id);if(w){w.state.onClose?.();w.state.element.remove?.();w.state.visible=false;}return w;}
   closeAll(all=false){for(const w of [...this.manager.windows])if(all||!w.pinned)this.close(w.id);}
   pointerDown(x,y){
     if(this.menuOpen){const b=this.menuBounds,toolbarButton=this.menuBarRegions?.some(r=>r.onClick&&x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h);if(toolbarButton||b&&x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h)return false;this.closeMenu();this.menuDismissGesture=true;return true;}
@@ -243,6 +247,8 @@ export class CityDesktop {
     if(this.city.mayorCampaign?.mode==='play'&&this.manager.find('tool:editor'))this.close('tool:editor');
     if(this.city.mayorCampaign?.mode==='play'&&this.city.mayorCampaign.status==='defeated'&&!this.mayorDefeatShown){this.mayorDefeatShown=true;this.hidden=false;this.element.hidden=false;this.openModule('mayor');}
     if(mayorPlaying(this.city)&&this.mayorSession!==this.city.mayorCampaign){this.mayorSession=this.city.mayorCampaign;this.closeAll(true);this.hidden=true;this.element.hidden=true;}
+    this.syncMayorDecisionWindows(paused);
+    this.syncMayorNotices();
     this.chromeState={clockText,paused,speed,renderMode};this.menuGroups??=desktopMenus(this);this.tooltip=null;this.menuAnchors=[];
     const activeWorldCity=this.worldCoordinator?.cities.get(this.worldCoordinator.activeCityId),activeCityName=activeWorldCity?.city?.municipalIdentity?.name||this.city?.municipalIdentity?.name||activeWorldCity?.metadata?.name||'Cidade',worldButtonWidth=Math.min(160,Math.max(82,ui.textWidth(activeCityName)+34));
     let x=4,barY=2;const controls=[[paused?'play':'pause',paused?'Continuar':'Pausar',this.controls.pause,paused],['fast',`Velocidade ${speedLabel(speed)}${speed>=128?' · simulação muito reduzida':speed>=64?' · avanço com detalhe reduzido':''}`,this.controls.speed,false]];
@@ -250,12 +256,15 @@ export class CityDesktop {
       {label:'Busca geral · Ctrl+K',icon:'search',w:36,click:()=>this.openGlobalSearch()},
       {label:`${activeCityName} · Mundo e rotas marítimas`,buttonLabel:activeCityName,icon:'map',w:worldButtonWidth,click:()=>{this.closeMenu();this.openModule('world');},selected:!this.hidden&&!!this.manager.find('module:world')},
       ...controls.map(([icon,label,click,selected])=>({icon,label,click:()=>{this.closeMenu();click?.();},selected,w:29})),
-      ...CITY_WINDOWS.filter(([tab])=>tab!=='world'&&(!mayorPlaying(this.city)||['mayor','city','people','production','transport','map'].includes(tab))).map(([tab,label])=>({label,icon:tab,w:29,click:()=>{this.closeMenu();if(tab==='mayor'&&mayorPlaying(this.city))this.openMayorDesk('agenda');else this.toggleModule(tab);},selected:!this.hidden&&!!this.manager.find(`module:${tab}`)})),
+      ...CITY_WINDOWS.filter(([tab])=>tab!=='world'&&(!mayorPlaying(this.city)||['mayor','city','people','production','transport','map'].includes(tab))).map(([tab,label])=>({label:tab==='mayor'&&mayorPlaying(this.city)?`Decisões (${mayorDecisions(this.city).length})`:label,icon:tab,w:29,click:()=>{this.closeMenu();if(tab==='mayor'&&mayorPlaying(this.city))this.openMayorDesk('agenda');else this.toggleModule(tab);},selected:!this.hidden&&!!this.manager.find(`module:${tab}`)})),
+      ...(mayorPlaying(this.city)?[
+        ['build','land','Construir'],['operations','sanitation','Serviços'],['cabinet','people','Gabinete'],['policies','politics','Políticas'],['campaign','elections','Campanha'],['challenges','current','Compromissos']
+      ].map(([view,icon,label])=>({label,icon,w:29,click:()=>{this.closeMenu();this.openMayorDesk(view);},selected:!this.hidden&&this.manager.active?.id===`mayor-desk:${view}`})):[]),
       ...this.menuGroups.map(g=>({id:g.id,label:g.label,icon:g.id==='tools'?'settings':'windows',w:36,click:()=>this.toggleMenu(g.id),selected:this.menuOpen&&this.menuId===g.id}))
     ];
     const placed=[];for(const entry of entries){if(x>4&&x+entry.w>ui.width-4){x=4;barY+=30;}placed.push({...entry,x,y:barY});x+=entry.w+2;}
     for(const rowY of new Set(placed.map(entry=>entry.y))){const row=placed.filter(entry=>entry.y===rowY),end=Math.max(...row.map(entry=>entry.x+entry.w)),offset=Math.max(0,Math.floor((ui.width-end-4)/2));for(const entry of row)entry.x+=offset;}
-    const dockStart=ui.regions.length,barHeight=drawMayorDock(this,ui,barY+32),dockRegions=ui.regions.splice(dockStart);this.manager.top=barHeight;this.manager.viewport(ui.width,ui.height);bevel(ui.ctx,0,0,ui.width,barY+32,{fill:T.face});
+    const barHeight=barY+32;this.manager.top=barHeight;this.manager.viewport(ui.width,ui.height);bevel(ui.ctx,0,0,ui.width,barY+32,{fill:T.face});
     // Registered after window content as well, so the menu bar remains above all panels.
     const barRegion={x:0,y:0,w:ui.width,h:barHeight,onClick:null};this.menuBarRegions=[barRegion];ui.regions.push(barRegion);
     for(const entry of placed){ui.button(entry.x,entry.y,entry.w,28,'',entry.click||(()=>{}),{selected:entry.selected});
@@ -264,11 +273,10 @@ export class CityDesktop {
       if(ui.pointer?.x>=entry.x&&ui.pointer.x<entry.x+entry.w&&ui.pointer.y>=entry.y&&ui.pointer.y<entry.y+28)this.tooltip={text:entry.id?`${entry.label} ▾`:entry.label,x:entry.x,y:barHeight+3};
       ui.regions.at(-1).label=entry.id?`${entry.label} — menu`:entry.label;this.menuBarRegions.push(ui.regions.at(-1));
     }
-    ui.regions.push(...dockRegions);this.menuBarRegions.push(...dockRegions);
     const y=ui.height-27;bevel(ui.ctx,0,y,ui.width,27,{fill:T.face});const s=this.city.stats(),cash=money(this.city.treasury),cashW=Math.min(190,ui.width*.42,Math.max(120,ui.textWidth(cash)+26)),dateW=Math.min(225,ui.width-cashW-12,Math.max(120,ui.textWidth(clockText)+24));
     bevel(ui.ctx,3,y+3,dateW,21,{inset:true,fill:T.paper});ui.text(ui.fitText(clockText,dateW-14),10,y+7,T.ink);
     const right=ui.width-cashW-3;bevel(ui.ctx,right,y+3,cashW,21,{inset:true,fill:T.paper});const shownCash=ui.fitText(cash,cashW-16);ui.text(shownCash,right+cashW-ui.textWidth(shownCash)-8,y+7,T.ink);
-    const middle=right-dateW-12;if(middle>80){bevel(ui.ctx,dateW+6,y+3,middle,21,{inset:true,fill:T.paper});const effective=paused?'0.0× efetiva':Number.isFinite(effectiveSpeed)?`${effectiveSpeed.toFixed(1)}× efetiva`:'medindo…',status=middle<230?effective:`${s.population} habitantes · ${speedLabel(speed)} · ${effective} · ${this.manager.windows.length} janelas`;ui.text(ui.fitText(status,middle-12),dateW+12,y+7,paused?T.red:T.ink);}
+    const middle=right-dateW-12;if(middle>80){bevel(ui.ctx,dateW+6,y+3,middle,21,{inset:true,fill:T.paper});const effective=paused?'0.0× efetiva':Number.isFinite(effectiveSpeed)?`${effectiveSpeed.toFixed(1)}× efetiva`:'medindo…',status=mayorPlaying(this.city)?mayorStatus(this):middle<230?effective:`${s.population} habitantes · ${speedLabel(speed)} · ${effective} · ${this.manager.windows.length} janelas`;ui.text(ui.fitText(status,middle-12),dateW+12,y+7,paused?T.red:T.ink);}
 
   }
   frame(ui,w){
@@ -283,7 +291,7 @@ export class CityDesktop {
     ui.button(w.x+w.w-83,w.y+2,20,18,w.pinned?'●':'○',()=>this.manager.pin(w.id),{selected:w.pinned});ui.regions.at(-1).label=`Fixar: ${title}`;
     ui.button(w.x+w.w-62,w.y+2,20,18,w.shaded?'▣':'−',()=>this.manager.shade(w.id));ui.regions.at(-1).label=`Recolher: ${title}`;
     ui.button(w.x+w.w-41,w.y+2,20,18,w.maximized?'↙':'↗',()=>this.manager.maximize(w.id));ui.regions.at(-1).label=`Ampliar: ${title}`;
-    ui.button(w.x+w.w-20,w.y+2,18,18,'×',()=>this.close(w.id));ui.regions.at(-1).label=`Fechar: ${title} (também com botão direito)`;
+    if(!w.state.mayorDecisionKey){ui.button(w.x+w.w-20,w.y+2,18,18,'×',()=>this.close(w.id));ui.regions.at(-1).label=`Fechar: ${title} (também com botão direito)`;}
     if(!w.shaded){const previousState=ui.windowState;ui.windowState=w.state;w.state.windowLinks=[];try{if(w.state.tab==='map')this.drawMap(ui,w);else w.state.drawFloating(ui,w);}finally{ui.windowState=previousState;}if(w.state.openCurrentInWindow&&w.state.tab!=='map'){ui.button(w.x+w.w-177,w.y+w.h-20,154,18,'DESTACAR ABA ↗',()=>w.state.openCurrentInWindow());ui.regions.at(-1).label='Abrir aba atual em outra janela';}if(!w.maximized){const handle=this.manager.resizeHandle(w);ctx.fillStyle=T.muted;for(let i=0;i<3;i++)ctx.fillRect(handle.x+handle.w-3-i*4,handle.y+handle.h-3-i*4,2,2+i*4);ui.regions.push({...handle,label:`Redimensionar: ${title}`,onClick:null});}ui.text(w.pinned?'Fixada':'',w.x+6,w.y+w.h-17,T.muted);}
     else {w.state.element.hidden=true;w.state.zones=[];}
   }
@@ -295,6 +303,41 @@ export class CityDesktop {
     if(this.menuOpen){for(const w of this.manager.windows)for(const input of w.state.inputs || [])input.hidden=true;this.drawMenu(ui);}
     this.tooltipElement.hidden=!this.tooltip||this.menuOpen||!!this.manager.gesture;
     if(!this.tooltipElement.hidden){const {text,x,y}=this.tooltip,w=Math.min(440,ui.width-8,Math.ceil(ui.textWidth(text))+18);this.tooltipElement.textContent=text;Object.assign(this.tooltipElement.style,{left:`${Math.max(4,Math.min(x,ui.width-w-4))}px`,top:`${Math.max(0,Math.min(y,ui.height-190))}px`,width:`${w}px`});}
+  }
+  syncMayorDecisionWindows(paused=false){
+    const pending=pendingMayorDecisions(this.city),required=pending.find(d=>d.kind!=='bill');
+    const shown=[...(required?[required]:[]),...pending.filter(d=>d.kind==='bill')],keys=new Set(shown.map(d=>d.key));
+    for(const w of [...this.manager.windows])if(w.state.mayorDecisionKey&&!keys.has(w.state.mayorDecisionKey)){delete w.state.mayorDecisionKey;this.close(w.id);}
+    if(required){
+      this.mayorAutoPause??={resume:!(this.controls.isPaused?.()??paused)};
+      this.controls.setPaused?.(true);
+    }else if(this.mayorAutoPause){
+      const resume=this.mayorAutoPause.resume;this.mayorAutoPause=null;
+      if(resume&&this.city.mayorCampaign?.status!=='defeated')this.controls.setPaused?.(false);
+    }
+    for(const decision of shown){
+      const id=`page:mayor-decision:${decision.key}`;
+      if(!this.manager.find(id)){
+        const state=this.openPage(`mayor-decision:${decision.key}`,{title:decision.title,width:decision.kind==='bill'?480:580,height:decision.kind==='bill'?360:560,draw:(p,ui)=>renderMayorDecision(ui,p)});
+        state.mayorDecisionKey=decision.key;
+      }
+    }
+    if(required){this.hidden=false;this.element.hidden=false;}
+  }
+  syncMayorNotices(){
+    if(!mayorPlaying(this.city)||pendingMayorDecisions(this.city).length||this.menuOpen||this.mayorMapOrder)return;
+    const tasks=mayorDecisions(this.city),ids=new Set(tasks.map(t=>t.id));
+    this.mayorReadNotices??=new Set();
+    for(const id of this.mayorReadNotices)if(!ids.has(id))this.mayorReadNotices.delete(id);
+    const existing=this.manager.find('page:mayor-notice');
+    if(existing){if(ids.has(existing.state.mayorNoticeId))return;this.close(existing.id);}
+    const task=tasks.find(t=>!this.mayorReadNotices.has(t.id));if(!task)return;
+    const state=this.openPage('mayor-notice',{title:task.title,width:380,height:220,draw:p=>{
+      p.heading(task.title);p.note(task.text||'');
+      p.button('REVISAR',()=>{this.close('page:mayor-notice');if(task.target)this.openMayorTarget(task.target);else this.openMayorDesk(task.desk||'agenda',task.section);});
+      p.button('DISPENSAR AVISO',()=>this.close('page:mayor-notice'));
+    }});
+    state.mayorNoticeId=task.id;state.onClose=()=>this.mayorReadNotices.add(task.id);
   }
   drawMap(ui,w){
     const state=w.state,world=this.city.world;state.zones=[];for(const input of state.inputs || [])input.hidden=true;

@@ -1,3 +1,4 @@
+import {mayorDecisionBlocked} from './city_mayor_decisions.js';
 import {packFishing} from './fishing_motion.js';
 import {packBoatRiders,packBoatTows} from './boat_rider_motion.js?v=shared-crossings-1';
 import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=game-approach-camera-9';
@@ -240,7 +241,7 @@ setInterval(() => {
   if (!state) return;
   try {
     const now = performance.now(), dt = Math.min(.1, (now - lastTime) / 1000); lastTime = now;
-    if (!paused) {
+    if (!paused&&!mayorDecisionBlocked(state.city)) {
       // A bounded backlog prevents a slow hour from causing endless catch-up work.
       accumulator = Math.min(accumulator + dt * speed, Math.max(.25, speed * .25));
       const deadline = performance.now() + (speed>=16?14:8), step=stepSize();
@@ -249,6 +250,7 @@ setInterval(() => {
         const started=performance.now();state.city.update(step);lastUpdateMs=performance.now()-started;recordProfile(state.city.lastUpdateProfile);updateTotalMs+=lastUpdateMs;updateCount++;
         if(lastUpdateMs>maxUpdateMs){maxUpdateMs=lastUpdateMs;maxUpdateMinute=state.city.minute;maxUpdateProfile=state.city.profileDiagnostics?state.city.lastUpdateProfile:null;}
         accumulator -= step; tick++; elapsed += step; steps++;
+        if(mayorDecisionBlocked(state.city)){accumulator=0;break;}
       }
       if (steps) dirty = true;
     }

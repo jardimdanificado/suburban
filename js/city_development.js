@@ -105,7 +105,7 @@ export class CityDevelopment {
   }
   completeService(project) {
     const city = this.city;
-    if (project.status === 'completed' || project.cancelled || project.inventory.pedra < project.stone || project.labor < project.requiredLabor) return null;
+    if (project.paused || project.status === 'completed' || project.cancelled || project.inventory.pedra < project.stone || project.labor < project.requiredLabor) return null;
     let result;
     if (project.service === 'lamp') {
       result = city.lighting.completePost(project);
@@ -479,7 +479,7 @@ export class CityDevelopment {
     return project;
   }
   complete(project) {
-    if (project.status === 'completed' || project.cancelled || project.inventory.pedra < project.stone || project.labor < project.requiredLabor) return null;
+    if (project.paused || project.status === 'completed' || project.cancelled || project.inventory.pedra < project.stone || project.labor < project.requiredLabor) return null;
     if (['lamp', 'road', 'road-repair', 'repair', 'expansion'].includes(project.service)) return this.completeService(project);
     const p = this.plots.find(p => p.id === project.plotId), city = this.city;
     const b = city.addBuilding(project.type, p.x, p.y, { width: project.width ?? p.width, depth: project.depth ?? p.depth, floors: project.floors, plotId: p.id, ownerAccountId: project.accountId, kind: project.kind, crop:project.crop, materialSource: project,rotation:project.rotation??0 });
@@ -546,7 +546,7 @@ export class CityDevelopment {
     project.materialStatus=project.inventory.pedra>=project.stone?'Pedras entregues':need<=0?'Pedras em transporte':project.materialFundingGap>0?'Orçamento de materiais precisa de complemento':!stock.some(b=>b.inventory.pedra>0)?'Extração ainda não disponibilizou pedras':'Compra ou transporte aguardando atendimento';
   }
   work(project, c) {
-    if (!project || project.cancelled || project.status === 'completed') return false;
+    if (!project || project.paused || project.cancelled || project.status === 'completed') return false;
     if (project.inventory.pedra < project.stone) return false;
     if(['work','manage'].includes(c.task)){c.task='construction';c.workProjectId=project.id;c.targetId=project.builderId||c.targetId;}
     const plot=this.plots.find(p=>p.id===project.plotId),parallel=project.service==='building'||project.service==='expansion';
@@ -576,7 +576,7 @@ export class CityDevelopment {
     if(!dispatch||dispatch.minute!==this.city.minute){
       const assigned=new Map();for(const worker of this.city.citizens)if(!worker.entity.destroyed&&worker.task==='construction')assigned.set(worker.workProjectId,(assigned.get(worker.workProjectId)||0)+1);
       const people=this.city.citizens.filter(person=>!person.entity.destroyed),homeless=people.reduce((n,person)=>n+Number(!person.homeUnitId),0),housingCrisis=homeless>=Math.max(12,people.length*.1);
-      const projects=this.projects.filter(p=>p.status!=='blocked'&&p.labor<p.requiredLabor&&!p.waitingForCouncilContract&&!p.cancelled&&p.status!=='completed'&&p.inventory.pedra>=p.stone&&(p.service!=='lamp'||!!p.builderId));
+      const projects=this.projects.filter(p=>!p.paused&&p.status!=='blocked'&&p.labor<p.requiredLabor&&!p.waitingForCouncilContract&&!p.cancelled&&p.status!=='completed'&&p.inventory.pedra>=p.stone&&(p.service!=='lamp'||!!p.builderId));
       const housing=projects.filter(p=>p.accountId==='treasury'&&['super_popular_housing','popular_housing','popular_luxury_housing'].includes(p.type)).sort((a,b)=>(b.priority||0)-(a.priority||0)||a.startedAt-b.startedAt||String(a.id).localeCompare(String(b.id)));
       dispatch={minute:this.city.minute,assigned,projects,housingCrisis,priorityHousingId:housing[0]?.id};
       constructionDispatch.set(this,dispatch);
@@ -584,7 +584,7 @@ export class CityDevelopment {
     let selected=null,selectedPriority=-Infinity,selectedCrew=Infinity;
     for(const p of dispatch.projects){
       const owned=!p.builderId&&(p.accountId===c.accountId||p.accountId==='treasury'&&p.ownerId===c.id),builderJob=business&&contractorHandles(business.type,p.service)&&(p.builderId===business.id||p.accountId===business.accountId);
-      if(!owned&&!builderJob||p.status==='blocked'||p.labor>=p.requiredLabor||p.waitingForCouncilContract||p.cancelled||p.status==='completed'||p.inventory.pedra<p.stone)continue;
+      if(!owned&&!builderJob||p.paused||p.status==='blocked'||p.labor>=p.requiredLabor||p.waitingForCouncilContract||p.cancelled||p.status==='completed'||p.inventory.pedra<p.stone)continue;
       const crew=dispatch.assigned.get(p.id)||0,limit=Math.max(1,Math.min(6,Math.ceil(Math.max(0,p.requiredLabor-p.labor)/30)));if(crew>=limit)continue;
       const housingPriority=dispatch.housingCrisis&&p.accountId==='treasury'&&['super_popular_housing','popular_housing','popular_luxury_housing'].includes(p.type)?(p.id===dispatch.priorityHousingId?500:250):0;
       const score=housingPriority+(p.priority||0)+(p.service==='lamp'?Math.min(80,Math.max(0,this.city.minute-p.startedAt)/60*2):0)+Math.min(160,(this.city.minute-p.startedAt)/60);

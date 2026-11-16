@@ -1,4 +1,4 @@
-import {mayorDecisions,mayorOrder,MAYOR_DESKS} from './city_mayor_play.js';
+import {mayorDecisions,mayorOrder,renderMayorChallenges,renderMayorElection,MAYOR_DESKS} from './city_mayor_play.js';
 import {OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
 import {publicProjects,municipalFirmType,municipalOfficeVacancies} from './city_mayor_campaign.js';
 import {describePromise} from './city_mandates.js';
@@ -54,10 +54,13 @@ export function renderMayorCampaign(ui,p) {
     p.status('MANTENHA O PARTIDO NO PODER',`Avaliação ${Math.round(gov.approval)}/100 · votação ${gov.nextElectionAt==null?'sem data':day(gov.nextElectionAt)}`);
     p.links(tabs.map(([id,label])=>({label,selected:view===id,click:()=>{if(ui.host?.openMayorDesk)ui.host.openMayorDesk(id);else{ui.mayorView=id;ui.resetScroll();}}})));
   }
-  if(view==='agenda'){
+  if(view==='challenges'){renderMayorChallenges(ui,p);
+  }else if(view==='campaign'){renderMayorElection(ui,p);
+  }else if(view==='agenda'){
     p.note('Clique nos imóveis e moradores do mapa para dar ordens no local. Feche as janelas para acompanhar a cidade.');
     p.buttons([{label:'VOLTAR AO MAPA',click:()=>{if(ui.host){ui.host.hidden=true;ui.host.element.hidden=true;}}},{label:'ACOMPANHAR OBRAS',click:()=>ui.host?.openMayorDesk('build','queue')}]);
     p.buttons([{label:'CÂMARA E ORÇAMENTO',click:()=>ui.host?.openMayorDesk('council')},{label:'HISTÓRICO DE ORDENS',click:()=>ui.host?.openMayorDesk('orders')}]);
+    p.buttons([{label:'COMPROMISSOS PÚBLICOS',click:()=>ui.host?.openMayorDesk('challenges')},{label:'ORGANIZAR CAMPANHA',click:()=>ui.host?.openMayorDesk('campaign')}]);
     p.heading('DECISÕES PENDENTES');
     const tasks=mayorDecisions(city);
     if(!tasks.length)p.note('Nenhuma decisão urgente. Acompanhe as obras e prepare a próxima eleição.');
@@ -102,7 +105,7 @@ export function renderMayorCampaign(ui,p) {
     const projects=publicProjects(city),page=Math.min(ui.mayorWorkPage||0,Math.max(0,Math.ceil(projects.length/8)-1));
     if(projects.length>8)p.buttons([{label:'ANTERIORES',click:()=>{ui.mayorWorkPage=Math.max(0,page-1);}},{label:'PRÓXIMAS',click:()=>{ui.mayorWorkPage=page+1;}}]);
     for(const project of projects.slice(page*8,page*8+8)){
-      p.record(`#${project.id} · ${project.name||city.buildingTypes[project.type]?.label||project.service}`,`${project.status} · prioridade ${project.priority||0} · pedra ${project.inventory?.pedra||0}/${project.stone||0} · trabalho ${Math.floor(project.labor||0)}/${project.requiredLabor||0}`,()=>ui.host?.openContract(project.id));
+      p.record(`#${project.id} · ${project.name||city.buildingTypes[project.type]?.label||project.service}`,`${project.status} · prioridade ${project.priority||0} · pedra ${project.inventory?.pedra||0}/${project.stone||0} · trabalho ${Math.floor(project.labor||0)}/${project.requiredLabor||0}`,()=>ui.host?.openMayorTarget({kind:'project',id:project.id}));
       p.buttons([[10,'BAIXA'],[100,'NORMAL'],[200,'URGENTE']].map(([value,label])=>({label,selected:project.priority===value,click:()=>act('priority',{projectId:project.id,value})})));
     }
     if(!projects.length)p.note('Nenhuma obra pública pendente.');

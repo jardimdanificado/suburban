@@ -30,7 +30,11 @@ test('mayor commands execute in worker and persist in full save export',{timeout
           worker.postMessage({type:'control',cityId:'mayor',paused:true,speed:1,observed:true});
           worker.postMessage({type:'command',cityId:'mayor',id:1,path:'mayorAction',args:['start',{}]});
         }else if(mirror.mayorCampaign&&!exporting){
-          exporting=true;worker.postMessage({type:'export-state',cityId:'mayor',id:5});
+          exporting=true;
+          worker.postMessage({type:'command',cityId:'mayor',id:2,path:'mayorAction',args:['challenge',{kind:'works'}]});
+          worker.postMessage({type:'command',cityId:'mayor',id:3,path:'mayorAction',args:['campaignControl',{mode:'manual'}]});
+          worker.postMessage({type:'step',cityId:'mayor'});
+          worker.postMessage({type:'export-state',cityId:'mayor',id:5});
         }
       }catch(error){reject(error);}
     });
@@ -38,6 +42,11 @@ test('mayor commands execute in worker and persist in full save export',{timeout
   const restored=new CityStateGraph().apply(saved).city;bindCityState(restored);
   assert.equal(restored.mayorCampaign.mayorId,mayorId);
   assert.equal(restored.mayorCampaign.status,'active');
+  assert(restored.mayorCampaign.governmentReview);
+  assert.equal(restored.minute,city.minute,'even a worker step cannot skip the pending government review');
+  assert.equal(restored.mayorCampaign.campaignControl,'manual');
+  assert.equal(restored.mayorCampaign.challenges[0].kind,'works');
+  assert.equal(restored.mayorCampaign.challenges[0].status,'active');
   assert.equal(restored.currency.supply(),restored.currency.netIssued());
   assert(restored.mayorAction('observe'));
 });

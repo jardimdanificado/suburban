@@ -1,3 +1,5 @@
+import {syncMayorReviews,selectReviewPromises,confirmMayorReview} from './city_mayor_decisions.js';
+import {acceptMayorChallenge,updateMayorChallenges} from './city_mayor_challenges.js';
 import {OFFICE_ONLY_TYPES,officeFloors,createMunicipalOffice} from './city_offices.js?v=office-demand-rollout-1';
 import {SECRETARIATS, secretarySkillScore} from './city_secretariats.js';
 import {canFarmVertically} from './city_farm_layout.js';
@@ -19,7 +21,7 @@ export function updateMayorCampaign(city) {
   // A vacancy alone is not a defeat: constitutional succession must resolve first.
   if(!mayor || mayor.entity.destroyed)return;
   s.mayorId=mayor.id;
-  if(mayor.political?.partyId===s.partyId)return;
+  if(mayor.political?.partyId===s.partyId){updateMayorChallenges(city);syncMayorReviews(city);return;}
   s.status='defeated';s.endedAt=city.minute;
   s.reason=`${s.partyName} perdeu a prefeitura. ${mayor.entity.properties.name} assumiu por outro partido.`;
   city.log(s.reason,'government',[mayor.id],{kind:'mayor-campaign-defeated',partyId:s.partyId});
@@ -259,15 +261,16 @@ function orderPublicFood(city) {
   for(const shipment of created)shipment.executiveInitiative=true;
   return {shipments:created.length};
 }
-function campaignRally(city) {
+function campaignRally(city,options={}) {
   const p=city.politics,election=p.active;
+  if(options.point&&(!Number.isFinite(options.point.x)||!Number.isFinite(options.point.y)))return city.fail('Ponto de campanha inválido.');
   if(!election||election.status!=='campaign')return city.fail('Não há campanha eleitoral em curso.');
   if(city.hour<7||city.hour>=20)return city.fail('Bandeiraços acontecem entre 7h e 20h.');
   const partyId=p.partyOfId(city.economy.mayorId)?.id,nomination=election.candidates?.find(item=>item.partyId===partyId);
   if(!nomination)return city.fail('O partido do prefeito não tem candidatura própria nesta eleição.');
   const s=city.mayorCampaign,hour=Math.floor(city.minute/60);
   if(s.lastRallyHour===hour)return city.fail('A militância já foi mobilizada nesta hora; aguarde o próximo horário.');
-  const participants=p.campaigns.rally(nomination,election);
+  const participants=p.campaigns.rally(nomination,election,options.point);
   if(!participants)return city.fail('Sem militantes, bandeiras ou ponto de rua disponíveis para o bandeiraço.');
   s.lastRallyHour=hour;
   return {participants,candidateId:nomination.citizenId,partyId};
@@ -283,6 +286,7 @@ export function mayorAction(city,action,options={}) {
     const mayor=city.society.citizen(city.economy.mayorId),party=p.party(mayor?.political?.partyId);
     if(!mayor||mayor.entity.destroyed||!party?.active)return city.fail('Aguarde um prefeito com partido em exercício.');
     city.mayorCampaign={version:2,mode:'play',status:'active',partyId:party.id,partyName:party.name,mayorId:mayor.id,startedAt:city.minute,orders:[],nextOrderId:1};
+    syncMayorReviews(city);
     record(city,'start',`O jogador assumiu a gestão de ${party.name}. Obras e serviços dependem dos recursos da cidade.`);
     return true;
   }
@@ -295,7 +299,33 @@ export function mayorAction(city,action,options={}) {
   const mayor=city.society.citizen(city.economy.mayorId);
   if(!mayor||mayor.entity.destroyed)return city.fail('Aguarde a posse do prefeito.');
   let result,details={};
-  if(action==='build'){
+  if(action==='reviewPromises'){
+    if(!['government','program'].includes(options.kind))return city.fail('Revisão desconhecida.');
+    const review=options.kind==='government'?s.governmentReview:s.programReview;
+    const metrics=options.metric&&review?(review.selected.includes(options.metric)?review.selected.filter(m=>m!==options.metric):[...review.selected,options.metric]):options.metrics;
+    result=selectReviewPromises(city,options.kind,metrics);
+  }else if(action==='confirmReview'){
+    if(!['government','program'].includes(options.kind))return city.fail('Revisão desconhecida.');
+    result=confirmMayorReview(city,options.kind);
+  }else if(action==='challenge'){
+    result=acceptMayorChallenge(city,options.kind);if(!result)return result;details={challengeId:result.id};
+  }else if(action==='campaignControl'){
+    if(!['manual','automatic'].includes(options.mode))return city.fail('Controle de campanha inválido.');
+    s.campaignControl=options.mode;result=true;
+  }else if(action==='campaignMaterial'){
+    const election=p.active,n=election?.candidates?.find(n=>n.partyId===s.partyId);
+    if(election?.status!=='campaign'||!n)return city.fail('Sem candidatura própria em campanha.');
+    if(!['pamphlet','flag','banner','paint'].includes(options.kind))return city.fail('Material de campanha inválido.');
+    const materials=p.campaigns.getMaterials(),firstId=materials.nextId;
+    materials.plan(election,{candidateId:n.citizenId,kind:options.kind});
+    result=materials.missions.find(m=>m.id>=firstId&&m.candidateId===n.citizenId&&m.kind===options.kind);
+    if(!result)return city.fail('Sem contratação: confira horário (7h–22h), material, caixa partidário, trabalhador, destino e limite diário.');
+    details={missionId:result.id};
+  }else if(action==='pauseWork'){
+    const project=publicProjects(city).find(p=>p.id===options.projectId);
+    if(!project||typeof options.paused!=='boolean')return city.fail('Escolha uma obra pública pendente.');
+    project.paused=options.paused;result=true;details={projectId:project.id,paused:project.paused};
+  }else if(action==='build'){
     if(OFFICE_ONLY_TYPES.has(options.type))return city.fail('Esta atividade precisa de um andar empresarial; a contratação direta deste modo atende instalações próprias.');
     const vertical=options.type==='farm'&&options.vertical===true?true:null,floors=Number.isInteger(options.floors)?options.floors:null;
     result=p.startPublicWork(options.type,options.crop||'milho',{vertical,floors,plotId:options.plotId??null});
@@ -427,18 +457,18 @@ export function mayorAction(city,action,options={}) {
     if(!result)return result;
     details=result;
   }else if(action==='rally'){
-    result=campaignRally(city);
+    result=campaignRally(city,options);
     if(!result)return result;
     details=result;
   }else if(action==='sanction'||action==='veto'){
-    const bill=p.council.bills.find(b=>b.id===options.billId&&b.status==='awaiting-sanction');
+    const bill=p.council.bills.find(b=>b.id===options.billId&&b.status==='awaiting-sanction'&&city.minute<(b.sanctionAt??Infinity));
     if(!bill)return city.fail('Projeto indisponível para sanção ou veto.');
     if(action==='veto')result=p.vetoBill(bill.id);
-    else {p.council.execute(bill);result=true;}
+    else {bill.sanctionedBy=mayor.id;bill.sanctionedAt=city.minute;p.council.execute(bill);result=bill.status!=='awaiting-sanction';}
     details={billId:bill.id};
   }else return city.fail('Ordem de prefeito desconhecida.');
   if(!result)return result;
-  const label={build:'contratar obra',priority:'alterar prioridade',fund:'destinar custeio',service:'contratar serviço',bill:'encaminhar proposta à Câmara',decree:'emitir decreto',appoint:'nomear secretário',dismiss:'exonerar secretário',nationalize:'encaminhar estatização',privatize:'encaminhar privatização',road:'contratar acesso viário',expand:'contratar ampliação',firm:'abrir empresa municipal',office:'instalar atividade em andar municipal',housing:'contratar habitação social',paving:'priorizar pavimentação',roadRepair:'conservar vias',maintain:'contratar manutenção predial',offerShares:'ofertar participações dentro da cota',dividend:'transferir resultado de estatal',marketRecovery:'recuperar mercado local',rentVoucher:'conceder vale-aluguel',housingCredit:'conceder crédito habitacional',equityLoan:'conceder crédito de participação em estatal',lighting:'instalar iluminação pública',restock:'comprar alimentos para refeições públicas',rally:'realizar bandeiraço',sanction:'sancionar projeto',veto:'vetar projeto'}[action];
+  const label={reviewPromises:'escolher promessas',confirmReview:'confirmar decisões de governo',challenge:'assumir compromisso público',campaignControl:'definir controle da campanha',campaignMaterial:'contratar propaganda partidária',pauseWork:'alterar execução de obra',build:'contratar obra',priority:'alterar prioridade',fund:'destinar custeio',service:'contratar serviço',bill:'encaminhar proposta à Câmara',decree:'emitir decreto',appoint:'nomear secretário',dismiss:'exonerar secretário',nationalize:'encaminhar estatização',privatize:'encaminhar privatização',road:'contratar acesso viário',expand:'contratar ampliação',firm:'abrir empresa municipal',office:'instalar atividade em andar municipal',housing:'contratar habitação social',paving:'priorizar pavimentação',roadRepair:'conservar vias',maintain:'contratar manutenção predial',offerShares:'ofertar participações dentro da cota',dividend:'transferir resultado de estatal',marketRecovery:'recuperar mercado local',rentVoucher:'conceder vale-aluguel',housingCredit:'conceder crédito habitacional',equityLoan:'conceder crédito de participação em estatal',lighting:'instalar iluminação pública',restock:'comprar alimentos para refeições públicas',rally:'realizar bandeiraço',sanction:'sancionar projeto',veto:'vetar projeto'}[action];
   const suffix=action==='appoint'?` ${details.officeShort}: ${city.society.citizen(details.citizenId)?.entity.properties.name||''}.`:action==='dismiss'?` ${details.officeShort}.`:'';
   record(city,action,`Ordem de governo: ${label}.${suffix}`,details);
   return result;
