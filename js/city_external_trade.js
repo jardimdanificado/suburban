@@ -1,11 +1,18 @@
+import {makeBuildingName} from './city_names.js';
 import {economicPolicy} from './city_economic_policies.js';
 import {INDUSTRIES} from './city_industries.js';
 import {inventoryFree} from './city_inventory.js';
 import {ensureExternalAccount} from './city_currency.js';
 // External buyers and suppliers use an unlimited account outside the local money supply.
 export const EXTERNAL_TRADE_RULES=Object.freeze({minimumFirmStock:24,maximumPerSale:12,maximumSalesPerHour:4,priceFactor:1.1,importPriceFactor:2.25,maximumImportQuantity:24});
-const FOREIGN_PART_BRANDS=Object.freeze(['Koyo Motion','Senda Norte','Meridian Works','Rivermark Mobility','Lumen Components','Vento Austral','Orbe Technik','Tamarind Roadworks']);
-export const fictionalForeignBrand=good=>FOREIGN_PART_BRANDS[[...good].reduce((n,c)=>Math.imul(n^c.charCodeAt(0),16777619)>>>0,2166136261)%FOREIGN_PART_BRANDS.length];
+const foreignBrands=new Map();
+export function fictionalForeignBrand(good){
+ if(foreignBrands.has(good))return foreignBrands.get(good);
+ // Keep brands stable per good without consuming the simulation's random stream.
+ let seed=[...good].reduce((n,c)=>Math.imul(n^c.charCodeAt(0),16777619)>>>0,2166136261);
+ const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+ const name=makeBuildingName({random},new Set(),'').trim();foreignBrands.set(good,name);return name;
+}
 function importDepotArrival(city,anchor,current=null){
  if(!anchor?.door)return {door:current?{...current}:null,direction:{x:1,y:0}};
  const horizontal=(anchor.rotation||0)%2===0,valid=point=>{

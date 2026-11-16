@@ -23,7 +23,7 @@ export class CityOfficialJournal {
     const city=this.city;
     const existing=city.buildings.find(b=>b.officialJournal&&!b.entity.destroyed)||city.buildings.find(b=>b.type==='newsroom'&&b.municipal&&!b.entity.destroyed);
     if(existing){
-      existing.officialJournal=true;existing.newsGenre='política';existing.entity.properties.name='Jornal Oficial do Município';
+      existing.officialJournal=true;existing.newsGenre='política';
       const target=city.currency.price(40000),available=Math.max(0,city.treasury-city.welfare.conditions().reserve);
       if(existing.balance<target&&available>0)city.transfer('treasury',existing.accountId,Math.min(target-existing.balance,available),'Custeio do Jornal Oficial');
       return;
@@ -41,10 +41,10 @@ export class CityOfficialJournal {
   print(building,pages,editor){
     const city=this.city,library=city.publications,edition=this.nextEdition++;
     const doc=library.stock(building,'jornais',pages);
-    Object.assign(doc,{sealed:true,official:true,genre:'política',editionKey:`oficial:${edition}`,title:`Jornal Oficial do Município · edição ${edition} · dia ${city.day}`,editorId:editor.id});
+    Object.assign(doc,{sealed:true,official:true,genre:'política',editionKey:`oficial:${edition}`,title:`${building.entity.properties.name} · edição ${edition} · dia ${city.day}`,editorId:editor.id});
     for(const record of this.records.slice(this.printedThrough,this.printedThrough+library.capacity(doc))){
       const entry=Object.freeze({id:library.nextEntryId++,type:'event',truth:true,text:record.message,sourceEventId:record.id,sourceMinute:record.minute,eventId:record.id,
-        authorId:editor.id,authorName:'Jornal Oficial do Município',writtenAt:city.minute,officialRecord:record,
+        authorId:editor.id,authorName:building.entity.properties.name,writtenAt:city.minute,officialRecord:record,
         sourceSnapshot:Object.freeze({id:record.id,minute:record.minute,message:record.message,kind:'government',category:'government',truth:true,billId:record.billId,partyId:record.partyId,electionId:record.electionId,termId:record.termId,data:{kind:record.action,votes:record.votes,absences:record.absences},citizenIds:record.votes.map(v=>v.citizenId),subjects:[]})});
       doc.entries.push(entry);library.eventIndex.set(record.id,{documentId:doc.id,entry});this.printedThrough++;
     }

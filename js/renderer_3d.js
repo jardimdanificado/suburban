@@ -37,7 +37,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 
 import * as THREE from "https://esm.sh/three@0.160.0";
 import {NightLighting} from "./night_lighting.js?v=local-night-lights-1";
-import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
+import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds,citizenBuildingSurfaceHeight } from "./city_building_geometry.js";
 import { syncCityBuildings } from "./city_renderer_3d.js?v=street-graffiti-visible-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
@@ -7228,8 +7228,8 @@ export class RCT3DRenderer {
             if(neighborIsStone&&ny*this.mapWidth+nx<ty*this.mapWidth+tx)continue;
             const otherStone=neighborIsStone?terrainTileSurfaceVertices(world,nx,ny):null;
             const otherSurface=otherStone?null:streetSurfaceCorners(world,nx,ny);
-            // Paved streets own the complete retaining panel at this boundary.
-            if(otherSurface&&roadRailingAllowed(world,nx,ny))continue;
+            // Streets and sidewalk shelves own the complete retaining panel here.
+            if(otherSurface)continue;
             const [otherIndexA,otherIndexB]=neighborEdgeIndices[edge.side];
             const offsetA=otherSurface?{x:0,z:0}:terrainVertexOffset(world,...edge.a),offsetB=otherSurface?{x:0,z:0}:terrainVertexOffset(world,...edge.b);
             const lowA=otherStone?.[otherIndexA]||[edge.a[0]+offsetA.x,otherSurface?otherSurface[otherIndexA]:terrainCornerHeight(world,...edge.a),edge.a[1]+offsetA.z];
@@ -8122,10 +8122,11 @@ export class RCT3DRenderer {
         surfaceH = this.getTileSurfaceHeight(map, Math.floor(e.x), Math.floor(e.y), 1, 1);
       } else {
         if(cityCitizen&&indoorLocation&&interiorBuilding){
-          const inside=renderX>=interiorBuilding.entity.x&&renderX<interiorBuilding.entity.x+interiorBuilding.width&&renderY>=interiorBuilding.entity.y&&renderY<interiorBuilding.entity.y+interiorBuilding.depth;
+          const shell=this.cityMeshes?.get(interiorBuilding.officeTenantOf??interiorBuilding.entity.id);
           // Keep the citizen on the outdoor slope until they cross the doorway;
           // the raised foundation only applies to positions inside the shell.
-          surfaceH=inside?(interiorBuilding.terrain?.base??this.getSurfaceElevation(map,renderX,renderY)):this.getSurfaceElevation(map,renderX,renderY);
+          // Occupied rooms also include balconies outside the shell footprint.
+          surfaceH=citizenBuildingSurfaceHeight(interiorBuilding,indoorLocation,{x:renderX,y:renderY},this.getSurfaceElevation(map,renderX,renderY),shell?.position.y??interiorBuilding.terrain?.base);
         }
         else if(cityCitizen){
           const cache=this._entitySurfaceCache??=new WeakMap(),cached=cache.get(e);

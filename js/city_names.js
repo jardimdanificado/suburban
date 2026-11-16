@@ -18,7 +18,16 @@ function word(city, { names = false, gender = '' } = {}) {
     const result = names ? clean : converterParaSingular(clean.toLocaleLowerCase('pt-BR'));
     if (result.length >= 3) return capitalize(result);
   }
-  return names ? 'Pioneiro' : 'Horizonte';
+  // Deterministic vocabulary scan keeps bounded random sampling from inventing a fixed fallback.
+  for (const raw of source) {
+    const clean = raw.trim().normalize('NFC');
+    if (!/^[\p{L}]{3,16}$/u.test(clean) || filialTerms.has(clean.toLocaleLowerCase('pt-BR'))) continue;
+    const category = classificarPalavra(clean);
+    if (gender && category !== 'neutro' && category !== gender) continue;
+    const result = names ? clean : converterParaSingular(clean.toLocaleLowerCase('pt-BR'));
+    if (result.length >= 3) return capitalize(result);
+  }
+  throw new RangeError('Vocabulário sem palavras válidas para gerar nome');
 }
 function combinedName(city, first, gender = '') {
   const second = word(city, { names: true, gender });
@@ -60,8 +69,9 @@ export function makeBuildingName(city, used, label) {
     const name = `${label} ${title}`;
     if (!used.has(name)) {used.add(name);return name;}
   }
+  const stem = word(city);
   for (let serial = 1; ; serial++) {
-    const name = `${label} Horizonte ${serial}`;
+    const name = `${label} ${stem} ${serial}`;
     if (!used.has(name)) {used.add(name);return name;}
   }
 }

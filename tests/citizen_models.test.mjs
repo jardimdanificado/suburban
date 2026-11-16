@@ -221,3 +221,15 @@ test('rapid movement advances adjacent poses without the old slow clock throttle
  e.x+=1.25;draw(.1);assert.equal(pose(),'run:2');
  for(let i=0;i<10;i++)draw(.1);assert.equal(pose(),'run:2');
 });
+
+test('seated bench occupants keep their pose and facing during delayed position interpolation',async()=>{
+ const {model}=await models(),e=person(91),c=e.properties.citizen;
+ model.begin(.05,1);model.add(e,2);model.end();
+ c.task='sit';c.seated=true;c.furnitureUse={type:'bench',seated:true};c.facingTarget={x:1.02,y:0};e.x=.02;
+ model.begin(.05,1);model.add(e,2);model.end();
+ const seated=[...model.batches.entries()].find(([key,b])=>key.startsWith('sentado_no_banco:')&&b.count);
+ assert(seated,'interpolation must not replace a confirmed seated pose with running');
+ assert.equal(seated[1].mesh.matrices[0].angle,Math.PI/2);
+ c.path=[{x:2,y:0}];model.begin(.05,1);model.add(e,2);model.end();
+ assert([...model.batches.entries()].some(([key,b])=>key.startsWith('run:')&&b.count),'an active route still takes precedence');
+});

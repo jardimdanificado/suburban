@@ -500,7 +500,7 @@ export class CityDevelopment {
     const p = this.plots.find(p => p.id === project.plotId), city = this.city;
     const b = city.addBuilding(project.type, p.x, p.y, { width: project.width ?? p.width, depth: project.depth ?? p.depth, floors: project.floors, plotId: p.id, ownerAccountId: project.accountId, kind: project.kind, crop:project.crop, materialSource: project,rotation:project.rotation??0 });
     if(b&&project.micro)b.micro=true;
-    if(b&&project.officialJournal){b.officialJournal=true;b.newsGenre='política';b.entity.properties.name='Jornal Oficial do Município';}
+    if(b&&project.officialJournal){b.officialJournal=true;b.newsGenre='política';}
     if(b&&project.equityPartners)b.equityPartners=project.equityPartners;
     if (!b) { project.status = 'blocked'; project.error = city.lastError; return null; }
     city.reputation.completed(city.building(project.builderId), null, 'edifício concluído', {projectId:project.id});

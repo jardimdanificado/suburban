@@ -19,7 +19,7 @@ export class CityBank {
       const bank=rentOffice(city,tower.id,floor.floor,'bank',founder.id);
       if(!bank){city.transfer(founder.accountId,'founding-bank-investors',capital,'Estorno de aporte bancário');continue;}
       city.transfer(founder.accountId,bank.accountId,Math.max(0,founder.balance-before),'Integralização de capital bancário privado',{buildingId:bank.id});
-      bank.foundingPrivateBank=true;bank.entity.properties.name=`Banco ${i===0?'Horizonte':'Pioneiro'}`;
+      bank.foundingPrivateBank=true;
       city.log(`${bank.entity.properties.name} iniciou operações com capital privado externo, sem consumir o tesouro.`,'business',[founder.id],{kind:'private-bank-founded',buildingId:bank.id,amount:capital});
     }
   }

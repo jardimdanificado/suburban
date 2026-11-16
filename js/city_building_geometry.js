@@ -47,3 +47,10 @@ export function buildingInteriorEntrance(b){
   const x=b.entity.x+unit.x+.5,y=b.entity.y+unit.y+.5,centerX=b.entity.x+b.width/2,centerY=b.entity.y+b.depth/2,dx=centerX-x,dy=centerY-y,distance=Math.hypot(dx,dy)||1;
   return {x:x+dx/distance*.35,y:y+dy/distance*.35,z:0};
 }
+
+/** Use the visible shell base for occupants, including balconies beyond its footprint. */
+export function citizenBuildingSurfaceHeight(building,location,position,ground,visualBase=building.terrain?.base){
+  const inside=position.x>=building.entity.x&&position.x<building.entity.x+building.width&&position.y>=building.entity.y&&position.y<building.entity.y+building.depth;
+  const usingRoom=location.unitId!=null&&!location.exiting&&!location.path?.length;
+  return inside||usingRoom?visualBase??ground:ground;
+}

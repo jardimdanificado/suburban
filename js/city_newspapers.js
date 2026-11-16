@@ -1,3 +1,4 @@
+import {gerarFraseTematica} from './gerador_frases.js';
 export const NEWS_GENRES=['política','cotidiano','fofocas','alimentação','moda','economia','cultura','esportes'];
 const interests=(c,g)=>((Math.imul(c.id+5,g.length*97)>>>0)%100)/100;
 export function newsroomGenre(b){return b.newsGenre||NEWS_GENRES[b.id%NEWS_GENRES.length];}
@@ -16,7 +17,7 @@ export function printNewspaper(city,b,pages,editor){
     const words={política:/govern|elei|corrup|prefeit|vereador|partid|promess|debate|entrevista/i,cotidiano:/moradia|fome|obra|morreu|nasceu|inaugur|estrada/i,fofocas:/romanc|amizad|inimig|casou|separ|escând|famil/i,alimentação:/colheu|alimenta|comida|marmita|cozinha|fome/i,moda:/roupa|tecido|confecção|loja/i,economia:/empresa|infla|preço|negócio|produção|emprego/i,cultura:/livro|publica|papel|cultura/i,esportes:/esport|jogo|lazer/i};
     const culturalSkill=city.politics?.secretaries?.find(row=>row.officeId==='education_culture')?.skill||0;
     b.newsArticles=[...events].filter(e=>e?.message&&!['finance','sale','publication'].includes(e.kind)&&city.minute-(e.minute||0)<7*1440).map(e=>({e,score:(words[genre].test(e.message)?10:0)+(/elei|inaugur|morreu|escând|promess|fome/i.test(e.message)?3:0)})).filter(r=>r.score>0).sort((a,b)=>b.score-a.score||(b.e.minute||0)-(a.e.minute||0)).slice(0,5+Math.floor(culturalSkill/25)).map(({e})=>({sourceEventId:e.id,sourceMinute:e.minute,text:e.message,truth:e.objectiveTruth??e.truth??null,type:'event',targetId:e.targetId??null,corruptionCaseId:e.corruptionCaseId??null}));
-    if(!b.newsArticles.length)b.newsArticles=[{type:'information',text:`Boletim de ${genre}: ${city.citizens.filter(c=>!c.entity.destroyed).length} moradores; esta edição acompanha os acontecimentos da cidade.`,truth:true}];
+    if(!b.newsArticles.length)b.newsArticles=[{type:'information',text:gerarFraseTematica(genre==='fofocas'?'familia':genre,{random:()=>city.random(),complexidade:'simples'}),truth:null}];
     b.newsSponsored=[];const election=city.politics.active;
     if(election?.status==='campaign')for(const n of election.candidates.slice((b.id+city.day)%Math.max(1,election.candidates.length)).concat(election.candidates).slice(0,2)){
       if(b.newsSponsored.some(a=>a.candidateId===n.citizenId))continue;

@@ -45,3 +45,13 @@ test('exiting and moving indoor occupants keep their existing visibility rules',
  location.exiting=false;location.path=[{}];assert.equal(visible(renderer,location),false);
  assert.equal(visible(renderer,null),false);
 });
+
+test('raised house occupants follow the visible shell base, including occupied balconies',async()=>{
+ const {citizenBuildingSurfaceHeight:height}=await import('../js/city_building_geometry.js');
+ const building={entity:{x:10,y:10},width:3,depth:3,terrain:{base:2}};
+ assert.equal(height(building,{unitId:1,path:[]},{x:11,y:11},.5,4),4);
+ assert.equal(height(building,{unitId:1,path:[]},{x:13.2,y:11},.5,4),4);
+ assert.equal(height(building,{unitId:null,path:[{}]},{x:13.2,y:11},.5,4),.5);
+ assert.equal(height(building,{unitId:1,exiting:true,path:[{}]},{x:13.2,y:11},.5,4),.5);
+ assert.equal(height(building,{unitId:1,path:[]},{x:11,y:11},.5),2);
+});

@@ -139,3 +139,17 @@ test('retaining walls meet the rendered stone shelf instead of averaged ground',
   const stone=terrainTileSurfaceCorners(world,5,4),face=roadRetainingFaces(world,5,5).find(face=>face.side===0);
   assert(face);near(face.highA,stone[3]);near(face.highB,stone[2]);
 });
+
+
+test('sidewalk shelves beside dirt roads still close every exposed bank edge',()=>{
+  const world=fixture();world.sidewalkTiles=new Set([4*world.width+5]);
+  for(let x=2;x<10;x++)world.setTile(x,5,TILE_ROAD_GRASS);
+  for(let x=0;x<12;x++)world.setTile(x,3,TILE_HILL);
+  const surface=streetSurfaceCorners(world,5,4);
+  assert(surface);
+  const faces=roadRetainingFaces(world,5,4),north=faces.find(face=>face.side===0);
+  assert(north,'sidewalk shelf must close its bank even without adjacent paving');
+  near(north.lowA,surface[0]);near(north.lowB,surface[1]);
+  near(north.highA,terrainCornerHeight(world,5,4));near(north.highB,terrainCornerHeight(world,6,4));
+  assert.deepEqual(roadRetainingFaces(world,5,5),[],'dirt road itself remains natural');
+});

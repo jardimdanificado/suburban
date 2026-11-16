@@ -428,6 +428,7 @@ export class CityCitizenModels {
     const moved=dx*dx+dy*dy>1e-7;
      if(moved){motion.angle=Math.atan2(dx,dy);if(!this.animationPaused)motion.walkDistance+=Math.hypot(dx,dy);motion.x=x;motion.y=y;}
     if(c.ridingVehicleId&&Number.isFinite(vehicleAngle))motion.angle=vehicleAngle+(c.ridingAsPassenger?Math.PI/2:0);
+    if(!citizenHasPath(c)&&!c.indoorLocation?.path?.length&&c.facingTarget)motion.angle=Math.atan2(c.facingTarget.x-x,c.facingTarget.y-y);
     if(c.fishingPose)motion.angle=Math.atan2(c.fishingPose.water.x-x,c.fishingPose.water.y-y);
     let renderX=x,renderY=y,renderAngle=motion.angle;
     // Vehicle entities already receive bridge interpolation; smoothing riders
@@ -445,7 +446,8 @@ export class CityCitizenModels {
     if(moved)advanceCitizenGait(motion,this.animationPaused);
     // Keep the travel pose for the full route, including frames between
     // simulation movement updates. A sit task can be assigned before arrival.
-    const traveling=moved||citizenHasPath(c)||!!c.indoorLocation?.path?.length||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding';
+    const settledFurniture=!!c.furnitureUse?.seated||c.furnitureUse?.pose==='lying';
+    const traveling=moved&&!settledFurniture||citizenHasPath(c)||!!c.indoorLocation?.path?.length||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding';
     const sleeping=citizenIsSleeping(c),lying=!sleeping&&!traveling&&c.furnitureUse?.pose==='lying',clip=citizenAnimation(c,traveling),actionState=clip==='murro'||clip==='chute'||clip==='derrotado',actionToken=c.combatAnimation?.sequence??c.combatReaction?.sequence??c.unconsciousUntil??null;
     // The seated OBJ pose puts the legs in the same vertical bands used by
     // the standing-body fat mask. Cap its morph so those vertices do not
