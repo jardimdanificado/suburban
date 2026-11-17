@@ -16,8 +16,22 @@ export function boatRouteTime(city,start,path){
  for(const point of path){total+=Math.hypot(point.x-previous.x,point.y-previous.y)*roadTravelCost(tileAt(city.world,Math.floor(point.x),Math.floor(point.y)))/4;previous=point;}
  return total;
 }
+// Quotes for different passengers and bicycles repeatedly inspect the same
+// terrain in one minute. Keep geometry separate from ownership/reservations.
+// Weak ownership also keeps these temporary search results out of save graphs.
+const terrainQuoteCaches=new WeakMap();
+function terrainQuotes(city){
+ const revision=`${city.minute}:${city.world.width}:${city.world.height}:${city.world.revision||0}:${city.structureRevision||0}:${city.obstacleRevision||0}:${city.occupied.size}`;
+ let cache=terrainQuoteCaches.get(city);
+ if(!cache||cache.revision!==revision||cache.map!==city.world.map||cache.occupied!==city.occupied){
+  cache={revision,map:city.world.map,occupied:city.occupied,land:new Map(),crossings:new Map()};terrainQuoteCaches.set(city,cache);
+ }
+ return cache;
+}
+function rememberQuote(cache,key,value){if(cache.size>=512)cache.delete(cache.keys().next().value);cache.set(key,value);return value;}
 function landRoute(city,start,goal,mode){
- const path=findTerrainPath(city.world,start,goal,city.occupied,{preferRoads:false});
+ const cache=terrainQuotes(city).land,key=`${start.x},${start.y}:${goal.x},${goal.y}`;
+ const path=cache.has(key)?cache.get(key):rememberQuote(cache,key,findTerrainPath(city.world,start,goal,city.occupied,{preferRoads:false}));
  if(path===null)return null;
  const points=path.map(p=>({...p,transportMode:mode}));
  if(!points.length||Math.hypot(points.at(-1).x-goal.x,points.at(-1).y-goal.y)>.001)points.push({x:goal.x,y:goal.y,transportMode:mode});
@@ -50,6 +64,12 @@ function push(heap,cost,key){let i=heap.length;heap.push([cost,key]);while(i){co
 function pop(heap){const root=heap[0],last=heap.pop();if(heap.length){let i=0;while(i*2+1<heap.length){let child=i*2+1;if(child+1<heap.length&&heap[child+1][0]<heap[child][0])child++;if(heap[child][0]>=last[0])break;heap[i]=heap[child];i=child;}heap[i]=last;}return root;}
 // Owned rigs may launch, land and relaunch without a port. Other boats stay afloat after disembarkation.
 function crossingRoute(city,boat,bike,goal,{relocate=false,limitSeconds=Infinity}={}){
+ const cache=terrainQuotes(city).crossings;
+ const key=`${boat.boatClass}:${boat.pickLength||2.8}:${boat.pickWidth||.75}:${bike?.good}:${Math.floor(boat.x)},${Math.floor(boat.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}:${relocate}:${limitSeconds}`;
+ if(cache.has(key))return cache.get(key);
+ return rememberQuote(cache,key,computeCrossingRoute(city,boat,bike,goal,{relocate,limitSeconds}));
+}
+function computeCrossingRoute(city,boat,bike,goal,{relocate=false,limitSeconds=Infinity}={}){
  const {width,height}=city.world,size=width*height,sx=Math.floor(boat.x),sy=Math.floor(boat.y),gx=Math.floor(goal.x),gy=Math.floor(goal.y);
  if([sx,gx].some(x=>x<0||x>=width)||[sy,gy].some(y=>y<0||y>=height))return null;
  const towing=!!bike,start=sy*width+sx,goalCell=gy*width+gx,startedWater=water(city,boat.x,boat.y);

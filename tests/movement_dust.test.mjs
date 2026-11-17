@@ -8,8 +8,12 @@ function harness({tile=8,vehicle=null}={}){
   class BufferGeometry{constructor(){this.attributes={};}setAttribute(name,attribute){this.attributes[name]=attribute;}setDrawRange(start,count){this.drawRange={start,count};}getAttribute(name){return this.attributes[name];}}
   class ShaderMaterial{constructor(options){Object.assign(this,options);}}
   class Points{constructor(geometry,material){this.geometry=geometry;this.material=material;}}
-  const THREE={Group,BufferGeometry,BufferAttribute,ShaderMaterial,Points};
-  const group=new Group(),renderer={entityGroup:group,currentMap:[],getSurfaceElevation(){return 1;}};
+  class Vector3{constructor(x=0,y=0,z=0){this.set(x,y,z);}set(x,y,z){this.point=[x,y,z];return this;}normalize(){return this;}}
+  class Color{constructor(value=0xffffff){this.value=value;}setRGB(r,g,b){this.r=r;this.g=g;this.b=b;return this;}}
+  const THREE={Group,BufferGeometry,BufferAttribute,ShaderMaterial,Points,Vector3,Color};
+  const group=new Group(),renderer={entityGroup:group,currentMap:[],getSurfaceElevation(){return 1;},
+    sunLight:{color:{r:1,g:1,b:1},intensity:1.4,position:{x:40,y:80,z:50},target:{position:{x:0,y:0,z:0}}},
+    ambientLight:{color:{r:.86,g:.91,b:.96},intensity:.9}};
   const world={width:100,height:100,getTile(){return tile;}};
   const entity={id:1,x:5,y:5,properties:vehicle?{cityVehicle:{good:vehicle,driverId:2,angle:0}}:{citizen:{}}};
   return {THREE,group,renderer,world,entity,step(distance,dt){entity.x+=distance;syncMovementDust(THREE,renderer,world,[entity],null,dt);},field(){return group.children[0].children[0];}};
@@ -33,7 +37,7 @@ test('dust can be disabled',()=>{
   const h=harness({vehicle:'bicicleta'});
   h.step(0,.1);h.step(.4,.1);
   assert.equal(h.group.children[0].visible,true);
-  syncMovementDust(h.THREE,h.renderer,h.world,[h.entity],null,.1,1,false);
+  syncMovementDust(h.THREE,h.renderer,h.world,[h.entity],null,.1,false);
   assert.equal(h.group.children[0].visible,false);
 });
 

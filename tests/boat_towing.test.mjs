@@ -16,6 +16,78 @@ function fixture({bike=true,boatOnLand=true,kind='canoe'}={}){
 }
 function finish(city,person,max=2000){let modes=new Set(),positions=[];for(let i=0;i<max&&(person.path.length||person.localBoatTrip);i++){modes.add(person.path[0]?.transportMode);advanceLocalBoatTrip(city,person,.05);const boat=city.vehicles.units.get(2);positions.push({x:boat.x,y:boat.y});}assert.equal(person.path.length,0);assert.equal(person.localBoatTrip,null);return {modes,positions};}
 
+test('different passenger quotes reuse terrain searches and invalidate them after an obstacle edit',()=>{
+ const {city,person,boat,goal}=fixture();
+ const getTile=city.world.getTile;let reads=0;
+ city.world.getTile=function(...args){reads++;return getTile.apply(this,args);};
+ const first=planBoatTrip(city,person.entity,goal,{boat,relocate:true}),firstReads=reads;
+ assert.ok(first);
+ person.id=7;reads=0;
+ const second=planBoatTrip(city,person.entity,goal,{boat,relocate:true});
+ assert.deepEqual(second,first);
+ assert.ok(reads<firstReads/4,`expected geometry reuse: ${reads} versus ${firstReads} tile reads`);
+ // Clearing a consumer's array must not damage the cached geometry.
+ second.length=0;person.id=8;reads=0;
+ assert.deepEqual(planBoatTrip(city,person.entity,goal,{boat,relocate:true}),first);
+ for(let y=0;y<city.world.height;y++)city.occupied.add(`8,${y}`);
+ city.obstacleRevision++;person.id=9;
+ assert.equal(planBoatTrip(city,person.entity,goal,{boat,relocate:true}),null);
+});
+
+function incrementalRelocationFixture(){
+ const f=fixture({boatOnLand:false}),{city,person,boat}=f;
+ for(let y=0;y<24;y++)for(let x=12;x<18;x++)city.world.map[y*32+x]=TILE_WATER;
+ for(let y=3;y<7;y++)for(let x=3;x<7;x++)city.world.map[y*32+x]=TILE_WATER;
+ boat.x=4.5;boat.y=6.5;person.entity.x=10.5;person.accountId='commuter';
+ person.task='work';person.targetId=person.jobId=17;
+ const job={id:17,active:true,door:f.goal,accountId:'job',entity:{destroyed:false}};
+ city.building=id=>id===17?job:null;city.buildings=[job];city.minute=480;
+ const operator={id:8,accountId:boat.ownerAccountId,businessIds:[],entity:{x:7.5,y:12.5,properties:{}},task:null,path:[]};
+ operator.entity.properties.citizen=operator;city.citizens.push(operator);
+ city.society.citizen=id=>city.citizens.find(c=>c.id===id);
+ return {...f,operator,job};
+}
+
+test('budgeted relocation resumes across minutes and eventually reserves a real rig',async()=>{
+ const {dispatchBoatRelocations}=await import('../js/city_boat_relocation.js');
+ const {city,operator,boat}=incrementalRelocationFixture();
+ const findPath=city.findPath;let searches=0;
+ city.findPath=function(...args){searches++;return findPath.apply(this,args);};
+ assert.equal(dispatchBoatRelocations(city,{maxSearches:1}),false);
+ assert.equal(searches,1);assert.equal(operator.localBoatTrip,undefined);
+ city.minute++;
+ assert.equal(dispatchBoatRelocations(city,{maxSearches:1}),false);
+ assert.equal(searches,2);assert.equal(operator.localBoatTrip,undefined);
+ let dispatched=false;
+ for(let i=0;i<100&&!dispatched;i++){city.minute++;dispatched=dispatchBoatRelocations(city,{maxSearches:1});}
+ assert.equal(dispatched,true);assert.equal(operator.task,'boat-relocation');
+ assert.equal(operator.localBoatTrip.boatId,boat.id);
+});
+
+test('pending relocations recheck operators, demand and hull ownership before dispatch',async()=>{
+ const {dispatchBoatRelocations}=await import('../js/city_boat_relocation.js');
+ for(const change of [f=>{f.operator.sleep={active:true};},f=>{f.job.active=false;},f=>{f.boat.ownerAccountId='another-owner';},f=>{f.boat.condition=0;}]){
+  const f=incrementalRelocationFixture();
+  assert.equal(dispatchBoatRelocations(f.city,{maxSearches:1}),false);
+  change(f);
+  for(let i=0;i<100;i++){f.city.minute++;assert.equal(dispatchBoatRelocations(f.city,{maxSearches:1}),false);}
+  assert.equal(f.operator.localBoatTrip,undefined);assert.equal(f.boat.driverId,undefined);
+ }
+});
+
+test('terrain changes discard a pending relocation before another search runs',async()=>{
+ const {dispatchBoatRelocations}=await import('../js/city_boat_relocation.js');
+ const {city}=incrementalRelocationFixture();
+ const findPath=city.findPath;let searches=0;
+ city.findPath=function(...args){searches++;return findPath.apply(this,args);};
+ dispatchBoatRelocations(city,{maxSearches:1});assert.equal(searches,1);
+ city.obstacleRevision++;city.minute++;
+ assert.equal(dispatchBoatRelocations(city,{maxSearches:1}),false);
+ assert.equal(searches,1,'the stale job must not continue');
+ city.minute=490;dispatchBoatRelocations(city,{maxSearches:1});
+ assert.equal(searches,2,'the next planning interval starts a fresh job');
+});
+
 test('an owned canoe is retrieved, towed, launched across an inland lake and brought to the destination',()=>{
  const {city,person,boat,cycle,goal}=fixture();
  person.path=planBoatTrip(city,person.entity,goal);assert(person.path);assert(person.path.some(p=>p.transportMode==='tow'));assert(person.path.some(p=>p.transportMode==='sail'));

@@ -1,5 +1,5 @@
 // Fine grains behind moving land vehicles, on any land surface.
-import {DustField,renderGrains} from './dust_field.js';
+import {DustField,renderGrains} from './dust_field.js?v=grain-dust-4';
 import {tileAt,PAVED_ROAD_TILES} from './city_terrain.js';
 import {TILE_SAND,TILE_WATER,TILE_VOID} from './world_gen.js';
 const local=new WeakMap();
@@ -28,16 +28,16 @@ function emit(state,vehicle,x,z,base,surface,speed){
       z:z+Math.sin(back)*.22+Math.sin(angle)*Math.random()*.2,
       h:base+.08+Math.random()*.16,
       vx:Math.cos(angle)*(.1+Math.random()*.3)*boost,vz:Math.sin(angle)*(.1+Math.random()*.3)*boost,
-      vh:.1+Math.random()*.25,age:0,life:1+Math.random()*.9,
-      size:(1.2+Math.random()*1.4)*(.75+boost*.4),color:palette,seed:Math.random(),
+      vh:.1+Math.random()*.25,age:0,life:.8+Math.random()*.6,
+      size:(1.05+Math.random()*1.1)*(.75+boost*.4),color:palette,seed:Math.random(),
     });
   }
 }
 
-export function syncMovementDust(THREE,renderer,world,entities,offsets,dt,daylight=1,enabled=true){
+export function syncMovementDust(THREE,renderer,world,entities,offsets,dt,enabled=true){
   let state=local.get(renderer);
   if(!enabled||!(dt>0)||!entities?.length||!renderer?.entityGroup){
-    if(state)state.group.visible=false;
+    if(state){state.group.visible=false;state.grains.length=0;state.field.begin();state.field.end();}
     return;
   }
   if(!state){
@@ -46,7 +46,7 @@ export function syncMovementDust(THREE,renderer,world,entities,offsets,dt,daylig
   }
   if(!state.group.parent)renderer.entityGroup.add(state.group);
   state.group.visible=true;
-  state.field.setDaylight(daylight);state.time+=dt*1000;
+  state.field.syncLighting(renderer);state.time+=dt*1000;
 
   for(const entity of entities){
     const vehicle=movingVehicle(entity);if(!vehicle)continue;

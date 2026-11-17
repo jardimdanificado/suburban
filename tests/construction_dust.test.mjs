@@ -8,9 +8,13 @@ function harness(){
   class BufferGeometry{constructor(){this.attributes={};}setAttribute(name,attribute){this.attributes[name]=attribute;}setDrawRange(start,count){this.drawRange={start,count};}getAttribute(name){return this.attributes[name];}}
   class ShaderMaterial{constructor(options){Object.assign(this,options);}}
   class Points{constructor(geometry,material){this.geometry=geometry;this.material=material;}}
-  const THREE={Group,BufferGeometry,BufferAttribute,ShaderMaterial,Points};
-  const group=new Group(),renderer={entityGroup:group,currentMap:[],getSurfaceElevation(){return 2;}};
-  return {THREE,group,renderer,field(){return group.children[0].children[0];}};
+  class Vector3{constructor(x=0,y=0,z=0){this.set(x,y,z);}set(x,y,z){this.point=[x,y,z];return this;}normalize(){return this;}}
+  class Color{constructor(value=0xffffff){this.value=value;this.setRGB(((value>>16)&255)/255,((value>>8)&255)/255,(value&255)/255);}setRGB(r,g,b){this.r=r;this.g=g;this.b=b;return this;}}
+  const THREE={Group,BufferGeometry,BufferAttribute,ShaderMaterial,Points,Vector3,Color};
+  const renderer={entityGroup:new Group(),currentMap:[],getSurfaceElevation(){return 2;},
+    sunLight:{color:{r:1,g:.98,b:.92},intensity:1.4,position:{x:40,y:80,z:50},target:{position:{x:0,y:0,z:0}}},
+    ambientLight:{color:{r:.86,g:.91,b:.96},intensity:.9}};
+  return {THREE,renderer,group:renderer.entityGroup,field(){return renderer.entityGroup.children[0].children[0];}};
 }
 function fixture(overrides={}){
   const project={id:'b1',service:'building',status:'building'};
@@ -20,9 +24,8 @@ function fixture(overrides={}){
 }
 
 test('construction grains appear only where a worker is on site',()=>{
-  const h=harness(),development=fixture();
-  syncConstructionDust(h.THREE,h.renderer,development,1000,.7);
-  assert.equal(h.field().geometry.drawRange.count,18);
+  const h=harness();
+  syncConstructionDust(h.THREE,h.renderer,fixture(),1000,true);
   assert.equal(h.field().geometry.drawRange.count,18);
 });
 
@@ -37,21 +40,30 @@ test('no workers, travelling workers or finished sites raise no dust',()=>{
   assert.equal(h.field().geometry.drawRange.count,0);
 });
 
+test('rewound or stale timestamps clear stuck grains',()=>{
+  const h=harness(),development=fixture();
+  syncConstructionDust(h.THREE,h.renderer,development,1000);
+  assert.equal(h.field().geometry.drawRange.count,18);
+  syncConstructionDust(h.THREE,h.renderer,{projects:development.projects,city:{citizens:[]}},900);
+  assert.equal(h.field().geometry.drawRange.count,0);
+});
+
 test('dust can be disabled',()=>{
   const h=harness();
-  syncConstructionDust(h.THREE,h.renderer,fixture(),1000,1,true);
+  syncConstructionDust(h.THREE,h.renderer,fixture(),1000,true);
   assert.equal(h.group.children[0].visible,true);
-  syncConstructionDust(h.THREE,h.renderer,fixture(),1100,1,false);
+  syncConstructionDust(h.THREE,h.renderer,fixture(),1100,false);
   assert.equal(h.group.children[0].visible,false);
 });
 
-test('grains dither in screen space and darken at night',()=>{
+test('grains are lit by scene lights with per-grain normals and dither',()=>{
   const h=harness();
-  syncConstructionDust(h.THREE,h.renderer,fixture(),1000,.25);
+  h.renderer.sunLight.intensity=.32;h.renderer.ambientLight.intensity=.24;
+  syncConstructionDust(h.THREE,h.renderer,fixture(),1000);
   const material=h.field().material;
+  assert.match(material.fragmentShader,/normalize\(vec3\(p,sqrt\(max\(0\.0,1\.0-r\*r\)\)\)\)/);
+  assert.match(material.fragmentShader,/uAmbColor\*uAmbIntensity\+uSunColor\*uSunIntensity\*ndl/);
   assert.match(material.fragmentShader,/bayer4\(gl_FragCoord\.xy\)/);
-  assert.match(material.fragmentShader,/gl_PointCoord/);
-  assert.match(material.fragmentShader,/pow\(max\(0\.0,uDaylight\),1\.25\)/);
-  assert.equal(material.uniforms.uDaylight.value,.25);
-  assert.equal(h.field().geometry.drawRange.count,18);
+  assert.equal(material.uniforms.uSunIntensity.value,.32);
+  assert.equal(material.uniforms.uAmbIntensity.value,.24);
 });

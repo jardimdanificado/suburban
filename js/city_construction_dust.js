@@ -1,5 +1,5 @@
 // Fine grains kicked up only where a worker is active on a construction site.
-import {DustField,renderGrains} from './dust_field.js';
+import {DustField,renderGrains} from './dust_field.js?v=grain-dust-4';
 const local=new WeakMap();
 const EMIT_INTERVAL=.12;
 const PALETTE=[[.91,.83,.67],[.84,.76,.6],[.95,.88,.73]];
@@ -10,16 +10,16 @@ function emit(state,x,z,base){
     state.grains.push({
       x:x+Math.cos(angle)*rad,z:z+Math.sin(angle)*rad,h:base+.1+Math.random()*.16,
       vx:Math.cos(angle)*(.16+Math.random()*.34),vz:Math.sin(angle)*(.16+Math.random()*.34),vh:.2+Math.random()*.3,
-      age:0,life:1.3+Math.random(),size:1.4+Math.random()*1.5,
+      age:0,life:1+Math.random()*.7,size:1.2+Math.random()*1.2,
       color:PALETTE[Math.floor(Math.random()*PALETTE.length)],seed:Math.random(),
     });
   }
 }
 
-export function syncConstructionDust(THREE,renderer,development,time,daylight=1,enabled=true){
+export function syncConstructionDust(THREE,renderer,development,time,enabled=true){
   let state=local.get(renderer);
   if(!enabled||!development?.projects?.length){
-    if(state)state.group.visible=false;
+    if(state){state.group.visible=false;state.grains.length=0;state.field.begin();state.field.end();}
     return;
   }
   if(!state){
@@ -28,8 +28,11 @@ export function syncConstructionDust(THREE,renderer,development,time,daylight=1,
   }
   if(!state.group.parent)renderer.entityGroup.add(state.group);
   state.group.visible=true;
-  state.field.setDaylight(daylight);
-  const dt=Math.max(0,Math.min(.06,(time-state.time)*.001));state.time=time;
+  state.field.syncLighting(renderer);
+  const delta=(time-state.time)*.001;state.time=time;
+  const invalid=!Number.isFinite(delta)||delta<0||delta>.5;
+  if(invalid){state.grains.length=0;state.lastEmit=new WeakMap();}
+  const dt=invalid?.016:Math.max(.008,Math.min(.06,delta));
 
   const workers=new Map();
   for(const citizen of development.city?.citizens||[]){
