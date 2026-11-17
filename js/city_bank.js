@@ -32,7 +32,9 @@ export class CityBank {
     const staffed=bank.workers.length||this.city.economy.citizen(bank.ownerId),selfService=this.city.fiscal?.municipal(bank)&&bank.balance>=this.city.currency.price(20000);
     return staffed||selfService;
   }
-  available(candidates=this.city.economy.businesses) { return candidates.filter(b => this.canServe(b)); }
+  // canServe already checks type, activity and destruction. Scan live buildings
+  // directly instead of first allocating the complete private-business list.
+  available(candidates=this.city.buildings) { return candidates.filter(b => this.canServe(b)); }
   developmentBanks(){
     const city=this.city,banks=city.economy.businesses.filter(b=>b.type==='bank');
     if(this.lastDevelopmentPreparation!==city.minute){
@@ -179,7 +181,7 @@ export class CityBank {
     if(topUp&&existing.bankId!==bank.id)return reject('Complemento precisa ser contratado no banco do empréstimo original.');
     if(existing&&!topUp)return reject('Empreendedor já possui financiamento empresarial em andamento.');
     const operatingReserve=this.liquidityReserve(bank);
-    const firstFoodShopPending=!['market','greengrocer'].includes(proposal.type)&&!city.economy.businesses.some(b=>['market','greengrocer'].includes(b.type)&&b.active&&!b.entity.destroyed)&&city.economy.demands?.some(d=>['market','greengrocer'].includes(d.type)&&d.score>=30);
+    const firstFoodShopPending=!['market','greengrocer'].includes(proposal.type)&&!city.buildings.some(b=>['market','greengrocer'].includes(b.type)&&b.active&&!b.entity.destroyed)&&city.economy.demands?.some(d=>['market','greengrocer'].includes(d.type)&&d.score>=30);
     const reserve=operatingReserve+(firstFoodShopPending?city.currency.price(230000):0),cash=Math.max(0,bank.balance-reserve);
     let refinance=0;
     if(initial&&amount>cash){if(proposal.allowPublicRefinance===false||firstFoodShopPending)return reject('O banco preserva a liquidez necessária para a primeira loja de alimentos e não possui caixa livre para esta abertura sem aporte do tesouro.');refinance=this.refinanceDevelopment(bank,amount-cash,proposal);if(refinance===false)return false;}

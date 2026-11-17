@@ -272,3 +272,25 @@ No benchmark completo de 1.200 minutos, arquipélago, 512 moradores, 128×128, s
 A melhoria isolada não reduziu o pico político nem o tempo total nesta execução. Há outros custos nessa revisão horária; as medições individuais também variam. O checksum do benchmark permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
 
 Validação: 31 testes passaram nas suítes `political_standing_refresh`, `city_government_performance`, `government_response`, `political_production_reform`, `party_reputation_migration`, `party_spectrum` e `party_network`. Cinco testes de `political_production_reform` falharam também na cópia anterior: financiamento coletivo de empresa, contrato com desvio, quatro ciclos eleitorais, microempresa de empregado e renderização dos painéis (`ui.selectControl`). A regressão nova foi repetida e passou. Para repetir o benchmark completo, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
+
+## Rodada 14 — consultas bancárias sem cópias da lista de empresas
+
+O pico de investimento do minuto 1572 realizou 4.278 tentativas de crédito, todas recusadas: 1.536 pela preservação de caixa para a primeira loja de alimentos e 2.742 pelo limite de caixa ou risco do crédito comum. A decomposição também registrou 1.537 chamadas de `available`. Essas consultas acessavam repetidamente `economy.businesses`, cujo getter filtra e aloca a lista completa de empresas privadas antes da busca por bancos ou lojas de alimentos.
+
+Agora `available` filtra diretamente os prédios atuais. `canServe` já verifica tipo bancário, atividade, destruição, caixa e atendimento. A consulta da primeira loja de alimentos também percorre os prédios diretamente, mantendo as verificações de tipo, atividade e destruição. Cada tentativa continua lendo o estado atual; não há cache de elegibilidade, saldos ou concessões de crédito.
+
+Na seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos sem LOD de fast-forward:
+
+| Medida local | Antes | Depois |
+| --- | ---: | ---: |
+| Pico de investimento empresarial, minuto 1572 | 116,6 ms | 87,1 ms |
+| Investimento empresarial acumulado | 351,3 ms | 321,7 ms |
+| Pico de seleção de terrenos e fundadores | 31,5 ms | 24,9 ms |
+| Pico de investimento em serviços essenciais | 33,4 ms | 27,4 ms |
+| Percentil 95 das atualizações | 51,7 ms | 52,6 ms |
+| Maior atualização completa | 146,8 ms | 138,7 ms |
+| Tempo total medido | 31,756 s | 31,541 s |
+
+O pico de investimento caiu cerca de 25%; o percentil 95 global não melhorou nesta execução. São medições individuais, sujeitas a variação. O checksum do benchmark permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
+
+Validação: 24 testes passaram nas suítes `bank_business_queries`, `service_investment_banks` e `economic_reform`. Cinco novas regressões verificam ordem e elegibilidade dos bancos, mudanças de caixa e atividade, bancos privados e municipais, seleção explícita de candidatos e reserva alimentar com loja ausente, inativa, destruída ou ativa. Elas também verificam empréstimo, recusa, saldos e transferências. Na versão anterior, as cinco preservaram essas expectativas funcionais e falharam apenas no contador de materializações da lista completa; depois, o contador ficou em zero. Para repetir o benchmark, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
