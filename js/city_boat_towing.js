@@ -29,9 +29,20 @@ function terrainQuotes(city){
  return cache;
 }
 function rememberQuote(cache,key,value){if(cache.size>=512)cache.delete(cache.keys().next().value);cache.set(key,value);return value;}
+// These approaches use occupied buildings only, matching their original
+// search rules. Reuse a packed grid for the same short-lived terrain quote.
+function landBlockedGrid(city,cache){
+ if(cache.blockedGrid)return cache.blockedGrid;
+ const {width,height}=city.world,grid=new Uint8Array(width*height);
+ for(const cell of city.occupied){
+  const comma=cell.indexOf(','),x=Number(cell.slice(0,comma)),y=Number(cell.slice(comma+1));
+  if(x>=0&&y>=0&&x<width&&y<height)grid[y*width+x]=1;
+ }
+ return cache.blockedGrid=grid;
+}
 function landRoute(city,start,goal,mode){
- const cache=terrainQuotes(city).land,key=`${start.x},${start.y}:${goal.x},${goal.y}`;
- const path=cache.has(key)?cache.get(key):rememberQuote(cache,key,findTerrainPath(city.world,start,goal,city.occupied,{preferRoads:false}));
+ const quotes=terrainQuotes(city),cache=quotes.land,key=`${start.x},${start.y}:${goal.x},${goal.y}`;
+ const path=cache.has(key)?cache.get(key):rememberQuote(cache,key,findTerrainPath(city.world,start,goal,city.occupied,{preferRoads:false,blockedGrid:landBlockedGrid(city,quotes)}));
  if(path===null)return null;
  const points=path.map(p=>({...p,transportMode:mode}));
  if(!points.length||Math.hypot(points.at(-1).x-goal.x,points.at(-1).y-goal.y)>.001)points.push({x:goal.x,y:goal.y,transportMode:mode});

@@ -297,3 +297,22 @@ test('a bicycle winches an offshore hull to the bank before towing it',()=>{
  }
  assert.equal(retrieved,true);assert.equal(person.localBoatTrip,null);assert.ok(Math.hypot(boat.x-goal.x,boat.y-goal.y)<.01);
 });
+
+
+test('boat approaches use packed obstacles and refresh same-size obstacle edits',()=>{
+ const {city,person,boat,goal}=fixture({bike:false,boatOnLand:false});
+ for(let x=20;x<28;x++)city.occupied.add(`${x},2`);
+ const has=city.occupied.has.bind(city.occupied);let reads=0;
+ city.occupied.has=key=>{reads++;return has(key);};
+ const path=planBoatTrip(city,person.entity,goal,{boat});
+ assert.ok(path);
+ assert.ok(reads<16,`approach searches must not hash coordinates at every neighbor: ${reads}`);
+ const size=city.occupied.size;
+ city.occupied.clear();
+ for(let y=11;y<=13;y++)for(let x=4;x<=6;x++)if(x!==5||y!==12)city.occupied.add(`${x},${y}`);
+ assert.equal(city.occupied.size,size);
+ city.obstacleRevision++;
+ assert.equal(planBoatTrip(city,person.entity,goal,{boat}),null,'the refreshed grid must block every departure from the operator');
+ city.occupied.clear();city.obstacleRevision++;
+ assert.ok(planBoatTrip(city,person.entity,goal,{boat}),'removing obstacles must retry the failed approach');
+});

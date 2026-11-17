@@ -168,3 +168,23 @@ Na seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos simu
 O ganho da etapa foi pequeno e não houve melhoria do tempo total. As medições são execuções individuais. O checksum completo permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
 
 Validação: 22 testes passaram nas suítes `service_investment_banks`, `business_heights` e `economic_reform`. As duas regressões cobrem serviços iniciais e já estabelecidos, mantêm a ordem dos bancos e verificam um banco ficando sem caixa e outro tornando-se ativo entre empreendedores. As leituras do cadastro de empresas caem de seis para uma nesse cenário; ambos os casos falharam na versão anterior e passaram após a alteração. A suíte adicional `sector_tax_lighting` teve três testes aprovados e uma falha preexistente: o teste de reposição de iluminação espera 12 unidades de combustível e recebe 48. Essa mesma falha foi reproduzida com os dois módulos anteriores à rodada. Para repetir a medição, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
+
+## Rodada 9 — obstáculos compactados na aproximação aos barcos
+
+No minuto 1023, a instrumentação encontrou 78 decisões de tarefas, somando aproximadamente 94 ms. As decisões mais caras gastavam até 15 ms buscando caminhos. A decomposição apontou buscas terrestres de aproximação às embarcações, algumas próximas de 9 ms, além do cálculo da própria travessia. Essas aproximações ainda construíam coordenadas em texto e consultavam o conjunto de ocupação para cada vizinho explorado pelo A*.
+
+Agora a primeira aproximação de uma cotação de terreno constrói uma grade `Uint8Array` a partir das células ocupadas. As aproximações seguintes reutilizam a grade durante a mesma revisão. A invalidação já existente considera minuto, dimensões, revisão do terreno, estruturas, obstáculos, quantidade de células ocupadas e substituição do mapa ou do conjunto. A grade segue a regra anterior dessas aproximações: bloqueia os edifícios registrados em `occupied`. O cache continua privado, fora dos saves, e as rotas e modos de transporte permanecem iguais.
+
+Na seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos simulados sem LOD de fast-forward:
+
+| Medida local | Antes | Depois |
+| --- | ---: | ---: |
+| Pico agregado de buscas, minuto 1023 | 79,5 ms | 63,7 ms |
+| Pico de decisões de tarefas, minuto 1023 | 92,5 ms | 74,9 ms |
+| Percentil 95 das atualizações | 57,6 ms | 57,0 ms |
+| Maior atualização completa | 151,5 ms | 151,1 ms |
+| Tempo total medido | 33,547 s | 33,728 s |
+
+O pico específico diminuiu cerca de 20%; não houve ganho no tempo total nessa execução individual. O checksum completo permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
+
+Validação: 49 testes passaram nas suítes `boat_towing`, `boat_crossings`, `boat_boarding`, `boat_trip_routine`, `boat_rider_motion` e `worker_state_export`. O novo teste reproduziu 97 consultas textuais de obstáculos na versão anterior; após a alteração passou com limite inferior a 16. Também substitui obstáculos mantendo a mesma quantidade de células, incrementa a revisão e confirma que o operador cercado perde a rota. Remover os obstáculos permite planejar novamente. Para repetir a medição, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
