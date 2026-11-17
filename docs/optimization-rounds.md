@@ -63,3 +63,24 @@ O ganho demonstrado é na duração da pausa, não no tempo total ou no percenti
 O teste de regressão reproduziu 52.878 consultas de passagem livre na versão anterior, em um mapa de 768 células. A versão corrigida passa com limite inferior a duas consultas por célula para a cotação completa, incluindo suas verificações externas ao casco. O teste também introduz um obstáculo após planejar e confirma que o barco não atravessa o novo bloqueio.
 
 Para repetir a medição, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`. Os próximos picos observados foram a preparação diária no minuto 1440 e o movimento no minuto 1093, ambos perto de 113 ms.
+
+## Rodada 4 — imóveis por proprietário no fechamento diário
+
+O fechamento econômico diário percorria o registro completo de cômodos para cada adulto, mesmo quando aquele morador não possuía imóveis. Agora uma única passagem agrupa os cômodos por proprietário. A decisão de vender ou alugar consulta somente o grupo daquele morador, preservando a ordem, as categorias residenciais, o limite de liquidez, a preferência por aluguel e as exclusões de moradia própria, locatários, menores e moradores mortos.
+
+O agrupamento é local ao fechamento; transferências de propriedade e mudanças de saldo são consideradas novamente na próxima chamada, sem cache persistido.
+
+Na seed e nos 1.200 minutos das rodadas anteriores:
+
+| Medida local | Antes | Depois |
+| --- | ---: | ---: |
+| Preparação diária total | 103,7 ms | 97,8 ms |
+| Fechamento econômico interno | 33,6 ms | 28,4 ms |
+| Maior atualização completa | 162,2 ms | 156,5 ms |
+| Tempo total medido | 35,586 s | 35,590 s |
+
+O ganho no cenário real é pequeno; não houve redução do tempo total. O checksum completo permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
+
+O benchmark isolado `node scripts/benchmark-daily-listings.mjs` usa 1.024 proprietários, 32.768 cômodos e oito fechamentos. Nessa carga sintética, o tempo caiu de 2.897 ms para 33,3 ms e as varreduras completas caíram de 8.192 para oito. O checksum das decisões permaneceu `647454482a5740195106a4cb49423fe91f06be6b8a849e4555e5666a3a4ef2d1`. Esse teste demonstra o ganho de escala da etapa, não o desempenho do jogo inteiro.
+
+Validação: 13 testes passaram, incluindo conservação econômica em uma cidade autônoma por vários dias e os novos casos de propriedade, saldos, locatários e categorias residenciais. Um teste antigo espera exatamente 12 culturas agrícolas, enquanto o catálogo atual tem 32; a mesma falha foi reproduzida com `city_economy.js` anterior à rodada. O teste de uma única varredura falhou na versão anterior com três passagens para três adultos e passou após a alteração.

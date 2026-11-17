@@ -1131,8 +1131,14 @@ export class CityEconomy {
         }else if(b.financialDistressDays>=8){const offer=b.shareOffers.find(o=>o.status==='open'&&o.capitalRaise),holder=offer&&equityShares(this.city,b).find(s=>s.accountId===offer.sellerId);if(holder){const expansion=Math.max(0,holder.points-offer.remaining);offer.points+=expansion;offer.remaining+=expansion;offer.valuation=Math.max(1,Math.floor(offer.valuation*.8));offer.lastRepricedAt=this.city.minute;}}
       }else b.financialDistressDays=0;
     }
+    // Daily listing decisions need only each owner's units. Keep their original
+    // order, but avoid scanning the entire room registry for every adult.
+    const unitsByOwner=new Map();
+    for(const unit of this.city.units.values()){
+      let units=unitsByOwner.get(unit.ownerId);if(!units)unitsByOwner.set(unit.ownerId,units=[]);units.push(unit);
+    }
     for (const owner of this.city.citizens) if (!owner.entity.destroyed && this.city.society.isAdult(owner)) {
-      for (const u of this.city.units.values()) if (u.ownerId === owner.accountId && ['residential', 'super_popular_housing', 'popular_housing', 'popular_luxury_housing', 'luxury_housing'].includes(this.city.building(u.buildingId)?.type) && u.id !== owner.homeUnitId) {
+      for (const u of unitsByOwner.get(owner.accountId)||[]) if (u.ownerId === owner.accountId && ['residential', 'super_popular_housing', 'popular_housing', 'popular_luxury_housing', 'luxury_housing'].includes(this.city.building(u.buildingId)?.type) && u.id !== owner.homeUnitId) {
         if (u.tenantId) continue;
         // Owners choose liquidity or rental income according to reserves and preference.
         u.forSale = owner.balance < 2500 || owner.rentalPreference < .75;
