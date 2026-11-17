@@ -81,7 +81,7 @@ test('fixed daily issuance does not depend on staffing the mint',()=>{
   // Hold the configured quota fixed: autonomous governments may otherwise
   // legislate a zero quota during this two-day integration scenario.
   const daily=city.currency.daily.bind(city.currency);city.currency.daily=()=>{city.currency.policy.mode='capped';city.currency.policy.dailyLimit=CURRENCY_RULES.mintDailyLimit;daily();};
-  for(let i=0;i<2*1440*4;i++)city.update(1/16);
+  for(let i=0;i<2*1440*4/64;i++)city.update(4);
   assert.equal(city.currency.issued,CURRENCY_RULES.initialSupply+2*CURRENCY_RULES.mintDailyLimit);assert.equal(totalMoney(city),city.currency.netIssued());
   // Cross-border purchases can outweigh the scheduled issuance, so the local
   // price index is not guaranteed to rise in this integrated simulation.

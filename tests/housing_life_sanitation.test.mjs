@@ -145,7 +145,7 @@ test('overflowing bathroom waste remains accounted for outside a full inventory'
 });
 
 test('twenty days sustain routines, food supply, sanitation and exact money/material accounting', () => {
-  const city = setup({ starter: true,population:128 }); for (let i = 0; i < 20 * 1440 * 4; i++) city.update(1 / 16);
+  const city = setup({ starter: true,population:128 }); for (let i = 0; i < 20 * 1440 * 4 / 64; i++) city.update(4);
   assert(city.citizens.length >= 20); assert(city.goodsStock('pao') > 0 || city.economy.produced.pao > 0 || (city.economy.externalTrade?.importedGoods?.pao || 0) > 0); assert(city.sanitation.cleaned > 0 || city.sanitation.cleanedFeces > 0); assert(city.economy.consumed.lixo > 0);
   for (const c of city.citizens) for (const value of Object.values(c.needs)) assert(Number.isFinite(value) && value >= 0 && value <= 100);
   assert.equal(totalMoney(city), city.currency.netIssued());

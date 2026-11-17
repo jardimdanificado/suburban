@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {gerarFrase,gerarFraseTematica,gerarSloganPartidario,gerarDialogoTematico} from '../js/gerador_frases.js';
+import {TEMAS_DO_JOGO} from '../js/vocabulario.js';
 
 function seeded(seed){let state=seed>>>0;return ()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};}
 
@@ -28,6 +29,14 @@ test('passive and adjunct phrases use contractions instead of bare prepositions'
   for(const complexidade of ['variada','complexa'])for(let seed=0;seed<60;seed++){
     const sentence=gerarFrase({tema:'cidade',random:seeded(seed),complexidade});
     assert.doesNotMatch(sentence,/\b(?:por|de|em) (?:o|a|os|as)\b/u);
+  }
+});
+
+test('core nouns keep gender agreement across themes',()=>{
+  const wrong=['o cidade','a prefeito','um cidade','uma bairro','o família','a governo','o escola','a hospital','o casa','a projeto','o reunião','a partido','o lei','a mercado','o água','a dinheiro','o saúde','a remédio','a aluno'];
+  for(const theme of TEMAS_DO_JOGO)for(let seed=0;seed<12;seed++){
+    const sentence=gerarFrase({tema:theme,random:seeded(seed),complexidade:'variada'});
+    for(const phrase of wrong)assert.doesNotMatch(sentence,new RegExp(`\\b${phrase}\\b`,'iu'));
   }
 });
 

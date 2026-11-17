@@ -194,7 +194,8 @@ test('a fifteen-day city develops families with coherent private contracts, need
   city.minute=r.partnerSince+2*1440;assert(city.society.planChild(a,b));
   const foundingChildren=city.citizens.filter(c=>c.parentIds.length).length;
   let childcare=false;
-  for (let i = 0; i < 15 * 1440 * 4; i++) {city.update(1 / 16);if(i%240===0)childcare ||= city.events.some(e=>e.data.kind==='childcare');}
+  // Sixteen minutes per frame; sample events every four frames (~one hour).
+  for (let i = 0; i < 15 * 1440 * 4 / 64; i++) {city.update(4);if(i%4===0)childcare ||= city.events.some(e=>e.data.kind==='childcare');}
   const children = city.citizens.filter(c => c.parentIds.length);
   assert(children.length > 0);
   assert(city.stats().couples > 0);

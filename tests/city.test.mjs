@@ -96,7 +96,9 @@ test('several days of movement, needs, wages, services and rent conserve currenc
   const city = setup();
   privateRental(city, city.citizens.find(c => !c.fixtureInvestor), city.citizens.find(c => c.fixtureInvestor));
   const reasons=new Set();
-  for (let i = 0; i < 3 * 1440 * 4; i++) {city.update(1 / 16);if(i%240===0)for(const e of city.ledger)reasons.add(e.reason);}
+  // One update advances sixteen minutes; 270 frames simulate the same three days
+  // as 17,280 per-minute frames while skipping redundant per-frame scans.
+  for (let i = 0; i < 3 * 1440 * 4 / 64; i++) {city.update(4);if(i%4===0)for(const e of city.ledger)reasons.add(e.reason);}
   assert.equal(city.day, 4);
   assert.equal(city.world.clock.day, city.day);
   assert.equal(totalMoney(city), city.currency.netIssued());

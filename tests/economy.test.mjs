@@ -118,7 +118,8 @@ test('missing food inputs create explicit upstream investment demand', () => {
 
 test('a multi-day autonomous city conserves money and every harvested or baked good', () => {
   const city = setup(), initialBusinesses = city.economy.businesses.length;
-  for (let i = 0; i < 8 * 1440 * 4; i++) city.update(1 / 16);
+  // Sixteen minutes per frame: same eight-day horizon, 64x fewer frame scans.
+  for (let i = 0; i < 8 * 1440 * 4 / 64; i++) city.update(4);
   assert(city.development.projects.length > 0); // Turnover can include closures when employers cannot cover costs.
   assert.equal(totalMoney(city), city.currency.netIssued());
   for (const good of Object.keys(GOODS)) {

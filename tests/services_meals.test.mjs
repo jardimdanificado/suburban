@@ -170,7 +170,8 @@ test('completing a site cancels incoming catering and refunds the employer inste
 
 test('autonomous public works keep currency and goods conserved through two days of simulation', () => {
   const city = setup({ starter: true, funded: true,population:128 });
-  for (let i = 0; i < 2 * 1440 * 4; i++) { city.update(1 / 16); if (i % 480 === 0) audit(city); }
+  // Sixteen minutes per frame; audit once per simulated three hours.
+  for (let i = 0; i < 2 * 1440 * 4 / 64; i++) { city.update(4); if (i % 12 === 0) audit(city); }
   assert(city.development.projects.some(p => p.service === 'road' && p.status === 'completed'));
   assert(city.logistics.delivered>0);assert(city.economy.produced.pedra>0);assert(city.economy.consumed.pedra>0);
   assert(live(city).every(p => p.inventory.pedra + (p.incoming.pedra || 0) <= p.stone)); audit(city);

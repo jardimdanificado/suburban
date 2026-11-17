@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {syncConstructionDust} from '../js/city_construction_dust.js';
 
 function harness(){
-  class Group{constructor(){this.children=[];}add(child){this.children.push(child);}}
+  class Group{constructor(){this.children=[];this.visible=true;}add(child){this.children.push(child);}}
   class BufferAttribute{constructor(array,itemSize){this.array=array;this.itemSize=itemSize;this.needsUpdate=false;}}
   class BufferGeometry{constructor(){this.attributes={};}setAttribute(name,attribute){this.attributes[name]=attribute;}setDrawRange(start,count){this.drawRange={start,count};}getAttribute(name){return this.attributes[name];}}
   class ShaderMaterial{constructor(options){Object.assign(this,options);}}
@@ -35,6 +35,14 @@ test('no workers, travelling workers or finished sites raise no dust',()=>{
   const finished=fixture();finished.projects[0].status='completed';
   syncConstructionDust(h.THREE,h.renderer,finished,1200);
   assert.equal(h.field().geometry.drawRange.count,0);
+});
+
+test('dust can be disabled',()=>{
+  const h=harness();
+  syncConstructionDust(h.THREE,h.renderer,fixture(),1000,1,true);
+  assert.equal(h.group.children[0].visible,true);
+  syncConstructionDust(h.THREE,h.renderer,fixture(),1100,1,false);
+  assert.equal(h.group.children[0].visible,false);
 });
 
 test('grains dither in screen space and darken at night',()=>{

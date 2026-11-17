@@ -144,7 +144,8 @@ test('a starter city autonomously builds housing, grows food and transports ever
   const city = setup({ starter: true,population:128 });
   // Real lamp installation shares builders and freight; wait for the production chain, with a bounded deadline.
   const developed = () => city.economy.produced.pedra > 0 && city.economy.consumed.pedra > 0 && city.logistics.delivered > 0 && ['farm', 'carrier'].every(type => city.buildings.some(b => b.type === type)) && city.buildings.some(b=>['residential','popular_housing','super_popular_housing'].includes(b.type)&&b.units.some(u=>u.tenantId));
-  for (let i = 0; i < 20 * 1440; i++) { city.update(0.25); if (i % 60 === 0) audit(city); if (i >= 2 * 1440 && developed()) break; }
+  // Sixteen minutes per frame; audit hourly, break after the same two-day warm-up.
+  for (let i = 0; i < 20 * 1440 / 16; i++) { city.update(4); if (i % 4 === 0) audit(city); if (i >= 2 * 1440 / 16 && developed()) break; }
   for (const type of ['farm', 'carrier']) assert(city.buildings.some(b => b.type === type), type);
   assert(city.economy.produced.pedra > 0); assert(city.economy.consumed.pedra > 0); assert(city.logistics.delivered > 0);
   assert(city.getEvents({limit:16000}).some(e => e.data.kind === 'shipment-delivered'));

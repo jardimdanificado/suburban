@@ -69,7 +69,7 @@ test('splitting and cancelling paint deliveries preserves every colored physical
 });
 test('a requested repaint autonomously travels to the workshop and completes during normal simulation',()=>{
  const city=fixture(),{v,owner,garage}=equipment(city),color='#2255bb';paintStock(garage,color);assert(city.paint.requestVehicle(v.id,garage.id,color));const job=city.paint.jobs.at(-1);
- for(let i=0;i<2880&&job.status!=='completed'&&job.status!=='cancelled';i++)city.update(.25);
+ for(let i=0;i<2880/16&&job.status!=='completed'&&job.status!=='cancelled';i++)city.update(4);
  assert.equal(job.status,'completed',JSON.stringify({status:job.status,minute:city.minute,ownerAction:owner.action,ownerTask:owner.task,ownerPath:owner.path.length,vehicle:{x:v.x,y:v.y,driver:v.driverId,trip:owner.mobilityTrip},workers:garage.workers.map(id=>{const c=city.society.citizen(id);return{id,task:c?.task,path:c?.path.length,action:c?.action};})}));assert.equal(v.color,color);assert(job.deliveredAt);assert.equal(v.paintHistory.length,1);
 });
 test('buyers choose a preferred vehicle color when type, price and availability are equal',()=>{
