@@ -84,3 +84,23 @@ O ganho no cenário real é pequeno; não houve redução do tempo total. O chec
 O benchmark isolado `node scripts/benchmark-daily-listings.mjs` usa 1.024 proprietários, 32.768 cômodos e oito fechamentos. Nessa carga sintética, o tempo caiu de 2.897 ms para 33,3 ms e as varreduras completas caíram de 8.192 para oito. O checksum das decisões permaneceu `647454482a5740195106a4cb49423fe91f06be6b8a849e4555e5666a3a4ef2d1`. Esse teste demonstra o ganho de escala da etapa, não o desempenho do jogo inteiro.
 
 Validação: 13 testes passaram, incluindo conservação econômica em uma cidade autônoma por vários dias e os novos casos de propriedade, saldos, locatários e categorias residenciais. Um teste antigo espera exatamente 12 culturas agrícolas, enquanto o catálogo atual tem 32; a mesma falha foi reproduzida com `city_economy.js` anterior à rodada. O teste de uma única varredura falhou na versão anterior com três passagens para três adultos e passou após a alteração.
+
+## Rodada 5 — destinos compartilhados no recrutamento de passageiros
+
+O pico de movimento no minuto 1093 vinha do início de uma travessia coletiva. O recrutamento consultava até 32 moradores e calculava, para cada candidato, a rota direta, o acesso ao embarque e o caminho da margem de desembarque ao destino. Vários candidatos tinham o mesmo destino; uma dessas buscas finais custava aproximadamente 8 ms e era repetida.
+
+Agora o recrutamento reutiliza a busca da margem para cada célula de destino, incluindo resultados sem caminho. O mapa existe somente durante aquela chamada síncrona de recrutamento. Novos embarques e pedidos posteriores consultam o terreno novamente. Cada passageiro mantém suas próprias listas e pontos de movimento; ordem, capacidade, elegibilidade e tarifas permanecem iguais.
+
+Na seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos simulados sem LOD de fast-forward:
+
+| Medida local | Antes | Depois |
+| --- | ---: | ---: |
+| Pico de movimento, minuto 1093 | 120,9 ms | 60,7 ms |
+| Tempo acumulado de movimento | 3,408 s | 3,106 s |
+| Percentil 95 das atualizações | 62,4 ms | 60,6 ms |
+| Maior atualização completa | 157,8 ms | 164,9 ms |
+| Tempo total medido | 36,192 s | 35,297 s |
+
+O pico específico caiu pela metade. A maior atualização geral não melhorou: após a alteração ocorreu no minuto 481. Os tempos totais representam uma execução por versão e incluem variação de execução; não demonstram eliminação de todos os picos. O checksum completo do benchmark permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
+
+Validação: 45 testes passaram nas suítes `boat_crossings`, `boat_towing`, `boat_boarding`, `boat_trip_routine`, `boat_rider_motion` e `worker_state_export`. O novo teste compara um e sete passageiros com o mesmo destino: as consultas a uma célula da margem caíram de 42 para seis, mantendo sete passageiros recrutados e listas independentes. O teste falhou na versão anterior e passou após a alteração. Para repetir a medição, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.

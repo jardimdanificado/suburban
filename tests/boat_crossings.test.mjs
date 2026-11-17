@@ -110,3 +110,27 @@ test('daily invitations retain useful shortcuts even when land connects the bank
  run(f);
  assert.ok(f.citizens.every(c=>Math.hypot(c.entity.x-8.5,c.entity.y-12.5)<.01));
 });
+
+
+test('one recruitment reuses landing routes without sharing passenger movement arrays',()=>{
+ function recruit(count){
+  const f=fixture(count);
+  for(const c of f.citizens){c.entity.x=10.5;c.entity.y=12.5;}
+  f.leader.path=planBoatTrip(f.city,f.leader.entity,f.goal);
+  const has=f.city.occupied.has.bind(f.city.occupied);let shoreReads=0;
+  f.city.occupied.has=key=>{if(key==='19,12')shoreReads++;return has(key);};
+  advanceLocalBoatTrip(f.city,f.leader,.01);
+  return {...f,shoreReads};
+ }
+ const single=recruit(2),group=recruit(8);
+ assert.ok(single.shoreReads>0,'landing route must inspect the far shore');
+ assert.equal(group.shoreReads,single.shoreReads,'same landing route must not be searched for every passenger');
+ assert.equal(group.leader.localBoatTrip.sharedCrossing.members.length,7);
+ const [first,second]=group.citizens.slice(1);
+ assert.notEqual(first.path,second.path);
+ const members=group.leader.localBoatTrip.sharedCrossing.members;
+ assert.notEqual(members[0].after,members[1].after);
+ assert.notEqual(members[0].after[0],members[1].after[0]);
+ first.path.length=0;
+ assert.ok(second.path.length,'one passenger must not consume another passenger’s route');
+});

@@ -47,15 +47,21 @@ function itinerary(city,c){
  }
  return null;
 }
-function membership(city,leader,c,goal,task,targetId){
+function membership(city,leader,c,goal,task,targetId,landingRoutes=null){
  const group=leader.localBoatTrip?.sharedCrossing,boat=group&&city.vehicles.units.get(group.boatId);
  if(!group||group.phase!=='boarding'||!available(city,c)||group.members.length+1>=BOAT_CLASSES[boat.boatClass].capacity||distance(c.entity,group.origin)>CROSSING_RULES.recruitRadius)return null;
  // Do not recruit a person whose ordinary land journey is already shorter.
- const direct=ground(city,c.entity,goal),approach=ground(city,c.entity,group.origin),after=ground(city,group.landing,goal);
+ const direct=ground(city,c.entity,goal),approach=ground(city,c.entity,group.origin);
+ // A recruitment pass is synchronous. Passengers with the same destination
+ // share this land search, including failures, without retaining stale routes.
+ const key=`${Math.floor(goal.x)},${Math.floor(goal.y)}`;
+ let after;
+ if(landingRoutes?.has(key))after=landingRoutes.get(key);
+ else{after=ground(city,group.landing,goal);landingRoutes?.set(key,after);}
  if(!approach||!after)return null;
  const seconds=(length(c.entity,approach)+length(group.landing,after))/4+group.seaSeconds+CROSSING_RULES.boardingSeconds;
  if(direct&&length(c.entity,direct)/4<=seconds)return null;
- return {goal:{x:goal.x,y:goal.y},task,targetId,approach,after,seconds};
+ return {goal:{x:goal.x,y:goal.y},task,targetId,approach,after:landingRoutes?after.map(p=>({...p})):after,seconds};
 }
 export function planSharedCrossing(city,start,goal,maxSeconds=Infinity){
  const c=start.properties?.citizen;if(!available(city,c))return null;
@@ -67,9 +73,10 @@ export function planSharedCrossing(city,start,goal,maxSeconds=Infinity){
  }
  return null;
 }
-export function joinSharedCrossing(city,c,plan){
+export function joinSharedCrossing(city,c,plan){return joinCrossing(city,c,plan);}
+function joinCrossing(city,c,plan,landingRoutes=null){
  const task=plan.task??c.task,targetId=plan.targetId??c.targetId;
- const leader=city.society.citizen(plan.sharedTripCitizenId),member=leader&&membership(city,leader,c,plan.goal,task,targetId);if(!member)return false;
+ const leader=city.society.citizen(plan.sharedTripCitizenId),member=leader&&membership(city,leader,c,plan.goal,task,targetId,landingRoutes);if(!member)return false;
  const group=leader.localBoatTrip.sharedCrossing;
  group.members.push({citizenId:c.id,...member});c.task=task;c.targetId=targetId;c.sharedBoatRide={leaderId:leader.id,boatId:plan.boatId,task:c.task,targetId:c.targetId,state:'approaching',goal:member.goal};
  c.path=member.approach.map(p=>({...p}));c.action='Indo ao embarque da travessia por lotação';
@@ -84,10 +91,11 @@ export function beginSharedCrossing(city,leader,boat,plan){
  remember(city,leader,boat,group);rememberMember(city,group,leader,plan.goal,leader.task,leader.targetId);
  const route=records(city).find(r=>r.key===group.routeKey),regularIds=new Set(route.members.map(m=>m.citizenId));
  const candidates=(city.citizens||[]).filter(c=>c!==leader&&available(city,c)&&distance(c.entity,origin)<=CROSSING_RULES.recruitRadius).sort((a,b)=>Number(regularIds.has(b.id))-Number(regularIds.has(a.id))||distance(a.entity,origin)-distance(b.entity,origin));
+ const landingRoutes=new Map();
  for(const c of candidates.slice(0,CROSSING_RULES.maxCandidates)){
   if(group.members.length+1>=BOAT_CLASSES[boat.boatClass].capacity)break;
   const trip=itinerary(city,c);if(!trip)continue;
-  joinSharedCrossing(city,c,{sharedTripCitizenId:leader.id,boatId:boat.id,goal:trip.goal,task:trip.task,targetId:trip.targetId});
+  joinCrossing(city,c,{sharedTripCitizenId:leader.id,boatId:boat.id,goal:trip.goal,task:trip.task,targetId:trip.targetId},landingRoutes);
  }
  return true;
 }
