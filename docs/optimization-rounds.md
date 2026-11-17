@@ -104,3 +104,24 @@ Na seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos simu
 O pico específico caiu pela metade. A maior atualização geral não melhorou: após a alteração ocorreu no minuto 481. Os tempos totais representam uma execução por versão e incluem variação de execução; não demonstram eliminação de todos os picos. O checksum completo do benchmark permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
 
 Validação: 45 testes passaram nas suítes `boat_crossings`, `boat_towing`, `boat_boarding`, `boat_trip_routine`, `boat_rider_motion` e `worker_state_export`. O novo teste compara um e sete passageiros com o mesmo destino: as consultas a uma célula da margem caíram de 42 para seis, mantendo sete passageiros recrutados e listas independentes. O teste falhou na versão anterior e passou após a alteração. Para repetir a medição, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
+
+## Rodada 6 — recusa antecipada de travessias mais lentas que caminhar
+
+A investigação do minuto 878 encontrou 98 chamadas de `findPath`, somando aproximadamente 100 ms na execução instrumentada; nenhuma busca individual explicava sozinha aquele pico. Parte do trabalho vinha da avaliação de travessias coletivas: mesmo quando a caminhada direta já era mais rápida que embarcar e navegar, a avaliação ainda buscava os dois trajetos terrestres de acesso antes de recusar o passageiro.
+
+Um caso no minuto 1180 gastou 6,1 ms para avaliar uma caminhada de 0,35 s contra um mínimo de 5,08 s de embarque e navegação. Agora a comparação ocorre logo após calcular o trajeto direto. Como os dois trechos terrestres não podem ter duração negativa, essa recusa preserva a decisão final. Travessias úteis continuam calculando e comparando todos os trechos.
+
+Na seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos simulados sem LOD de fast-forward:
+
+| Medida local | Antes | Depois |
+| --- | ---: | ---: |
+| Tempo acumulado nas buscas de caminho do passo da simulação | 3,596 s | 3,033 s |
+| Pico agregado dessas buscas | 86,9 ms | 81,3 ms |
+| Tempo acumulado de movimento | 3,113 s | 2,766 s |
+| Percentil 95 das atualizações | 61,2 ms | 58,8 ms |
+| Maior atualização completa | 150,8 ms | 155,2 ms |
+| Tempo total medido | 35,262 s | 34,317 s |
+
+Os tempos representam uma execução por versão. A maior atualização geral não melhorou; outras fontes de picos permanecem. O checksum completo do benchmark continuou `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
+
+Validação: 46 testes passaram nas suítes `boat_crossings`, `boat_towing`, `boat_boarding`, `boat_trip_routine`, `boat_rider_motion` e `worker_state_export`. O novo teste mantém tarefa, destino e recusa de um passageiro cuja caminhada é mais rápida; as consultas à margem inacessível caem de 16 para zero. Esse teste falhou na versão anterior e passou após a alteração. Os casos existentes continuam verificando travessias úteis mesmo quando há uma conexão terrestre. Para repetir a medição, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.

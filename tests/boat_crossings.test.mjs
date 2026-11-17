@@ -134,3 +134,18 @@ test('one recruitment reuses landing routes without sharing passenger movement a
  first.path.length=0;
  assert.ok(second.path.length,'one passenger must not consume another passenger’s route');
 });
+
+
+test('a walk shorter than boarding and sailing skips both crossing access searches',()=>{
+ const f=fixture(2),candidate=f.citizens[1];
+ candidate.jobId=18;candidate.targetId=18;
+ f.leader.path=planBoatTrip(f.city,f.leader.entity,f.goal);
+ const has=f.city.occupied.has.bind(f.city.occupied);let farShoreReads=0;
+ f.city.occupied.has=key=>{if(key==='19,12')farShoreReads++;return has(key);};
+ advanceLocalBoatTrip(f.city,f.leader,.01);
+ assert.equal(f.leader.localBoatTrip.sharedCrossing.members.length,0);
+ assert.equal(candidate.sharedBoatRide,undefined);
+ assert.equal(candidate.task,'work');
+ assert.equal(candidate.targetId,18);
+ assert.equal(farShoreReads,0,'a faster walk must not search the inaccessible far shore');
+});

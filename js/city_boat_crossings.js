@@ -51,7 +51,11 @@ function membership(city,leader,c,goal,task,targetId,landingRoutes=null){
  const group=leader.localBoatTrip?.sharedCrossing,boat=group&&city.vehicles.units.get(group.boatId);
  if(!group||group.phase!=='boarding'||!available(city,c)||group.members.length+1>=BOAT_CLASSES[boat.boatClass].capacity||distance(c.entity,group.origin)>CROSSING_RULES.recruitRadius)return null;
  // Do not recruit a person whose ordinary land journey is already shorter.
- const direct=ground(city,c.entity,goal),approach=ground(city,c.entity,group.origin);
+ const direct=ground(city,c.entity,goal),directSeconds=direct?length(c.entity,direct)/4:Infinity;
+ // Boarding and sailing alone are a lower bound, even if both land legs
+ // take no time. A faster direct walk cannot benefit from this crossing.
+ if(direct&&directSeconds<=group.seaSeconds+CROSSING_RULES.boardingSeconds)return null;
+ const approach=ground(city,c.entity,group.origin);
  // A recruitment pass is synchronous. Passengers with the same destination
  // share this land search, including failures, without retaining stale routes.
  const key=`${Math.floor(goal.x)},${Math.floor(goal.y)}`;
@@ -60,7 +64,7 @@ function membership(city,leader,c,goal,task,targetId,landingRoutes=null){
  else{after=ground(city,group.landing,goal);landingRoutes?.set(key,after);}
  if(!approach||!after)return null;
  const seconds=(length(c.entity,approach)+length(group.landing,after))/4+group.seaSeconds+CROSSING_RULES.boardingSeconds;
- if(direct&&length(c.entity,direct)/4<=seconds)return null;
+ if(direct&&directSeconds<=seconds)return null;
  return {goal:{x:goal.x,y:goal.y},task,targetId,approach,after:landingRoutes?after.map(p=>({...p})):after,seconds};
 }
 export function planSharedCrossing(city,start,goal,maxSeconds=Infinity){
