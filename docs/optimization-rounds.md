@@ -147,3 +147,24 @@ Na seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos simu
 São execuções individuais, sujeitas a variação. O ganho agregado foi pequeno; os picos de buscas e movimento não diminuíram nesta comparação. O checksum completo do benchmark permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
 
 Validação: 48 testes passaram nas suítes `boat_crossings`, `boat_towing`, `boat_boarding`, `boat_trip_routine`, `boat_rider_motion` e `worker_state_export`. A regressão de consultas tardias caiu de 4.208 verificações de obstáculos para zero na segunda consulta equivalente; falhou na versão anterior e passou após a alteração. Os novos testes verificam cópias independentes, recusa por lotação mesmo com geometria em cache, remoção de obstáculos, alteração e restauração do terreno, invalidação de falhas e renovação no minuto seguinte. Para repetir a medição, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
+
+## Rodada 8 — bancos candidatos e classificação por demanda de serviço
+
+A instrumentação separou a abertura de serviços da seleção de terrenos. A primeira consumia aproximadamente 35 ms no minuto 1572; as chamadas individuais de seleção de terrenos ficaram abaixo de 2 ms. A investigação das tentativas de crédito encontrou 838 reconstruções da lista de bancos em uma passagem no minuto 852 e 844 no minuto 1572. Cada reconstrução filtrava novamente o cadastro de empresas, mesmo sem possibilidade de criar bancos durante a abertura desses serviços.
+
+Agora a passagem seleciona uma vez os prédios bancários, mantendo sua ordem. `available(candidates)` filtra essa lista novamente a cada empreendedor, e `lendForBusiness` continua verificando atendimento, autorização, caixa, risco e demais regras. Bancos inicialmente inativos permanecem entre os candidatos, permitindo considerar uma mudança de disponibilidade durante a passagem. A classificação da demanda como cadeia inicial também ocorre uma vez por tipo de serviço, pois tentativas de empréstimo recusadas não abrem empresas nem consomem depósitos minerais.
+
+Na seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos simulados sem LOD de fast-forward:
+
+| Medida local | Antes | Depois |
+| --- | ---: | ---: |
+| Pico de investimento em serviços essenciais, minuto 1572 | 33,9 ms | 30,0 ms |
+| Pico de investimento em serviços iniciais, minuto 852 | 32,9 ms | 31,0 ms |
+| Pico total de investimento empresarial | 95,8 ms | 93,7 ms |
+| Percentil 95 das atualizações | 57,9 ms | 57,8 ms |
+| Maior atualização completa | 150,9 ms | 150,0 ms |
+| Tempo total medido | 34,166 s | 34,165 s |
+
+O ganho da etapa foi pequeno e não houve melhoria do tempo total. As medições são execuções individuais. O checksum completo permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
+
+Validação: 22 testes passaram nas suítes `service_investment_banks`, `business_heights` e `economic_reform`. As duas regressões cobrem serviços iniciais e já estabelecidos, mantêm a ordem dos bancos e verificam um banco ficando sem caixa e outro tornando-se ativo entre empreendedores. As leituras do cadastro de empresas caem de seis para uma nesse cenário; ambos os casos falharam na versão anterior e passaram após a alteração. A suíte adicional `sector_tax_lighting` teve três testes aprovados e uma falha preexistente: o teste de reposição de iluminação espera 12 unidades de combustível e recebe 48. Essa mesma falha foi reproduzida com os dois módulos anteriores à rodada. Para repetir a medição, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.

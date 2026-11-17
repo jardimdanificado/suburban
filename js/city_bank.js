@@ -32,7 +32,7 @@ export class CityBank {
     const staffed=bank.workers.length||this.city.economy.citizen(bank.ownerId),selfService=this.city.fiscal?.municipal(bank)&&bank.balance>=this.city.currency.price(20000);
     return staffed||selfService;
   }
-  available() { return this.city.economy.businesses.filter(b => this.canServe(b)); }
+  available(candidates=this.city.economy.businesses) { return candidates.filter(b => this.canServe(b)); }
   developmentBanks(){
     const city=this.city,banks=city.economy.businesses.filter(b=>b.type==='bank');
     if(this.lastDevelopmentPreparation!==city.minute){
