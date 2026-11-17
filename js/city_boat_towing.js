@@ -40,11 +40,32 @@ function landRoute(city,start,goal,mode){
 function prefixTime(city,start,path,boat,bike){let seconds=0,previous=start;for(const point of path){seconds+=Math.hypot(point.x-previous.x,point.y-previous.y)/speed(city,point.transportMode,boat,bike,point);previous=point;}return seconds;}
 // A hull needs its full width and length, including the stern, clear of buildings and cliffs.
 export function boatTowClear(city,boat,x,y,dx,dy){
- const length=boat.pickLength||2.8,width=boat.pickWidth||.75,centerHeight=tileHeight(tileAt(city.world,Math.floor(x),Math.floor(y)));
+ return hullClear(city,boat,x,y,dx,dy);
+}
+// A route search is synchronous: terrain and obstacles cannot change between
+// its footprint samples. Read each visited cell once, without retaining this
+// snapshot for movement, later searches or saves.
+function createHullTerrain(city){
+ // Status bits: sampled=1, water=2, walkable land=4.
+ const width=city.world.width,size=width*city.world.height,status=new Uint8Array(size),heights=new Float64Array(size);
+ return {status,heights,sample(x,y){
+  const index=y*width+x;
+  if(!status[index]){
+   const tile=tileAt(city.world,x,y);heights[index]=tileHeight(tile);
+   status[index]=1|(tile===TILE_WATER?2:city.walkable(x,y)?4:0);
+  }
+  return index;
+ }};
+}
+function hullClear(city,boat,x,y,dx,dy,terrain=null){
+ const length=boat.pickLength||2.8,width=boat.pickWidth||.75,centerX=Math.floor(x),centerY=Math.floor(y),centerHeight=terrain?terrain.heights[terrain.sample(centerX,centerY)]:tileHeight(tileAt(city.world,centerX,centerY));
  for(let along=-length/2;along<=length/2+.001;along+=length/4)for(const across of [-width/2,0,width/2]){
   const px=x+dx*along+dy*across,py=y+dy*along-dx*across,tx=Math.floor(px),ty=Math.floor(py);
   if(tx<0||ty<0||tx>=city.world.width||ty>=city.world.height)return false;
-  if(!water(city,px,py)&&(!city.walkable(tx,ty)||Math.abs(tileHeight(tileAt(city.world,tx,ty))-centerHeight)>1.25))return false;
+  if(terrain){
+   const cell=terrain.sample(tx,ty),status=terrain.status[cell];
+   if(!(status&2)&&(!(status&4)||Math.abs(terrain.heights[cell]-centerHeight)>1.25))return false;
+  }else if(!water(city,px,py)&&(!city.walkable(tx,ty)||Math.abs(tileHeight(tileAt(city.world,tx,ty))-centerHeight)>1.25))return false;
  }
  return true;
 }
@@ -74,6 +95,7 @@ function computeCrossingRoute(city,boat,bike,goal,{relocate=false,limitSeconds=I
  if([sx,gx].some(x=>x<0||x>=width)||[sy,gy].some(y=>y<0||y>=height))return null;
  const towing=!!bike,start=sy*width+sx,goalCell=gy*width+gx,startedWater=water(city,boat.x,boat.y);
  if(!towing&&!startedWater)return null;
+ const hullTerrain=towing?createHullTerrain(city):null;
  const costs=new Float64Array(size*2).fill(Infinity),parents=new Int32Array(size*2).fill(-1),heap=[];
  // Tow state records whether water was used. Ferry state records whether the passenger has landed.
  const root=start+(towing&&startedWater?size:0);costs[root]=0;push(heap,0,root);let target=-1,visited=0;
@@ -83,10 +105,10 @@ function computeCrossingRoute(city,boat,bike,goal,{relocate=false,limitSeconds=I
   if(cell===goalCell&&(relocate||!towing||flag)){target=key;break;}
   for(const [dx,dy]of directions){
    const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=width||ny>=height)continue;
-   const toWater=water(city,nx,ny);if(!toWater&&!city.walkable(nx,ny)||!towing&&flag&&toWater)continue;
+   const toWater=water(city,nx,ny);if(!toWater&&!(hullTerrain?hullTerrain.status[hullTerrain.sample(nx,ny)]&4:city.walkable(nx,ny))||!towing&&flag&&toWater)continue;
    if(fromWater!==toWater){const landX=fromWater?nx:x,landY=fromWater?ny:y;if(tileHeight(tileAt(city.world,landX,landY))>1.25)continue;}
    else if(!toWater&&!canStep(city.world,x,y,nx,ny))continue;
-   if(towing&&!toWater&&(!boatTowClear(city,boat,nx+.5,ny+.5,dx,dy)||!boatTowClear(city,boat,x+.5+dx*.5,y+.5+dy*.5,dx,dy)))continue;
+   if(towing&&!toWater&&(!hullClear(city,boat,nx+.5,ny+.5,dx,dy,hullTerrain)||!hullClear(city,boat,x+.5+dx*.5,y+.5+dy*.5,dx,dy,hullTerrain)))continue;
    const nextFlag=towing?flag||toWater:flag||!toWater,next=ny*width+nx+(nextFlag?size:0),mode=toWater?'sail':towing?'tow':'walkAfter';
    const candidate=cost+1/speed(city,mode,boat,bike,{x:nx+.5,y:ny+.5})+(fromWater!==toWater?1.5:0);
    if(candidate>=costs[next])continue;costs[next]=candidate;parents[next]=key;push(heap,candidate,next);

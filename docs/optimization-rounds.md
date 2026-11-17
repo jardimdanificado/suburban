@@ -44,3 +44,22 @@ Comparação local de 400 minutos simulados com os mesmos parâmetros da rodada 
 O checksum completo permaneceu `53949bbbcbb78c9c389ea10ca3fb7cc837ed5cb21d579b590ee8675d0c836509` nas duas execuções.
 
 Os testes cobrem portas repetidas sem rota, nova tentativa após mudança de acesso, seleção do próximo banheiro pela pontuação, autorização de visitantes e contratos de limpeza. O teste longo de vinte dias falhou com `city.world.setSidewalk is not a function`; a mesma falha foi reproduzida com `city_sanitation.js` anterior à rodada, em uma cópia isolada. Essa falha não foi alterada nesta otimização.
+
+## Rodada 3 — folga do casco durante o planejamento
+
+A medição foi ampliada para 1.200 minutos simulados na mesma seed. No minuto 947, uma única cotação de realocação levou cerca de 274 ms: 258 ms na travessia e 16 ms nas aproximações. O algoritmo repetia consultas de terreno e obstáculos para as amostras do casco em cada direção de cada nó da busca.
+
+Agora cada busca de casco mantém um retrato local e preguiçoso de altura, água e passagem livre das células visitadas. Leituras repetidas usam arrays tipados. O retrato existe somente durante a busca síncrona; o movimento real continua consultando os obstáculos atuais, sem reutilizar esse retrato.
+
+| Medida local, 1.200 minutos | Antes | Depois |
+| --- | ---: | ---: |
+| Pico da fase de veículos | 265,2 ms | 49,8 ms |
+| Maior atualização completa | 293,3 ms | 175,0 ms |
+| Percentil 95 das atualizações | 60,5 ms | 63,0 ms |
+| Tempo total medido | 35,42 s | 35,63 s |
+
+O ganho demonstrado é na duração da pausa, não no tempo total ou no percentil 95. O checksum completo dos 1.200 minutos coincidiu: `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
+
+O teste de regressão reproduziu 52.878 consultas de passagem livre na versão anterior, em um mapa de 768 células. A versão corrigida passa com limite inferior a duas consultas por célula para a cotação completa, incluindo suas verificações externas ao casco. O teste também introduz um obstáculo após planejar e confirma que o barco não atravessa o novo bloqueio.
+
+Para repetir a medição, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`. Os próximos picos observados foram a preparação diária no minuto 1440 e o movimento no minuto 1093, ambos perto de 113 ms.

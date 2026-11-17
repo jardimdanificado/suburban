@@ -34,6 +34,22 @@ test('different passenger quotes reuse terrain searches and invalidate them afte
  assert.equal(planBoatTrip(city,person.entity,goal,{boat,relocate:true}),null);
 });
 
+test('a hull search samples obstacle walkability at most once per visited terrain cell',()=>{
+ const {city,person,boat,goal}=fixture(),walkable=city.walkable.bind(city);
+ let calls=0;
+ city.walkable=(x,y)=>{calls++;return walkable(x,y);};
+ const path=planBoatTrip(city,person.entity,goal,{boat,relocate:true});
+ assert.ok(path?.some(p=>p.transportMode==='tow'));
+ assert.ok(calls<city.world.width*city.world.height*2,`repeated footprint checks: ${calls}`);
+ // Collision during the actual trip must read current obstacles, not reuse
+ // the planner's terrain snapshot.
+ person.path=path;advanceLocalBoatTrip(city,person,0);
+ const next=person.path.find(p=>p.transportMode==='tow');assert.ok(next);
+ city.occupied.add(`${Math.floor(next.x)},${Math.floor(next.y)}`);city.obstacleRevision++;
+ const before={x:boat.x,y:boat.y};advanceLocalBoatTrip(city,person,.05);
+ assert.deepEqual({x:boat.x,y:boat.y},before);
+});
+
 function incrementalRelocationFixture(){
  const f=fixture({boatOnLand:false}),{city,person,boat}=f;
  for(let y=0;y<24;y++)for(let x=12;x<18;x++)city.world.map[y*32+x]=TILE_WATER;
