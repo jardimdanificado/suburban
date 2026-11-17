@@ -1632,6 +1632,8 @@ export class CitySimulation {
       if(!c.deliveryId&&!urgent&&!c.conversation&&(INTERRUPTIBLE_TASKS.has(c.task)||(c.task==='energy'&&n.energy>65))){
         for(const child of this.childrenOf(c.id))if(this.society.age(child)<6&&Math.min(child.needs.food,child.needs.water,child.needs.hygiene,child.needs.social)<25){c.task=null;c.path=[];break;}
       }
+      // Keep physical boat trips through routine reviews; urgent needs above may cancel them safely.
+      if(c.localBoatTrip)continue;
       if (c.deliveryId || c.cleaningJobId || c.informalJobId) continue;
       if (c.conversation) continue;
       if(!urgent&&c.career?.pendingInterview?.status==='análise')routeToInterview(this,c);

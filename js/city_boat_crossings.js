@@ -180,7 +180,7 @@ export function dispatchRegularCrossings(city){
  }
 }
 
-export function crossingCandidates(city){return (city.citizens||[]).filter(c=>available(city,c));}
+export function crossingCandidates(city,options={}){return (city.citizens||[]).filter(c=>available(city,c,options));}
 export function crossingRequests(city){
- return crossingCandidates(city).map(c=>({citizen:c,...itinerary(city,c)})).filter(request=>request.goal);
+ return crossingCandidates(city,{allowIndoor:true}).map(c=>({citizen:c,...itinerary(city,c)})).filter(request=>request.goal);
 }

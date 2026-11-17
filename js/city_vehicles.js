@@ -67,6 +67,8 @@ export class CityVehicles {
       const signature=`initial-boat-import:${kind}`;let model=this.models.get(signature);
       if(!model){model={id:this.nextModelId++,signature,kind,brand:fictionalForeignBrand(kind),name:`${BOAT_CLASSES[kind].label} de entrada`,initial:true,createdAt:this.city.minute,components:Object.entries(VEHICLE_RECIPES[kind]).map(([good,quantity])=>({good,quantity,producerId:`import:${good}`,producerName:fictionalForeignBrand(good),brand:fictionalForeignBrand(good),origin:'Importação inicial',design:1}))};this.models.set(signature,model);}
       boat.modelId=model.id;boat.active=false;boat.imported=true;boat.ownerAccountId=port.accountId;boat.holderAccountId=port.accountId;boat.status='À venda no porto';port.inventory[kind]=(port.inventory[kind]||0)+1;this.city.economy.initialStock[kind]=(this.city.economy.initialStock[kind]||0)+1;boat.entity.properties.name=`${model.brand} · ${model.name}`;this.parkBoat(boat);
+      // Light boats for sale must be reachable by a towing bicycle.
+      if(['canoe','launch'].includes(kind))this.placeDisplay(boat,port);
     }
   }
   personalMobilityAssets(accountId){

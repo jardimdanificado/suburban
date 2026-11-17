@@ -78,9 +78,22 @@ function crossingRoute(city,boat,bike,goal,{relocate=false,limitSeconds=Infinity
  if(!relocate&&!waterSteps||waterSteps>BOAT_CLASSES[boat.boatClass].maxWaterTiles)return null;
  path.reverse();return {path,seconds:costs[target]};
 }
-function approaches(city,boat){
+function approaches(city,boat,retrieve=false){
  if(!water(city,boat.x,boat.y))return [{x:boat.x,y:boat.y}];
  const x=Math.floor(boat.x),y=Math.floor(boat.y),result=[];
+ if(retrieve){
+  const queue=[{x,y,path:[]}],seen=new Set([`${x},${y}`]);
+  for(let i=0;i<queue.length;i++){
+   const cell=queue[i];
+   for(const [dx,dy] of directions){const nx=cell.x+dx,ny=cell.y+dy,key=`${nx},${ny}`;
+    if(nx<0||ny<0||nx>=city.world.width||ny>=city.world.height)continue;
+    if(water(city,nx,ny)){if(cell.path.length<6&&!seen.has(key)){seen.add(key);queue.push({x:nx,y:ny,path:[...cell.path,{x:nx+.5,y:ny+.5,transportMode:'retrieve'}]});}continue;}
+    if(city.walkable(nx,ny)&&tileHeight(tileAt(city.world,nx,ny))<=1.25&&boatTowClear(city,boat,nx+.5,ny+.5,dx,dy))result.push({x:nx+.5,y:ny+.5,retrieval:[...cell.path,{x:nx+.5,y:ny+.5,transportMode:'retrieve'}]});
+   }
+  }
+  return result;
+ }
+
  for(const [dx,dy]of directions){const nx=x+dx,ny=y+dy;if(city.walkable(nx,ny)&&tileHeight(tileAt(city.world,nx,ny))<=1.25)result.push({x:nx+.5,y:ny+.5});}
  return result;
 }
@@ -98,14 +111,16 @@ function computeBoatTrip(city,start,goal,{boat:fixedBoat=null,relocate=false,ser
    if(relocate&&!bike||bike&&BOAT_CLASSES[boat.boatClass].capacity<Math.max(2,load))continue;
    // The approach alone can disqualify a rig before running a graph search.
    if(Math.hypot(start.x-boat.x,start.y-boat.y)/8+Math.hypot(goal.x-boat.x,goal.y-boat.y)/(4*BOAT_CLASSES[boat.boatClass].speed)+2>=bestSeconds)continue;
-   let prefix=null,prefixSeconds=Infinity;
-   for(const approach of approaches(city,boat)){
+   let prefix=null,prefixSeconds=Infinity,routeBoat=boat;
+   for(const approach of approaches(city,boat,!!bike)){
     const toBike=bike?landRoute(city,start,bike,'walk'):[],from=bike||start,toBoat=landRoute(city,from,approach,bike?'cycle':'walk');if(!toBike||!toBoat)continue;
-    const trial=[...toBike,...toBoat,{x:boat.x,y:boat.y,transportMode:'pickup',...(water(city,boat.x,boat.y)?{boatClass:boat.boatClass}:{})}],seconds=prefixTime(city,start,trial,boat,bike)+2;
-    if(seconds<prefixSeconds){prefix=trial;prefixSeconds=seconds;}
+    const pickup=approach.retrieval?approach:boat;
+    const trial=[...toBike,...toBoat,...(approach.retrieval||[]),{x:pickup.x,y:pickup.y,transportMode:'pickup',...(water(city,pickup.x,pickup.y)?{boatClass:boat.boatClass}:{})}];
+    const seconds=prefixTime(city,start,[...toBike,...toBoat],boat,bike)+2+(approach.retrieval?prefixTime(city,boat,approach.retrieval.map(p=>({...p,transportMode:'tow'})),boat,bike):Math.hypot(boat.x-approach.x,boat.y-approach.y)/(4*BOAT_CLASSES[boat.boatClass].speed));
+    if(seconds<prefixSeconds){prefix=trial;prefixSeconds=seconds;routeBoat=approach.retrieval?{...boat,x:approach.x,y:approach.y}:boat;}
    }
    if(!prefix||prefixSeconds>=bestSeconds)continue;
-   const crossing=crossingRoute(city,boat,bike,goal,{relocate,limitSeconds:bestSeconds-prefixSeconds});if(!crossing?.path.length)continue;
+   const crossing=crossingRoute(city,routeBoat,bike,goal,{relocate,limitSeconds:bestSeconds-prefixSeconds});if(!crossing?.path.length)continue;
    let seconds=prefixSeconds+crossing.seconds;
    const path=[...prefix,...crossing.path];
    if(Math.hypot(path.at(-1).x-goal.x,path.at(-1).y-goal.y)>.001){const endpoint={x:goal.x,y:goal.y,transportMode:bike?'tow':'walkAfter'};seconds+=prefixTime(city,path.at(-1),[endpoint],boat,bike);path.push(endpoint);}
@@ -128,7 +143,7 @@ export function planBoatTrip(city,start,goal,options={}){
  const person=start.properties?.citizen;
  if(!city.walkable(Math.floor(goal.x),Math.floor(goal.y))||!person||person.dead||person.localBoatTrip||person.sharedBoatRide||person.mobilityTrip||person.ridingVehicleId||person.boatClass||person.worldBoatCrew||person.custody||person.entity.destroyed)return null;
  const shared=!options.boat&&planSharedCrossing(city,start,goal,options.maxSeconds);if(shared)return shared;
- const vehicles=[...(city.vehicles?.units?.values()||[])];if(!vehicles.some(v=>v.boatClass&&free(v)))return null;
+ const vehicles=[...(city.vehicles?.units?.values()||[])];if(!options.boat&&!vehicles.some(v=>v.boatClass&&free(v)))return null;
  const revision=`${city.minute}:${city.world.revision||0}:${city.structureRevision||0}:${city.obstacleRevision||0}:${city.occupied.size}`;
  let cache=boatPlanCaches.get(city);if(!cache||cache.revision!==revision){cache={revision,paths:new Map()};boatPlanCaches.set(city,cache);}
  const fleet=vehicles.filter(v=>v.boatClass||BOAT_TOW_RULES.canoe.bikes.includes(v.good)).map(v=>`${v.id},${v.good},${v.boatClass},${v.x},${v.y},${v.ownerAccountId},${v.possessorAccountId},${free(v)},${Math.floor(v.condition??100)},${v.passengerIds?.length||0}`).join(';');
@@ -201,6 +216,16 @@ export function advanceLocalBoatTrip(city,person,dt){
  let remaining=Math.max(0,dt),guard=0;
  while(remaining>0&&person.path.length&&guard++<512){
   const point=person.path[0],mode=point.transportMode,from=trip.position,dx=point.x-from.x,dy=point.y-from.y,len=Math.hypot(dx,dy),isWater=water(city,point.x,point.y),tx=Math.floor(point.x),ty=Math.floor(point.y);
+  if(mode==='retrieve'){
+   if(!bike||!isWater&&!boatTowClear(city,boat,point.x,point.y,Math.sign(point.x-boat.x),Math.sign(point.y-boat.y))){releaseLocalBoatTrip(city,person,true);return true;}
+   const bx=point.x-boat.x,by=point.y-boat.y,length=Math.hypot(bx,by),velocity=BOAT_TOW_RULES[boat.boatClass].speed,travel=Math.min(length,remaining*velocity);
+   if(length)position(city,boat,boat.x+bx/length*travel,boat.y+by/length*travel,Math.atan2(bx,by));
+   remaining-=travel/velocity;person.lastProgressAt=city.minute;
+   person.action='Guinchando embarcação da água até a margem';boat.status=person.action;
+   if(travel>=length-1e-5)person.path.shift();else break;
+   continue;
+  }
+
   if(isWater&&!['pickup','sail'].includes(mode)||!isWater&&!city.walkable(tx,ty)||mode==='sail'&&!isWater||mode==='tow'&&(!bike||!boatTowClear(city,boat,point.x,point.y,Math.abs(dx)>=Math.abs(dy)?Math.sign(dx)||1:0,Math.abs(dy)>Math.abs(dx)?Math.sign(dy):0))){releaseLocalBoatTrip(city,person,true);return true;}
   if(mode==='sail'&&trip.sharedCrossing?.phase==='boarding'){
    const departure=prepareSharedDeparture(city,person,remaining);remaining=departure.remaining;

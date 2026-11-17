@@ -166,3 +166,46 @@ test('commute demand dispatches a healthy boat from another lake and launches it
  assert.equal(operator.task,null);assert.equal(boat.driverId,null);assert.equal(cycle.driverId,null);
  const crossing=city.findPath(person.entity,goal);assert.equal(crossing?.[0]?.boatPlan?.boatId,boat.id);
 });
+
+test('indoor commute demand buys an accessible sale boat and tows it into service',async()=>{
+ const {dispatchBoatRelocations}=await import('../js/city_boat_relocation.js');
+ const {city,person,boat,cycle,goal}=fixture();
+ for(let y=0;y<24;y++)for(let x=12;x<18;x++)city.world.map[y*32+x]=TILE_WATER;
+ const operator={id:8,accountId:cycle.ownerAccountId,businessIds:[],entity:{x:5.5,y:12.5,properties:{}},task:null,path:[]};operator.entity.properties.citizen=operator;
+ person.accountId='commuter';person.task='work';person.targetId=17;person.jobId=17;
+ person.indoorLocation={buildingId:19};person.entity.x=30.5;
+ const job={id:17,active:true,door:goal,accountId:'job',entity:{destroyed:false}},home={id:19,active:true,door:{x:10.5,y:12.5},entity:{destroyed:false}};
+ city.buildings=[job,home];city.building=id=>city.buildings.find(b=>b.id===id);city.minute=480;
+ city.citizens.push(operator);city.society.citizen=id=>city.citizens.find(c=>c.id===id);
+ for(let y=3;y<8;y++)for(let x=3;x<8;x++)city.world.map[y*32+x]=TILE_WATER;
+ boat.x=5.5;boat.y=5.5;
+ boat.active=false;boat.ownerAccountId=boat.holderAccountId=city.worldPort.accountId;
+ city.worldPort.inventory={canoe:1};city.accounts=new Map([[operator.accountId,{balance:1000}],[city.worldPort.accountId,{balance:0}]]);
+ city.economy={goods:{canoe:{price:100}}};city.createEntity=data=>({destroyed:false,...data});city.accountName=id=>id;
+ city.transfer=(from,to,amount)=>{const payer=city.accounts.get(from);if(!payer||payer.balance<amount)return false;payer.balance-=amount;city.accounts.get(to).balance+=amount;return true;};
+ const before={x:boat.x,y:boat.y};
+ assert.equal(dispatchBoatRelocations(city),true);
+ assert.equal(boat.active,true);assert.equal(boat.ownerAccountId,operator.accountId);assert.equal(city.worldPort.inventory.canoe,0);
+ assert.equal(city.accounts.get(operator.accountId).balance,882);
+ assert.deepEqual({x:boat.x,y:boat.y},before,'purchase must not move the hull');
+ assert.ok(operator.path.some(p=>p.transportMode==='tow'));
+ assert.ok(operator.path.some(p=>p.transportMode==='retrieve'));
+ finish(city,operator);
+ assert.equal(city.world.getTile(Math.floor(boat.x),Math.floor(boat.y)),TILE_WATER);
+ assert.ok(boat.x>=12&&boat.x<18);
+ assert.equal(city.findPath(person.entity,goal)?.[0]?.boatPlan?.boatId,boat.id);
+});
+
+test('a bicycle winches an offshore hull to the bank before towing it',()=>{
+ const {city,person,boat,goal}=fixture({boatOnLand:false});boat.x=15.5;
+ person.path=planBoatTrip(city,person.entity,goal,{boat,relocate:true});
+ assert.ok(person.path?.some(p=>p.transportMode==='retrieve'));
+ let retrieved=false,previous={x:boat.x,y:boat.y};
+ for(let i=0;i<2000&&(person.path.length||person.localBoatTrip);i++){
+  const retrieving=person.path[0]?.transportMode==='retrieve';
+  advanceLocalBoatTrip(city,person,.05);
+  if(retrieving){retrieved=true;assert.ok(city.walkable(Math.floor(person.entity.x),Math.floor(person.entity.y)),'the operator stays on the bank while pulling the hull');}
+  assert.ok(Math.hypot(boat.x-previous.x,boat.y-previous.y)<=.05*4*1.15+.001);previous={x:boat.x,y:boat.y};
+ }
+ assert.equal(retrieved,true);assert.equal(person.localBoatTrip,null);assert.ok(Math.hypot(boat.x-goal.x,boat.y-goal.y)<.01);
+});

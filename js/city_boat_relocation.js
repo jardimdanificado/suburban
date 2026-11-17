@@ -13,17 +13,20 @@ export function dispatchBoatRelocations(city){
  const hour=city.hour??Math.floor(city.minute%1440/60);
  if(city.minute%10!==0||hour<7||hour>=20)return false;
  const fleet=[...(city.vehicles?.units.values()||[])];
- let boats=fleet.filter(v=>BOAT_TOW_RULES[v.boatClass]&&idle(v)&&(v.condition??100)>15&&city.minute-(v.lastRelocationAt??-Infinity)>=180);
+ const forSale=v=>!v.active&&v.holderAccountId&&(v.holderAccountId===city.worldPort?.accountId||(city.buildings||[]).some(b=>b.accountId===v.holderAccountId&&['boat_shop','shipyard'].includes(b.type)&&b.active&&!b.entity.destroyed));
+ let boats=fleet.filter(v=>BOAT_TOW_RULES[v.boatClass]&&(idle(v)||forSale(v)&&idle({...v,active:true}))&&(v.condition??100)>15&&city.minute-(v.lastRelocationAt??-Infinity)>=180);
  if(!boats.length||!fleet.some(v=>!v.boatClass&&BOAT_TOW_RULES.canoe.bikes.includes(v.good)&&idle(v)&&v.condition>15))return false;
  const operators=crossingCandidates(city).filter(c=>!c.mechanicJob&&!c.workMeal);
- boats=boats.filter(boat=>operators.some(c=>boatAccessAccounts(city,c).has(boat.ownerAccountId)&&fleet.some(v=>!v.boatClass&&idle(v)&&v.condition>15&&BOAT_TOW_RULES[boat.boatClass].bikes.includes(v.good)&&boatAccessAccounts(city,c).has(v.possessorAccountId||v.ownerAccountId))));
+ boats=boats.filter(boat=>operators.some(c=>(boatAccessAccounts(city,c).has(boat.ownerAccountId)||forSale(boat)&&city.vehicles.vehiclePrice&&[...boatAccessAccounts(city,c)].some(account=>(city.accounts?.get(account)?.balance??0)>=city.vehicles.vehiclePrice(boat)))&&fleet.some(v=>!v.boatClass&&idle(v)&&v.condition>15&&BOAT_TOW_RULES[boat.boatClass].bikes.includes(v.good)&&boatAccessAccounts(city,c).has(v.possessorAccountId||v.ownerAccountId))));
  if(!boats.length)return false;
  const waters=fishingWaters(city.world),width=city.world.width;
  const bodyAt=p=>waters.bodyAt[Math.floor(p.y)*width+Math.floor(p.x)]??-1;
- const requests=crossingRequests(city).filter(r=>['work','manage','walk'].includes(r.task)).slice(0,16);
+ const demand=crossingRequests(city).filter(r=>['work','manage','walk'].includes(r.task));
+ const offset=demand.length?Math.floor(city.minute/10)*16%demand.length:0;
+ const requests=[...demand.slice(offset),...demand.slice(0,offset)].slice(0,16);
  const shores=[];
  for(const body of waters.bodies){
-  if(fleet.some(v=>v.boatClass&&v.active&&!v.scrapped&&(v.condition??100)>15&&!v.worldFleetReserved&&bodyAt(v)===body.id)||city.citizens.some(c=>c.localBoatTrip?.relocation?.bodyId===body.id))continue;
+  if(city.citizens.some(c=>c.localBoatTrip?.relocation?.bodyId===body.id))continue;
   for(const cell of body.cells){if(waters.distance[cell]!==1)continue;
    const water={x:cell%width+.5,y:Math.floor(cell/width)+.5};
    for(const [dx,dy] of directions){const land={x:water.x+dx,y:water.y+dy};
@@ -32,20 +35,24 @@ export function dispatchBoatRelocations(city){
   }
  }
  for(const {citizen,goal} of requests){
-  const ground=city.findPath(citizen.entity,goal,{allowBoats:false}),current=city.findPath(citizen.entity,goal);
+  const door=citizen.indoorLocation&&city.building(citizen.indoorLocation.buildingId)?.door;
+  const start=door?{...door,properties:{citizen}}:citizen.entity;
+  const ground=city.findPath(start,goal,{allowBoats:false}),current=city.findPath(start,goal);
   if(current?.[0]?.boatPlan)continue;
-  const nearest=shores.slice().sort((a,b)=>distance(a.land,citizen.entity)-distance(b.land,citizen.entity));
+  const nearest=shores.slice().sort((a,b)=>distance(a.land,start)-distance(b.land,start));
   for(const shore of nearest.slice(0,12))for(const boat of boats.slice(0,4)){
    if(bodyAt(boat)===shore.bodyId)continue;
-   const hypothetical={...boat,id:`relocation:${boat.id}:${shore.water.x},${shore.water.y}`,x:shore.water.x,y:shore.water.y};
-   const useful=planBoatTrip(city,citizen.entity,goal,{boat:hypothetical,groundPath:ground,maxSeconds:boatRouteTime(city,citizen.entity,ground)});
+   const hypothetical={...boat,active:true,id:`relocation:${boat.id}:${shore.water.x},${shore.water.y}`,x:shore.water.x,y:shore.water.y};
+   const useful=planBoatTrip(city,start,goal,{boat:hypothetical,groundPath:ground,maxSeconds:boatRouteTime(city,start,ground)});
    if(!useful)continue;
    for(const operator of operators){
     if(city.society?.isAdult&&!city.society.isAdult(operator))continue;
     const accounts=boatAccessAccounts(city,operator);
-    if(!accounts.has(boat.ownerAccountId)||operator!==citizen&&!([null,'walk','leisure'].includes(operator.task??null)||['work','manage'].includes(operator.task)&&city.building?.(operator.targetId??operator.jobId)?.accountId===boat.ownerAccountId))continue;
-    const path=planBoatTrip(city,operator.entity,shore.land,{boat,relocate:true});
+    const buyer=forSale(boat)&&[...accounts].find(account=>(city.accounts?.get(account)?.balance??0)>=city.vehicles.vehiclePrice(boat));
+    if(!accounts.has(boat.ownerAccountId)&&!buyer||operator!==citizen&&!([null,'walk','leisure'].includes(operator.task??null)||['work','manage'].includes(operator.task)&&city.building?.(operator.targetId??operator.jobId)?.accountId===(buyer||boat.ownerAccountId)))continue;
+    const path=planBoatTrip(city,operator.entity,shore.land,{boat:buyer?{...boat,active:true,ownerAccountId:buyer}:boat,relocate:true});
     if(!path)continue;
+    if(buyer&&!city.vehicles.buyVehicle(buyer,boat.id))continue;
     // Launch the hull, then bring the operator and bicycle back to the bank.
     path.push({...shore.water,transportMode:'sail',boatClass:boat.boatClass},{...shore.land,transportMode:'walkAfter'});
     path[0]={...path[0],boatPlan:{...path[0].boatPlan,relocation:{bodyId:shore.bodyId,task:operator.task,targetId:operator.targetId,goal:operator.path?.at(-1)&&{x:operator.path.at(-1).x,y:operator.path.at(-1).y}}}};
