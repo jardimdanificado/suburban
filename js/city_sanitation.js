@@ -145,6 +145,10 @@ export class CitySanitation {
     const rows=this._facilityChoiceRows??=[],pool=this._facilityChoicePool??=[];this._facilityChoiceRows=rows;this._facilityChoicePool=pool;rows.length=0;let rowCount=0;
     const addChoice=(facility,trespass)=>{let row=pool[rowCount];if(!row)pool[rowCount]=row=[null,0,false,0];row[0]=facility;row[1]=this.score(c,facility);row[2]=trespass;row[3]=rowCount;rows.push(row);rowCount++;};
     for(const f of choices)if(this.allowed(c,f,search)&&this.city.units.get(f.unitId)?.roomType==='bathroom')addChoice(f,false);
+    // Several bathrooms can share one entrance. A failed route applies to all
+    // of them during this decision, including the private-access fallback.
+    // Do not retain failures across decisions: boats and terrain can change.
+    let unreachableDoors=null;
     const routeChoices=()=>{
       if(!rows.length)return false;
       // Build a stable min-heap instead of sorting every eligible facility for
@@ -153,7 +157,10 @@ export class CitySanitation {
       const siftDown=(index,size)=>{for(;;){let child=index*2+1;if(child>=size)return;const right=child+1;if(right<size&&before(rows[right],rows[child]))child=right;if(!before(rows[child],rows[index]))return;const hold=rows[index];rows[index]=rows[child];rows[child]=hold;index=child;}};
       for(let i=(rows.length>>1)-1;i>=0;i--)siftDown(i,rows.length);
       const tryChoice=row=>{
-        const [f,,trespass]=row,b=this.city.building(f.buildingId),path=this.city.findPath(c.entity,b.door);if(path===null)return false;
+        const [f,,trespass]=row,b=this.city.building(f.buildingId),doorKey=`${b.door.x},${b.door.y}`;
+        if(unreachableDoors?.has(doorKey))return false;
+        const path=this.city.findPath(c.entity,b.door);
+        if(path===null){(unreachableDoors??=new Set()).add(doorKey);return false;}
         const previous=c.task==='toilet'?c.toiletTargetId:c.task==='hygiene'?c.hygieneTargetId:null;if(previous)this.inboundFacilities.set(previous,Math.max(0,(this.inboundFacilities.get(previous)||0)-1));this.inboundFacilities.set(f.id,(this.inboundFacilities.get(f.id)||0)+1);
         if(task==='toilet'){c.toiletTargetId=f.id;if(trespass)c.trespassToiletFacilityId=f.id;}else{c.hygieneTargetId=f.id;if(trespass)c.trespassHygieneFacilityId=f.id;else c.hygieneWaitingSince=null;}c.task=task;c.targetId=b.id;c.path=path;
         if(trespass)c.action=task==='hygiene'?'Indo usar sem autorização a pia de uma propriedade privada':'Indo usar sem autorização o banheiro de uma propriedade privada';

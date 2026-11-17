@@ -25,3 +25,22 @@ node scripts/benchmark-fast-simulation.mjs
 ```
 
 Esses tempos medem CPU da simulação local, sem renderização. Ainda existem picos em outros sistemas; os números não equivalem a FPS nem a medições no celular.
+
+## Rodada 2 — banheiros com a mesma porta
+
+Na mesma seed, uma decisão de banheiro fazia até 51 consultas de rota para apenas quatro destinos; até 48 consultas repetiam a mesma porta inacessível. O número de banheiros no prédio multiplicava a tentativa de planejar caminhos terrestres, marítimos e por passarelas.
+
+A decisão agora lembra quais portas não têm rota. Outros banheiros com a mesma entrada são descartados sem repetir a busca. A memória dura somente durante aquela decisão, inclusive sua tentativa de acesso privado por necessidade extrema. A próxima decisão testa as portas novamente, permitindo alterações de terreno, disponibilidade de barcos e acesso. Pontuação, permissões e filas continuam iguais.
+
+Comparação local de 400 minutos simulados com os mesmos parâmetros da rodada 1:
+
+| Medida | Antes | Depois |
+| --- | ---: | ---: |
+| Pico de busca de banheiro | 309,3 ms | 41,5 ms |
+| Maior atualização completa | 402,3 ms | 190,4 ms |
+| Percentil 95 das atualizações | 71,1 ms | 67,4 ms |
+| Tempo total medido | 13,67 s | 12,80 s |
+
+O checksum completo permaneceu `53949bbbcbb78c9c389ea10ca3fb7cc837ed5cb21d579b590ee8675d0c836509` nas duas execuções.
+
+Os testes cobrem portas repetidas sem rota, nova tentativa após mudança de acesso, seleção do próximo banheiro pela pontuação, autorização de visitantes e contratos de limpeza. O teste longo de vinte dias falhou com `city.world.setSidewalk is not a function`; a mesma falha foi reproduzida com `city_sanitation.js` anterior à rodada, em uma cópia isolada. Essa falha não foi alterada nesta otimização.

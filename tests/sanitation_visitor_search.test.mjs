@@ -34,3 +34,31 @@ test('a friend moving out removes visitor access, while an empty owned bathroom 
  host.homeId=null;city.housing.invalidateResidents();assert.equal(city.sanitation.choose(guest),false);
  city.units.get('bath').ownerId=guest.accountId;assert.equal(city.sanitation.choose(guest),true);
 });
+
+test('an unreachable building is routed once per search even with many bathrooms',()=>{
+ const {city,guest}=fixture(),site=city.building(1);
+ for(let i=0;i<12;i++){
+  const id=`public-bath:${i}`;city.units.set(id,{id,roomType:'bathroom'});
+  city.sanitation.addFacility(site,{unitId:id,access:'public',price:0});
+ }
+ let calls=0;city.findPath=()=>{calls++;return null;};
+ assert.equal(city.sanitation.choose(guest),false);
+ assert.equal(calls,1);
+ // A new decision must retry: a boat, passarela or terrain edit can open access.
+ city.findPath=()=>{calls++;return [];};
+ assert.equal(city.sanitation.choose(guest),true);
+ assert.equal(calls,2);
+});
+
+test('skipping duplicate failed doors still selects the next accessible facility by score',()=>{
+ const {city,guest}=fixture(),near=city.building(1),far={id:2,type:'public_toilet',active:true,door:{x:10,y:10}};
+ city.building=id=>id===1?near:id===2?far:null;
+ for(const [site,id] of [[near,'near:1'],[near,'near:2'],[far,'far']]){
+  city.units.set(id,{id,roomType:'bathroom'});city.sanitation.addFacility(site,{unitId:id,access:'public'});
+ }
+ const visited=[],path=[{x:4,y:4}];
+ city.findPath=(start,goal)=>{visited.push(goal);return goal===near.door?null:path;};
+ assert.equal(city.sanitation.choose(guest,'hygiene'),true);
+ assert.deepEqual(visited,[near.door,far.door]);
+ assert.equal(guest.hygieneTargetId,'toilet:far');assert.equal(guest.path,path);
+});
