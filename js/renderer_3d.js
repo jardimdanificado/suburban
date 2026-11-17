@@ -3855,6 +3855,24 @@ export class RCT3DRenderer {
     const postQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.postMaterial);
     this.postScene.add(postQuad);
 
+    // Keep the final low-resolution image intact when presenting on dense screens.
+    this.presentationTarget = new THREE.WebGLRenderTarget(1, 1, {
+      minFilter: THREE.NearestFilter,
+      magFilter: THREE.NearestFilter,
+      depthBuffer: true
+    });
+    this.presentationScene = new THREE.Scene();
+    this.presentationMaterial = new THREE.ShaderMaterial({
+      uniforms: { tImage: { value: this.presentationTarget.texture } },
+      vertexShader: `varying vec2 vUv;
+        void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+      fragmentShader: `uniform sampler2D tImage; varying vec2 vUv;
+        void main() { gl_FragColor = texture2D(tImage, vUv); }`,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false
+    });
+    this.presentationScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.presentationMaterial));
     this.updateRendererResolution();
 
     const canvasDom = this.renderer.domElement;
@@ -3955,7 +3973,8 @@ export class RCT3DRenderer {
       brightness: 1.0,
       contrast: 1.0,
       alpha: 1.0,
-      nightLightLimit: 32
+      nightLightLimit: 32,
+      dust: true
     };
     this._lastPerspState = null;
     // 4.6 Texture-Derived & Procedural Normal Maps
@@ -5257,8 +5276,17 @@ export class RCT3DRenderer {
   updateRendererResolution() {
     const internalW = Math.max(160, Math.floor(this.width * this.scaleFactor));
     const internalH = Math.max(120, Math.floor(this.height * this.scaleFactor));
-    this.renderer.setSize(internalW, internalH, false);
+    const dpr = Math.max(1, Number(globalThis.window?.devicePixelRatio) || 1);
+    this.pixelPresentationEnabled = dpr > 1;
+    // Render the scene at the selected scale, but copy its pixels to a native
+    // framebuffer. CSS fractional upscaling can soften pixels on Android.
     this.renderer.setPixelRatio(1.0);
+    this.renderer.setSize(
+      this.pixelPresentationEnabled ? Math.round(this.width * dpr) : internalW,
+      this.pixelPresentationEnabled ? Math.round(this.height * dpr) : internalH,
+      false
+    );
+    this.presentationTarget?.setSize(internalW, internalH);
     if (this.renderTarget) {
       this.renderTarget.setSize(internalW, internalH);
     }
@@ -5267,6 +5295,12 @@ export class RCT3DRenderer {
     if (canvasDom) {
       canvasDom.style.imageRendering = this.scaleFactor < 1.0 ? "pixelated" : "auto";
     }
+  }
+
+  presentPixels() {
+    if (!this.pixelPresentationEnabled) return;
+    this.renderer.setRenderTarget(null);
+    this.renderer.render(this.presentationScene, this.postCamera);
   }
 
   setTerrainOptimizations(enabled) {
@@ -9394,7 +9428,7 @@ export class RCT3DRenderer {
     this.cityCitizenBatches.end();
     this.cityCitizenModels.end();
     syncSubstanceSmoke(THREE,this,this.cityDevelopment?.city,time);
-    syncConstructionDust(THREE,this,this.cityDevelopment,time,daylight);
+    syncConstructionDust(THREE,this,this.cityDevelopment,time,daylight,this.graphicOptions.dust!==false);
     // Clean inactive dynamic billboards
     for (const [id, spr] of this.entitySprites.entries()) {
       if (!activeIds.has(id)) {
@@ -9448,7 +9482,7 @@ export class RCT3DRenderer {
     // Draw WebGL Frame with Depth of Field & Chromatic Aberration in Perspective Modes
     const profilePrepared = this.profileFrame ? performance.now() : 0;
     this.terrainTracks.update(this.renderer,world,entities,dt*effectiveSpeed,this.cityCitizenModels,citizenRenderOffsets,this);
-    syncMovementDust(THREE,this,world,entities,citizenRenderOffsets,dt*effectiveSpeed,daylight);
+    syncMovementDust(THREE,this,world,entities,citizenRenderOffsets,dt*effectiveSpeed,daylight,this.graphicOptions.dust!==false);
     const activeCam = this.isPerspectiveActive() ? this.fpCamera : this.camera;
     const lightBlockers=(this.cityDevelopment?.city?.buildings||[])
       .filter(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&b.type!=='quarry')
@@ -9476,7 +9510,7 @@ export class RCT3DRenderer {
       retroDitherPostUniform.value=postBayerActive?1:0;
       this.renderer.setRenderTarget(this.renderTarget);
       this.renderer.render(this.scene, activeCam);
-      this.renderer.setRenderTarget(null);
+      this.renderer.setRenderTarget(this.pixelPresentationEnabled ? this.presentationTarget : null);
       this.postMaterial.uniforms.tDiffuse.value = this.renderTarget.texture;
       this.postMaterial.uniforms.uBayerEnabled.value=postBayerActive?1:0;
 
@@ -9507,9 +9541,10 @@ export class RCT3DRenderer {
     } else {
       retroDitherPostUniform.value=0;
       this.postMaterial.uniforms.uBayerEnabled.value=0;
-      this.renderer.setRenderTarget(null);
+      this.renderer.setRenderTarget(this.pixelPresentationEnabled ? this.presentationTarget : null);
       this.renderer.render(this.scene, activeCam);
     }
+    this.presentPixels();
     if (this.profileFrame) this.frameProfile = {terrain:profileTerrain-profileStart,city:profileCity-profileTerrain,entities:profilePrepared-profileCity,entityLoop:profileEntityLoop-profileCity,entityRest:profilePrepared-profileEntityLoop,citizenClass:profileCitizenClass,citizenSurface:profileCitizenSurface,citizenBody:profileCitizenBody,webgl:performance.now()-profilePrepared};
   }
 

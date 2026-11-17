@@ -10,7 +10,7 @@ varying float vSeed;
 void main(){
   vColor=aColor;vSeed=aSeed;
   vec4 mv=modelViewMatrix*vec4(position,1.0);
-  gl_PointSize=clamp(aSize*uScale/max(0.5,-mv.z),3.0,32.0);
+  gl_PointSize=clamp(aSize*uScale/max(0.5,-mv.z),3.0,28.0);
   gl_Position=projectionMatrix*mv;
 }`;
 const FRAG=`
@@ -46,7 +46,7 @@ export class DustField {
     geometry.setAttribute('aSize',new THREE.BufferAttribute(this.sizes,1));
     geometry.setAttribute('aSeed',new THREE.BufferAttribute(this.seeds,1));
     const material=new THREE.ShaderMaterial({vertexShader:VERT,fragmentShader:FRAG,uniforms:{
-      uDaylight:{value:1},uScale:{value:260},
+      uDaylight:{value:1},uScale:{value:225},
     },transparent:true,depthWrite:false,depthTest:true,fog:false});
     this.points=new THREE.Points(geometry,material);
     this.points.frustumCulled=false;group.add(this.points);

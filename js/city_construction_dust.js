@@ -10,20 +10,24 @@ function emit(state,x,z,base){
     state.grains.push({
       x:x+Math.cos(angle)*rad,z:z+Math.sin(angle)*rad,h:base+.1+Math.random()*.16,
       vx:Math.cos(angle)*(.16+Math.random()*.34),vz:Math.sin(angle)*(.16+Math.random()*.34),vh:.2+Math.random()*.3,
-      age:0,life:1.3+Math.random(),size:1.6+Math.random()*1.8,
+      age:0,life:1.3+Math.random(),size:1.4+Math.random()*1.5,
       color:PALETTE[Math.floor(Math.random()*PALETTE.length)],seed:Math.random(),
     });
   }
 }
 
-export function syncConstructionDust(THREE,renderer,development,time,daylight=1){
-  if(!development?.projects?.length)return;
+export function syncConstructionDust(THREE,renderer,development,time,daylight=1,enabled=true){
   let state=local.get(renderer);
+  if(!enabled||!development?.projects?.length){
+    if(state)state.group.visible=false;
+    return;
+  }
   if(!state){
     const group=new THREE.Group();group.name='construction-dust';renderer.entityGroup.add(group);
     state={group,field:new DustField(THREE,group),grains:[],lastEmit:new WeakMap(),time};local.set(renderer,state);
   }
   if(!state.group.parent)renderer.entityGroup.add(state.group);
+  state.group.visible=true;
   state.field.setDaylight(daylight);
   const dt=Math.max(0,Math.min(.06,(time-state.time)*.001));state.time=time;
 

@@ -29,19 +29,23 @@ function emit(state,vehicle,x,z,base,surface,speed){
       h:base+.08+Math.random()*.16,
       vx:Math.cos(angle)*(.1+Math.random()*.3)*boost,vz:Math.sin(angle)*(.1+Math.random()*.3)*boost,
       vh:.1+Math.random()*.25,age:0,life:1+Math.random()*.9,
-      size:(1.4+Math.random()*1.6)*(.75+boost*.4),color:palette,seed:Math.random(),
+      size:(1.2+Math.random()*1.4)*(.75+boost*.4),color:palette,seed:Math.random(),
     });
   }
 }
 
-export function syncMovementDust(THREE,renderer,world,entities,offsets,dt,daylight=1){
-  if(!(dt>0)||!entities?.length||!renderer?.entityGroup)return;
+export function syncMovementDust(THREE,renderer,world,entities,offsets,dt,daylight=1,enabled=true){
   let state=local.get(renderer);
+  if(!enabled||!(dt>0)||!entities?.length||!renderer?.entityGroup){
+    if(state)state.group.visible=false;
+    return;
+  }
   if(!state){
     const group=new THREE.Group();group.name='movement-dust';renderer.entityGroup.add(group);
     state={group,field:new DustField(THREE,group,3072),grains:[],history:new WeakMap(),time:0};local.set(renderer,state);
   }
   if(!state.group.parent)renderer.entityGroup.add(state.group);
+  state.group.visible=true;
   state.field.setDaylight(daylight);state.time+=dt*1000;
 
   for(const entity of entities){
