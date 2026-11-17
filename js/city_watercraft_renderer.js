@@ -83,18 +83,6 @@ function boatVisual(renderer,THREE,id,kind){
   if(!group){group=makeBoatModel(THREE,kind);group.userData.kind=kind;const ring=new THREE.Mesh(new THREE.RingGeometry(.62,.82,20),new THREE.MeshBasicMaterial({color:0xffe178,side:THREE.DoubleSide,transparent:true,opacity:.95,depthWrite:false}));ring.rotation.x=-Math.PI/2;ring.position.y=.035;ring.visible=false;ring.userData.worldVesselSelectionRing=true;group.add(ring);group.userData.selectionRing=ring;renderer.portVesselVisuals.set(id,group);renderer.scene.add(group);}
   return group;
 }
-function seatedPeople(group,THREE,people){
-  const key=people.map(person=>person.globalId||person.citizenId||person.id).join(':');
-  if(group.userData.peopleKey===key)return;
-  if(group.userData.people){group.remove(group.userData.people);group.userData.people.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}
-  const seats=new THREE.Group();group.userData.people=seats;group.userData.peopleKey=key;group.add(seats);
-  people.forEach((person,index)=>{const actor=new THREE.Group(),skin=new THREE.MeshLambertMaterial({color:0xc18b65}),cloth=new THREE.MeshLambertMaterial({color:0x496978});
-    const head=new THREE.Mesh(new THREE.BoxGeometry(.13,.15,.13),skin);head.position.y=.64;actor.add(head);
-    const body=new THREE.Mesh(new THREE.BoxGeometry(.18,.23,.13),cloth);body.position.y=.45;actor.add(body);
-    for(const x of [-.055,.055]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.065,.065,.19),cloth);leg.position.set(x,.32,.08);actor.add(leg);}
-    actor.position.set((index%2)*.23-.11,0,Math.floor(index/2)*.24-.2);actor.userData.personGlobalId=person.globalId;seats.add(actor);
-  });
-}
 const clamp01=value=>Math.max(0,Math.min(1,value));
 function edgeRoute(renderer,coordinator,city,world,cityId){
   const session=coordinator?.cities?.get(cityId),targetCity=session?.city||(cityId===city.worldPort?.cityId?city:null),targetWorld=targetCity?.world||session?.world,targetPort=targetCity?.worldPort;
@@ -126,7 +114,7 @@ export function syncCityWatercraft(renderer,THREE,city,world){
   docked.forEach(vessel=>{const id=vessel.id,kind=BOAT_CLASSES[vessel.classId]?vessel.classId:'cargo',group=boatVisual(renderer,THREE,id,kind),radius=kind==='cargo'?3:kind==='ferry'?2:1.5,transfer=coordinator.transfers.get(vessel.transferId),docking=transfer&&coordinator.minute>=transfer.departureMinute-1&&(!coordinator.ports.get(portId)?.dockedVesselId||coordinator.ports.get(portId).dockedVesselId===id);
     const local=vessel.homeCityId===port.cityId?city.vehicles?.units?.get(vessel.localVehicleId):null;let point=docking?{x:berth.x+.5,y:berth.y+.5}:local?boatVisualPosition(local):renderer.vesselMoorings.get(`${portId}:${id}`);
     if(!point||!Number.isFinite(point.x)||!Number.isFinite(point.y)){point=mooringPosition(world,berth,occupied,radius);if(point)renderer.vesselMoorings.set(`${portId}:${id}`,point);}
-    if(!point)return;seatedPeople(group,THREE,transfer?.payload.crew?[transfer.payload.crew]:[]);occupied.push({...point,radius});liveVessels.add(id);group.position.set(point.x,boatSurfaceY(renderer,world,point.x,point.y,group),point.y);group.rotation.y=Math.atan2(awayX,awayY);group.visible=true;
+    if(!point)return;occupied.push({...point,radius});liveVessels.add(id);group.position.set(point.x,boatSurfaceY(renderer,world,point.x,point.y,group),point.y);group.rotation.y=Math.atan2(awayX,awayY);group.visible=true;
     group.userData.worldVesselSelection={key:id,vessel,transfer,route:coordinator.routes.get(vessel.routeId),phase:docking?'Atracado para embarque':'Aguardando em vaga de fundeio',x:point.x,y:point.y};
   });
   for(const vessel of city.vehicles?.units?.values?.()||[]){if(vessel.scrapped||!vessel.boatClass||vessel.entity?.destroyed)continue;
@@ -135,7 +123,7 @@ export function syncCityWatercraft(renderer,THREE,city,world){
     // position, making the ship appear to jump between that point and the port.
     const worldRepresentation=[...(coordinator?.vessels?.values?.()||[])].find(item=>item.homeCityId===(port?.cityId||city.id)&&item.localVehicleId===vessel.id);
     if(hideLocalBoat(worldRepresentation,liveVessels,vessel.driverId))continue;
-    const id=`city-vehicle:${vessel.id}`,group=boatVisual(renderer,THREE,id,vessel.boatClass),passenger=Number.isSafeInteger(vessel.transportCitizenId)?city.society?.citizen(vessel.transportCitizenId):null,carried=passenger?.ridingVehicleId?city.vehicles?.units?.get(passenger.ridingVehicleId):null;if(carried?.ferrying){group.userData.carriedCycle??=makeCarriedCycle(THREE,carried.good);group.userData.carriedCycle.visible=true;}else if(group.userData.carriedCycle)group.userData.carriedCycle.visible=false;group.userData.flagVessel=vessel;seatedPeople(group,THREE,passenger?[passenger]:[]);const x=vessel.entity?.x??vessel.x,y=vessel.entity?.y??vessel.y;liveVessels.add(id);group.position.set(x,boatSurfaceY(renderer,world,x,y,group),y);group.rotation.y=vessel.angle||0;group.visible=true;
+    const id=`city-vehicle:${vessel.id}`,group=boatVisual(renderer,THREE,id,vessel.boatClass),passenger=Number.isSafeInteger(vessel.transportCitizenId)?city.society?.citizen(vessel.transportCitizenId):null,carried=passenger?.ridingVehicleId?city.vehicles?.units?.get(passenger.ridingVehicleId):null;if(carried?.ferrying){group.userData.carriedCycle??=makeCarriedCycle(THREE,carried.good);group.userData.carriedCycle.visible=true;}else if(group.userData.carriedCycle)group.userData.carriedCycle.visible=false;group.userData.flagVessel=vessel;const x=vessel.entity?.x??vessel.x,y=vessel.entity?.y??vessel.y;liveVessels.add(id);group.position.set(x,boatSurfaceY(renderer,world,x,y,group),y);group.rotation.y=vessel.angle||0;group.visible=true;
     const towBike=vessel.towedByVehicleId&&city.vehicles.units.get(vessel.towedByVehicleId);
     if(towBike){
       group.userData.towline??=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),new THREE.LineBasicMaterial({color:ropeColor}));
@@ -151,7 +139,6 @@ export function syncCityWatercraft(renderer,THREE,city,world){
     if(cityId!==port?.cityId)continue;
     const route=edgeRoute(renderer,coordinator,city,world,cityId);if(!route)continue;const berthBusy=!atOrigin&&coordinator.ports.get(portId)?.dockedVesselId&&coordinator.ports.get(portId).dockedVesselId!==transfer.vesselId;const localProgress=atOrigin?progress*2:(progress-.5)*2,points=atOrigin?route:route.slice().reverse(),position=berthBusy&&progress>=.95?mooringPosition(world,berth,occupied,2):routePoint(points,localProgress);if(!position)continue;position.angle??=0;if(berthBusy)occupied.push({...position,radius:2});
     const vessel=coordinator.vessels.get(transfer.vesselId),kind=BOAT_CLASSES[vessel?.classId]?vessel.classId:'cargo',id=`voyage:${transfer.id}`,group=boatVisual(renderer,THREE,id,kind);group.userData.worldVesselSelection={key:id,vessel,transfer,route,phase:atOrigin?'saindo da cidade':'chegando à cidade',x:position.x,y:position.y};
-    const manifest=transfer.payload,people=manifest.kind==='citizen'?(manifest.package?.version===2?manifest.package.members:[manifest.package]):manifest.crew?[manifest.crew]:[];seatedPeople(group,THREE,[...(manifest.kind==='citizen'&&manifest.crew?[manifest.crew]:[]),...people].filter(Boolean));
     liveVessels.add(id);group.position.set(position.x,boatSurfaceY(renderer,world,position.x,position.y,group),position.y);group.rotation.y=position.angle;group.visible=true;
   }
   for(const vessel of coordinator?.vessels?.values?.()||[]){
@@ -160,7 +147,7 @@ export function syncCityWatercraft(renderer,THREE,city,world){
     const travelMinutes=Math.max(1,route.travelMinutes),progress=clamp01((worldMinute-(vessel.returnMinute-travelMinutes))/travelMinutes),atDestination=progress<.5,cityId=atDestination?route.destinationCityId:route.originCityId;
     if(cityId!==port?.cityId)continue;
     const points=edgeRoute(renderer,coordinator,city,world,cityId);if(!points)continue;const localProgress=atDestination?progress*2:(progress-.5)*2,travelPath=atDestination?points:points.slice().reverse(),position=routePoint(travelPath,localProgress);if(!position)continue;
-    const kind=BOAT_CLASSES[vessel.classId]?vessel.classId:'cargo',id=`return:${vessel.id}`,group=boatVisual(renderer,THREE,id,kind);const returningTrip=coordinator.transfers.get(vessel.lastTransferId);seatedPeople(group,THREE,returningTrip?.payload.crew?[returningTrip.payload.crew]:[]);group.userData.worldVesselSelection={key:id,vessel,transfer:returningTrip,route,phase:atDestination?'retornando ao porto de origem':'retornando do mar',x:position.x,y:position.y};
+    const kind=BOAT_CLASSES[vessel.classId]?vessel.classId:'cargo',id=`return:${vessel.id}`,group=boatVisual(renderer,THREE,id,kind);const returningTrip=coordinator.transfers.get(vessel.lastTransferId);group.userData.worldVesselSelection={key:id,vessel,transfer:returningTrip,route,phase:atDestination?'retornando ao porto de origem':'retornando do mar',x:position.x,y:position.y};
     liveVessels.add(id);group.position.set(position.x,boatSurfaceY(renderer,world,position.x,position.y,group),position.y);group.rotation.y=position.angle;group.visible=true;
   }
   for(const[id,group]of renderer.portVesselVisuals){if(!liveVessels.has(id)){disposeGroup(renderer,group);renderer.portVesselVisuals.delete(id);continue;}group.userData.selectionRing&&(group.userData.selectionRing.visible=renderer.selectedEntityId===`world-vessel:${id}`);}
@@ -168,7 +155,7 @@ export function syncCityWatercraft(renderer,THREE,city,world){
   const people=city.citizens.filter(person=>!person.entity.destroyed&&person.boatClass&&!person.boatVehicleId&&person.entity.x>=0&&person.entity.y>=0),live=new Set();
   for(const person of people){const id=person.id,kind=person.boatClass;live.add(id);let group=renderer.boatCitizenVisuals.get(id);
     if(!group||group.userData.kind!==kind){if(group)disposeGroup(renderer,group);group=makeBoatModel(THREE,kind);group.userData.kind=kind;renderer.boatCitizenVisuals.set(id,group);renderer.scene.add(group);}
-    group.userData.flagOwner=person;seatedPeople(group,THREE,[person]);const next=person.path?.[0],dx=next?next.x-person.entity.x:0,dy=next?next.y-person.entity.y:0;group.position.set(person.entity.x,boatSurfaceY(renderer,world,person.entity.x,person.entity.y,group),person.entity.y);group.visible=true;if(dx||dy)group.rotation.y=Math.atan2(dx,dy);
+    group.userData.flagOwner=person;const next=person.path?.[0],dx=next?next.x-person.entity.x:0,dy=next?next.y-person.entity.y:0;group.position.set(person.entity.x,boatSurfaceY(renderer,world,person.entity.x,person.entity.y,group),person.entity.y);group.visible=true;if(dx||dy)group.rotation.y=Math.atan2(dx,dy);
   }
   for(const[id,group]of renderer.boatCitizenVisuals)if(!live.has(id)){disposeGroup(renderer,group);renderer.boatCitizenVisuals.delete(id);}
   for(const group of [...renderer.portVesselVisuals.values(),...renderer.boatCitizenVisuals.values()])syncBoatFlags(renderer,THREE,city,group);

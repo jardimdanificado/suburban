@@ -23,6 +23,8 @@ import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMater
 import {cachedConstructionFootprint,grassExclusionCells,grassExclusionSignature,grassChunkSignatures} from './city_site_footprints.js?v=local-chunk-mask-3';
 import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=typed-roots-2';
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
+import {syncConstructionDust} from './city_construction_dust.js?v=grain-dust-1';
+import {syncMovementDust} from './city_movement_dust.js?v=grain-dust-1';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-player-marker-5';
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import {streetSurfaceTextures} from './street_surface_textures.js?v=ground-realism-2';
@@ -9392,6 +9394,7 @@ export class RCT3DRenderer {
     this.cityCitizenBatches.end();
     this.cityCitizenModels.end();
     syncSubstanceSmoke(THREE,this,this.cityDevelopment?.city,time);
+    syncConstructionDust(THREE,this,this.cityDevelopment,time,daylight);
     // Clean inactive dynamic billboards
     for (const [id, spr] of this.entitySprites.entries()) {
       if (!activeIds.has(id)) {
@@ -9445,6 +9448,7 @@ export class RCT3DRenderer {
     // Draw WebGL Frame with Depth of Field & Chromatic Aberration in Perspective Modes
     const profilePrepared = this.profileFrame ? performance.now() : 0;
     this.terrainTracks.update(this.renderer,world,entities,dt*effectiveSpeed,this.cityCitizenModels,citizenRenderOffsets,this);
+    syncMovementDust(THREE,this,world,entities,citizenRenderOffsets,dt*effectiveSpeed,daylight);
     const activeCam = this.isPerspectiveActive() ? this.fpCamera : this.camera;
     const lightBlockers=(this.cityDevelopment?.city?.buildings||[])
       .filter(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&b.type!=='quarry')

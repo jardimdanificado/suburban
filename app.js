@@ -17,16 +17,30 @@ import { OptionsPanel } from "./js/options.js?v=music-1";
 import { MusicPlayer } from "./js/music.js";
 import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
 import { WorldNetClient, WorldNetCoordinator } from './js/world_net.js?v=world-net-1';
+import { StartupLoading } from './js/startup_loading.js';
 
 const root = document.querySelector("#experience");
 const canvasUI = document.querySelector("#canvas-ui");
 const container3D = document.querySelector("#container-3d");
 const renderer3D = new RCT3DRenderer(container3D);
+const startupLoading = new StartupLoading({root});
+let booted = false;
+// Top-level awaits pause module evaluation. Swallow input until boot finishes,
+// so handlers below cannot touch bindings still in the temporal dead zone.
+for (const type of ['pointerdown','pointermove','pointerup','pointercancel','click','dblclick','contextmenu','wheel','keydown','keyup','blur']) {
+  window.addEventListener(type, event => {
+    if (startupLoading.closed || event.target === startupLoading.canvas) return;
+    event.stopImmediatePropagation();
+    if (type !== 'pointermove' && type !== 'keyup') event.preventDefault();
+  }, { capture: true, passive: false });
+}
 let gameCameraCitizenId=null;
 let gameCameraLocked=true;
 let gameIndoorCamera=null;
 const urlParams = new URLSearchParams(window.location.search);
 const worldSettings = resolveWorldSettings(urlParams);
+startupLoading.stage('Gerando terreno…', 0.1);
+await startupLoading.paint();
 const world = new World(worldSettings.presetId, worldSettings.seed, worldSettings.size);
 world.preset = worldSettings.preset;
 const entities = [];
@@ -342,6 +356,7 @@ function panGameCamera(dx,dy){
 }
 
 function onPointerDown(event) {
+  if(!booted) return;
   if(gameUI.active){
     const rect=root.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
     pointerOnUI=gameUI.pointerDown(x,y,event.button,legacyUI);
@@ -420,6 +435,7 @@ function onPointerDown(event) {
 }
 
 function onPointerMove(event) {
+  if(!booted) return;
   if(gameUI.active){
     const rect=root.getBoundingClientRect();
     mousePosition={x:event.clientX-rect.left,y:event.clientY-rect.top};
@@ -481,6 +497,7 @@ function onPointerMove(event) {
 }
 
 function onPointerUp(event) {
+  if(!booted) return;
   if(gameUI.active&&pointerOnUI){
     const rect=root.getBoundingClientRect(),moved=pointerDown&&Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>=6;
     if(moved)gameUI.desktop.pointerUp();else gameUI.pointerUp(event.clientX-rect.left,event.clientY-rect.top,event.button,legacyUI);
@@ -565,8 +582,9 @@ root.addEventListener("pointerdown", onPointerDown);
 root.addEventListener("pointermove", onPointerMove);
 root.addEventListener("pointerleave",()=>renderer3D.setMousePos(undefined,undefined));
 root.addEventListener("pointerup", onPointerUp);
-root.addEventListener("dblclick",event=>{const rect=root.getBoundingClientRect();if((gameUI.active?gameUI.desktop:cityUI).doubleClick(event.clientX-rect.left,event.clientY-rect.top))event.preventDefault();});
+root.addEventListener("dblclick",event=>{if(!booted)return;const rect=root.getBoundingClientRect();if((gameUI.active?gameUI.desktop:cityUI).doubleClick(event.clientX-rect.left,event.clientY-rect.top))event.preventDefault();});
 root.addEventListener("pointercancel", (event) => {
+  if(!booted) return;
   freeCameraTouch.pointerUp(event.pointerId);
   rightClickConsumed=false;
   gameUI.desktop.pointerUp();
@@ -579,6 +597,7 @@ root.addEventListener("pointercancel", (event) => {
 });
 root.addEventListener("contextmenu", (event) => event.preventDefault());
 root.addEventListener("wheel", (event) => {
+  if (!booted) return;
   if (event.target.closest(".ui-panel")) return;
   const rect = root.getBoundingClientRect();
   if((gameUI.active?gameUI:cityUI).scrollAt(event.clientX-rect.left,event.clientY-rect.top,event.deltaY)){event.preventDefault();return;}
@@ -594,6 +613,7 @@ root.addEventListener("wheel", (event) => {
 }, { passive: false });
 
 window.addEventListener("keydown", (event) => {
+  if(!booted) return;
   if(gameUI.active){if(gameUI.key(event,true))event.preventDefault();return;}
   if (mainMenu.isActive()) {
     if (event.code === 'Escape' && cityUI?.visible && cityUI?.manager?.windows?.length > 0) {
@@ -636,8 +656,8 @@ window.addEventListener("keydown", (event) => {
   if (["Equal", "NumpadAdd"].includes(event.code)) { event.preventDefault(); time.changeSpeed(1); }
   if (event.code === "Period" && !event.repeat) stepSimulation();
 });
-window.addEventListener('keyup',event=>{freeCameraKeys.delete(event.code);if(gameUI.key(event,false))event.preventDefault();});
-window.addEventListener('blur',()=>{freeCameraKeys.clear();freeCameraTouch.clear();cameraLookDrag=false;gameUI.blur();});
+window.addEventListener('keyup',event=>{if(!booted)return;freeCameraKeys.delete(event.code);if(gameUI.key(event,false))event.preventDefault();});
+window.addEventListener('blur',()=>{if(!booted)return;freeCameraKeys.clear();freeCameraTouch.clear();cameraLookDrag=false;gameUI.blur();});
 window.addEventListener("resize", resize);
 
 function frame(now) {
@@ -763,15 +783,6 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-{
-  const { x, y } = world.spawnCenter;
-  renderer3D.setCamera(x, y, 1.2);
-  resize();
-  previousFrame = performance.now();
-  lastRenderedAt = previousFrame;
-  requestAnimationFrame(frame);
-}
-
 function selectEntity(entity, unitId = null) {
   selected = entity;
   renderer3D.selectEntity(entity?.id ?? -1);
@@ -779,6 +790,8 @@ function selectEntity(entity, unitId = null) {
   window.dispatchEvent(new CustomEvent("experience:select", { detail: selected }));
 }
 
+startupLoading.stage('Fundando a cidade…', 0.45);
+await startupLoading.paint();
 export let city = new CitySimulation({ world, createEntity, population: worldSettings.population, startFoundingWorks: true });
 let cityGenerationError = null;
 try { city.initialize(); } catch (error) {
@@ -786,6 +799,8 @@ try { city.initialize(); } catch (error) {
   city.log(error.message, 'city', [], { kind: 'generation-failed' });
   city.syncClock();
 }
+startupLoading.stage('Carregando sistemas…', 0.8);
+await startupLoading.paint();
 export const cityUI = new CityDesktop({ city, root, select: selectEntity, controls: {
   interventionsVisible:()=>options.values.showInterventions!==false,
   pauseForCouncilBills:()=>options.values.pauseForCouncilBills===true,
@@ -884,7 +899,23 @@ function initSimulationBridge() {
 }
 initSimulationBridge();
 
-export function startNewCity({ preset = 'archipelago', seed = 482910, size = 256, population = 512 } = {}) {
+startupLoading.stage('Pronto…', 1);
+await startupLoading.paint();
+startupLoading.close();
+booted = true;
+{
+  const { x, y } = world.spawnCenter;
+  renderer3D.setCamera(x, y, 1.2);
+  resize();
+  previousFrame = performance.now();
+  lastRenderedAt = previousFrame;
+  requestAnimationFrame(frame);
+}
+
+export async function startNewCity({ preset = 'archipelago', seed = 482910, size = 256, population = 512 } = {}) {
+  startupLoading.open();
+  startupLoading.stage('Preparando o mundo…', 0.05);
+  await startupLoading.paint();
   if (simulationBridge) {
     simulationBridge.worker?.terminate();
     simulationBridge.active = false;
@@ -911,6 +942,8 @@ export function startNewCity({ preset = 'archipelago', seed = 482910, size = 256
     world.map = new Uint8Array(size * size);
   }
   world.preset = preset;
+  startupLoading.stage('Gerando terreno…', 0.25);
+  await startupLoading.paint();
   world.generate(presetId, seed);
 
   renderer3D.clear();
@@ -920,6 +953,8 @@ export function startNewCity({ preset = 'archipelago', seed = 482910, size = 256
   renderer3D.currentWorldRevision = world.revision;
   renderer3D.setCamera(world.spawnCenter.x, world.spawnCenter.y, 1.2);
 
+  startupLoading.stage('Fundando a cidade…', 0.55);
+  await startupLoading.paint();
   city = new CitySimulation({ world, createEntity, population, startFoundingWorks: true });
   favorites.city=city;
   let genError = null;
@@ -949,7 +984,12 @@ export function startNewCity({ preset = 'archipelago', seed = 482910, size = 256
   mainMenu.selectedSize = size;
   mainMenu.selectedPopulation = population;
 
+  startupLoading.stage('Carregando sistemas…', 0.85);
+  await startupLoading.paint();
   initSimulationBridge();
+  startupLoading.stage('Pronto…', 1);
+  await startupLoading.paint();
+  startupLoading.close();
   startOrResumeGame();
 }
 
