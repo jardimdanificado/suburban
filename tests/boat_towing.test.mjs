@@ -346,3 +346,20 @@ test('crossing quotes reuse complete routes across time budgets without treating
  assert.ok(reads<100,`a smaller failed budget repeated the search: ${reads} tile reads`);
  assert.deepEqual(planBoatTrip(city,person.entity,goal,{boat,maxSeconds:seconds+2}),path);
 });
+
+test('crossing scratch storage resets after a failed search and a map resize',()=>{
+ const {city,person,boat,goal}=fixture({bike:false,boatOnLand:false});
+ const first=planBoatTrip(city,person.entity,goal,{boat});assert.ok(first);
+ for(let y=0;y<city.world.height;y++)city.occupied.add(`19,${y}`);
+ city.obstacleRevision++;city.minute++;
+ assert.equal(planBoatTrip(city,person.entity,goal,{boat}),null);
+ city.occupied.clear();city.obstacleRevision++;city.minute++;
+ assert.deepEqual(planBoatTrip(city,person.entity,goal,{boat}),first);
+ const width=64,height=32,map=new Uint8Array(width*height).fill(TILE_FLOOR);
+ for(let y=3;y<height-3;y++)for(let x=12;x<18;x++)map[y*width+x]=TILE_WATER;
+ const world={width,height,map,revision:10,getTile(x,y){return x<0||y<0||x>=this.width||y>=this.height?5:this.map[y*this.width+x];}};
+ city.world=world;city.minute++;
+ const fresh=fixture({bike:false,boatOnLand:false});fresh.city.world=world;
+ const expected=planBoatTrip(fresh.city,fresh.person.entity,fresh.goal,{boat:fresh.boat});assert.ok(expected);
+ assert.deepEqual(planBoatTrip(city,person.entity,goal,{boat}),expected);
+});

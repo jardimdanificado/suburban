@@ -92,8 +92,29 @@ export function boatLandParking(city,building,boat){
  }
  return candidates.sort((a,b)=>Math.hypot(a.x-origin.x,a.y-origin.y)-Math.hypot(b.x-origin.x,b.y-origin.y))[0]||null;
 }
-function push(heap,cost,key){let i=heap.length;heap.push([cost,key]);while(i){const parent=(i-1)>>1;if(heap[parent][0]<=cost)break;heap[i]=heap[parent];i=parent;}heap[i]=[cost,key];}
-function pop(heap){const root=heap[0],last=heap.pop();if(heap.length){let i=0;while(i*2+1<heap.length){let child=i*2+1;if(child+1<heap.length&&heap[child+1][0]<heap[child][0])child++;if(heap[child][0]>=last[0])break;heap[i]=heap[child];i=child;}heap[i]=last;}return root;}
+// Searches are synchronous. Reuse scratch storage outside saves, retaining
+// the same heap comparisons and tie order without allocating [cost,key] pairs.
+const crossingWorkspaces=new WeakMap();
+function crossingWorkspace(city,size){
+ let w=crossingWorkspaces.get(city);
+ if(!w||w.costs.length!==size*2){
+  w={costs:new Float64Array(size*2),parents:new Int32Array(size*2),heapKeys:new Int32Array(512),heapCosts:new Float64Array(512),heapLength:0,poppedCost:0};
+  crossingWorkspaces.set(city,w);
+ }
+ w.costs.fill(Infinity);w.parents.fill(-1);w.heapLength=0;return w;
+}
+function push(w,cost,key){
+ if(w.heapLength===w.heapKeys.length){const capacity=w.heapKeys.length*2,keys=new Int32Array(capacity),costs=new Float64Array(capacity);keys.set(w.heapKeys);costs.set(w.heapCosts);w.heapKeys=keys;w.heapCosts=costs;}
+ const keys=w.heapKeys,costs=w.heapCosts;let i=w.heapLength++;
+ while(i){const parent=(i-1)>>1;if(costs[parent]<=cost)break;keys[i]=keys[parent];costs[i]=costs[parent];i=parent;}
+ keys[i]=key;costs[i]=cost;
+}
+function pop(w){
+ const keys=w.heapKeys,costs=w.heapCosts,root=keys[0];w.poppedCost=costs[0];const end=--w.heapLength;if(!end)return root;
+ const lastKey=keys[end],lastCost=costs[end];let i=0;
+ while(i*2+1<end){let child=i*2+1;if(child+1<end&&costs[child+1]<costs[child])child++;if(costs[child]>=lastCost)break;keys[i]=keys[child];costs[i]=costs[child];i=child;}
+ keys[i]=lastKey;costs[i]=lastCost;return root;
+}
 // Owned rigs may launch, land and relaunch without a port. Other boats stay afloat after disembarkation.
 function crossingRoute(city,boat,bike,goal,{relocate=false,limitSeconds=Infinity}={}){
  const cache=terrainQuotes(city).crossings;
@@ -113,11 +134,11 @@ function computeCrossingRoute(city,boat,bike,goal,{relocate=false,limitSeconds=I
  if(!towing&&!startedWater)return null;
  // Ferries also revisit shore cells; only towed hulls need height samples.
  const hullTerrain=createHullTerrain(city,towing);
- const costs=new Float64Array(size*2).fill(Infinity),parents=new Int32Array(size*2).fill(-1),heap=[];
+ const heap=crossingWorkspace(city,size),{costs,parents}=heap;
  // Tow state records whether water was used. Ferry state records whether the passenger has landed.
  const root=start+(towing&&startedWater?size:0);costs[root]=0;push(heap,0,root);let target=-1,visited=0;
- while(heap.length&&visited++<60000){
-  const [cost,key]=pop(heap);if(cost!==costs[key]||cost>limitSeconds)continue;
+ while(heap.heapLength&&visited++<60000){
+  const key=pop(heap),cost=heap.poppedCost;if(cost!==costs[key]||cost>limitSeconds)continue;
   const cell=key%size,flag=key>=size,x=cell%width,y=Math.floor(cell/width),fromWater=water(city,x,y);
   if(cell===goalCell&&(relocate||!towing||flag)){target=key;break;}
   for(const [dx,dy]of directions){

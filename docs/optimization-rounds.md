@@ -343,3 +343,29 @@ No benchmark completo da seed 1794658272, arquipélago, 512 moradores, 128×128,
 O pico de banheiros passou do minuto 907 para o minuto 1023. A execução completa não demonstrou ganho global: os picos gerais e o tempo total ficaram maiores. As medidas individuais variam; a melhoria comprovada nesta rodada é a eliminação da busca repetida entre orçamentos no cenário controlado. O checksum completo permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
 
 Validação: 51 testes passaram nas suítes `boat_towing`, `boat_crossings`, `boat_boarding`, `boat_trip_routine`, `boat_rider_motion` e `worker_state_export`. A regressão foi repetida após acrescentar a verificação de reutilização de falhas limitadas e passou. Para repetir o benchmark completo, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
+
+## Rodada 17 — fila numérica e buffers reutilizáveis na busca de travessias
+
+A decomposição do minuto 1023 registrou uma busca de travessia com 6.037 inserções na fila de prioridade. Cada inserção criava dois arrays `[custo, estado]`, somando 12.074 arrays apenas nessa busca. Custos e predecessores também eram alocados novamente a cada consulta.
+
+A fila agora usa vetores numéricos de chaves e custos, com crescimento quando necessário. Um workspace privado por cidade reutiliza esses vetores, custos e predecessores. Cada busca reinicializa os custos, predecessores e tamanho da fila. As comparações, desempates, ordem dos vizinhos, limite de exploração e reconstrução da rota permanecem iguais. O workspace fica em `WeakMap`, fora dos saves; a amostragem de colisões continua nova a cada busca.
+
+Em um cenário de travessia com balsa em mapa 128×128, cinco aquecimentos e 40 buscas novas, avançando o minuto para invalidar os caches de geometria, reduziram a mediana de 5,96 para 4,78 ms e o percentil 95 de 13,85 para 7,19 ms. O hash das 40 rotas completas permaneceu idêntico.
+
+A primeira comparação sequencial de 1.200 minutos marcou 38,518 s antes e 42,043 s depois, com piora também em fases não alteradas. Essa execução não demonstrou ganho global. Para reduzir variações entre janelas de carga, foi acrescentado `scripts/benchmark-paired-simulation.mjs`: ele mantém duas cidades, executa o mesmo minuto em ambas e alterna qual versão roda primeiro. Esse método exige memória para duas cidades e compartilha a coleta de lixo do processo; não elimina toda a variação de medição.
+
+Na comparação alternada da seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos por versão sem LOD de fast-forward:
+
+| Medida local | Antes | Depois |
+| --- | ---: | ---: |
+| Pico agregado de buscas de caminho, minuto 1023 | 57,8 ms | 53,0 ms |
+| Pico de veículos, minuto 947 | 43,3 ms | 36,8 ms |
+| Pico de busca de banheiros | 29,7 ms | 26,8 ms |
+| Pico de escolha de tarefas | 70,4 ms | 95,7 ms |
+| Percentil 95 das atualizações | 61,8 ms | 59,4 ms |
+| Maior atualização completa | 166,9 ms | 163,4 ms |
+| Tempo acumulado das atualizações | 35,732 s | 34,988 s |
+
+O pico de escolha de tarefas passou do minuto 1023 para o minuto 1017 e não melhorou; o de banheiros passou para o minuto 912. O ganho isolado foi de aproximadamente 20%, e a comparação alternada mostrou cerca de 2% no tempo acumulado. Esses resultados não provam eliminação de todos os picos. Os snapshots usados nas medições diferem somente pela mudança desta rodada, preservando fora da comparação as alterações paralelas de poeira e renderização. Os checksums das comparações sequencial e alternada permaneceram `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
+
+Validação: 52 testes passaram nas suítes `boat_towing`, `boat_crossings`, `boat_boarding`, `boat_trip_routine`, `boat_rider_motion` e `worker_state_export`. A nova regressão intercala sucesso, busca sem rota e novo sucesso na mesma cidade, depois redimensiona o mapa e compara a rota com uma cidade sem workspace anterior. O benchmark alternado passou por verificação de sintaxe e execução de dois minutos por versão, com estados iguais. Para repetir a comparação alternada, use `node scripts/benchmark-paired-simulation.mjs ANTES DEPOIS`, fornecendo dois diretórios de fontes; as variáveis `SUBURBAN_BENCH_SEED`, `SUBURBAN_BENCH_PRESET`, `SUBURBAN_BENCH_POPULATION`, `SUBURBAN_BENCH_SIZE` e `SUBURBAN_BENCH_CITY_MINUTES` substituem os padrões deste cenário. O benchmark sequencial continua usando o comando da rodada 1.
