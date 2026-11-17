@@ -12,11 +12,18 @@ function ground(city,from,to){
  const world=city.world,revision=`${city.minute}:${world.width}:${world.height}:${world.revision||0}:${city.structureRevision||0}:${city.obstacleRevision||0}:${city.occupied.size}`;
  let cache=groundRoutes.get(city);
  if(!cache||cache.revision!==revision||cache.world!==world||cache.map!==world.map||cache.occupied!==city.occupied){
-  cache={revision,world,map:world.map,occupied:city.occupied,paths:new Map()};groundRoutes.set(city,cache);
+  const blockedGrid=new Uint8Array(world.width*world.height);
+  // These walking legs use occupied buildings only. Pack the same obstacles
+  // once per geometry revision instead of hashing every explored neighbor.
+  for(const cell of city.occupied){
+   const comma=cell.indexOf(','),x=Number(cell.slice(0,comma)),y=Number(cell.slice(comma+1));
+   if(x>=0&&y>=0&&x<world.width&&y<world.height)blockedGrid[y*world.width+x]=1;
+  }
+  cache={revision,world,map:world.map,occupied:city.occupied,paths:new Map(),blockedGrid};groundRoutes.set(city,cache);
  }
  const key=`${Math.floor(from.x)},${Math.floor(from.y)}:${Math.floor(to.x)},${Math.floor(to.y)}`;
  if(!cache.paths.has(key)){
-  const path=findTerrainPath(world,from,to,city.occupied,{preferRoads:false});
+  const path=findTerrainPath(world,from,to,city.occupied,{preferRoads:false,blockedGrid:cache.blockedGrid});
   if(cache.paths.size>=256)cache.paths.delete(cache.paths.keys().next().value);
   cache.paths.set(key,path);
  }

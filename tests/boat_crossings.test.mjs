@@ -117,14 +117,14 @@ test('one recruitment reuses landing routes without sharing passenger movement a
   const f=fixture(count);
   for(const c of f.citizens){c.entity.x=10.5;c.entity.y=12.5;}
   f.leader.path=planBoatTrip(f.city,f.leader.entity,f.goal);
-  const has=f.city.occupied.has.bind(f.city.occupied);let shoreReads=0;
-  f.city.occupied.has=key=>{if(key==='19,12')shoreReads++;return has(key);};
+  const has=f.city.occupied.has.bind(f.city.occupied);let endpointChecks=0;
+  f.city.occupied.has=key=>{if(key==='23,12')endpointChecks++;return has(key);};
   advanceLocalBoatTrip(f.city,f.leader,.01);
-  return {...f,shoreReads};
+  return {...f,endpointChecks};
  }
  const single=recruit(2),group=recruit(8);
- assert.ok(single.shoreReads>0,'landing route must inspect the far shore');
- assert.equal(group.shoreReads,single.shoreReads,'same landing route must not be searched for every passenger');
+ assert.ok(single.endpointChecks>0,'landing route must check its destination');
+ assert.equal(group.endpointChecks,single.endpointChecks,'same landing route must not be searched for every passenger');
  assert.equal(group.leader.localBoatTrip.sharedCrossing.members.length,7);
  const [first,second]=group.citizens.slice(1);
  assert.notEqual(first.path,second.path);
@@ -140,14 +140,14 @@ test('a walk shorter than boarding and sailing skips both crossing access search
  const f=fixture(2),candidate=f.citizens[1];
  candidate.jobId=18;candidate.targetId=18;
  f.leader.path=planBoatTrip(f.city,f.leader.entity,f.goal);
- const has=f.city.occupied.has.bind(f.city.occupied);let farShoreReads=0;
- f.city.occupied.has=key=>{if(key==='19,12')farShoreReads++;return has(key);};
+ const has=f.city.occupied.has.bind(f.city.occupied);let endpointChecks=0;
+ f.city.occupied.has=key=>{endpointChecks++;return has(key);};
  advanceLocalBoatTrip(f.city,f.leader,.01);
  assert.equal(f.leader.localBoatTrip.sharedCrossing.members.length,0);
  assert.equal(candidate.sharedBoatRide,undefined);
  assert.equal(candidate.task,'work');
  assert.equal(candidate.targetId,18);
- assert.equal(farShoreReads,0,'a faster walk must not search the inaccessible far shore');
+ assert.equal(endpointChecks,1,'a faster walk must only search the direct route');
 });
 
 
@@ -165,6 +165,7 @@ test('late crossing quotes reuse geometry while rechecking capacity and keeping 
  f.city.occupied.has=key=>{reads++;return has(key);};
  const first=planSharedCrossing(f.city,a.entity,f.goal);
  assert.ok(first);assert.ok(reads>0);
+ assert.ok(reads<=3,`only the three endpoint checks may hash obstacles: ${reads}`);
  reads=0;
  const second=planSharedCrossing(f.city,b.entity,f.goal);
  assert.ok(second);assert.equal(reads,0,'same cell geometry must not repeat terrain searches');
@@ -181,7 +182,8 @@ test('crossing geometry retries failures after obstacle, terrain and minute chan
  const f=waitingCrossing(),c=f.citizens[1],quote=()=>planSharedCrossing(f.city,c.entity,f.goal);
  assert.ok(quote());
  const cell=`${Math.floor(f.goal.x)},${Math.floor(f.goal.y)}`;
- f.city.occupied.add(cell);f.city.obstacleRevision++;
+ f.city.occupied.add('1,1');f.city.obstacleRevision++;assert.ok(quote());
+ f.city.occupied.delete('1,1');f.city.occupied.add(cell);f.city.obstacleRevision++;
  assert.equal(quote(),null);
  f.city.occupied.delete(cell);f.city.obstacleRevision++;
  assert.ok(quote(),'a failed quote cannot survive obstacle removal');

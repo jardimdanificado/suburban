@@ -231,3 +231,24 @@ Na seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos simu
 As medições são execuções individuais e incluem variação. O pico específico de banheiros não diminuiu e permanece como alvo de investigação. A alteração reduz verificações repetidas nas travessias encontradas durante essa análise; não resolve todas as fontes daquele pico. O checksum completo permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
 
 Validação: 50 testes passaram nas suítes `boat_towing`, `boat_crossings`, `boat_boarding`, `boat_trip_routine`, `boat_rider_motion` e `worker_state_export`. A nova regressão sem bicicleta reproduziu 635 consultas de passagem livre em 209 células na versão anterior. Após a alteração, passou com limite de uma consulta por célula, mais quatro verificações externas à busca da travessia. Os testes de reboque, obstáculos novos, embarque, movimento físico e exportação de estado continuaram passando. Para repetir a medição, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
+
+## Rodada 12 — obstáculos compactados nas pernas terrestres das travessias coletivas
+
+A decomposição das dez buscas do morador 390 no minuto 964 mostrou que quase todo o tempo estava dentro de `findBoatPath`, nas buscas terrestres usadas para avaliar travessias coletivas. Cinco destinos consumiam de 7 a 14 ms cada; a avaliação de pontes e o caminho terrestre principal eram pequenos naquele caso. As buscas de aproximação e de saída desse módulo ainda consultavam `occupied` por coordenadas em texto, apesar de já compartilharem resultados de rotas.
+
+Agora a revisão de geometria do módulo também mantém uma grade compacta dos mesmos obstáculos ocupados. As buscas A* de caminhada usam essa grade, preservando custos, ordem de exploração e critérios de acesso. A grade segue a invalidação já existente por minuto, dimensões, revisões e substituição do mapa ou conjunto de ocupação. Ela não adiciona árvores ou bancos de praça às regras anteriores dessas pernas terrestres e não integra os saves.
+
+Na seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos simulados sem LOD de fast-forward:
+
+| Medida local | Antes | Depois |
+| --- | ---: | ---: |
+| Pico de busca de banheiros | 60,6 ms | 26,2 ms |
+| Pico de movimento, minuto 1093 | 50,3 ms | 14,2 ms |
+| Pico agregado de buscas de caminho | 60,0 ms | 56,6 ms |
+| Percentil 95 das atualizações | 55,4 ms | 52,8 ms |
+| Maior atualização completa | 160,3 ms | 136,5 ms |
+| Tempo total medido | 32,252 s | 31,803 s |
+
+O pico de banheiros passou do minuto 964 para o minuto 1023. O ganho de movimento também aparece porque o recrutamento inicial usa essas mesmas buscas. As medições são execuções individuais e não provam eliminação de todos os picos. O checksum completo do benchmark permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
+
+Validação: 50 testes passaram nas suítes `boat_crossings`, `boat_towing`, `boat_boarding`, `boat_trip_routine`, `boat_rider_motion` e `worker_state_export`. A primeira consulta de travessia do teste fazia 4.208 verificações textuais de obstáculos na versão anterior; agora passa com limite de três verificações de destino. A segunda consulta equivalente continua sem refazer buscas. As regressões de recrutamento e recusa antecipada foram adaptadas para observar verificações de destino, pois a consulta textual de vizinhos deixou de existir. O teste de invalidação agora também troca obstáculos mantendo sua quantidade, além de verificar mudanças de terreno, falhas, lotação e renovação no minuto seguinte. Os 15 testes de travessias foram repetidos após esse reforço e passaram. Para repetir a medição, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
