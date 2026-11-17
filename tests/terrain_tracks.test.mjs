@@ -136,3 +136,40 @@ test('render pickup consults local wear for natural grass and imaginary dirt roa
     assert.equal(load,.4);assert.equal(sampled,1);assert(recorded>0);
   }
 });
+
+test('tires and towed hulls carry sand and worn soil, then shed their load and wash clean',async()=>{
+  const {TerrainTracks}=await import('../js/terrain_tracks.js');
+  const {TILE_SAND,TILE_FLOOR,TILE_ROAD,TILE_WATER}=await import('../js/world_gen.js');
+  for(const vehicle of [{good:'carrinho'},{good:'canoe',boatClass:'canoe',towedByVehicleId:3}]){
+    for(const source of [TILE_SAND,TILE_FLOOR]){
+      const tracker=Object.create(TerrainTracks.prototype),entity={id:1,x:5,y:5,properties:{cityVehicle:{...vehicle}}};
+      let tile=source,painted=[];
+      Object.assign(tracker,{time:0,motion:new TerrainTrackMotion(),sandCarry:new SandCarry(),dirtCarry:new SandCarry(),
+        grassWear:{coverage:()=>1,record(){},prune(){}},uniforms:{terrainTrackTime:{value:0}},ensureWorld(){},
+        paint(_renderer,stamps){painted.push(...stamps);}});
+      const world={width:20,height:20,getTile:()=>tile};
+      const move=()=>{entity.y+=.2;tracker.update({},world,[entity],.1);};
+      tracker.update({},world,[entity],.1);move();tile=TILE_ROAD;painted=[];move();
+      const deposits=painted.filter(s=>s.deposit);
+      assert(deposits.length>0,`${vehicle.good} carries ${source===TILE_SAND?'sand':'soil'}`);
+      assert(deposits.every(s=>source===TILE_SAND?s.deposit>0:s.deposit<0));
+      assert(deposits.every(s=>s.kind===(vehicle.boatClass?2:0)),'deposits preserve the contact shape');
+      for(let i=0;i<8;i++)move();painted=[];move();assert(!painted.some(s=>s.deposit));
+      tile=source;move();tile=TILE_WATER;move();tile=TILE_ROAD;painted=[];move();
+      assert(!painted.some(s=>s.deposit),'water clears carried residue');
+      tile=source;move();entity.y+=4;tile=TILE_ROAD;painted=[];tracker.update({},world,[entity],.1);move();
+      assert(!painted.some(s=>s.deposit),'teleports clear carried residue');
+    }
+  }
+});
+
+test('each tire keeps its own residue load and sheds by distance rather than contact count',()=>{
+  const world={width:20,height:4,getTile:x=>x===0?3:8};
+  const stamp=(x,wheel,distance)=>({x,z:1,kind:0,carryContact:wheel,carryDistance:distance,width:.05,length:.1,angle:0});
+  for(const steps of [4,60]){
+    const carry=new SandCarry(),entity={};carry.contacts(entity,[stamp(.5,0,.05)],world);
+    assert.deepEqual(carry.contacts(entity,[stamp(1.1,1,.05)],world),[],'clean tire stays clean');
+    for(let i=0;i<steps;i++)carry.contacts(entity,[stamp(1.1+i/steps,0,1/steps)],world);
+    assert.deepEqual(carry.contacts(entity,[stamp(2.5,0,.05)],world),[],'load expires after the same distance');
+  }
+});

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {NightLighting} from '../js/night_lighting.js';
+import {NightLighting,hasOutdoorTorch} from '../js/night_lighting.js';
 class Vector{constructor(...values){this.set(...values);}set(...values){this.values=values;return this;}}
 class Matrix{constructor(){this.elements=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];}}
 class Texture{constructor(data,width,height){this.image={data,width,height};this.version=0;}set needsUpdate(value){if(value)this.version++;}dispose(){this.disposed=true;}}
@@ -41,4 +41,31 @@ test('a cloned terrain variant retaining the decorated source hook injects light
  assert.equal(shader.fragmentShader.match(/uniform sampler2D nightLightData;/g).length,1);
  assert.equal(shader.fragmentShader.match(/RE_Direct\(directLight/g).length,1);
  assert.match(shader.vertexShader,/terrain blend/);
+});
+
+
+test('blocker rows include nearby buildings and update when a building changes',()=>{
+ const n=new NightLighting(THREE),c=camera(),light=source();
+ const nearby={min:[11,0,19],max:[14,6,22]},far={min:[100,0,100],max:[104,6,104]};
+ n.update([light],c,scene,[nearby,far]);
+ assert.equal(n.blockers.image.data[3],1);
+ assert.deepEqual([...n.blockers.image.data.slice(0,3)],nearby.min);
+ assert.deepEqual([...n.blockers.image.data.slice(4,7)],nearby.max);
+ const version=n.blockers.version;n.update([light],c,scene,[nearby,far]);
+ assert.equal(n.blockers.version,version);
+ nearby.max[1]=9;n.update([light],c,scene,[nearby,far]);
+ assert.equal(n.blockers.image.data[5],9);
+ n.update([light],c,scene,[]);assert.equal(n.blockers.image.data[3],0);
+});
+
+test('carried torches emit outdoors only, including fueled torches taken indoors',()=>{
+ const entity={properties:{citizen:{},heldItem:{resourceType:'torch',fuel:48}}};
+ assert.equal(hasOutdoorTorch(entity),true);
+ entity.properties.citizen.indoorLocation={buildingId:1,floor:0};
+ assert.equal(hasOutdoorTorch(entity),false);
+ assert.equal(entity.properties.heldItem.fuel,48);
+ delete entity.properties.citizen.indoorLocation;
+ assert.equal(hasOutdoorTorch(entity),true);
+ entity.properties.heldItem.fuel=0;
+ assert.equal(hasOutdoorTorch(entity),false);
 });

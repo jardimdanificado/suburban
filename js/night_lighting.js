@@ -5,6 +5,8 @@ uniform sampler2D nightLightData;
 uniform sampler2D nightLightCells;
 uniform sampler2D nightLightIndices;
 uniform int nightLightCount;
+uniform sampler2D nightLightBlockers;
+uniform float nightLightBlockerWidth;
 uniform vec4 nightLightGrid;
 uniform vec2 nightLightGridSize;
 uniform vec2 nightLightIndexSize;
@@ -29,6 +31,25 @@ if (nightLightCount > 0) {
       #if defined( LAMBERT ) || defined( PHONG ) || ( defined( STANDARD ) && !defined( USE_CLEARCOAT ) && !defined( USE_TRANSMISSION ) )
         if (dot(geometryNormal, nightDelta) <= 0.0) continue;
       #endif
+      // Test the open segment: the receiving facade must not shadow itself.
+      vec3 nightRay = nightWorldPosition - (nightLightCameraWorld * vec4(nightPosition.xyz, 1.0)).xyz;
+      vec3 nightStart = nightWorldPosition - nightRay;
+      float nightBlockerCount = texture2D(nightLightBlockers, vec2(0.5 / nightLightBlockerWidth, (nightIndex + 0.5) / 256.0)).w;
+      bool nightBlocked = false;
+      for (int blocker = 0; blocker < 1024; blocker++) {
+        if (float(blocker) >= nightBlockerCount) break;
+        vec2 uv = vec2((float(blocker) * 2.0 + 0.5) / nightLightBlockerWidth, (nightIndex + 0.5) / 256.0);
+        vec3 lo = texture2D(nightLightBlockers, uv).xyz;
+        vec3 hi = texture2D(nightLightBlockers, uv + vec2(1.0 / nightLightBlockerWidth, 0.0)).xyz;
+        vec3 safeRay = mix(vec3(1e-7), nightRay, step(vec3(1e-7), abs(nightRay)));
+        vec3 a = (lo - nightStart) / safeRay, b = (hi - nightStart) / safeRay;
+        vec3 nearHit = min(a, b), farHit = max(a, b);
+        float enter = max(max(nearHit.x, nearHit.y), nearHit.z);
+        float leave = min(min(farHit.x, farHit.y), farHit.z);
+        float endpointBias = 0.04 / max(length(nightRay), 0.04);
+        if (max(enter, endpointBias) < min(leave, 1.0 - endpointBias)) { nightBlocked = true; break; }
+      }
+      if (nightBlocked) continue;
       vec4 nightColor = texture2D(nightLightData, vec2((nightIndex + 0.5) / ${NIGHT_LIGHT_CAPACITY}.0, 0.75));
       float nightInverseDistance = inversesqrt(max(nightDistanceSq, 1e-20));
       directLight.direction = nightDelta * nightInverseDistance;
@@ -60,7 +81,9 @@ export class NightLighting {
     this.data=this.texture(this.viewLights,NIGHT_LIGHT_CAPACITY,2);
     this.cells=this.texture(this.grid.cells,NIGHT_GRID_SIDE,NIGHT_GRID_SIDE);
     this.indices=this.texture(this.grid.indices,NIGHT_INDEX_WIDTH,1);
+    this.blockers=this.texture(new Float32Array(256*8),2,256);
     this.uniforms={
+      nightLightBlockers:{value:this.blockers},nightLightBlockerWidth:{value:2},
       nightLightData:{value:this.data},nightLightCells:{value:this.cells},nightLightIndices:{value:this.indices},
       nightLightCount:{value:0},nightLightGrid:{value:new THREE.Vector4()},
       nightLightGridSize:{value:new THREE.Vector2()},nightLightIndexSize:{value:new THREE.Vector2(NIGHT_INDEX_WIDTH,1)},
@@ -88,8 +111,31 @@ export class NightLighting {
     material.customProgramCacheKey=()=>`${key}:local-night-lights-v1`;
     material.needsUpdate=true;
   }
-  update(sources,camera,scene) {
+  updateBlockers(boxes,lightsChanged) {
+    const signature=JSON.stringify(boxes);
+    if(!lightsChanged&&signature===this.blockerSignature)return;
+    this.blockerSignature=signature;
+    const lists=[];let width=2;
+    for(let i=0;i<this.grid.count;i++){
+      const at=i*4,[x,y,z,r]=this.grid.lights.subarray(at,at+4);
+      const nearby=boxes.filter(b=>Math.hypot(Math.max(b.min[0]-x,0,x-b.max[0]),Math.max(b.min[1]-y,0,y-b.max[1]),Math.max(b.min[2]-z,0,z-b.max[2]))<r);
+      lists.push(nearby);width=Math.max(width,nearby.length*2);
+    }
+    // Grow rows to fit every candidate; never silently drop an occluder.
+    const data=new Float32Array(width*256*4);
+    for(let i=0;i<lists.length;i++){
+      for(let j=0;j<lists[i].length;j++){const at=(i*width+j*2)*4;data.set(lists[i][j].min,at);data.set(lists[i][j].max,at+4);}
+      data[i*width*4+3]=lists[i].length;
+    }
+    const old=this.blockers.image.data;
+    if(old.length===data.length&&data.every((v,i)=>v===old[i]))return;
+    if(old.length!==data.length){this.blockers.dispose();this.blockers=this.texture(data,width,256);this.uniforms.nightLightBlockers.value=this.blockers;}
+    else {old.set(data);this.blockers.needsUpdate=true;}
+    this.uniforms.nightLightBlockerWidth.value=width;
+  }
+  update(sources,camera,scene,blockers=[]) {
     const g=this.grid,changed=g.update(sources);
+    this.updateBlockers(blockers,changed);
     camera.updateMatrixWorld();
     this.uniforms.nightLightCount.value=g.count;
     this.uniforms.nightLightCameraWorld.value=camera.matrixWorld;
@@ -122,5 +168,12 @@ export class NightLighting {
       else this.decorate(object.material);
     });
   }
-  dispose(){this.data.dispose();this.cells.dispose();this.indices.dispose();}
+  dispose(){this.data.dispose();this.cells.dispose();this.indices.dispose();this.blockers.dispose();}
+}
+
+export function hasOutdoorTorch(entity) {
+  const p=entity.properties;
+  if(!p||p.citizen?.indoorLocation)return false;
+  return [p.arm_left?.heldItem,p.arm_right?.heldItem,p.heldItem]
+    .some(item=>item?.resourceType==='torch'&&item.fuel>0);
 }

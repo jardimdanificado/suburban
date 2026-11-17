@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CityDesktop, CITY_WINDOWS } from '../js/city_desktop.js';
+import { MapEditor } from '../js/map_editor.js';
 import { ManagementCanvasUI } from '../js/management_ui.js';
 import { setup } from './helpers/city.mjs';
 
@@ -127,4 +128,24 @@ test('justice records open in their own dossier and leave the directory selectio
   const h=harness(),state=h.desktop.openDestination('justice','cases');
   const dossier=state.openPanel({justiceCaseId:123});assert.equal(dossier.tab,'justice-case');assert.equal(dossier.justiceCaseId,123);assert.equal(state.tab,'justice');assert.equal(state.justiceCaseId,undefined);
   assert.equal(state.openPanel({justiceCaseId:123}),dossier);
+});
+
+
+test('map object selector stays visible across frames and hides outside the object tab',()=>{
+  const h=harness(),editor=new MapEditor({world:h.city.world,entities:[],destroyEntity(){}});
+  editor.registerPrefab('tree',{label:'Árvore',create(){}});
+  editor.tab='OBJECTS';editor.prefabId='tree';
+  const state=h.desktop.openTool('editor',editor),select=state.inputs[0];
+  h.draw();assert.equal(select.hidden,false);assert.equal(select.value,'tree');
+  const hiddenWrites=[],valueWrites=[];let hidden=select.hidden,value=select.value;
+  Object.defineProperty(select,'hidden',{get:()=>hidden,set:next=>{hiddenWrites.push(next);hidden=next;}});
+  Object.defineProperty(select,'value',{get:()=>value,set:next=>{valueWrites.push(next);value=next;}});
+  h.draw();h.draw();
+  assert.deepEqual(hiddenWrites,[]);assert.deepEqual(valueWrites,[]);
+  editor.tab='TILES';h.draw();assert.equal(select.hidden,true);
+  editor.tab='OBJECTS';h.draw();assert.equal(select.hidden,false);
+  editor.scroll=100;h.desktop.manager.find('tool:editor').h=210;
+  h.draw();assert.equal(select.hidden,true);
+  editor.scroll=0;h.draw();assert.equal(select.hidden,false);
+  h.desktop.close('tool:editor');assert.equal(select.hidden,true);assert.equal(editor.open,false);
 });

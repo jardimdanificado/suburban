@@ -36,7 +36,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 // =============================================================================
 
 import * as THREE from "https://esm.sh/three@0.160.0";
-import {NightLighting} from "./night_lighting.js?v=local-night-lights-1";
+import {NightLighting,hasOutdoorTorch} from "./night_lighting.js?v=building-occlusion-2";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds,citizenBuildingSurfaceHeight } from "./city_building_geometry.js";
 import { syncCityBuildings } from "./city_renderer_3d.js?v=street-graffiti-visible-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
@@ -9142,11 +9142,8 @@ export class RCT3DRenderer {
 
         // 3. Torches Carried by Intelligent Creatures
         const isIntelligent = !!e.properties?.brain || !!e.properties?.group_member || !!e.properties?.citizen;
-        if (isIntelligent) {
-          const leftTorch = e.properties.arm_left?.heldItem?.resourceType === "torch" && (e.properties.arm_left?.heldItem?.fuel || 0) > 0;
-          const rightTorch = e.properties.arm_right?.heldItem?.resourceType === "torch" && (e.properties.arm_right?.heldItem?.fuel || 0) > 0;
-          const heldTorch = e.properties.heldItem?.resourceType === "torch" && (e.properties.heldItem?.fuel || 0) > 0;
-          if (leftTorch || rightTorch || heldTorch) {
+        if (isIntelligent && !e.properties?.citizen?.indoorLocation) {
+          if (hasOutdoorTorch(e)) {
             const sH = this.getSurfaceElevation(map, e.x, e.y);
             const dx = e.x - focusX;
             const dy = e.y - focusY;
@@ -9449,7 +9446,11 @@ export class RCT3DRenderer {
     const profilePrepared = this.profileFrame ? performance.now() : 0;
     this.terrainTracks.update(this.renderer,world,entities,dt*effectiveSpeed,this.cityCitizenModels,citizenRenderOffsets,this);
     const activeCam = this.isPerspectiveActive() ? this.fpCamera : this.camera;
-    this.nightLighting?.update(this.nightLightPool,activeCam,this.scene);
+    const lightBlockers=(this.cityDevelopment?.city?.buildings||[])
+      .filter(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&b.type!=='quarry')
+      .map(b=>{const x=b.entity.x,z=b.entity.y,base=b.terrain?.base??this.getSurfaceElevation(map,x,z);
+        return {min:[x,base,z],max:[x+b.width,base+(b.floors||1)*CITY_FLOOR_HEIGHT,z+b.depth]};});
+    this.nightLighting?.update(this.nightLightPool,activeCam,this.scene,lightBlockers);
     const shadowNow=performance.now(),shadowCameraDx=this.camX-this._lastShadowRefreshCamX,shadowCameraDy=this.camY-this._lastShadowRefreshCamY;
     this._shadowFramesSinceRefresh++;
     // A time-only cadence can refresh every single frame when rendering itself

@@ -79,18 +79,18 @@ export class TerrainTrackMotion {
     if(hull){
       if(distance<.001&&Math.abs(rotation)<.005)return stamps;
       const steps=Math.max(1,Math.ceil(Math.max(distance/.08,Math.abs(rotation)/.08)));
-      for(let step=1;step<=steps;step++){const ratio=step/steps;stamps.push({x:previous.x+dx*ratio,z:previous.z+dz*ratio,angle:previous.angle+rotation*ratio,width:hull.width,length:hull.length,kind:2});}
+      for(let step=1;step<=steps;step++){const ratio=step/steps;stamps.push({x:previous.x+dx*ratio,z:previous.z+dz*ratio,angle:previous.angle+rotation*ratio,width:hull.width,length:hull.length,kind:2,carryDistance:Math.max(distance,Math.abs(rotation)*Math.hypot(hull.width,hull.length)/2)/steps});}
     }else if(vehicle){
       const wheels=VEHICLE_CONTACTS[vehicle];if(!wheels||distance<.001&&Math.abs(rotation)<.005)return stamps;
       const steps=Math.max(1,Math.ceil(Math.max(distance/.06,Math.abs(rotation)/.08)));
       for(let step=1;step<=steps;step++){
         const a=(step-1)/steps,b=step/steps;
-        for(const wheel of wheels){
+        for(const [wheelIndex,wheel] of wheels.entries()){
           const from=contact(previous.x+dx*a,previous.z+dz*a,previous.angle+rotation*a,wheel);
           const to=contact(previous.x+dx*b,previous.z+dz*b,previous.angle+rotation*b,wheel);
           const length=Math.hypot(to.x-from.x,to.z-from.z);
           if(length<.0001)continue;
-          stamps.push({x:(from.x+to.x)/2,z:(from.z+to.z)/2,angle:Math.atan2(to.x-from.x,to.z-from.z),width:wheel[2],length:length+wheel[2],kind:0});
+          stamps.push({x:(from.x+to.x)/2,z:(from.z+to.z)/2,angle:Math.atan2(to.x-from.x,to.z-from.z),width:wheel[2],length:length+wheel[2],kind:0,carryContact:wheelIndex,carryDistance:length});
         }
       }
     }else if(distance>.00001){
@@ -108,24 +108,28 @@ export class TerrainTrackMotion {
 
 
 // Sand stays on each shoe for only three contacts after leaving the beach.
+// Wheels and dragged hulls shed their load over .75 world units of contact travel.
 export class SandCarry {
   constructor(){this.history=new WeakMap();}
   reset(entity){this.history.delete(entity);}
   contacts(entity,stamps,world,sourceTiles=[TILE_SAND],kind='sand',sourceAmount=null){
     if(!stamps.length)return [];
-    const shoes=this.history.get(entity)||[0,0,1,1],deposits=[];
+    const shoes=this.history.get(entity)||new Map(),deposits=[];
     this.history.set(entity,shoes);
     for(const stamp of stamps){
-      if(Math.abs(stamp.kind)!==1)continue;
-      const x=Math.floor(stamp.x),z=Math.floor(stamp.z),foot=stamp.kind<0?0:1;
+      const walking=Math.abs(stamp.kind)===1;
+      const x=Math.floor(stamp.x),z=Math.floor(stamp.z),foot=walking?(stamp.kind<0?0:1):stamp.kind===2?'hull':`wheel:${stamp.carryContact}`;
+      const capacity=walking?3:.75,state=shoes.get(foot)||{remaining:0,load:0};
+      shoes.set(foot,state);
       const tile=x<0||z<0||x>=world.width||z>=world.height?TILE_VOID:(world.getTile?world.getTile(x,z):world.map?.[z*world.width+x]);
-      if(sourceTiles.includes(dirtRoadGround(tile))){shoes[foot]=3;shoes[foot+2]=Math.max(0,Math.min(1,sourceAmount?sourceAmount(stamp,tile):1));continue;}
-      if(tile===TILE_WATER||tile===TILE_VOID){shoes[foot]=0;continue;}
-      if(shoes[foot]>0){
-        const amount=shoes[foot]--;
+      if(sourceTiles.includes(dirtRoadGround(tile))){state.remaining=capacity;state.load=Math.max(0,Math.min(1,sourceAmount?sourceAmount(stamp,tile):1));continue;}
+      if(tile===TILE_WATER||tile===TILE_VOID){state.remaining=0;continue;}
+      if(state.remaining>0){
+        const amount=state.remaining;
+        state.remaining=Math.max(0,state.remaining-(walking?1:stamp.carryDistance||0));
         // Stable contact hash: probability and grains do not change with FPS.
-        const chance=Math.sin(stamp.x*127.1+stamp.z*311.7+foot*74.7)*43758.5453;
-        const load=amount/3*shoes[foot+2];
+        const chance=Math.sin(stamp.x*127.1+stamp.z*311.7+(walking?foot:stamp.carryContact||0)*74.7)*43758.5453;
+        const load=amount/capacity*state.load;
         if(load>0&&chance-Math.floor(chance)<.8)deposits.push({...stamp,deposit:kind==='dirt'?-load:load});
       }
     }
@@ -296,11 +300,9 @@ export class TerrainTracks {
       const dimensions=vehicle?.towedByVehicleId&&BOAT_HULL_DIMENSIONS[vehicle.boatClass],hull=dimensions?{width:dimensions.width*(vehicle.boatClass==='canoe'?1:BOAT_CLASSES[vehicle.boatClass].scale),length:dimensions.length*(vehicle.boatClass==='canoe'?1:BOAT_CLASSES[vehicle.boatClass].scale)}:null;
       const contacts=this.motion.move(entity,{x,z,angle,vehicle:vehicle?.good||null,scale:motion?.bodySize||1,hull},this.time);
       stamps.push(...contacts);
-      if(citizen&&!vehicle){
-        stamps.push(...this.sandCarry.contacts(entity,contacts,world));
-        stamps.push(...this.dirtCarry.contacts(entity,contacts,world,[TILE_ROAD_GRASS,TILE_ROAD_HILL,TILE_FLOOR,TILE_HILL],'dirt',
-          stamp=>this.grassWear.coverage(stamp,world,this.time)));
-      }
+      stamps.push(...this.sandCarry.contacts(entity,contacts,world));
+      stamps.push(...this.dirtCarry.contacts(entity,contacts,world,[TILE_ROAD_GRASS,TILE_ROAD_HILL,TILE_FLOOR,TILE_HILL],'dirt',
+        stamp=>this.grassWear.coverage(stamp,world,this.time)));
       this.grassWear.record(contacts,world,this.time);
     }
     this.grassWear.prune(this.time,256,world);
