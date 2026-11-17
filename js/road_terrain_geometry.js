@@ -54,7 +54,9 @@ function sandVertexHeight(world,x,y){
   const dry=Math.max(SAND_MIN_HEIGHT,terrainTileHeight(TILE_SAND)+noise*.055);
   for(let dz=-1;dz<=0;dz++)for(let dx=-1;dx<=0;dx++){
     const tile=at(world,x+dx,y+dz);
-    if(ROADS.has(tile)||baseTerrainTile(tile)===TILE_STONE||sidewalkAt(world,x+dx,y+dz))return dry;
+    // Engineered seams need the exact base level. Dune grain here would leave
+    // centimetre-high retaining slivers with see-through cracks along the edge.
+    if(ROADS.has(tile)||baseTerrainTile(tile)===TILE_STONE||sidewalkAt(world,x+dx,y+dz))return terrainTileHeight(TILE_SAND);
   }
   // Spread the dry approach over three tiles instead of lowering only the
   // last corner. Shared corner heights keep walking, grass and picking aligned.

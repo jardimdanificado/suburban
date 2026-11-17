@@ -702,10 +702,6 @@ function frame(now) {
   else time.advance(dt, advanceSimulation);
   const rapidMode=simulationBridge?.active&&time.speed>=16&&city.citizens.length>=512;
   renderer3D.rapidCityMode=rapidMode;
-  if(renderer3D.renderer.shadowMap.enabled===rapidMode&&renderer3D.shadowsEnabled){
-    renderer3D.renderer.shadowMap.enabled=!rapidMode;
-    renderer3D.renderer.shadowMap.needsUpdate=true;
-  }
   const renderDt=Math.min((now-lastRenderedAt)/1000,.25);lastRenderedAt=now;
   const paused = time.paused;
   renderer3D.setPaused(paused);

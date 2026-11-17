@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {roadSurfaceCorners,roadRetainingFaces,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,terrainTileSurfaceCorners} from '../js/road_terrain_geometry.js';
+import {roadSurfaceCorners,roadRetainingFaces,terrainCornerHeight,terrainSurfaceElevation,terrainTileHeight,streetSurfaceCorners,terrainTileSurfaceCorners} from '../js/road_terrain_geometry.js';
 import {surfaceElevation} from '../js/city_terrain.js';
-import {TILE_FLOOR,TILE_STONE,TILE_SAND,TILE_HILL,TILE_ROAD_GRASS,TILE_ROAD_HILL,TILE_ROAD_GRASS_STONE,TILE_ROAD_HILL_STONE} from '../js/world_gen.js';
+import {TILE_FLOOR,TILE_STONE,TILE_SAND,TILE_HILL,TILE_ROAD_GRASS,TILE_ROAD_SAND,TILE_ROAD_HILL,TILE_ROAD_GRASS_STONE,TILE_ROAD_HILL_STONE} from '../js/world_gen.js';
 
 function fixture(){
   const world={width:12,height:10,revision:1,map:new Uint8Array(120).fill(TILE_FLOOR)};
@@ -108,6 +108,19 @@ test('unbuilt dirt roads cut the same shelf and retaining wall as paving',()=>{
   const dirtFaces=roadRetainingFaces(world,5,5);
   assert(dirtFaces.length>0);near(terrainSurfaceElevation(world,5.5,5.5),1.1);
   road(world);assert.deepEqual(roadRetainingFaces(world,5,5),dirtFaces);near(terrainSurfaceElevation(world,5.5,5.5),1.1);
+});
+
+test('sand road edges stay flush with the dune instead of growing see-through slivers',()=>{
+  const world={width:12,height:10,revision:1,map:new Uint8Array(120).fill(TILE_SAND)};
+  world.getTile=(x,y)=>world.map[y*world.width+x];
+  world.setTile=(x,y,tile)=>{world.map[y*world.width+x]=tile;world.revision++;};
+  for(let x=2;x<10;x++)world.setTile(x,5,TILE_ROAD_SAND);
+  for(let x=3;x<8;x++){
+    near(terrainCornerHeight(world,x,5),terrainTileHeight(TILE_SAND));
+    assert.deepEqual(roadRetainingFaces(world,x,5),[],'a flat sand road needs no centimetre-high wall');
+  }
+  // Dune grain survives on corners that do not touch an engineered seam.
+  assert([3,4,5,6].some(x=>Math.abs(terrainCornerHeight(world,x,4)-terrainTileHeight(TILE_SAND))>1e-6));
 });
 
 test('a paved street ending at a dirt road has no railing face on the shared edge',()=>{

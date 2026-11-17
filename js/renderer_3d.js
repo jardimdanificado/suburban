@@ -743,6 +743,44 @@ export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) 
   };
 }
 
+// The shared retro dither is disabled in perspective views (the post pass takes
+// over) and its restrained luma shift leaves the water's specular sun glare a
+// smooth gradient. Quantize only totalSpecular before it joins the diffuse
+// color: dithering gl_FragColor instead turns the whole surface into a visible
+// green mesh, day and night.
+function addWaterDitherShader(material, steps = 7.0, intensity = 1.2, scale = 2.0, darkSteps = 24.0, darkIntensity = 0.4) {
+  if (!material) return material;
+  const prevCompile = material.onBeforeCompile;
+  const prevKey = material.customProgramCacheKey?.bind(material);
+  material.customProgramCacheKey = () => `${prevKey ? prevKey() : ''}:water-specular-dither-v4`;
+  material.onBeforeCompile = shader => {
+    if (prevCompile) prevCompile(shader);
+    shader.fragmentShader = `
+      float getWaterBayer4x4(vec2 p) {
+        vec2 m = mod(floor(p), 4.0);
+        int x = int(m.x), y = int(m.y);
+        if (y == 0) { if (x == 0) return 0.0; if (x == 1) return 8.0; if (x == 2) return 2.0; return 10.0; }
+        if (y == 1) { if (x == 0) return 12.0; if (x == 1) return 4.0; if (x == 2) return 14.0; return 6.0; }
+        if (y == 2) { if (x == 0) return 3.0; if (x == 1) return 11.0; if (x == 2) return 1.0; return 9.0; }
+        if (x == 0) return 15.0; if (x == 1) return 7.0; if (x == 2) return 13.0; return 5.0;
+      }
+    ` + shader.fragmentShader;
+    // Ramp with specular brightness: at night there is no glare to break up,
+    // so leave the tiny ambient specular alone instead of adding noise to it.
+    const specularDither = `float waterSpecLuma = dot(totalSpecular, vec3(0.2126, 0.7152, 0.0722));
+      float waterGlare = smoothstep(0.02, 0.20, waterSpecLuma);
+      float waterSteps = mix(${darkSteps.toFixed(1)}, ${steps.toFixed(1)}, waterGlare);
+      float waterIntensity = mix(${darkIntensity.toFixed(2)}, ${intensity.toFixed(2)}, waterGlare);
+      float waterBayer = (getWaterBayer4x4(gl_FragCoord.xy / ${scale.toFixed(1)}) / 16.0 - 0.5) * waterIntensity;
+      totalSpecular = floor(totalSpecular * waterSteps + waterBayer + 0.5) / waterSteps;`;
+    const outgoing = 'vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;';
+    if (shader.fragmentShader.includes(outgoing)) {
+      shader.fragmentShader = shader.fragmentShader.replace(outgoing, `${specularDither}\n      ${outgoing}`);
+    }
+  };
+  return material;
+}
+
 export function applyWindFoliageShader(mat, deformScale = 0.20, rootHeight = 0.25) {
   if (!mat) return;
   mat.userData.foliageShader = null;
@@ -3983,10 +4021,10 @@ export class RCT3DRenderer {
       material.userData.caribbeanWaterTime = waterMotionUniform;
       return material;
     };
-    const makeWaterMaterial = () => addWaterMotionShader(new THREE.MeshStandardMaterial({
-      map: caribbeanWater, color: 0xffffff, vertexColors: true, roughness: 0.34, metalness: 0.03,
+    const makeWaterMaterial = () => addWaterDitherShader(addWaterMotionShader(new THREE.MeshStandardMaterial({
+      map: caribbeanWater, color: 0xffffff, vertexColors: true, roughness: 0.22, metalness: 0.03,
       transparent: false, depthWrite: true, side: THREE.DoubleSide, dithering: true
-    }));
+    })));
     const makeFoamMaterial = () => {
       const material=addWaterMotionShader(new THREE.MeshLambertMaterial({
         vertexColors: true, transparent: true, opacity: 1.0, depthWrite: false, side: THREE.DoubleSide,
