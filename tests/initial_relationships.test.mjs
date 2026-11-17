@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {setup} from './helpers/city.mjs';
 
 test('founding community includes compatible couples, generations, siblings and single parents',()=>{
- const city=setup({starter:true,population:40}),society=city.society;
- assert.equal(city.citizens.length,40);
+ const city=setup({starter:true,population:64}),society=city.society;
+ assert.equal(city.citizens.length,64);
  const couples=city.citizens.filter(c=>c.partnerId&&c.id<c.partnerId);
  assert(couples.some(c=>c.socialProfile.gender===society.citizen(c.partnerId).socialProfile.gender));
  assert(couples.some(c=>c.socialProfile.gender!==society.citizen(c.partnerId).socialProfile.gender));
@@ -51,9 +51,18 @@ test('small and partial founding populations retain valid references and exact p
  }
 });
 
+test('initial arrivals keep children at or below one tenth of the population',()=>{
+ for(const population of [8,11,12,17,24,40,41,64,81]){
+  const city=setup({starter:true,population});
+  const children=city.citizens.filter(person=>!city.society.isAdult(person));
+  assert(children.length<=Math.floor(population/10),`${children.length} children among ${population} residents`);
+  for(const child of children)assert(city.society.isAdult(city.society.guardian(child)));
+ }
+});
+
 test('founding genealogy is deterministic and survives state transfer',async()=>{
  const {CityStateGraph,bindCityState}=await import('../js/city_state.js');
- const first=setup({starter:true,population:24}),second=setup({starter:true,population:24});
+ const first=setup({starter:true,population:48}),second=setup({starter:true,population:48});
  const describe=city=>city.citizens.map(c=>({id:c.id,age:c.initialAge,parents:c.parentIds,children:c.childIds,partner:c.partnerId,guardian:c.guardianId,profile:c.socialProfile}));
  assert.deepEqual(describe(first),describe(second));
  const restored=new CityStateGraph().apply(new CityStateGraph().encode({city:first})).city;

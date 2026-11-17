@@ -5,7 +5,7 @@ export function desktopMenus(d){
     {id:'tools',label:'Ferramentas',items:[
       item('Menu principal (Esc)',()=>d.controls.mainMenu?.()),
       separator,
-      item('Jogar como prefeito',()=>{d.hidden=false;d.element.hidden=false;d.openModule('mayor');}),
+      item('Jogar como partido',()=>{d.hidden=false;d.element.hidden=false;d.openModule('mayor');}),
       item('Jogar como personagem',()=>d.controls.play?.()),
       item('Favoritos',()=>d.openModule('favorites')),
       item('Histórico personalizado',()=>d.openModule('custom-history')),

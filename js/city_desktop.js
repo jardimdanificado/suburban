@@ -263,7 +263,7 @@ export class CityDesktop {
       {label:'Busca geral · Ctrl+K',icon:'search',w:36,click:()=>this.openGlobalSearch()},
       {label:`${activeCityName} · Mundo e rotas marítimas`,buttonLabel:activeCityName,icon:'map',w:worldButtonWidth,click:()=>{this.closeMenu();this.openModule('world');},selected:!this.hidden&&!!this.manager.find('module:world')},
       ...controls.map(([icon,label,click,selected])=>({icon,label,click:()=>{this.closeMenu();click?.();},selected,w:29})),
-      ...CITY_WINDOWS.filter(([tab])=>tab!=='world'&&(!mayorPlaying(this.city)||['mayor','city','people','production','transport','map'].includes(tab))).map(([tab,label])=>({label:tab==='mayor'&&mayorPlaying(this.city)?`Decisões (${mayorDecisions(this.city).length})`:label,icon:tab,w:29,click:()=>{this.closeMenu();if(tab==='mayor'&&mayorPlaying(this.city))this.openMayorDesk('party');else this.toggleModule(tab);},selected:!this.hidden&&!!this.manager.find(`module:${tab}`)})),
+      ...CITY_WINDOWS.filter(([tab])=>tab!=='world'&&tab!=='mayor'&&(!mayorPlaying(this.city)||['city','people','production','transport','map'].includes(tab))).map(([tab,label])=>({label,icon:tab,w:29,click:()=>{this.closeMenu();this.toggleModule(tab);},selected:!this.hidden&&!!this.manager.find(`module:${tab}`)})),
       ...(mayorPlaying(this.city)?[
         ['build','land','Construir'],['operations','sanitation','Serviços'],['cabinet','people','Gabinete'],['policies','politics','Políticas'],['campaign','elections','Campanha'],['challenges','current','Compromissos']
       ].map(([view,icon,label])=>({label,icon,w:29,click:()=>{this.closeMenu();this.openMayorDesk(view);},selected:!this.hidden&&this.manager.active?.id===`mayor-desk:${view}`})):[]),
