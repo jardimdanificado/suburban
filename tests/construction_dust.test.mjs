@@ -51,6 +51,7 @@ test('grains dither in screen space and darken at night',()=>{
   const material=h.field().material;
   assert.match(material.fragmentShader,/bayer4\(gl_FragCoord\.xy\)/);
   assert.match(material.fragmentShader,/gl_PointCoord/);
+  assert.match(material.fragmentShader,/pow\(max\(0\.0,uDaylight\),1\.25\)/);
   assert.equal(material.uniforms.uDaylight.value,.25);
   assert.equal(h.field().geometry.drawRange.count,18);
 });

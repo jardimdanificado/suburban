@@ -25,7 +25,7 @@ void main(){
   float density=(1.0-smoothstep(0.5,1.1,r))*(0.9+0.1*vSeed);
   float threshold=(bayer4(gl_FragCoord.xy)+0.5)/16.0*0.55;
   if(density<threshold)discard;
-  float shade=(0.82+0.18*(1.0-r))*mix(0.5,1.0,uDaylight)*(0.95+0.1*vSeed);
+  float shade=(0.7+0.3*(1.0-r))*pow(max(0.0,uDaylight),1.25)*(0.9+0.2*vSeed);
   gl_FragColor=vec4(vColor*shade,1.0);
 }`;
 
