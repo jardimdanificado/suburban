@@ -1,3 +1,4 @@
+import {buildingFloorDesign} from './city_facade_patterns.js';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {HOUSE_STYLES} from './city_culture.js?v=colonial-colored-trim-1';
 import {INDUSTRIES} from './city_industries.js';
@@ -58,7 +59,8 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    else for(const dz of [-.25,.25])box(.05,.8,.035,wall+normal*(space.depth+.04),y+.4,door+dz,style.accent);
   }
  };
- const motif=style.motif,accent=style.accent??clay,trim=style.trim??cream,colonialForm=style.colonialForm??style.dutchForm??'sobrado',sertanejoForm=style.sertanejoForm??'taipa';
+ const motif=style.motif,colonialFacade=motif==='portuguese_colonial'||motif==='dutch_colonial',accent=style.accent??clay,trim=style.trim??cream,colonialForm=style.colonialForm??style.dutchForm??'sobrado',sertanejoForm=style.sertanejoForm??'taipa';
+ const frontWindows=new Set(windowDetails.filter(d=>d.side==='front').map(d=>`${d.unit.z}:${Math.floor(d.unit.x)}`));
  const frontDoorAlong=entryDoorDetails?.side==='front'?entryDoorDetails.unit.x+.5:null,frontDoorGap=(x,half=.48)=>frontDoorAlong!==null&&Math.abs(x-frontDoorAlong)<half;
  const frontRail=(start,end,height,depth,y,z,color)=>{
   if(frontDoorAlong===null||frontDoorAlong+.48<=start||frontDoorAlong-.48>=end){box(end-start,height,depth,(start+end)/2,y,z,color);return;}
@@ -148,13 +150,13 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    for(let floor=0;floor<b.floors;floor++)for(let x=.42;x<b.width-.1;x+=1.15){box(.1,.38,.08,x-.32,floor*CITY_FLOOR_HEIGHT+.92,front+.14,accent);box(.1,.38,.08,x+.32,floor*CITY_FLOOR_HEIGHT+.92,front+.14,accent);}
   }
   // Distinct horizontal floor bands leave the window openings unobstructed.
-  if(motif!=='portuguese_colonial'&&(variant===2||variant===4))for(let floor=1;floor<b.floors;floor++)box(b.width+.1,.12,.16,b.width/2,floor*CITY_FLOOR_HEIGHT+.12,front+.045,variant===2?cream:roofColor);
-  if(motif!=='portuguese_colonial')for(let floor=0;floor<b.floors;floor++)for(let col=0;col<b.width;col++){
-   const x=col+.5,y=floor*CITY_FLOOR_HEIGHT;if(spaces.some(s=>s.kind==='balcony'&&s.floor===floor&&['front','back'].includes(s.side)&&Math.abs(s.doorAlong-x)<.1))continue;
-   if((col+floor+variant)%3===0){box(.52,.12,.22,x,y+.62,front+.13,clay);box(.4,.18,.18,x,y+.76,front+.14,green);}
+  if(!colonialFacade&&(variant===2||variant===4))for(let floor=1;floor<b.floors;floor++)box(b.width+.1,.12,.16,b.width/2,floor*CITY_FLOOR_HEIGHT+.12,front+.045,variant===2?cream:roofColor);
+  if(!colonialFacade)for(let floor=0;floor<b.floors;floor++)for(let col=0;col<b.width;col++){
+   const x=col+.5,y=floor*CITY_FLOOR_HEIGHT;if(!frontWindows.has(`${floor}:${col}`))continue;if(spaces.some(s=>s.kind==='balcony'&&s.floor===floor&&['front','back'].includes(s.side)&&Math.abs(s.doorAlong-x)<.1))continue;
+   if((col+variant)%3===0){box(.52,.12,.22,x,y+.62,front+.13,clay);box(.4,.18,.18,x,y+.76,front+.14,green);}
    else if((col+variant)%4===0){const awning=box(.65,.08,.32,x,y+1.32,front+.16,variant%2?0xb97a60:0x90a6a0);if(awning)awning.rotation.x=.15;}
   }
-  if(motif!=='portuguese_colonial'&&['gingerbread','island_cottage','shotgun','chattel_house','colonial_veranda','pastel_cottage','veranda_duplex','stilt_house','breezeway_house','coral_gable','wraparound_veranda','st_lucia_villa'].includes(b.architecture)){
+  if(!colonialFacade&&['gingerbread','island_cottage','shotgun','chattel_house','colonial_veranda','pastel_cottage','veranda_duplex','stilt_house','breezeway_house','coral_gable','wraparound_veranda','st_lucia_villa'].includes(b.architecture)){
    const porchDepth=['shotgun','stilt_house','wraparound_veranda'].includes(b.architecture)?.78:.62,porchY=1.72,postXs=[.28,b.width-.28];
    box(b.width+.16,.12,porchDepth,b.width/2,porchY,front+porchDepth*.42,roofColor);
    for(const x of postXs)if(!frontDoorGap(x,.16)){box(.11,1.68,.11,x,.84,front+porchDepth*.75,wood);box(.2,.1,.2,x,1.7,front+porchDepth*.75,cream);}
@@ -166,7 +168,7 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    }
    if(b.architecture==='gingerbread')for(let i=0;i<Math.min(7,b.width*2);i++)box(.07,.2,.07,.2+i*(b.width-.4)/Math.max(1,Math.min(7,b.width*2)-1),1.82,front+.31,i%2?0xe7cb9e:0xc47768);
   }
-  if(motif!=='portuguese_colonial'&&b.architecture==='coastal_concrete'){
+  if(!colonialFacade&&b.architecture==='coastal_concrete'){
    for(const x of [.12,b.width-.12])box(.12,.32,b.depth+.08,x,roof+.12,b.depth/2,cream);
    const cistern=new THREE.Mesh(new THREE.CylinderGeometry(.38,.4,.72,8),mat(0x879a91));cistern.position.set(b.width*.72,roof+.55,b.depth*.68);cistern.castShadow=true;root.add(cistern);
    for(let col=0;col<b.width;col+=2){box(.62,.72,.1,col+.5,.98,front+.15,variant%2?0x597e79:0x8c6555);box(.72,.09,.15,col+.5,1.38,front+.19,cream);}
@@ -174,9 +176,9 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
   // Fifteen facade treatments add recognizable island details: shutters,
   // jalousie screens, painted brackets, breeze blocks and deep shade eaves.
   const facadePalette=[0x42847c,0xd4775e,0xe3bd63,0x657d9a,0xa45d54,0x71936c,0x9e7798,0xc78358,0x528d91,0xdda77e,0x6d7d54,0x8498a6,0xb75f56,0x5e8173,0xd0ad59];
-  if(motif!=='portuguese_colonial'&&variant%3===0){for(let col=0;col<b.width;col++){const x=col+.5;for(let floor=0;floor<b.floors;floor++)if((col+floor+variant)%2===0){box(.12,.5,.1,x-.34,floor*CITY_FLOOR_HEIGHT+.9,front+.14,facadePalette[variant]);box(.12,.5,.1,x+.34,floor*CITY_FLOOR_HEIGHT+.9,front+.14,facadePalette[(variant+3)%15]);}}}
-  else if(motif!=='portuguese_colonial'&&variant%3===1){const count=Math.max(2,b.width*2);for(let i=0;i<count;i++){const x=.2+i*Math.max(.1,(b.width-.4)/(count-1));box(.075,.34,.07,x,1.08,front+.16,facadePalette[variant]);box(.23,.055,.12,x,1.29,front+.19,cream);}}
-  else if(motif!=='portuguese_colonial'){for(const x of [.22,b.width-.22]){box(.14,1.25,.14,x,.62,front+.1,facadePalette[variant]);box(.34,.12,.2,x,1.28,front+.14,cream);}}
+  if(!colonialFacade&&variant%3===0){for(let col=0;col<b.width;col++){const x=col+.5;for(let floor=0;floor<b.floors;floor++)if(frontWindows.has(`${floor}:${col}`)){box(.12,.5,.1,x-.34,floor*CITY_FLOOR_HEIGHT+.9,front+.14,facadePalette[variant]);box(.12,.5,.1,x+.34,floor*CITY_FLOOR_HEIGHT+.9,front+.14,facadePalette[(variant+3)%15]);}}}
+  else if(!colonialFacade&&variant%3===1){const count=Math.max(2,b.width*2);for(let i=0;i<count;i++){const x=.2+i*Math.max(.1,(b.width-.4)/(count-1));box(.075,.34,.07,x,1.08,front+.16,facadePalette[variant]);box(.23,.055,.12,x,1.29,front+.19,cream);}}
+  else if(!colonialFacade){for(const x of [.22,b.width-.22]){box(.14,1.25,.14,x,.62,front+.1,facadePalette[variant]);box(.34,.12,.2,x,1.28,front+.14,cream);}}
  if(style.roofKind==='flat'){
    // A sizable roof garden or shaded terrace, inside the roof footprint.
    const y=roof+.17;
@@ -323,7 +325,7 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
   for(const {unit:u,side,openingBit,closed=false} of windowDetails){
    const expectedBit=({back:1,front:2,left:4,right:8})[side];
    if(!u.hasWindow||openingBit!==expectedBit)continue;
-   const floorY=u.z*CITY_FLOOR_HEIGHT,centerY=floorY+.96,windowStyle=(Math.imul(u.x*17+u.y*31+u.z*47+seed,2654435761)>>>0)%4;
+   const floorY=u.z*CITY_FLOOR_HEIGHT,centerY=floorY+.96,windowStyle=buildingFloorDesign(b,u.z).windowStyle;
    if(side==='front'||side==='back'){
     const sign=side==='front'?1:-1,z=u.y+(sign>0?1:0)+sign*.055,x=u.x+.5;
     box(.05,.88,.14,x-.19,centerY,z+sign*.025,style.trim);box(.05,.88,.14,x+.19,centerY,z+sign*.025,style.trim);

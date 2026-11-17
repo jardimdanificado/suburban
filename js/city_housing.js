@@ -13,7 +13,7 @@ function resetHousingSleep(c){
   if(c.task==='energy'&&!c.deliveryId&&!c.cleaningJobId&&!c.informalJobId&&!c.mobilityTrip&&!c.ridingVehicleId){c.task=null;c.targetId=null;c.path=[];}
 }
 const roomRoll=(b,u,salt=0)=>{let value=(b.id*2654435761^u.x*2246822519^u.y*3266489917^u.z*668265263^salt)>>>0;value^=value>>>16;return value%100;};
-function configureRoomWindow(b,u){const roll=roomRoll(b,u,5);u.hasWindow=u.roomType==='bedroom'||u.roomType==='dining'||u.roomType==='laundry'||u.roomType==='plenary'||u.roomType==='treatment'||u.roomType==='office'&&roll<78||u.roomType==='workspace'&&roll<58||u.roomType==='service'&&roll<42;u.windowStyle=['sash','tall','picture','round','shuttered'][roomRoll(b,u,11)%5];}
+function configureRoomWindow(b,u){const roll=roomRoll(b,{...u,z:0},5);u.hasWindow=u.roomType==='bedroom'||u.roomType==='dining'||u.roomType==='laundry'||u.roomType==='plenary'||u.roomType==='treatment'||u.roomType==='office'&&roll<78||u.roomType==='workspace'&&roll<58||u.roomType==='service'&&roll<42;u.windowStyle=['sash','tall','picture','round','shuttered'][roomRoll(b,{x:0,y:0,z:0},11)%5];}
 
 /** Only facade cells can be owned. Interior cells are common circulation. */
 export function floorCells(b, z) {
@@ -48,19 +48,19 @@ export class CityHousing {
         if(b.type==='popular_housing'){bathroom=floorUnits[0];bathroom.roomType='bathroom';bedrooms=floorUnits.slice(1);}
         if(b.type==='super_popular_housing')bedrooms=floorUnits.filter(u=>u.id!==b.sharedBathroomUnitId);
         if(b.type==='popular_luxury_housing'){
-          const rooms=floorUnits,id=`home:${rooms[0].id}`;if(rooms[0])rooms[0].roomType='bedroom';if(rooms[1])rooms[1].roomType='bathroom';if(rooms[2])rooms[2].roomType='dining';if(rooms[3]&&roomRoll(b,rooms[3],29)<62)rooms[3].roomType='laundry';
+          const rooms=floorUnits,id=`home:${rooms[0].id}`;if(rooms[0])rooms[0].roomType='bedroom';if(rooms[1])rooms[1].roomType='bathroom';if(rooms[2])rooms[2].roomType='dining';if(rooms[3]&&roomRoll(b,{...rooms[3],z:0},29)<62)rooms[3].roomType='laundry';
           const home={id,buildingId:b.id,unitIds:rooms.map(u=>u.id),createdAt:this.city.minute};for(const u of rooms)u.homeId=id;this.homes.set(id,home);continue;
         }
         if(b.type==='residential'||b.type==='luxury_housing'){
           const groupSize=b.type==='luxury_housing'?4:2;
-          for(let i=0;i<floorUnits.length;i+=groupSize){const rooms=floorUnits.slice(i,i+groupSize),id=`home:${rooms[0].id}`;if(rooms[1])rooms[1].roomType='bathroom';if(groupSize===4&&rooms[2])rooms[2].roomType='dining';if(groupSize===4&&rooms[3]&&roomRoll(b,rooms[3],29)<62)rooms[3].roomType='laundry';const home={id,buildingId:b.id,unitIds:rooms.map(u=>u.id),createdAt:this.city.minute};for(const u of rooms)u.homeId=id;this.homes.set(id,home);}
+          for(let i=0;i<floorUnits.length;i+=groupSize){const rooms=floorUnits.slice(i,i+groupSize),id=`home:${rooms[0].id}`;if(rooms[1])rooms[1].roomType='bathroom';if(groupSize===4&&rooms[2])rooms[2].roomType='dining';if(groupSize===4&&rooms[3]&&roomRoll(b,{...rooms[3],z:0},29)<62)rooms[3].roomType='laundry';const home={id,buildingId:b.id,unitIds:rooms.map(u=>u.id),createdAt:this.city.minute};for(const u of rooms)u.homeId=id;this.homes.set(id,home);}
           continue;
         }
         for(const room of bedrooms){const id=`home:${room.id}`,bathroomUnitId=b.type==='super_popular_housing'?b.sharedBathroomUnitId:bathroom?.id;const home={id,buildingId:b.id,unitIds:[room.id],bathroomUnitId,sharedBathroom:shared,sharedBathroomFloor:floor,createdAt:this.city.minute};room.homeId=id;this.homes.set(id,home);}
       }
     }
     if(b.type==='laundromat'&&units[0])units[0].roomType='laundry';
-    else if(!housingType&&b.type!=='farm'&&b.constructionKind!=='open-air'&&b.type!=='council_chamber'&&units.length>=6&&roomRoll(b,units[0],37)<22)units[0].roomType='laundry';
+    else if(!housingType&&b.type!=='farm'&&b.constructionKind!=='open-air'&&b.type!=='council_chamber'&&units.length>=6&&roomRoll(b,{...units[0],z:0},37)<22)units[0].roomType='laundry';
     for(const u of units)configureRoomWindow(b,u);
     b.layoutRevision=(b.layoutRevision||0)+1;
     return units;

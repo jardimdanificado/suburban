@@ -1,3 +1,4 @@
+import {buildingFloorDesign} from './city_facade_patterns.js';
 import {buildingPoint,modelSize,CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {HOUSE_STYLES} from './city_culture.js?v=colonial-colored-trim-1';
 const homes=new Set(['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing']);
@@ -31,21 +32,37 @@ export function buildingLeisureSpaces(b){
  if(!b||['townhall','council_chamber'].includes(b.type)||b.constructionKind==='open-air'||b.officeTenantOf)return [];
  const key=`${b.layoutRevision||0}:${b.floors}:${b.rotation||0}:${b.type}:${b.architecture}`,old=cache.get(b);if(old?.key===key)return old.spaces;
  const {width,depth}=modelSize(b),variant=hash(b.id,37)%5,spaces=[];
- const add=(candidate,w,d,planters)=>{
+ const styleVariant=hash(b.id,17)%4,balconyDepth=homes.has(b.type)?(variant%2?.68:.85):.62;
+ const add=(candidate,w,d,planters,styleVariant)=>{
   const alongLength=['front','back'].includes(candidate.side)?width:depth,edgeClearance=Math.min(candidate.along,alongLength-candidate.along),maxCenteredWidth=Math.max(.6,edgeClearance*2-.08),balconyWidth=Math.min(Math.max(.6,w),Math.max(.6,alongLength-.14),maxCenteredWidth);
-  const pos=balconyPosition(b,candidate,d),doorBit=SIDE_BITS[candidate.side][(b.rotation||0)%4],styleVariant=hash(b.id,candidate.unit.z,candidate.unit.x,candidate.unit.y,17)%4;
+  const pos=balconyPosition(b,candidate,d),doorBit=SIDE_BITS[candidate.side][(b.rotation||0)%4];
   spaces.push({id:`balcony:${candidate.unit.id}`,kind:'balcony',floor:candidate.unit.z,unitId:candidate.unit.id,side:candidate.side,doorBit,along:candidate.along,doorAlong:candidate.along,width:balconyWidth,depth:d,planters,styleVariant,balconyStyle:['iron','stone','wood','lattice'][styleVariant],position:{x:pos.x,y:pos.y,z:candidate.unit.z*CITY_FLOOR_HEIGHT+.14},capacity:1});
  };
+ // Choose facade columns once, then repeat them in a cycle of floor types.
+ // A column needs an accessible room on every floor; never move a balcony
+ // sideways to compensate for a bathroom or another ineligible room.
+ const floors=Array.from({length:Math.max(0,b.floors-1)},(_,i)=>sideCandidates(b,i+1));
+ const columnKey=c=>`${c.side}:${c.along}`;
+ const columns=floors.map(rows=>new Map(rows.map(c=>[columnKey(c),c])));
+ const candidates=(floors[0]||[]).filter(c=>columns.every(rows=>rows.has(columnKey(c))));
+ // Keep balconies on one principal facade, away from corners and each other.
+ // Repeated bays provide structure even when intermediate floors omit balconies.
+ const side=['front','back','left','right'].find(side=>candidates.some(c=>c.side===side));
+ const length=['front','back'].includes(side)?width:depth;
+ const onSide=candidates.filter(c=>c.side===side),inner=onSide.filter(c=>c.along>1&&c.along<length-1);
+ const available=inner.length?inner:onSide;
+ const targets=length>=5?[length/3,length*2/3]:[length/2],pattern=[];
+ for(const target of targets){
+  const candidate=[...available].sort((a,b)=>Math.abs(a.along-target)-Math.abs(b.along-target)||a.along-b.along).find(c=>pattern.every(p=>Math.abs(p.along-c.along)>=2));
+  if(candidate)pattern.push(candidate);
+ }
  for(let floor=1;floor<b.floors;floor++){
-  const candidates=sideCandidates(b,floor);
-  if(homes.has(b.type)){
-   const byUnit=new Map();for(const candidate of candidates){let list=byUnit.get(candidate.unit.id);if(!list)byUnit.set(candidate.unit.id,list=[]);list.push(candidate);}
-   for(const [unitId,options]of byUnit){const unit=options[0].unit;if(hash(b.id,floor,unit.x,unit.y)%5>1)continue;const pick=hash(b.id,floor,unit.x,unit.y,11)%options.length,candidate=options[pick],alongLength=['front','back'].includes(candidate.side)?width:depth;
-    add(candidate,Math.min(.82,alongLength-.14),hash(b.id,floor,candidate.unit.x,candidate.unit.y)%2?.68:.85,(hash(b.id,candidate.unit.x,candidate.unit.y,floor)%3)===0);
-   }
-  }else if((floor+variant)%2===0&&candidates.length){
-   const candidate=candidates[hash(b.id,floor,variant)%candidates.length],alongLength=['front','back'].includes(candidate.side)?width:depth;
-   add(candidate,Math.min(Math.max(.9,width-.4),alongLength-.14),.62,variant%2===0);
+  const design=buildingFloorDesign(b,floor);
+  if(!design.balconies)continue;
+  const rows=columns[floor-1],floorPattern=design.index===2?pattern.slice(0,1):pattern;
+  for(const column of floorPattern.length?floorPattern:pattern.slice(0,1)){
+   const candidate=rows.get(columnKey(column)),alongLength=['front','back'].includes(candidate.side)?width:depth;
+   add(candidate,Math.min(design.index===2?.68:homes.has(b.type)?.82:Math.max(.9,width-.4),alongLength-.14),balconyDepth,design.index===3,styleVariant);
   }
  }
  if((homes.has(b.type)&&(HOUSE_STYLES[b.architecture]||HOUSE_STYLES.modern).roofKind==='flat')||b.type==='office_tower'){

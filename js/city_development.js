@@ -116,7 +116,16 @@ export class CityDevelopment {
       if (project.route.some(t => this.roadPlotBlocked(Math.floor(t.x),Math.floor(t.y),access)) || project.route.some(p => !city.walkable(Math.floor(p.x), Math.floor(p.y))) || project.route.some((p, i, route) => i && !canStep(city.world, Math.floor(route[i - 1].x), Math.floor(route[i - 1].y), Math.floor(p.x), Math.floor(p.y)))) { project.status = 'blocked'; project.error = 'Trajeto deixou de ser acessível.'; return null; }
       const lampPostTiles=new Set([...city.lighting.sites.values()].filter(post=>post.status!=='cancelled').map(post=>`${Math.floor(post.x)},${Math.floor(post.y)}`));
       const treeTiles=new Set([...(city.nature?.tiles||new Map())].filter(([key,id])=>city.nature.plants.get(id)?.entity.properties.tree).map(([key])=>key));
-      pavePath(city.world,project.route,(x,y,key)=>(city.occupied.has(key)&&!lampPostTiles.has(key))||(city.nature?.tiles?.has(key)&&!treeTiles.has(key)),treeTiles,(x,y)=>city.clearCardboardSheltersForArea?.(x,y,1,1)); result = project;
+      pavePath(city.world,project.route,(x,y,key)=>city.occupied.has(key)&&!lampPostTiles.has(key),treeTiles,(x,y,surface)=>{
+        const plant=city.nature?.plants.get(city.nature.tiles.get(`${x},${y}`));
+        if(plant&&(surface==='road'||!plant.entity.properties.tree)){
+          city.nature.remove(plant,'vegetação removida para pavimentação');
+          city.nature.lost++;
+          // Removing vegetation also removes its sidewalk marker. Restore the new paving.
+          if(surface==='sidewalk')city.world.setSidewalk(x,y);
+        }
+        city.clearCardboardSheltersForArea?.(x,y,1,1);
+      }); result = project;
       if (project.service === 'road-repair') for (const p of project.route) { const x = Math.floor(p.x), y = Math.floor(p.y), tile = tileAt(city.world, x, y); if (ROAD_TILES.has(tile)) { city.world.setTile(x, y, roadFor(tile)); city.world.roadCondition?.set(`${x},${y}`, 100); } }
       if (project.service === 'road') project.service = 'road';
     } else {
