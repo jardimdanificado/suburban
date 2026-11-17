@@ -54,8 +54,15 @@ export class CityRelationships {
   view(a,b,create=false) { if(!a || !b || a.id===b.id)return null;return this.city.society.getRelation(a,b,create)?.views?.[a.id] || null; }
   context(r,a,b) {
     const aHome=this.city.building(this.city.units.get(a.homeUnitId)?.buildingId),bHome=this.city.building(this.city.units.get(b.homeUnitId)?.buildingId);
-    const contexts=[...(this.kinship(a,b)?['family']:[]),...(a.jobId && a.jobId===b.jobId?['coworkers']:[]),...(a.homeId && a.homeId===b.homeId?['household']:[]),...(aHome && bHome && aHome!==bHome && Math.hypot(aHome.door.x-bHome.door.x,aHome.door.y-bHome.door.y)<=8?['neighbors']:[])];
-    if(contexts.join('|')!==r.contexts.join('|'))r.contexts=Object.freeze(contexts);
+    const family=!!this.kinship(a,b),coworkers=!!a.jobId&&a.jobId===b.jobId,household=!!a.homeId&&a.homeId===b.homeId;
+    const neighbors=!!(aHome&&bHome&&aHome!==bHome&&Math.hypot(aHome.door.x-bHome.door.x,aHome.door.y-bHome.door.y)<=8);
+    // Most encounters retain the same contexts. Compare their ordered labels
+    // directly, allocating a replacement only when membership has changed.
+    const count=Number(family)+Number(coworkers)+Number(household)+Number(neighbors);let index=0;
+    if(r.contexts.length===count&&(!family||r.contexts[index++]==='family')&&(!coworkers||r.contexts[index++]==='coworkers')&&(!household||r.contexts[index++]==='household')&&(!neighbors||r.contexts[index++]==='neighbors'))return;
+    const contexts=[];
+    if(family)contexts.push('family');if(coworkers)contexts.push('coworkers');if(household)contexts.push('household');if(neighbors)contexts.push('neighbors');
+    r.contexts=Object.freeze(contexts);
   }
   sync(r) {
     r.revision=(r.revision||0)+1;
@@ -88,7 +95,8 @@ export class CityRelationships {
   }
   updateBond(a,b,r=this.city.society.getRelation(a,b)) {
     if(!r?.views)return;
-    for(const [observer,target] of [[a,b],[b,a]]) {
+    for(let direction=0;direction<2;direction++) {
+      const observer=direction?b:a,target=direction?a:b;
       const v=r.views[observer.id],next=this.status(v);
       if(next!==v.status) {
         const previous=v.status;v.status=next;v.lastStatusAt=this.city.minute;
@@ -395,7 +403,8 @@ export class CityRelationships {
     for(const c of this.city.citizens){c.social.grief=c.social.grief.filter(g=>g.until>now);c.social.beliefs=c.social.beliefs.filter(b=>now-b.heardAt<12*1440);}
     for(const r of this.city.society.relations.values()) {
       const a=this.city.society.citizen(r.a),b=this.city.society.citizen(r.b);if(!a || !b)continue;
-      for(const [observer,target] of [[a,b],[b,a]]) {
+      for(let direction=0;direction<2;direction++) {
+        const observer=direction?b:a;
         const v=r.views[observer.id];
         if(now-r.lastContact>2*1440){v.affection=bounded(v.affection+(v.affection>10?-1:0),-100,100);v.trust=bounded(v.trust-.5);}
         v.resentment=bounded(v.resentment-observer.socialProfile.forgiveness*.8);v.fear=bounded(v.fear-.5);

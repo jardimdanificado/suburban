@@ -188,3 +188,25 @@ Na seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos simu
 O pico específico diminuiu cerca de 20%; não houve ganho no tempo total nessa execução individual. O checksum completo permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
 
 Validação: 49 testes passaram nas suítes `boat_towing`, `boat_crossings`, `boat_boarding`, `boat_trip_routine`, `boat_rider_motion` e `worker_state_export`. O novo teste reproduziu 97 consultas textuais de obstáculos na versão anterior; após a alteração passou com limite inferior a 16. Também substitui obstáculos mantendo a mesma quantidade de células, incrementa a revisão e confirma que o operador cercado perde a rota. Remover os obstáculos permite planejar novamente. Para repetir a medição, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
+
+## Rodada 10 — menos listas temporárias na atualização de relações
+
+A decomposição do fechamento diário encontrou aproximadamente 36 ms no processamento social, dos quais 32 ms estavam na atualização das relações. Foram observadas 3.921 chamadas de atualização de contextos naquele fechamento. A implementação construía listas de rótulos e duas strings para comparar família, colegas de trabalho, residência compartilhada e vizinhança, mesmo quando esses contextos não mudavam. As atualizações bilaterais também construíam listas temporárias de pares para visitar os dois observadores.
+
+Agora os contextos são comparados diretamente, preservando ordem e identidade do snapshot existente. Uma nova lista congelada é criada somente quando os rótulos mudam. A atualização bilateral visita primeiro o mesmo observador anterior e depois o outro, sem construir listas de pares. Decaimento de sentimentos, taxa individual de perdão, revisão, eventos e regras de parceria permanecem iguais.
+
+Na seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos simulados sem LOD de fast-forward:
+
+| Medida local | Antes | Depois |
+| --- | ---: | ---: |
+| Fechamento diário das relações | 28,1 ms | 25,6 ms |
+| Preparação diária total, minuto 1440 | 87,9 ms | 82,1 ms |
+| Percentil 95 das atualizações | 57,4 ms | 56,3 ms |
+| Maior atualização completa | 146,4 ms | 146,8 ms |
+| Tempo total medido | 33,236 s | 33,502 s |
+
+O ganho real é pequeno e não houve melhoria do tempo total. A comparação final ocorreu sem testes concorrentes; o tempo interno do fechamento social foi medido por um wrapper temporário de `relationships.daily`. O checksum completo do benchmark permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
+
+O benchmark isolado `node scripts/benchmark-relationship-contexts.mjs` executa 200.000 atualizações, alternando todos os contextos a cada 1.024 chamadas. Caiu de 104,5 ms para 38,4 ms, com as mesmas 195 substituições de snapshots e checksum `7d540d2f0585c38f74c423967cdc1b1888b3ae954492ebe7552060bb32278acd`. O argumento posicional opcional seleciona outra árvore de fontes para comparação. Esse resultado mede somente a operação de contexto, não a simulação inteira.
+
+Validação: 18 testes distintos passaram nas suítes `relationship_contexts`, `initial_relationships` e `society`, incluindo uma cidade simulada durante 15 dias com famílias, contratos e conservação monetária. Os casos novos cobrem todas as 16 combinações de contextos, ordem dos rótulos, snapshots congelados, retenção de identidade sem mudança, exclusão de vizinhança dentro do mesmo prédio e decaimento assimétrico conforme a taxa de perdão de cada observador. Para repetir a medição geral, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
