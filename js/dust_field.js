@@ -27,8 +27,8 @@ float bayer4(vec2 p){vec2 q=floor(mod(p,4.0));return 4.0*b2(mod(q,2.0))+b2(floor
 void main(){
   vec2 p=gl_PointCoord*2.0-1.0;
   float r=length(p);
-  float density=(1.0-smoothstep(0.5,1.1,r))*(0.9+0.1*vSeed);
-  float threshold=(bayer4(gl_FragCoord.xy)+0.5)/16.0*0.55;
+  float density=(1.0-smoothstep(0.42,1.05,r))*(0.84+0.16*vSeed);
+  float threshold=(bayer4(gl_FragCoord.xy)+0.5)/16.0*0.88;
   if(density<threshold)discard;
   vec3 normal=normalize(vec3(p,sqrt(max(0.0,1.0-r*r))));
   float ndl=max(dot(normal,normalize(uSunDir)),0.0);

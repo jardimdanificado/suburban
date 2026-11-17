@@ -18,6 +18,7 @@ import { MusicPlayer } from "./js/music.js";
 import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
 import { WorldNetClient, WorldNetCoordinator } from './js/world_net.js?v=world-net-1';
 import { StartupLoading } from './js/startup_loading.js';
+import { aquecerCatalogos } from './js/vocabulario.js?v=economic-flow-7';
 
 const root = document.querySelector("#experience");
 const canvasUI = document.querySelector("#canvas-ui");
@@ -790,6 +791,9 @@ function selectEntity(entity, unitId = null) {
   window.dispatchEvent(new CustomEvent("experience:select", { detail: selected }));
 }
 
+startupLoading.stage('Aquecendo vocabulário…', 0.4);
+await startupLoading.paint();
+aquecerCatalogos();
 startupLoading.stage('Fundando a cidade…', 0.45);
 await startupLoading.paint();
 export let city = new CitySimulation({ world, createEntity, population: worldSettings.population, startFoundingWorks: true });
@@ -861,7 +865,7 @@ renderer3D.cityFavorites=favorites;
 options.openFavorites=()=>favorites.open('settings');
 
 // Background simulation starts after UI/editor bindings exist. Commands are serialized by the worker.
-function initSimulationBridge() {
+async function initSimulationBridge() {
   if (simulationBridge) {
     simulationBridge.worker?.terminate();
     simulationBridge.active = false;
@@ -896,8 +900,9 @@ function initSimulationBridge() {
   worldNet.on('worldOffers', () => worldNetCoordinator.computeOffers());
   worldNet.on('worldDemand', () => worldNetCoordinator.computeDemand());
   worldNet.on('worldMigrationCandidates', args => worldNetCoordinator.migrationCandidates(args[0]));
+  await startupLoading.prepareSimulation(simulationBridge);
 }
-initSimulationBridge();
+await initSimulationBridge();
 
 startupLoading.stage('Pronto…', 1);
 await startupLoading.paint();
@@ -986,7 +991,7 @@ export async function startNewCity({ preset = 'archipelago', seed = 482910, size
 
   startupLoading.stage('Carregando sistemas…', 0.85);
   await startupLoading.paint();
-  initSimulationBridge();
+  await initSimulationBridge();
   startupLoading.stage('Pronto…', 1);
   await startupLoading.paint();
   startupLoading.close();

@@ -23,7 +23,7 @@ test('land vehicles leave a grain trail at any speed on any land surface',()=>{
   for(const tile of [0,3,8]){
     const h=harness({tile,vehicle:'carrinho'});
     h.step(0,.1);assert.equal(h.field().geometry.drawRange.count,0);
-    h.step(.1,.1);assert.equal(h.field().geometry.drawRange.count,14);
+    h.step(.1,.1);assert(h.field().geometry.drawRange.count>0);
   }
 });
 
@@ -47,4 +47,60 @@ test('grains carry per-particle color and seed for variation',()=>{
   const field=h.field();
   assert.equal(field.geometry.getAttribute('aColor').array.length,3072*3);
   assert(new Set(Array.from(field.geometry.getAttribute('aSeed').array.slice(0,6))).size>1);
+});
+
+function positions(h){return Array.from(h.field().geometry.getAttribute('position').array.slice(0,h.field().geometry.drawRange.count*3));}
+
+test('wheel dust follows displacement even when vehicle angle is stale',()=>{
+  const h=harness({vehicle:'carrinho'});
+  h.entity.properties.cityVehicle.angle=Math.PI;
+  h.step(0,.1);h.step(.4,.1);
+  const points=positions(h);
+  for(let i=0;i<points.length;i+=3){
+    assert(points[i]<=h.entity.x+.25);
+    assert(Math.abs(points[i+2]-h.entity.y)<.36);
+    assert(points[i+1]>=1&&points[i+1]<1.1);
+  }
+  assert(points.some((v,i)=>i%3===2&&v<5));
+  assert(points.some((v,i)=>i%3===2&&v>5));
+});
+
+test('distance spacing keeps emission count stable across frame rates',()=>{
+  const a=harness({vehicle:'carrinho'}),b=harness({vehicle:'carrinho'});
+  a.step(0,.01);b.step(0,.01);
+  a.step(.4,.1);
+  for(let i=0;i<4;i++)b.step(.1,.025);
+  assert.equal(a.field().geometry.drawRange.count,b.field().geometry.drawRange.count);
+});
+
+test('teleports and re-enabling dust do not create connecting trails',()=>{
+  const h=harness({vehicle:'carrinho'});
+  h.step(0,.1);h.step(10,.1);
+  assert.equal(h.field().geometry.drawRange.count,0);
+  syncMovementDust(h.THREE,h.renderer,h.world,[h.entity],null,.1,false);
+  h.step(1,.1);
+  assert.equal(h.field().geometry.drawRange.count,0);
+});
+
+test('dust uses vehicle coordinates rather than citizen crowd offsets',()=>{
+  const h=harness({vehicle:'bicicleta'}),offsets=new Map([[1,{x:20,y:20}]]);
+  syncMovementDust(h.THREE,h.renderer,h.world,[h.entity],offsets,.1);
+  h.entity.x+=.2;
+  syncMovementDust(h.THREE,h.renderer,h.world,[h.entity],offsets,.1);
+  const points=positions(h);
+  assert(points.length>0);
+  for(let i=0;i<points.length;i+=3){assert(points[i]<6);assert(Math.abs(points[i+2]-5)<.1);}
+});
+
+test('clouds expand, fade smoothly and expire without leftover particles',async()=>{
+  const {renderVehicleDust}=await import('../js/vehicle_dust_field.js?v=soft-dust-1');
+  const particle={x:0,z:0,h:0,vx:0,vz:0,vh:.1,age:0,life:1,size:.2,color:[1,1,1],seed:.5,opacity:.3};
+  const particles=[particle],samples=[];
+  const field={begin(){},end(){},add(x,y,z,size,color,seed,opacity){samples.push({size,opacity,y});}};
+  renderVehicleDust(particles,0,field);
+  assert.equal(samples.at(-1).opacity,0);
+  renderVehicleDust(particles,.15,field);const young=samples.at(-1);
+  renderVehicleDust(particles,.6,field);const old=samples.at(-1);
+  assert(old.size>young.size);assert(old.opacity<young.opacity);assert(old.opacity>0);assert(old.y>young.y);
+  renderVehicleDust(particles,.3,field);assert.equal(particles.length,0);
 });

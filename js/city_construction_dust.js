@@ -1,5 +1,5 @@
 // Fine grains kicked up only where a worker is active on a construction site.
-import {DustField,renderGrains} from './dust_field.js?v=grain-dust-4';
+import {DustField,renderGrains} from './dust_field.js?v=grain-dust-6';
 const local=new WeakMap();
 const EMIT_INTERVAL=.12;
 const PALETTE=[[.91,.83,.67],[.84,.76,.6],[.95,.88,.73]];

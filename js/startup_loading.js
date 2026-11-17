@@ -55,6 +55,18 @@ export class StartupLoading {
     return new Promise(resolve => raf(() => raf(() => resolve())));
   }
 
+  async prepareSimulation(bridge) {
+    this.stage('Aquecendo simulação e vocabulário…', 0.9);
+    await this.paint();
+    if (!bridge?.active) return;
+    try {
+      // The checkpoint arrives after worker initialization and vocabulary warmup.
+      await bridge.checkpoint();
+    } catch {
+      // The bridge reports worker failures and restores local simulation itself.
+    }
+  }
+
   attach() {
     this.canvas = document.createElement('canvas');
     Object.assign(this.canvas.style, {

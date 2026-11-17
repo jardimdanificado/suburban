@@ -65,3 +65,30 @@ test('close removes the overlay and suppresses drawing until reopened', () => {
   loading.stage('Pronto…', 1);
   assert(calls.some(([op]) => op === 'fillRect'));
 });
+
+test('simulation preparation keeps loading open until the worker checkpoint completes', async () => {
+  const loading = new StartupLoading();
+  loading.open();
+  const events = [];
+  loading.paint = async () => { events.push('paint'); };
+  let finish;
+  const checkpoint = new Promise(resolve => { finish = resolve; });
+  let ready = false;
+  const pending = loading.prepareSimulation({ active: true, checkpoint() { events.push('checkpoint'); return checkpoint; } });
+  pending.then(() => { ready = true; });
+  await Promise.resolve();
+  assert.deepEqual(events, ['paint', 'checkpoint']);
+  assert.equal(loading.stageLabel, 'Aquecendo simulação e vocabulário…');
+  assert.equal(loading.closed, false);
+  assert.equal(ready, false);
+  finish();
+  await pending;
+  assert.equal(ready, true);
+});
+
+test('simulation preparation permits local fallback when the worker is unavailable or fails', async () => {
+  const loading = new StartupLoading();
+  loading.paint = async () => {};
+  await loading.prepareSimulation({ active: false, checkpoint() { assert.fail('inactive worker'); } });
+  await loading.prepareSimulation({ active: true, checkpoint: async () => { throw new Error('worker failed'); } });
+});

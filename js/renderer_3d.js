@@ -23,8 +23,8 @@ import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMater
 import {cachedConstructionFootprint,grassExclusionCells,grassExclusionSignature,grassChunkSignatures} from './city_site_footprints.js?v=local-chunk-mask-3';
 import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=typed-roots-2';
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
-import {syncConstructionDust} from './city_construction_dust.js?v=grain-dust-4';
-import {syncMovementDust} from './city_movement_dust.js?v=grain-dust-4';
+import {syncConstructionDust} from './city_construction_dust.js?v=grain-dust-6';
+import {syncMovementDust} from './city_movement_dust.js?v=ground-dust-5';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-player-marker-5';
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import {streetSurfaceTextures} from './street_surface_textures.js?v=ground-realism-2';
