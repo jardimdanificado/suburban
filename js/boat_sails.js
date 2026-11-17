@@ -19,7 +19,7 @@ export function syncBoatSails(THREE,city,group,identity,time=performance.now()/1
   if(changed){
    const material=sail.material;if(material.userData.boatFlag)material.map?.dispose();
    let texture=null;
-   if(flag){const canvas=partyFlagCanvas(flag,()=>{if(texture)texture.needsUpdate=true;});texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;}
+   if(flag){const canvas=partyFlagCanvas(flag,()=>{if(texture)texture.needsUpdate=true;});texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;}
    material.map=texture;material.userData.boatFlag=!!texture;material.color.setHex(0xffffff);material.needsUpdate=true;
   }
   sail.scale.y=underway?1:.09;

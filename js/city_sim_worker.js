@@ -4,6 +4,7 @@ import {packFishing} from './fishing_motion.js';
 import {packBoatRiders,packBoatTows} from './boat_rider_motion.js?v=shared-crossings-1';
 import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=game-approach-camera-9';
 import { FF_SPEED, FF_LOD_SPEED, FF2_SPEED, FF3_SPEED, FF4_SPEED } from './simulation_time.js?v=ff3-ff4-steps-1';
+import { aquecerCatalogos } from './vocabulario.js?v=economic-flow-7';
 
 const graph = new CityStateGraph();
 let fieldTailPatches=false;
@@ -148,6 +149,7 @@ self.onmessage = ({ data }) => {
       cityId = data.cityId || 'city-1';
       fieldTailPatches=data.stateFeatures?.fieldTailPatches===true&&graph.supportsFieldTailPatches===true;
       state = graph.apply(data.packet); bindCityState(state.city);
+      aquecerCatalogos();
       for(const citizen of state.city.citizens)citizen.globalId??=`${cityId}:${citizen.id}`;
       state.city.staggerInitialTaskDecisions();
       state.city.profileDiagnostics=data.profileDiagnostics===true;

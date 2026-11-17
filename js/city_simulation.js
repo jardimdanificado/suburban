@@ -17,6 +17,7 @@ import {beginFastForwardMinute,deferFastForwardCitizen,routineRevision,nextRouti
 // city graph so the mirror and snapshot encoders stay untouched.
 const movementActionCache=new WeakMap();
 import {CitySubstances} from './city_substances.js?v=economic-flow-7';
+import {aquecerCatalogos} from './vocabulario.js?v=economic-flow-7';
 import {beginActivitySearch,endActivitySearch,invalidateActivitySearch} from './city_activity_search.js';
 import {sleepState,wantsSleep,sleepMinute,interruptSleep} from './city_sleep.js';
 import {injuredCarryCapacity} from './city_injury_effects.js';
@@ -614,6 +615,7 @@ export class CitySimulation {
     return true;
   }
   initialize() {
+    aquecerCatalogos();
     // Foreign buyers and suppliers operate outside the finite local monetary base.
     this.currency.initialize();
     generateSettlement(this);

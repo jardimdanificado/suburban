@@ -26,7 +26,7 @@ export function syncBoatFlags(renderer,THREE,city,group){
       const pole=new THREE.Mesh(new THREE.CylinderGeometry(.012,.016,height,6),new THREE.MeshLambertMaterial({color:0xb5a780}));pole.position.y=height/2;flags.add(pole);
       const add=(flag,w,y)=>{
         let texture;const canvas=partyFlagCanvas(flag,()=>{if(texture)texture.needsUpdate=true;});
-        texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
+        texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;
         const material=new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide});
         material.userData.boatFlag=true;
         const cloth=new THREE.Mesh(clothFlagGeometry(THREE,w,w*76/120),material);cloth.position.set(w/2,y,0);flags.add(cloth);

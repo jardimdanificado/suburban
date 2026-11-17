@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {roadSurfaceCorners,roadRetainingFaces,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,terrainTileSurfaceCorners} from '../js/road_terrain_geometry.js';
 import {surfaceElevation} from '../js/city_terrain.js';
-import {TILE_FLOOR,TILE_STONE,TILE_SAND,TILE_HILL,TILE_ROAD_GRASS,TILE_ROAD_GRASS_STONE,TILE_ROAD_HILL_STONE} from '../js/world_gen.js';
+import {TILE_FLOOR,TILE_STONE,TILE_SAND,TILE_HILL,TILE_ROAD_GRASS,TILE_ROAD_HILL,TILE_ROAD_GRASS_STONE,TILE_ROAD_HILL_STONE} from '../js/world_gen.js';
 
 function fixture(){
   const world={width:12,height:10,revision:1,map:new Uint8Array(120).fill(TILE_FLOOR)};
@@ -80,12 +80,12 @@ test('crossing bank and ramp profiles taper to zero instead of creating an uprig
   }
 });
 
-test('only pavement has retaining walls; removing paving restores the natural surface',()=>{
+test('paving wear keeps the road profile and retaining walls on dirt roads',()=>{
   const world=fixture();road(world);
   for(let x=0;x<12;x++)world.setTile(x,4,TILE_HILL);
   const before=roadSurfaceCorners(world,5,5),faces=roadRetainingFaces(world,5,5);
   world.setTile(5,5,TILE_ROAD_GRASS);
-  assert(faces.length>0);assert.deepEqual(roadSurfaceCorners(world,5,5),before);assert.deepEqual(roadRetainingFaces(world,5,5),[]);
+  assert(faces.length>0);assert.deepEqual(roadSurfaceCorners(world,5,5),before);assert.deepEqual(roadRetainingFaces(world,5,5),faces);
   world.setTile(5,5,TILE_ROAD_GRASS_STONE);assert.deepEqual(roadRetainingFaces(world,5,5),faces);
   world.setTile(5,5,TILE_ROAD_GRASS);
   world.setTile(6,5,TILE_ROAD_HILL_STONE);
@@ -101,14 +101,23 @@ test('walking height follows the actual mesh triangles even on a non-planar terr
 });
 
 
-test('unbuilt dirt roads follow natural slopes, and only paving creates the shelf and retaining wall',()=>{
+test('unbuilt dirt roads cut the same shelf and retaining wall as paving',()=>{
   const world=fixture();
   for(let y=0;y<5;y++)for(let x=0;x<12;x++)world.setTile(x,y,TILE_HILL);
-  const natural=terrainSurfaceElevation(world,5.5,5.5);
   for(let x=2;x<10;x++)world.setTile(x,5,TILE_ROAD_GRASS);
-  near(terrainSurfaceElevation(world,5.5,5.5),natural);
-  assert.deepEqual(roadRetainingFaces(world,5,5),[]);
-  road(world);assert(roadRetainingFaces(world,5,5).length>0);near(terrainSurfaceElevation(world,5.5,5.5),1.1);
+  const dirtFaces=roadRetainingFaces(world,5,5);
+  assert(dirtFaces.length>0);near(terrainSurfaceElevation(world,5.5,5.5),1.1);
+  road(world);assert.deepEqual(roadRetainingFaces(world,5,5),dirtFaces);near(terrainSurfaceElevation(world,5.5,5.5),1.1);
+});
+
+test('a paved street ending at a dirt road has no railing face on the shared edge',()=>{
+  const world=fixture();
+  for(let y=0;y<5;y++)for(let x=0;x<12;x++)world.setTile(x,y,TILE_HILL);
+  for(let x=2;x<10;x++)world.setTile(x,5,x<6?TILE_ROAD_HILL:TILE_ROAD_GRASS_STONE);
+  // Railing layout passes ownsSharedBoundary=()=>true, skipping shared street edges.
+  assert(roadRetainingFaces(world,6,5,()=>true).every(face=>face.side!==3),'west edge toward dirt has no railing face');
+  assert(roadRetainingFaces(world,5,5,()=>true).every(face=>face.side!==1),'dirt side has no railing face on the shared edge');
+  assert(roadRetainingFaces(world,5,5).some(face=>face.side===0),'dirt road keeps its own bank retaining wall');
 });
 
 

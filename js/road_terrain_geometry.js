@@ -185,12 +185,7 @@ export function sidewalkSurfaceCorners(world,x,y){
   }
   cache?.sidewalks.set(key,corners);return corners;
 }
-export function streetSurfaceCorners(world,x,y){
-  const tile=at(world,x,y);
-  // Unpaved paths follow the natural surface instead of cutting an engineered shelf.
-  if(ROADS.has(tile)&&!PAVED_ROADS.has(tile))return null;
-  return roadSurfaceCorners(world,x,y)||sidewalkSurfaceCorners(world,x,y);
-}
+export function streetSurfaceCorners(world,x,y){return roadSurfaceCorners(world,x,y)||sidewalkSurfaceCorners(world,x,y);}
 
 export function roadRetainingFaces(world,x,y,ownsSharedBoundary=null){
   const surface=streetSurfaceCorners(world,x,y);if(!surface)return [];

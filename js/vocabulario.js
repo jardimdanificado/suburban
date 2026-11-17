@@ -385136,6 +385136,11 @@ function bancoGramatical(theme){
   for(const word of adjetivosLexicais)if(word.length<=14)adjectives.add(word);
   const bank={nouns:[...nouns.values()],verbs:[...verbs],adjectives:[...adjectives],adverbs:[...adverbs]};bancosGramaticais.set(cacheKey,bank);return bank;
 }
+// Build the lazy lexical caches before the simulation needs them. The first
+// autonomous graffiti used to pay ~900 ms while generating its text at 8:30.
+export function aquecerCatalogos(){
+  for(const theme of ['cidade','moradia','alimentacao','saude','politica'])bancoGramatical([theme]);
+}
 function pluralizarFrase(word){
   if(/ção$/u.test(word))return word.slice(0,-3)+'ções';if(/são$/u.test(word))return word.slice(0,-3)+'sões';
   if(word.endsWith('s'))return word;
