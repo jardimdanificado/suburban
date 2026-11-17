@@ -316,3 +316,13 @@ test('boat approaches use packed obstacles and refresh same-size obstacle edits'
  city.occupied.clear();city.obstacleRevision++;
  assert.ok(planBoatTrip(city,person.entity,goal,{boat}),'removing obstacles must retry the failed approach');
 });
+
+
+test('a ferry search checks shore walkability once per cell without requiring a tow bike',()=>{
+ const {city,person,boat,goal}=fixture({bike:false,boatOnLand:false}),walkable=city.walkable.bind(city),cells=new Set();let calls=0;
+ city.walkable=(x,y)=>{calls++;cells.add(`${x},${y}`);return walkable(x,y);};
+ const path=planBoatTrip(city,person.entity,goal,{boat});
+ assert.ok(path?.some(p=>p.transportMode==='sail'));
+ assert.ok(path.some(p=>p.transportMode==='walkAfter'));
+ assert.ok(calls<=cells.size+4,`repeated shore checks: ${calls} calls for ${cells.size} cells`);
+});

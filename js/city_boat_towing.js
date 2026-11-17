@@ -56,13 +56,13 @@ export function boatTowClear(city,boat,x,y,dx,dy){
 // A route search is synchronous: terrain and obstacles cannot change between
 // its footprint samples. Read each visited cell once, without retaining this
 // snapshot for movement, later searches or saves.
-function createHullTerrain(city){
+function createHullTerrain(city,sampleHeights=true){
  // Status bits: sampled=1, water=2, walkable land=4.
- const width=city.world.width,size=width*city.world.height,status=new Uint8Array(size),heights=new Float64Array(size);
+ const width=city.world.width,size=width*city.world.height,status=new Uint8Array(size),heights=sampleHeights?new Float64Array(size):null;
  return {status,heights,sample(x,y){
   const index=y*width+x;
   if(!status[index]){
-   const tile=tileAt(city.world,x,y);heights[index]=tileHeight(tile);
+   const tile=tileAt(city.world,x,y);if(heights)heights[index]=tileHeight(tile);
    status[index]=1|(tile===TILE_WATER?2:city.walkable(x,y)?4:0);
   }
   return index;
@@ -106,7 +106,8 @@ function computeCrossingRoute(city,boat,bike,goal,{relocate=false,limitSeconds=I
  if([sx,gx].some(x=>x<0||x>=width)||[sy,gy].some(y=>y<0||y>=height))return null;
  const towing=!!bike,start=sy*width+sx,goalCell=gy*width+gx,startedWater=water(city,boat.x,boat.y);
  if(!towing&&!startedWater)return null;
- const hullTerrain=towing?createHullTerrain(city):null;
+ // Ferries also revisit shore cells; only towed hulls need height samples.
+ const hullTerrain=createHullTerrain(city,towing);
  const costs=new Float64Array(size*2).fill(Infinity),parents=new Int32Array(size*2).fill(-1),heap=[];
  // Tow state records whether water was used. Ferry state records whether the passenger has landed.
  const root=start+(towing&&startedWater?size:0);costs[root]=0;push(heap,0,root);let target=-1,visited=0;
@@ -116,7 +117,7 @@ function computeCrossingRoute(city,boat,bike,goal,{relocate=false,limitSeconds=I
   if(cell===goalCell&&(relocate||!towing||flag)){target=key;break;}
   for(const [dx,dy]of directions){
    const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=width||ny>=height)continue;
-   const toWater=water(city,nx,ny);if(!toWater&&!(hullTerrain?hullTerrain.status[hullTerrain.sample(nx,ny)]&4:city.walkable(nx,ny))||!towing&&flag&&toWater)continue;
+   const toWater=water(city,nx,ny);if(!toWater&&!(hullTerrain.status[hullTerrain.sample(nx,ny)]&4)||!towing&&flag&&toWater)continue;
    if(fromWater!==toWater){const landX=fromWater?nx:x,landY=fromWater?ny:y;if(tileHeight(tileAt(city.world,landX,landY))>1.25)continue;}
    else if(!toWater&&!canStep(city.world,x,y,nx,ny))continue;
    if(towing&&!toWater&&(!hullClear(city,boat,nx+.5,ny+.5,dx,dy,hullTerrain)||!hullClear(city,boat,x+.5+dx*.5,y+.5+dy*.5,dx,dy,hullTerrain)))continue;

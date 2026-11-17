@@ -210,3 +210,24 @@ O ganho real é pequeno e não houve melhoria do tempo total. A comparação fin
 O benchmark isolado `node scripts/benchmark-relationship-contexts.mjs` executa 200.000 atualizações, alternando todos os contextos a cada 1.024 chamadas. Caiu de 104,5 ms para 38,4 ms, com as mesmas 195 substituições de snapshots e checksum `7d540d2f0585c38f74c423967cdc1b1888b3ae954492ebe7552060bb32278acd`. O argumento posicional opcional seleciona outra árvore de fontes para comparação. Esse resultado mede somente a operação de contexto, não a simulação inteira.
 
 Validação: 18 testes distintos passaram nas suítes `relationship_contexts`, `initial_relationships` e `society`, incluindo uma cidade simulada durante 15 dias com famílias, contratos e conservação monetária. Os casos novos cobrem todas as 16 combinações de contextos, ordem dos rótulos, snapshots congelados, retenção de identidade sem mudança, exclusão de vizinhança dentro do mesmo prédio e decaimento assimétrico conforme a taxa de perdão de cada observador. Para repetir a medição geral, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
+
+## Rodada 11 — amostragem única das margens em travessias sem reboque
+
+A investigação da busca de banheiros no minuto 964 encontrou um morador com dez tentativas de rota, somando aproximadamente 57 ms. Durante a decomposição das buscas daquele minuto, uma travessia sem reboque consultou `walkable` 7.270 vezes para apenas 2.043 células distintas. A amostragem de passagem livre introduzida na rodada 3 era usada somente quando havia bicicleta rebocando o casco.
+
+Agora travessias sem reboque também reutilizam a passagem livre de cada célula durante a busca síncrona. Para esses barcos, a amostragem aloca apenas um byte de status por célula; a matriz de alturas continua exclusiva do reboque. A amostragem é descartada ao terminar a busca. Movimento, obstáculos editados posteriormente, saves, ordem de exploração e custos das rotas continuam seguindo as regras anteriores.
+
+Na seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos simulados sem LOD de fast-forward:
+
+| Medida local | Antes | Depois |
+| --- | ---: | ---: |
+| Pico agregado de buscas de caminho | 61,1 ms | 56,8 ms |
+| Pico de busca de banheiro, minuto 964 | 54,6 ms | 58,8 ms |
+| Pico de movimento | 51,7 ms | 49,8 ms |
+| Percentil 95 das atualizações | 55,9 ms | 55,6 ms |
+| Maior atualização completa | 160,1 ms | 150,9 ms |
+| Tempo total medido | 33,391 s | 32,830 s |
+
+As medições são execuções individuais e incluem variação. O pico específico de banheiros não diminuiu e permanece como alvo de investigação. A alteração reduz verificações repetidas nas travessias encontradas durante essa análise; não resolve todas as fontes daquele pico. O checksum completo permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
+
+Validação: 50 testes passaram nas suítes `boat_towing`, `boat_crossings`, `boat_boarding`, `boat_trip_routine`, `boat_rider_motion` e `worker_state_export`. A nova regressão sem bicicleta reproduziu 635 consultas de passagem livre em 209 células na versão anterior. Após a alteração, passou com limite de uma consulta por célula, mais quatro verificações externas à busca da travessia. Os testes de reboque, obstáculos novos, embarque, movimento físico e exportação de estado continuaram passando. Para repetir a medição, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
