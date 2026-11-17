@@ -11,7 +11,7 @@ function fixture(){
   const citizen={id:1,jobId:9,businessIds:[9],task:'leisure',entity:{x:2.5,y:1.5,properties:{name:'Artista'}},traits:{honesty:.1,riskTolerance:.8},skills:{artistic:20},path:[]};
   const piece={id:1,kind:'painting',message:'Original',creatorId:2,entity:{x:2.5,y:2.5},buildingId:9,support:{kind:'facade-banner',buildingId:9},layers:[],createdAt:0};
   const building={id:9,width:2,depth:2,door:{x:5.5,y:6.5},entity:{x:4,y:4,properties:{name:'Prédio'}}};
-  let nextId=1;const city={minute:1440,hour:22,buildings:[building],world:{width:16,height:16,getTile:()=>0},createEntity:data=>({...data,id:nextId++}),citizens:[citizen],society:{isAdult:()=>true,citizen:id=>id===1?citizen:null},building:id=>id===9?building:null,walkable:()=>true,findPath:()=>[],urgentNeed:()=>false,random:()=>.05,log:()=>({id:1}),currency:{price:n=>n},gigs:{jobs:[]},accountName:()=>null};
+  let nextId=1;const city={minute:1440,hour:22,buildings:[building],world:{width:16,height:16,getTile:()=>8},createEntity:data=>({...data,id:nextId++}),citizens:[citizen],society:{isAdult:()=>true,citizen:id=>id===1?citizen:null},building:id=>id===9?building:null,walkable:()=>true,findPath:()=>[],urgentNeed:()=>false,random:()=>.05,log:()=>({id:1}),currency:{price:n=>n},gigs:{jobs:[]},accountName:()=>null};
   const justice=new CityJustice(city);city.justice=justice;justice.art.push(piece);justice.crimeRecord=()=>({id:7});return {city,justice,citizen,piece};
 }
 
@@ -180,4 +180,35 @@ test('destroyed catalogue entries cannot move the camera',()=>{
  const records=[],camera=[],panel=new Proxy({record:(...args)=>records.push(args)},{get:(target,key)=>target[key]||(()=>{})});
  renderUrbanArt({city,view:()=> 'damage',matches:()=>true,camera:(...args)=>camera.push(args),host:{setSelection:()=>{}}},panel);
  const row=records.find(([title])=>title.includes(piece.message));assert(row);row[2]?.();assert.deepEqual(camera,[]);
+});
+
+test('ground graffiti requires a paved road, excluding grass, dirt roads and unpaved sidewalk',()=>{
+ const {city,citizen}=fixture();city.buildings=[];
+ for(const tile of [0,1,3,6,7,9]){
+  city.world.getTile=()=>tile;city.world.hasSidewalk=()=>true;
+  assert(!nearbyGraffitiSurfaces(city,citizen).some(s=>s.surface==='ground'),`tile ${tile} must not allow floor paint`);
+ }
+ city.world.getTile=()=>8;const support=nearbyGraffitiSurfaces(city,citizen).find(s=>s.surface==='ground');assert(support);
+ city.world.getTile=()=>0;assert.equal(graffitiSurfaceExists(city,support),false);
+});
+
+test('commissioned outdoor paintings use a real wall and complete through the outdoor worker route',()=>{
+ const city=setup({starter:true,funded:true,population:8}),b=city.buildings.find(b=>b.active&&b.constructionKind!=='open-air'&&b.municipal&&b.units?.length);
+ const job=city.gigs.createArtworkOrder('treasury',b.id,{kind:'painting',message:'Mural',supportKind:'exterior-wall'});
+ assert(job);assert.equal(job.artworkSupport,null);assert.equal(job.artworkFacadeSupport.surface,'wall');assert.equal(job.scope,'outdoor');
+ const artist=city.citizens[0];artist.needs={food:100,energy:100,health:100,water:100};artist.entity.x=job.point.x;artist.entity.y=job.point.y;artist.path=[];
+ city.gigs.candidates=()=>[artist];city.gigs.consumeArtworkMaterial=()=>true;city.urgentNeed=()=>false;
+ city.minute=600+job.id%3;job.required=.1;city.gigs.updateMinute();
+ assert.equal(job.status,'completed');const art=city.justice.art.find(a=>a.id===job.artworkId);assert(art);
+ assert.equal(art.kind,'painting');assert.equal(art.support.surface,'wall');
+ assert.equal(art.entity.x,art.support.position.x);assert.equal(art.entity.y,art.support.position.y);assert.equal(art.scene.buildingId,null);
+});
+
+test('spontaneous paintings can be created directly on nearby walls',()=>{
+ const city=setup({starter:true,population:8}),b=city.buildings.find(b=>b.active&&b.constructionKind!=='open-air'&&b.units?.length),artist=city.citizens[0];
+ city.minute=660;city.random=()=>.12;city.urgentNeed=()=>false;city.justice.art=[];
+ Object.assign(artist,{task:'leisure',path:[],graffitiMission:null});artist.skills.artistic=100;artist.needs.energy=100;artist.needs.health=100;
+ artist.entity.x=b.entity.x+.5;artist.entity.y=b.entity.y-.5;
+ const art=city.gigs.postSpontaneousArtwork();assert(art);assert.equal(art.kind,'painting');assert.equal(art.support.surface,'wall');assert.equal(art.buildingId,b.id);
+ assert.equal(art.entity.x,art.support.position.x);assert.equal(art.entity.y,art.support.position.y);
 });

@@ -1,6 +1,6 @@
 import {buildingEntranceDoor} from './city_building_geometry.js?v=banner-placement-2';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
-import {surfaceElevation,tileAt,terrainWalkable} from './city_terrain.js?v=entrance-retaining-clearance-1';
+import {surfaceElevation,tileAt,terrainWalkable,PAVED_ROAD_TILES} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {roadRetainingFaces} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
 
 export const graffitiCameraFocus=support=>support?.kind==='street-graffiti'?{zoom:8,...(support.surface!=='ground'?{yaw:support.rotation||0}:{})}:undefined;
@@ -44,7 +44,7 @@ export function nearbyGraffitiSurfaces(city,c,radius=4){
     fitGraffitiToWall(city,support);candidates.push(support);
   };
   for(let y=Math.max(0,cy-radius);y<=Math.min(world.height-1,cy+radius);y++)for(let x=Math.max(0,cx-radius);x<=Math.min(world.width-1,cx+radius);x++){
-    if(publicGround(city,x,y)){
+    if(publicGround(city,x,y)&&PAVED_ROAD_TILES.has(tileAt(world,x,y))){
       add('ground',`ground:${x},${y}`,{x:x+.5,y:y+.5,z:surfaceElevation(world,x+.5,y+.5)},{x:x+.5,y:y+.5},{tileX:x,tileY:y,width:.86,height:.86});
     }
     for(const face of roadRetainingFaces(world,x,y)){
@@ -85,7 +85,7 @@ export function graffitiSurfaceExists(city,support){
     const edge=edges[support.side],boundary=support.side===0?b.entity.y:support.side===1?b.entity.x+b.width:support.side===2?b.entity.y+b.depth:b.entity.x;
     return Math.abs((support.side%2?support.position.x-edge.dx*.025:support.position.y-edge.dy*.025)-boundary)<.01;
   }
-  if(support.surface==='ground')return publicGround(city,support.tileX,support.tileY)&&tileAt(city.world,support.tileX,support.tileY)!==undefined;
+  if(support.surface==='ground')return PAVED_ROAD_TILES.has(tileAt(city.world,support.tileX,support.tileY))&&publicGround(city,support.tileX,support.tileY)&&tileAt(city.world,support.tileX,support.tileY)!==undefined;
   return roadRetainingFaces(city.world,support.tileX,support.tileY).some(face=>face.side===support.side&&Math.abs(face.from-support.from)<.001&&Math.abs(face.to-support.to)<.001&&support.position.z-support.height/2>=Math.max(face.lowA,face.lowB)&&support.position.z+support.height/2<=Math.min(face.highA,face.highB));
 }
 

@@ -40,7 +40,7 @@ function addConstructionMaterials(THREE,site,world,cells,materials){
  for(let i=0;i<3;i++){const plank=new THREE.Mesh(new THREE.BoxGeometry(.72,.07,.09),materials.wood);plank.position.set(px,plankBase+i*.075,pz+(i-1)*.1);plank.rotation.y=i===1?.035:0;plank.castShadow=true;site.add(plank);}
  const innerX=(x0+x1)/2,innerZ=(z0+z1)/2;addSawhorse(THREE,site,world,innerX,innerZ,'x',materials);
 }
-function addConstructionPerimeter(THREE,world,site,cells){
+function addConstructionPerimeter(THREE,world,site,cells,road=false){
  if(!cells.length)return;
  const x0=Math.min(...cells.map(c=>c.x))-.5,x1=Math.max(...cells.map(c=>c.x))+.5,z0=Math.min(...cells.map(c=>c.y))-.5,z1=Math.max(...cells.map(c=>c.y))+.5;
  const materials={wood:new THREE.MeshLambertMaterial({color:0x76543a}),yellow:new THREE.MeshLambertMaterial({color:0xf2c328}),black:new THREE.MeshLambertMaterial({color:0x17191a})};
@@ -66,6 +66,22 @@ function addConstructionPerimeter(THREE,world,site,cells){
    addPerimeterPost(THREE,site,world,x,z,materials.wood);
   }
  };
+ if(road){
+  const occupied=new Map(cells.map(c=>[`${c.x},${c.y}`,c]));let stands=0;
+  for(const {x,y}of occupied.values()){
+   const exposed=[];
+   for(const [dx,dy]of [[0,-1],[0,1],[-1,0],[1,0]]){
+    if(occupied.has(`${x+dx},${y+dy}`))continue;
+    exposed.push([dx,dy]);
+   }
+   if(exposed.length>=3){
+    const axis=occupied.has(`${x-1},${y}`)||occupied.has(`${x+1},${y}`)?'z':'x';
+    addSawhorse(THREE,site,world,x,y,axis,materials);stands++;
+   }
+  }
+  if(!stands)addSawhorse(THREE,site,world,cells[0].x,cells[0].y,'x',materials);
+  return materials;
+ }
  edge('x',z0,x0,x1);edge('x',z1,x0,x1);edge('z',x0,z0,z1);edge('z',x1,z0,z1);
  const corners=[[x0,z0],[x1,z0],[x1,z1],[x0,z1]];
  for(const [x,z]of corners){addPerimeterPost(THREE,site,world,x,z,materials.wood);const join=new THREE.Mesh(new THREE.BoxGeometry(.045,.055,.045),materials.yellow);join.position.set(x,surfaceElevation(world,x,z)+.66,z);site.add(join);}
@@ -87,7 +103,8 @@ export function syncConstructionSites(renderer,THREE,world,development){
   if(site&&site.userData.signature!==signature){renderer.scene.remove(site);site.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});renderer.constructionMeshes.delete(project.id);site=null;}
   if(site)continue;
   site=new THREE.Group();site.userData.signature=signature;
-  addFarmSoil(THREE,world,cells,site);
+  if(project.service==='road'||project.service==='road-repair')addConstructionPerimeter(THREE,world,site,cells,true);
+  else addFarmSoil(THREE,world,cells,site);
   if(project.service==='building'){const materials=addConstructionPerimeter(THREE,world,site,cells);addConstructionMaterials(THREE,site,world,cells,materials);}
   renderer.registerSurfaceMaterials?.(site);
   renderer.scene.add(site);renderer.constructionMeshes.set(project.id,site);

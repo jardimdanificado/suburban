@@ -59,3 +59,10 @@ test('automatic street paint cleaning waits three days while manual cleaning rem
  assert.equal(city.gigs.jobs[0].artId,art.id);
  assert.equal(justice.requestArtworkCleaning(art.id),false,'a second order must not duplicate the existing job');
 });
+
+test('cleaning graffiti from a painted wall reveals the mural instead of removing it',()=>{
+ const {justice,art,vandalize,finish}=fixture();art.kind='painting';art.support={kind:'street-graffiti',surface:'wall',approach:{x:2.5,y:2.5}};
+ vandalize('Pixo sobre pintura');const job=justice.requestArtworkCleaning(art.id);assert(job);finish(job);
+ assert.equal(job.status,'completed');assert(!art.entity.destroyed);assert.equal(art.cleanedAt,undefined);assert.equal(art.layers.length,0);
+ assert.equal(art.message,'Mensagem original');
+});

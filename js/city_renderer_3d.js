@@ -202,10 +202,10 @@ function drawArtNarrative(ctx,narrative){
     else if(scene==='protest'||scene==='celebration'){ctx.moveTo(x-10,y+20);ctx.lineTo(x-18,y-3);ctx.moveTo(x+10,y+20);ctx.lineTo(x+18,y-3);}
     else{ctx.moveTo(x-10,y+20);ctx.lineTo(x-22,y+33);ctx.moveTo(x+10,y+20);ctx.lineTo(x+22,y+9);}ctx.stroke();}
 }
-function drawUntitledPainting(ctx,piece){
+function drawUntitledPainting(ctx,piece,{background=true}={}){
   const seed=(Math.imul(piece.id+13,2654435761)>>>0),variant=seed%4;
   const palettes=[['#d9b879','#73928a','#496e70','#b7715b','#e7d7b6'],['#e1bd72','#698394','#425a70','#9d6256','#e6d1a6'],['#d7a47c','#799071','#526447','#bd7657','#eee0bd'],['#d8c6a2','#7d8496','#555b73','#bc7661','#eee2c9']],palette=palettes[(seed>>>5)%palettes.length];
-  ctx.fillStyle=palette[0];ctx.fillRect(0,0,512,256);
+  if(background){ctx.fillStyle=palette[0];ctx.fillRect(0,0,512,256);}
   if(variant===0){ctx.fillStyle=palette[1];ctx.beginPath();ctx.moveTo(0,156);ctx.lineTo(76,90);ctx.lineTo(143,145);ctx.lineTo(236,74);ctx.lineTo(329,147);ctx.lineTo(414,96);ctx.lineTo(512,151);ctx.lineTo(512,256);ctx.lineTo(0,256);ctx.fill();ctx.fillStyle=palette[2];ctx.beginPath();ctx.moveTo(0,180);ctx.lineTo(99,132);ctx.lineTo(185,176);ctx.lineTo(305,117);ctx.lineTo(414,176);ctx.lineTo(512,135);ctx.lineTo(512,256);ctx.lineTo(0,256);ctx.fill();ctx.fillStyle=palette[3];ctx.fillRect(0,190,512,66);ctx.fillStyle=palette[4];ctx.beginPath();ctx.arc(376,70,30,0,Math.PI*2);ctx.fill();for(let row=0;row<4;row++){ctx.fillStyle=row%2?palette[1]:palette[4];ctx.fillRect(0,199+row*13,512,4);}}
   else if(variant===1){ctx.fillStyle=palette[4];ctx.fillRect(0,169,512,87);ctx.fillStyle=palette[2];ctx.fillRect(0,177,512,6);ctx.fillStyle=palette[3];ctx.beginPath();ctx.arc(253,103,46,0,Math.PI*2);ctx.fill();ctx.fillStyle=palette[1];ctx.beginPath();ctx.arc(253,103,29,0,Math.PI*2);ctx.fill();for(let i=0;i<5;i++){const x=78+i*86,h=32+(seed>>>((i*3)%24))%58;ctx.fillStyle=i%2?palette[2]:palette[3];ctx.fillRect(x,169-h,29,h);ctx.fillStyle=palette[4];ctx.fillRect(x+7,177-h,5,8);ctx.fillRect(x+18,177-h,5,8);}}
   else if(variant===2){ctx.fillStyle=palette[2];ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(234,0);ctx.lineTo(512,256);ctx.lineTo(274,256);ctx.closePath();ctx.fill();ctx.fillStyle=palette[3];ctx.beginPath();ctx.arc(177,128,76,0,Math.PI*2);ctx.fill();ctx.fillStyle=palette[4];ctx.beginPath();ctx.arc(177,128,48,0,Math.PI*2);ctx.fill();ctx.fillStyle=palette[1];ctx.beginPath();ctx.moveTo(298,0);ctx.lineTo(512,0);ctx.lineTo(512,150);ctx.lineTo(405,202);ctx.closePath();ctx.fill();ctx.fillStyle=palette[0];for(let i=0;i<5;i++)ctx.fillRect(290+i*36,168-(i%2)*14,22,88);}
@@ -275,9 +275,24 @@ function addVariedStatue(THREE,group,piece,stone){
   else if(variant===4){add(new THREE.BoxGeometry(.2,.82,.2),stone,0,.53,0,1,1,1,.08);add(new THREE.BoxGeometry(.72,.18,.2),stone,0,.93,0,1,1,1,-.12);add(new THREE.SphereGeometry(.2,6,4),stone,0,1.25,0,1,1,.9);add(new THREE.ConeGeometry(.24,.35,5),stone,0,1.52,0);}
   else{add(new THREE.CylinderGeometry(.28,.18,.28,7),stone,0,.2,0);add(new THREE.CylinderGeometry(.2,.27,.28,7),stone,0,.48,0,1,1,1,.2);add(new THREE.CylinderGeometry(.27,.18,.28,7),stone,0,.76,0,1,1,1,-.14);add(new THREE.SphereGeometry(.18,6,4),stone,0,1.04,0);}
 }
+export function drawWallPainting(ctx,piece,onReady=null){
+  if(piece.partyFlag){
+    drawPartyFlag(ctx,piece.partyFlag,0,0,512,256,onReady);
+    // The wall supplies the field color; keep only painted flag marks.
+    const background=piece.partyFlag.background||'#ffffff',hex=background.replace('#',''),color=parseInt(hex.length===3?hex.split('').map(c=>c+c).join(''):hex,16);
+    const pixels=ctx.getImageData(0,0,512,256),data=pixels.data;
+    for(let i=0;i<data.length;i+=4)if(data[i]===(color>>16&255)&&data[i+1]===(color>>8&255)&&data[i+2]===(color&255))data[i+3]=0;
+    ctx.putImageData(pixels,0,0);
+  }else drawUntitledPainting(ctx,piece,{background:false});
+}
+
 function addStreetGraffiti(THREE,group,world,piece,face){
+  let texture;
   const canvas=document.createElement('canvas');canvas.width=256;canvas.height=256;
   const ctx=canvas.getContext('2d');ctx.fillStyle=`#${(face.color??piece.color??0x222128).toString(16).padStart(6,'0')}`;ctx.textAlign='center';ctx.textBaseline='middle';
+  if(piece.kind==='painting'&&!piece.layers.length&&piece.materialUsed!=='fezes'){
+    canvas.width=512;canvas.height=256;drawWallPainting(ctx,piece,()=>{ctx.clearRect(0,0,512,256);drawWallPainting(ctx,piece);if(texture)texture.needsUpdate=true;});
+  }else{
   // Fill the painted surface: a small caption disappears after retro downsampling.
   const words=String(face.message).split(/\s+/);let lines=[];
   for(let size=96;size>=16;size-=4){
@@ -287,7 +302,8 @@ function addStreetGraffiti(THREE,group,world,piece,face){
   }
   const lineHeight=Math.min(228/Math.max(1,lines.length),96);
   lines.forEach((text,i)=>drawPixelText(ctx,text,128,128+(i-(lines.length-1)/2)*lineHeight,236));
-  const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;
+  }
+  texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;
   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(graffitiSurfaceVertices(world,piece.support),3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute([0,0,1,0,1,1,0,1],2));geometry.setIndex([0,1,2,0,2,3]);geometry.computeVertexNormals();
   const paint=new THREE.Mesh(geometry,new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide,transparent:true,alphaTest:.08,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}));group.add(paint);
 }
