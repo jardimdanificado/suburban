@@ -252,3 +252,23 @@ Na seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos simu
 O pico de banheiros passou do minuto 964 para o minuto 1023. O ganho de movimento também aparece porque o recrutamento inicial usa essas mesmas buscas. As medições são execuções individuais e não provam eliminação de todos os picos. O checksum completo do benchmark permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
 
 Validação: 50 testes passaram nas suítes `boat_crossings`, `boat_towing`, `boat_boarding`, `boat_trip_routine`, `boat_rider_motion` e `worker_state_export`. A primeira consulta de travessia do teste fazia 4.208 verificações textuais de obstáculos na versão anterior; agora passa com limite de três verificações de destino. A segunda consulta equivalente continua sem refazer buscas. As regressões de recrutamento e recusa antecipada foram adaptadas para observar verificações de destino, pois a consulta textual de vizinhos deixou de existir. O teste de invalidação agora também troca obstáculos mantendo sua quantidade, além de verificar mudanças de terreno, falhas, lotação e renovação no minuto seguinte. Os 15 testes de travessias foram repetidos após esse reforço e passaram. Para repetir a medição, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
+
+## Rodada 13 — reutilização de opiniões nos grupos eleitorais
+
+A revisão de popularidade recalculava afinidade ideológica e memória política para cada grupo eleitoral de cada candidato. Os grupos se sobrepõem: um eleitor pode participar de trabalhadores, baixa renda, ambientalistas e outros grupos simultaneamente. Agora cada par candidato/observador calcula seu apoio uma vez por revisão. A composição dos grupos também é calculada uma vez, preservando a ordem original das somas. Nenhum resultado é reutilizado entre revisões.
+
+Um teste controlado com três candidatos e oito grupos reduziu as consultas de distância ideológica de 48 para nove, mantendo os valores exatos de popularidade e apoio segmentado. O teste também verifica atualização forçada após mudança de moradia e novas memórias. Na cidade da seed 1794658272, no minuto 542, 40 revisões isoladas após cinco aquecimentos reduziram a mediana de 7,04 para 4,75 ms e o percentil 95 de 11,09 para 6,59 ms.
+
+No benchmark completo de 1.200 minutos, arquipélago, 512 moradores, 128×128, sem LOD de fast-forward:
+
+| Medida local | Antes | Depois |
+| --- | ---: | ---: |
+| Pico político horário, minuto 542 | 53,0 ms | 55,0 ms |
+| Tempo político acumulado | 332,7 ms | 322,3 ms |
+| Percentil 95 das atualizações | 56,5 ms | 55,0 ms |
+| Maior atualização completa | 142,2 ms | 150,7 ms |
+| Tempo total medido | 32,809 s | 32,813 s |
+
+A melhoria isolada não reduziu o pico político nem o tempo total nesta execução. Há outros custos nessa revisão horária; as medições individuais também variam. O checksum do benchmark permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
+
+Validação: 31 testes passaram nas suítes `political_standing_refresh`, `city_government_performance`, `government_response`, `political_production_reform`, `party_reputation_migration`, `party_spectrum` e `party_network`. Cinco testes de `political_production_reform` falharam também na cópia anterior: financiamento coletivo de empresa, contrato com desvio, quatro ciclos eleitorais, microempresa de empregado e renderização dos painéis (`ui.selectControl`). A regressão nova foi repetida e passou. Para repetir o benchmark completo, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
