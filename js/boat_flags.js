@@ -1,4 +1,4 @@
-import {syncBoatSails} from './boat_sails.js';
+import {syncBoatSails,boatSailsUnderway} from './boat_sails.js';
 import {partyFlagCanvas} from './city_party_flags.js';
 import {clothFlagGeometry,animateClothFlag,flagWindTime} from './city_flag_animation.js?v=flag-wind-tick-13';
 import {BOAT_HULL_DIMENSIONS} from './boat_types.js?v=local-sea-travel-2';
@@ -14,6 +14,11 @@ export function boatFlagIdentity(city,coordinator,vessel,person=null){
 function clearFlags(group){
   const old=group.userData.boatFlags;if(!old)return;
   group.remove(old);old.traverse(object=>{object.geometry?.dispose();object.material?.map?.dispose();object.material?.dispose();});
+}
+export function boatFlagRotation(group,time=performance.now()/1000){
+ const moving=group.position&&boatSailsUnderway(group,time,true);
+ const worldAngle=moving?group.userData.sailMotion.trailingAngle:Math.PI;
+ return worldAngle-group.rotation.y;
 }
 export function syncBoatFlags(renderer,THREE,city,group){
   const vessel=group.userData.worldVesselSelection?.vessel||group.userData.flagVessel;
@@ -38,8 +43,8 @@ export function syncBoatFlags(renderer,THREE,city,group){
   }
   syncBoatSails(THREE,city,group,identity);
   const flags=group.userData.boatFlags;
-  // Keep the stern attachment, but cancel the hull heading so cloth follows
-  // the same world-space wind direction as the municipal flags (rotation PI).
-  if(flags)flags.rotation.y=Math.PI-group.rotation.y;
+  // Keep the stern attachment. Moving cloth trails the actual displacement;
+  // stationary cloth follows the municipal flags (world rotation PI).
+  if(flags)flags.rotation.y=boatFlagRotation(group);
   for(const child of flags?.children||[])animateClothFlag(child,flagWindTime(renderer));
 }

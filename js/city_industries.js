@@ -81,7 +81,7 @@ export const INDUSTRIES = {
   soapworks: industry('Saboaria',{oleo:2,ervas:1},{sabao:3},18,'cleaning','Higiene doméstica compete pelo óleo usado na iluminação.','services',{need:'hygiene',boost:22}),
   herb_farm: industry('Horto medicinal',{}, {ervas:4},40,'agriculture','Cultivo renovável de insumos para remédios e sabão.'),
   pharmacy: industry('Farmácia',{ervas:3,vidro:1},{remedio:2},24,'medicine','Medicamentos reduzem necessidades de saúde.','services',{need:'health',boost:20}),
-  paper_mill: industry('Prensa de papel',{madeira:3},{papel:12},22,'maintenance','Papel liga a silvicultura à educação.'),
+  paper_mill: industry('Prensa de papel',{madeira:3},{papel:12},22,'maintenance','Transforma madeira ou fibra de cânhamo em papel para educação e publicações.'),
   publisher: industry('Papelaria e encadernação',{papel:5},{livros:1,panfletos:1},24,'social','Encaderna livros e panfletos; cada página preserva dois relatos, inclusive propaganda e anúncios.','services',{need:'leisure',boost:18}),
   pottery: industry('Ateliê de cerâmica',{argila:3,carvao:1},{ceramica:3},18,'maintenance','Utensílios para conforto doméstico.','services',{need:'shelter',boost:8}),
   composting: industry('Usina de adubo',{fezes:4},{adubo:3},20,'recycling','Compra fezes coletadas e transforma em adubo que acelera o crescimento das lavouras.'),

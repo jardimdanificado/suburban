@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {boatFlagIdentity,syncBoatFlags} from '../js/boat_flags.js';
+import {boatFlagIdentity,syncBoatFlags,boatFlagRotation} from '../js/boat_flags.js';
 const flag=name=>({name});
 function fixture(id){
  const owner={id:1,accountId:'person:1',political:{partyId:7}},party={active:true,flag:flag(`party-${id}`)},boat={ownerAccountId:owner.accountId};
@@ -41,4 +41,26 @@ test('both boat flags keep the municipal flag direction through every heading',(
   assert(Math.abs(Math.sin(worldAngle))<1e-12);
   assert.equal(flags.position,attachment);
  }
+});
+
+
+test('moving flags trail actual travel in every direction regardless of hull heading',()=>{
+ for(const [dx,dz]of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1]])for(const heading of [0,Math.PI/2,Math.PI,5.7]){
+  const group={position:{x:0,z:0},rotation:{y:heading},userData:{}};
+  boatFlagRotation(group,0);group.position.x=dx;group.position.z=dz;
+  const angle=heading+boatFlagRotation(group,.1),length=Math.hypot(dx,dz);
+  assert(Math.abs(Math.cos(angle)+dx/length)<1e-12);
+  assert(Math.abs(-Math.sin(angle)+dz/length)<1e-12);
+  assert.equal(boatFlagRotation(group,.3),angle-heading,'retain direction between worker snapshots');
+  const stopped=heading+boatFlagRotation(group,1);
+  assert(Math.abs(Math.cos(stopped)+1)<1e-12);
+  assert(Math.abs(Math.sin(stopped))<1e-12);
+ }
+});
+
+test('turning a stopped hull and wave bobbing preserve the municipal flag direction',()=>{
+ const group={position:{x:0,y:0,z:0},rotation:{y:0},userData:{}};
+ boatFlagRotation(group,0);group.rotation.y=1.2;group.position.y=1;
+ const angle=group.rotation.y+boatFlagRotation(group,.1);
+ assert(Math.abs(Math.cos(angle)+1)<1e-12);
 });

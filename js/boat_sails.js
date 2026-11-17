@@ -6,7 +6,8 @@ export function boatSailsUnderway(group,time,afloat){
  const {x,z}=group.position,previous=group.userData.sailMotion;
  const moved=previous&&Math.hypot(x-previous.x,z-previous.z)>.0001;
  const lastMovedAt=moved?time:previous?.lastMovedAt??-Infinity;
- group.userData.sailMotion={x,z,lastMovedAt};
+ const trailingAngle=moved?Math.atan2(z-previous.z,previous.x-x):previous?.trailingAngle;
+ group.userData.sailMotion={x,z,lastMovedAt,trailingAngle};
  return afloat&&time-lastMovedAt<.6;
 }
 export function syncBoatSails(THREE,city,group,identity,time=performance.now()/1000){

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {nearbyGraffitiSurfaces,graffitiSurfaceVertices} from '../js/city_graffiti_surfaces.js';
-import {syncUrbanArt,drawWallPainting} from '../js/city_renderer_3d.js';
+import {syncUrbanArt,drawWallPainting,graffitiInkColor} from '../js/city_renderer_3d.js';
 
 class Group{constructor(){this.children=[];this.userData={};this.position={set:(...v)=>this.xyz=v};this.rotation={y:0};this.visible=true;}add(o){this.children.push(o);}traverse(f){f(this);for(const o of this.children)o.traverse?.(f);}}
 class Mesh{constructor(geometry,material){this.geometry=geometry;this.material=material;this.position={set:(...v)=>this.xyz=v};this.isMesh=true;}traverse(f){f(this);}}
@@ -11,7 +11,7 @@ class Attribute{constructor(values,size){this.array=values;this.itemSize=size;}}
 class Material{constructor(options={}){this.options=options;}dispose(){}}
 class Texture{constructor(canvas){this.canvas=canvas;}}
 const THREE={Group,Mesh,BufferGeometry,Float32BufferAttribute:Attribute,BoxGeometry:Geometry,PlaneGeometry:Geometry,CylinderGeometry:Geometry,SphereGeometry:Geometry,MeshLambertMaterial:Material,CanvasTexture:Texture,DoubleSide:2,SRGBColorSpace:'srgb'};
-function fakeCanvas(){const canvas={width:0,height:0},ctx={canvas,font:'12px sans-serif',textAlign:'center',textBaseline:'middle',direction:'ltr',fillStyle:'#fff',fillRect(){},strokeRect(){},fillText(){},measureText(text){return {width:String(text).length*10};},getImageData(x,y,width,height){return{data:new Uint8ClampedArray(width*height*4)};},putImageData(){},drawImage(){},rect(){},clip(){},ellipse(){},clearRect(){},beginPath(){},moveTo(){},lineTo(){},quadraticCurveTo(){},bezierCurveTo(){},arc(){},closePath(){},stroke(){},fill(){},save(){},restore(){},translate(){},rotate(){}};canvas.getContext=()=>ctx;return canvas;}
+function fakeCanvas(){const canvas={width:0,height:0},ctx={canvas,font:'12px sans-serif',textAlign:'center',textBaseline:'middle',direction:'ltr',fillStyle:'#fff',fillRect(){},strokeRect(){},fillText(){},getTransform(){return{transformPoint:p=>p};},measureText(text){return {width:String(text).length*10};},getImageData(x,y,width,height){return{data:new Uint8ClampedArray(width*height*4)};},putImageData(){},drawImage(){},rect(){},clip(){},ellipse(){},clearRect(){},beginPath(){},moveTo(){},lineTo(){},quadraticCurveTo(){},bezierCurveTo(){},arc(){},closePath(){},stroke(){},fill(){},save(){},restore(){},translate(){},rotate(){}};canvas.getContext=()=>ctx;return canvas;}
 function artwork(id,support){return {id,kind:'banner',message:`Obra ${id}`,color:0x445566,entity:{x:8+id,y:10,destroyed:false},x:8+id,y:10,buildingId:support.buildingId,rotation:0,layers:[{id:1,message:`Obra ${id}`,color:0x445566}],support};}
 
 test('urban artworks render at their physical interior and skybridge supports',()=>{
@@ -55,11 +55,9 @@ test('street graffiti renders directly on ground, walls and retaining faces with
 });
 
 test('wall painting keeps its generated art transparent and removes flag background pixels',()=>{
- const canvas=fakeCanvas(),ctx=canvas.getContext('2d'),fills=[];
- ctx.fillRect=(...args)=>fills.push(args);
- drawWallPainting(ctx,{id:1});assert(!fills.some(([x,y,w,h])=>x===0&&y===0&&w===512&&h===256));
+ const canvas=fakeCanvas(),ctx=canvas.getContext('2d');
  let result;ctx.getImageData=()=>({data:new Uint8ClampedArray([17,34,51,255,200,40,30,255])});ctx.putImageData=pixels=>result=pixels;
- drawWallPainting(ctx,{partyFlag:{background:'#112233',foreground:'#c8281e',pattern:1}});
+ drawWallPainting(ctx,{wallDesign:{background:'#112233',foreground:'#c8281e',pattern:1}});
  assert.deepEqual([...result.data],[17,34,51,0,200,40,30,255]);
 });
 
@@ -74,4 +72,15 @@ test('wall paintings share wall geometry without a frame and can receive a visib
   piece.layers.push({kind:'graffiti',message:'Pixo sobre mural',color:0x222128});syncUrbanArt(renderer,THREE,city,world);
   assert.notEqual(renderer.urbanArtMeshes.get(1),group);assert.equal(renderer.urbanArtMeshes.get(1).children.length,1);
  }finally{globalThis.document=original;}
+});
+
+
+test('graffiti uses white on retaining walls, pavement and dark facades, preserving paint on light walls',()=>{
+ const building={architecture:'timber'},city={building:()=>building};
+ const piece={color:0x222128,support:{kind:'street-graffiti',surface:'retaining',buildingId:3}},layer={color:0xb64335};
+ assert.equal(graffitiInkColor(city,piece,layer),0xffffff);
+ piece.support.surface='ground';assert.equal(graffitiInkColor(city,piece,layer),0xffffff);
+ piece.support.surface='wall';assert.equal(graffitiInkColor(city,piece,layer),0xffffff);
+ building.architecture='hacienda';assert.equal(graffitiInkColor(city,piece,layer),layer.color);
+ assert.equal(graffitiInkColor(city,piece),piece.color);
 });

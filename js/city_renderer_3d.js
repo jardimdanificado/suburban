@@ -1,3 +1,4 @@
+import {ensureWallArtDesign} from './city_wall_art.js';
 import {graffitiSurfaceExists,graffitiSurfaceVertices} from './city_graffiti_surfaces.js';
 import {addBuildingRoof} from './city_building_roof.js';
 import {createFarmPlants,syncFarmPlants} from './city_farm_renderer.js';
@@ -248,6 +249,7 @@ function drawArtworkComposition(ctx,face,x,y,w,h,{caption=true}={}){
   const design=face.design;if(!design)return false;const artH=caption?h*.76:h,flagW=Math.min(w*.89,(artH-h*.1)*120/76),flagH=flagW*76/120,flagX=x+(w-flagW)/2,flagY=y+h*.05+(artH-h*.1-flagH)/2;ctx.save();ctx.fillStyle='#eadfc9';ctx.fillRect(x,y,w,h);ctx.strokeStyle='#493d32';ctx.lineWidth=Math.max(3,w*.018);ctx.strokeRect(x+2,y+2,w-4,h-4);drawPartyFlag(ctx,design,flagX,flagY,flagW,flagH,()=>drawArtworkComposition(ctx,face,x,y,w,h,{caption}));if(caption){ctx.fillStyle='#493d32';ctx.fillRect(x+w*.04,y+h*.81,w*.92,h*.15);ctx.fillStyle='#f5eddf';ctx.textAlign='center';ctx.textBaseline='middle';drawPixelText(ctx,String(face.message||''),x+w/2,y+h*.885,w*.86);}ctx.restore();return true;
 }
 export function drawArtworkPreview(ctx,piece){
+  if(piece.kind==='painting'&&piece.support?.kind==='street-graffiti'&&!piece.layers?.length&&piece.materialUsed!=='fezes'){ctx.clearRect(0,0,512,256);drawWallPainting(ctx,piece,()=>{ctx.clearRect(0,0,512,256);drawWallPainting(ctx,piece);});return;}
   const face=piece.layers?.at(-1)||piece;ctx.clearRect(0,0,512,256);
   if(piece.kind==='painting'){
     if(face.design)drawArtworkComposition(ctx,face,0,0,512,256,{caption:false});
@@ -276,20 +278,35 @@ function addVariedStatue(THREE,group,piece,stone){
   else{add(new THREE.CylinderGeometry(.28,.18,.28,7),stone,0,.2,0);add(new THREE.CylinderGeometry(.2,.27,.28,7),stone,0,.48,0,1,1,1,.2);add(new THREE.CylinderGeometry(.27,.18,.28,7),stone,0,.76,0,1,1,1,-.14);add(new THREE.SphereGeometry(.18,6,4),stone,0,1.04,0);}
 }
 export function drawWallPainting(ctx,piece,onReady=null){
-  if(piece.partyFlag){
-    drawPartyFlag(ctx,piece.partyFlag,0,0,512,256,onReady);
+  const design=ensureWallArtDesign(piece);
+  if(design){
+    drawPartyFlag(ctx,design,0,0,512,256,onReady);
     // The wall supplies the field color; keep only painted flag marks.
-    const background=piece.partyFlag.background||'#ffffff',hex=background.replace('#',''),color=parseInt(hex.length===3?hex.split('').map(c=>c+c).join(''):hex,16);
+    const background=design.background||'#ffffff',hex=background.replace('#',''),color=parseInt(hex.length===3?hex.split('').map(c=>c+c).join(''):hex,16);
     const pixels=ctx.getImageData(0,0,512,256),data=pixels.data;
     for(let i=0;i<data.length;i+=4)if(data[i]===(color>>16&255)&&data[i+1]===(color>>8&255)&&data[i+2]===(color&255))data[i+3]=0;
     ctx.putImageData(pixels,0,0);
-  }else drawUntitledPainting(ctx,piece,{background:false});
+  }
 }
 
-function addStreetGraffiti(THREE,group,world,piece,face){
+export function graffitiInkColor(city,piece,face=piece){
+  const support=piece.support;
+  if(support?.kind==='street-graffiti'){
+    if(support.surface==='retaining'||support.surface==='ground')return 0xffffff;
+    if(support.surface==='wall'){
+      const building=city?.building(support.buildingId),color=(HOUSE_STYLES[building?.architecture]||HOUSE_STYLES.modern).wall;
+      const linear=value=>{const channel=value/255;return channel<=.04045?channel/12.92:((channel+.055)/1.055)**2.4;};
+      const luminance=.2126*linear(color>>16&255)+.7152*linear(color>>8&255)+.0722*linear(color&255);
+      if(luminance<.3)return 0xffffff;
+    }
+  }
+  return face.color??piece.color??0x222128;
+}
+
+function addStreetGraffiti(THREE,group,world,piece,face,inkColor){
   let texture;
   const canvas=document.createElement('canvas');canvas.width=256;canvas.height=256;
-  const ctx=canvas.getContext('2d');ctx.fillStyle=`#${(face.color??piece.color??0x222128).toString(16).padStart(6,'0')}`;ctx.textAlign='center';ctx.textBaseline='middle';
+  const ctx=canvas.getContext('2d');ctx.fillStyle=`#${inkColor.toString(16).padStart(6,'0')}`;ctx.textAlign='center';ctx.textBaseline='middle';
   if(piece.kind==='painting'&&!piece.layers.length&&piece.materialUsed!=='fezes'){
     canvas.width=512;canvas.height=256;drawWallPainting(ctx,piece,()=>{ctx.clearRect(0,0,512,256);drawWallPainting(ctx,piece);if(texture)texture.needsUpdate=true;});
   }else{
@@ -314,6 +331,7 @@ export function syncUrbanArt(renderer,THREE,city,world){
   for(const piece of justice.art){
     if(!piece.flagArtworkCleanupVersion){piece.design=null;for(const layer of piece.layers||[])layer.design=null;piece.flagArtworkCleanupVersion=1;}
     if(piece.entity.destroyed&&!piece.debris||!piece.entity.destroyed&&piece.campaignDecorationId&&!piece.layers.length)continue;
+    if(piece.kind==='painting'&&piece.support?.kind==='street-graffiti'&&piece.materialUsed!=='fezes')ensureWallArtDesign(piece,city.initialSeed);
     const face=piece.layers.at(-1)||piece,legacyBannerSupport=!piece.entity.destroyed&&piece.kind==='banner'&&!piece.support&&!piece.campaignDecorationId&&piece.buildingId!=null?buildingFacadeBannerSupport(city.building(piece.buildingId),{isRoadAt:(x,y)=>isRoadAt(world,x,y)}):null;let support=piece.support||legacyBannerSupport;
     if(!piece.entity.destroyed&&support?.kind==='interior-wall'){
       const building=city.building(support.buildingId),unit=city.units.get(support.unitId);
@@ -331,11 +349,12 @@ export function syncUrbanArt(renderer,THREE,city,world){
       const tx=Math.floor(x),ty=Math.floor(y),insideBuilding=city.buildings.some(building=>!building.entity.destroyed&&x>=building.entity.x&&x<building.entity.x+building.width&&y>=building.entity.y&&y<building.entity.y+building.depth),needsSidewalk=piece.buildingId==null,invalid=isRoadAt(world,tx,ty)||insideBuilding||needsSidewalk&&!world.hasSidewalk?.(tx,ty);
       if(invalid){const point=city.gigs?.sidewalkArtworkPoint({entity:{x,y}});if(!point){if(group)group.visible=false;continue;}x=piece.x=piece.entity.x=point.x;y=piece.y=piece.entity.y=point.y;}
     }
+    const inkColor=graffitiInkColor(city,piece,face);
     const streetFacing=!piece.entity.destroyed&&!support&&!piece.campaignDecorationId&&piece.buildingId==null?artworkStreetFacingRotation(world,x,y,piece.id):null;
-    const key=`${support?.kind==='street-graffiti'?world.revision??0:''}:${piece.id}:${piece.entity.destroyed?'debris':`${piece.layers.length}:${face.message}:${piece.damaged}:${piece.materialUsed||''}:${piece.color??''}:${JSON.stringify(face.narrative||null)}:${JSON.stringify(face.design||null)}`}:${JSON.stringify(support||null)}`;
+    const key=`${support?.kind==='street-graffiti'?`${world.revision??0}:${inkColor}`:''}:${piece.id}:${piece.entity.destroyed?'debris':`${piece.layers.length}:${face.message}:${piece.damaged}:${piece.materialUsed||''}:${piece.color??''}:${JSON.stringify(face.narrative||null)}:${JSON.stringify(face.design||null)}`}:${JSON.stringify(support||null)}`;
     if(group?.userData.key!==key){if(group){renderer.scene.remove(group);group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();o.material?.map?.dispose();});}group=new THREE.Group();
       if(piece.entity.destroyed){const seed=(piece.id*2654435761)>>>0,masonry=['statue','monument'].includes(piece.kind),stone=new THREE.MeshLambertMaterial({color:piece.damaged>0?0x716d64:piece.color??0x8a857a}),dark=new THREE.MeshLambertMaterial({color:0x625e57});for(let i=0;i<7;i++){const n=(seed+i*1013904223)>>>0,angle=(n%6283)/1000,radius=.12+((n>>>8)%100)/220,width=.12+((n>>>16)%14)/100,height=masonry?.08+((n>>>20)%18)/100:.018,depth=.12+((n>>>24)%14)/100,fragment=new THREE.Mesh(new THREE.BoxGeometry(width,height,depth),i%3===0&&masonry?dark:stone);fragment.position.set(Math.cos(angle)*radius,height*.5,Math.sin(angle)*radius);fragment.rotation.set(masonry?((n>>>4)%80)/100:0,angle,masonry?((n>>>12)%80)/100:0);group.add(fragment);}}
-      else if(support?.kind==='street-graffiti')addStreetGraffiti(THREE,group,world,piece,face);
+      else if(support?.kind==='street-graffiti')addStreetGraffiti(THREE,group,world,piece,face,inkColor);
       else if(['statue','monument'].includes(piece.kind)){const palettes={pedra:0x8a857a,argila:0xa76545,ferro:0x55595b,aco:0x89939a,ceramica:0xb97a58,fezes:0x49301f},stone=new THREE.MeshLambertMaterial({color:piece.damaged>0?0x716d64:palettes[piece.materialUsed]??piece.color});if(piece.materialUsed==='fezes'){const base=new THREE.Mesh(new THREE.BoxGeometry(.62,.16,.62),new THREE.MeshLambertMaterial({color:0x55402e}));base.position.y=.08;group.add(base);for(let i=0;i<5;i++){const blob=new THREE.Mesh(new THREE.SphereGeometry(.16+(i%2)*.04,7,5),stone);blob.position.set(((i%3)-1)*.17,.24+Math.floor(i/3)*.13,((i*2)%3-1)*.13);blob.scale.set(1,.72,1);group.add(blob);}}else if(face.narrative)addNarrativeStatue(THREE,group,piece,face,stone);else if(piece.subjectId!=null)addNarrativeStatue(THREE,group,piece,{narrative:{participantIds:[piece.subjectId],participantRoles:[],title:'Retrato'}},stone);else addVariedStatue(THREE,group,piece,stone);addArtPlaque(THREE,group,face.message);}
       else if(piece.kind==='vase'&&!piece.layers.length){const ceramic=new THREE.MeshLambertMaterial({color:piece.color??0xa65c43}),dark=new THREE.MeshLambertMaterial({color:0x49352d}),body=new THREE.Mesh(new THREE.CylinderGeometry(.16,.28,.48,9),ceramic),foot=new THREE.Mesh(new THREE.CylinderGeometry(.19,.22,.08,9),dark),rim=new THREE.Mesh(new THREE.CylinderGeometry(.29,.22,.09,9),ceramic),lip=new THREE.Mesh(new THREE.TorusGeometry(.25,.035,6,12),dark);body.position.y=.29;foot.position.y=.04;rim.position.y=.56;lip.position.y=.62;lip.rotation.x=Math.PI/2;group.add(body,foot,rim,lip);for(let i=0;i<5;i++){const bead=new THREE.Mesh(new THREE.SphereGeometry(.045,6,4),i%2?dark:new THREE.MeshLambertMaterial({color:0xe0bf79}));const angle=i*Math.PI*2/5;bead.position.set(Math.cos(angle)*.26,.31,Math.sin(angle)*.26);group.add(bead);}}
       else if(piece.kind==='flags'&&!piece.layers.length&&!face.narrative&&!addPartyArtFlag(THREE,group,city,piece)){const compact=!['facade-banner','interior-wall','window'].includes(support?.kind);if(compact)addArtDisplayStand(THREE,group,{width:.82,height:1.18});const canvas=document.createElement('canvas');canvas.width=512;canvas.height=256;const ctx=canvas.getContext('2d',{willReadFrequently:!!face.design});if(face.design)drawArtworkComposition(ctx,face,0,0,512,256);else{const colors=[0xd84d43,0xe8bd43,0x4d9b67,0x4b78b6,0xbd5a9b];for(let i=0;i<5;i++){const pennant=new THREE.Shape();pennant.moveTo(-.16,.11);pennant.lineTo(.16,.11);pennant.lineTo(0,-.22);pennant.closePath();const mesh=new THREE.Mesh(new THREE.ShapeGeometry(pennant),new THREE.MeshLambertMaterial({color:colors[i],side:THREE.DoubleSide}));mesh.position.set(-.78+i*.39,1.32-Math.abs(2-i)*.035,.018);group.add(mesh);}ctx.fillStyle='#654a35';ctx.fillRect(0,0,512,128);ctx.fillStyle='#f5e5c4';ctx.textAlign='center';ctx.textBaseline='middle';drawPixelText(ctx,String(face.message),256,64,470);}const texture=new THREE.CanvasTexture(canvas);texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;const plaque=new THREE.Mesh(new THREE.PlaneGeometry(compact ? .72 : 1.72,compact ? .34 : .76),new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide}));plaque.position.set(0,compact?.86:.86,.01);group.add(plaque);}

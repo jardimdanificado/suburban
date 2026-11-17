@@ -1,6 +1,7 @@
 import {appearance,brandPreference} from './city_clothing.js?v=party-apparel-1';
 import {inventoryFree} from './city_inventory.js';
 import {reducedCadence} from './city_fast_forward.js';
+import {companyLogo} from './city_company_identity.js';
 /** Physical paper media. Written entries are independent of journal retention. */
 export const PUBLICATION_RULES=Object.freeze({bookPages:5,maxPages:32,entriesPerPage:2,writersPerHour:4});
 const printedGoods=new Set(['livros','panfletos','jornais']);
@@ -57,6 +58,7 @@ export class CityPublications {
     const faithful=!!source&&text===source.message;
     const objectiveTruth=type==='lie'?false:faithful?(source.objectiveTruth??source.truth??null):truth===false?false:null;
     const item={id:this.nextEntryId++,authorId:author.id,authorName:author.entity.properties.name,writtenAt:city.minute,type,text,truth:objectiveTruth,sourceEventId:source?.id??null,sourceMinute:source?.minute??null,sourceSnapshot:source?Object.freeze({...source}):null,targetId:targetId??source?.targetId??null,buildingId:buildingId??source?.buildingId??null,electionId:source?.electionId??null,candidateId:source?.candidateId??source?.accuserId??source?.citizenIds?.[0]??null};
+    if(type==='advertisement'&&item.buildingId!=null){const company=city.building(item.buildingId);if(company)item.companyLogo=companyLogo(city,company);}
     const event=city.history.record('publication',`${author.entity.properties.name} escreveu: ${text}`,[author.accountId],{kind:'publication-written',publicationId:doc.id,originalEventId:item.sourceEventId,truth:objectiveTruth,contentType:type});
     item.eventId=event.id;doc.entries.push(Object.freeze(item));this.eventIndex.set(event.id,{documentId:doc.id,entry:item});
     if(source)this.eventIndex.set(source.id,{documentId:doc.id,entry:item});
