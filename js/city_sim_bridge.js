@@ -130,7 +130,7 @@ export class CitySimulationBridge {
       this.worker = new Worker(new URL('./city_sim_worker.js?v=game-approach-camera-9', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
-      this.worker.postMessage({ type: 'init', cityId:this.cityId, packet: this.graph.encode(this.state),profileDiagnostics:profiling,stateFeatures:{fieldTailPatches:this.graph.supportsFieldTailPatches===true} });
+      this.worker.postMessage({ type: 'init', cityId:this.cityId, packet: this.graph.encode(this.state),profileDiagnostics:profiling,stateFeatures:{motionAck:true,fieldTailPatches:this.graph.supportsFieldTailPatches===true} });
       this.active = true;
       for (const [target, path, method] of [[city, '', 'mayorAction'],[city, '', 'gameAction'],[city, '', 'familyAction'],[city.history, 'history.', 'configureFavorites'],[city, '', 'addBuilding'], [city, '', 'setPolicies'], [city, '', 'setCitizenFinance'],...['reserveWorldExport','worldExportReservationInfo','departWorldExport','completeWorldExport','returnWorldExport','reserveWorldImport','cancelWorldImport','receiveWorldImport','deliverWorldImport','reserveWorldPayment','receiveWorldPayment','settleWorldPayment','receiveWorldFreightIncome','setWorldBoatAssigned','approachWorldBoat','reserveWorldBoatCrew','departWorldBoatCrew','returnWorldBoatCrew','payWorldPassengerFare','refundWorldPassengerFare','refundWorldPayment','finalizeWorldPayment','reserveWorldCitizenMigration','cancelWorldCitizenMigration','departWorldCitizenMigration','receiveWorldCitizenMigration','completeWorldCitizenMigration','reserveWorldHouseholdMigration','cancelWorldHouseholdMigration','departWorldHouseholdMigration','receiveWorldHouseholdMigration','completeWorldHouseholdMigration'].map(method=>[city,'',method]),
         ...['setPalette','requestPurchase','requestVehicle','requestBuilding'].map(method=>[city.paint,'paint.',method]),[city.vehicles,'vehicles.','mountFlag'],[city.vehicles,'vehicles.','removeFlag'],[city.economy,'economy.','rentOffice'],[city.economy,'economy.','configureEmployment'],[city.economy,'economy.','offerShares'],[city.economy,'economy.','buyShares'],[city.economy,'economy.','cancelShareOffer'],[city.vehicles,'vehicles.','configureAssembly'],[city.vehicles,'vehicles.','buyVehicle'],[city.vehicles,'vehicles.','transferVehicle'],[city.vehicles,'vehicles.','revisePart'],[city.politics.research,'politics.research.','commissionService'],[city.publications, 'publications.', 'write'], [city.publications, 'publications.', 'read'], [city.publications, 'publications.', 'configure'], [city.bank, 'bank.', 'deposit'], [city.bank, 'bank.', 'withdraw'], [city.bank, 'bank.', 'lend'], [city.bank, 'bank.', 'fileRecoveryPlan'],
@@ -191,7 +191,11 @@ export class CitySimulationBridge {
       if(game?.mode==='play'&&game.citizenId===data.citizenId&&c){game.input=data.input;game.intent=data.intent;c.task=data.task;c.action=data.action;}
       return;
     }
-    if (data.type === 'motion') { this.receiveMotion(data); return; }
+    if (data.type === 'motion') {
+      this.receiveMotion(data);
+      if(data.motionAck)this.worker?.postMessage({type:'motion-ack',cityId:this.cityId});
+      return;
+    }
     if(data.type==='heartbeat'){if(Number.isFinite(data.minute)){this.city.minute=data.minute;this.city.syncClock?.();this.onProgress?.(data.minute);}this.time.observeProgress?.(data.elapsed);this.time.tick=data.tick;this.time.elapsed=data.elapsed;if(data.workerMetrics)this.metrics={...this.metrics,...data.workerMetrics};return;}
     if(data.type==='summary'){this.onSummary?.(data.summary);return;}
     if (data.type !== 'state') return;

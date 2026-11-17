@@ -7,7 +7,7 @@ import { FF_SPEED, FF_LOD_SPEED, FF2_SPEED, FF3_SPEED, FF4_SPEED } from './simul
 import { aquecerCatalogos } from './vocabulario.js?v=economic-flow-7';
 
 const graph = new CityStateGraph();
-let fieldTailPatches=false;
+let fieldTailPatches=false, motionAck=false, awaitingMotionAck=false;
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
 let cityId = 'city-1', observed=true;
 let tick = 0, elapsed = 0, awaitingAck = false, lastSnapshot = 0, lastMotion = 0, lastSummary=0, lastSnapshotCost = 0, dirty = false, forceSnapshotPending = false, syncSnapshotPending = false;
@@ -100,7 +100,7 @@ function recordProfile(profile,prefix=''){
     const name=prefix+key,peak=phasePeaks[name];if(!peak||value>peak.ms)phasePeaks[name]={ms:value,minute:profile.minute};
   }
 }
-function workerMetrics(includeProfile=false){return{lastUpdateMs,maxUpdateMs,maxUpdateMinute,...(includeProfile?{maxUpdateProfile}:{}),averageUpdateMs:updateCount?updateTotalMs/updateCount:0,maxSnapshotMs,maxSnapshotMinute,phasePeaks};}
+function workerMetrics(includeProfile=false){return{lastUpdateMs,maxUpdateMs,maxUpdateMinute,...(includeProfile?{maxUpdateProfile,phasePeaks}:{}),averageUpdateMs:updateCount?updateTotalMs/updateCount:0,maxSnapshotMs,maxSnapshotMinute};}
 function snapshot(force = false, sync = false) {
   if (!state) return false;
   // A city nobody is viewing keeps its state in the worker. Periodic graphs
@@ -127,8 +127,12 @@ function snapshot(force = false, sync = false) {
 function sendMotion(force=false) {
   if (!state || !dirty || !force&&(paused || performance.now() - lastMotion < motionInterval())) return;
   if(!observed){postMessage({type:'heartbeat',cityId,minute:state.city.minute,tick,elapsed,workerMetrics:workerMetrics()});lastMotion=performance.now();return;}
+  // Keep at most one compact packet in flight. A busy or suspended UI must
+  // not accumulate stale positions and typed arrays while simulation continues.
+  if(motionAck&&awaitingMotionAck)return;
   const motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions(),needs=vitals();
-  postMessage({ type: 'motion', cityId, minute:state.city.minute, positions: motion, boatRiders:packBoatRiders(state.city.citizens), boatTows:packBoatTows(state.city.citizens), fishing:packFishing(state.city.citizens), benchSeats:packBenchSeats(state.city.citizens), inside, vehicles, needs, tick, elapsed, workerMetrics:workerMetrics() }, [motion.buffer, inside.buffer, vehicles.buffer, needs.buffer]);
+  postMessage({ type: 'motion', cityId, motionAck, minute:state.city.minute, positions: motion, boatRiders:packBoatRiders(state.city.citizens), boatTows:packBoatTows(state.city.citizens), fishing:packFishing(state.city.citizens), benchSeats:packBenchSeats(state.city.citizens), inside, vehicles, needs, tick, elapsed, workerMetrics:workerMetrics() }, [motion.buffer, inside.buffer, vehicles.buffer, needs.buffer]);
+  awaitingMotionAck=motionAck;
   lastMotion = performance.now();
 }
 function sendSummary(){
@@ -147,6 +151,7 @@ self.onmessage = ({ data }) => {
   try {
     if (data.type === 'init') {
       cityId = data.cityId || 'city-1';
+      motionAck=data.stateFeatures?.motionAck===true;awaitingMotionAck=false;
       fieldTailPatches=data.stateFeatures?.fieldTailPatches===true&&graph.supportsFieldTailPatches===true;
       state = graph.apply(data.packet); bindCityState(state.city);
       aquecerCatalogos();
@@ -185,6 +190,8 @@ self.onmessage = ({ data }) => {
       // Resuming observation needs a graph update even while paused so the
       // frozen mirror catches up before the city is drawn.
       if(observationChanged&&observed){lastSnapshot=0;dirty=true;}
+    } else if (data.type === 'motion-ack') {
+      awaitingMotionAck=false;
     } else if (data.type === 'ack') {
       awaitingAck = false;
       if (dirty) { const force=forceSnapshotPending, sync=syncSnapshotPending; forceSnapshotPending=false; syncSnapshotPending=false; snapshot(force,sync); }
