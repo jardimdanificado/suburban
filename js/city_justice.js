@@ -1,4 +1,4 @@
-import {upperGraffitiSurfaces,reachUpperGraffiti} from './city_graffiti_access.js';
+import {upperGraffitiSurfaceCandidates,reachUpperGraffiti} from './city_graffiti_access.js';
 import {ensureWallArtDesign} from './city_wall_art.js';
 import {graffitiContent} from './city_graffiti_text.js';
 import {nearbyGraffitiSurfaces,graffitiSurfaceExists,graffitiSurfaceLabel,fitGraffitiToWall} from './city_graffiti_surfaces.js';
@@ -811,7 +811,12 @@ export class CityJustice {
     const city=this.city;
     if(!c||c.entity.destroyed||c.dead||c.custody||c.graffitiMission||c.task&&!['walk','leisure','social'].includes(c.task)||c.conversation||c.mobilityTrip||c.ridingVehicleId||c.indoorLocation||c.deliveryId||c.cleaningJobId||city.urgentNeed?.(c)||!city.society.isAdult(c)||(c.traits?.honesty??.5)>.35||(c.traits?.riskTolerance??.5)<.5||(c.skills?.artistic??0)<4||city.minute-(c.lastGraffitiAttemptAt??-Infinity)<60||city.minute-(c.lastGraffitiAt??-Infinity)<1440)return false;
     c.lastGraffitiAttemptAt=city.minute;const darkness=city.hour<7||city.hour>=19;if(city.random()>(darkness?0.35:0.12))return false;
-    const upper=upperGraffitiSurfaces(city,c),ground=nearbyGraffitiSurfaces(city,c),targets=upper.length&&city.random()<.4?[...upper,...ground]:[...ground,...upper];let route=null;
+    const upper=upperGraffitiSurfaceCandidates(city,c),first=upper.next(),ground=nearbyGraffitiSurfaces(city,c),preferUpper=!first.done&&city.random()<.4;
+    const targets=(function*(){
+      if(preferUpper){yield first.value;yield* upper;}
+      yield* ground;
+      if(!preferUpper&&!first.done){yield first.value;yield* upper;}
+    })();let route=null;
     for(const support of targets){const path=city.findPath(c.entity,support.approach);if(path!==null){route={support,path};break;}}
     if(!route)return false;
     const content=graffitiContent(city,c);

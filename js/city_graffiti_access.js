@@ -4,7 +4,12 @@ import {fitGraffitiToWall} from './city_graffiti_surfaces.js';
 
 // Upper facades require an actual room and a connected route through the stairs.
 export function upperGraffitiSurfaces(city,c,radius=4){
- const surfaces=[];
+ return [...upperGraffitiSurfaceCandidates(city,c,radius)];
+}
+
+// Route validation is expensive in tall buildings. Consumers choosing a single
+// surface can stop as soon as they find an accessible wall.
+export function* upperGraffitiSurfaceCandidates(city,c,radius=4){
  for(const b of city.buildings){
   if(b.entity.destroyed||b.active===false||b.constructionKind==='open-air'||!b.door||Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)>radius)continue;
   for(const unit of b.units||[]){
@@ -18,11 +23,10 @@ export function upperGraffitiSurfaces(city,c,radius=4){
     if(city.justice.art.some(p=>!p.entity.destroyed&&p.support?.key===key)||city.citizens.some(p=>p.graffitiMission?.surface?.key===key))continue;
     if(interiorRoute(b,{...b.door,z:0},accessPoint)===null)continue;
     const support={kind:'street-graffiti',surface:'wall',key,buildingId:b.id,unitId:unit.id,floor:unit.z,side,position,accessPoint,approach:{...b.door},rotation:[Math.PI,Math.PI/2,0,-Math.PI/2][side],width:.86,height:1.64};
-    fitGraffitiToWall(city,support);surfaces.push(support);
+    fitGraffitiToWall(city,support);yield support;
    }
   }
  }
- return surfaces;
 }
 
 export function reachUpperGraffiti(city,c,mission){

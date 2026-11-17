@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CityJustice} from '../js/city_justice.js';
-import {upperGraffitiSurfaces} from '../js/city_graffiti_access.js';
+import {upperGraffitiSurfaces,upperGraffitiSurfaceCandidates} from '../js/city_graffiti_access.js';
 import {fitGraffitiToWall,graffitiSurfaceExists} from '../js/city_graffiti_surfaces.js';
 import {syncCitizenInterior,advanceCitizenInterior} from '../js/city_interiors.js?v=citizen-access-1';
 
@@ -15,6 +15,15 @@ function fixture(){
  city.justice=new CityJustice(city);city.justice.crimeRecord=(type,actor,victim,details)=>{const record={id:nextId++,type,details};records.push(record);return record;};
  return {city,c,building,unit,records};
 }
+
+test('upper wall search preserves candidate order and stops before unused buildings',()=>{
+ const {city,c}=fixture(),expected=upperGraffitiSurfaces(city,c);
+ assert.deepEqual([...upperGraffitiSurfaceCandidates(city,c)],expected);
+ city.buildings.push({get entity(){throw Error('unused building inspected');}});
+ const candidates=upperGraffitiSurfaceCandidates(city,c);
+ assert.deepEqual(candidates.next().value,expected[0]);
+ candidates.return();
+});
 
 test('upper walls retain floor height and window clearance, and disappear when their floor is removed',()=>{
  const {city,c,building}=fixture(),surfaces=upperGraffitiSurfaces(city,c);
