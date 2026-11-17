@@ -258,6 +258,15 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    for(const space of spaces.filter(s=>s.kind==='balcony'))furnishedBalcony(space);
   }
  }
+ // Flower boxes belong to real windows and repeat with the floor composition.
+ for(const {unit,side} of windowDetails){
+  const design=buildingFloorDesign(b,unit.z);
+  if(unit.z===0||design.index!==2||(unit.x+unit.y+seed)%2!==0)continue;
+  const y=unit.z*CITY_FLOOR_HEIGHT+.44,axisX=side==='front'||side==='back',sign=side==='front'||side==='right'?1:-1;
+  const x=axisX?unit.x+.5:unit.x+(sign>0?1:0)+sign*.13,z=axisX?unit.y+(sign>0?1:0)+sign*.13:unit.y+.5;
+  box(axisX?.46:.2,.13,axisX?.2:.46,x,y,z,clay);
+  box(axisX?.38:.16,.16,axisX?.16:.38,x,y+.12,z,green);
+ }
  if(motif==='portuguese_colonial'||motif==='dutch_colonial'){
   const dutch=motif==='dutch_colonial',colonialForm=dutch?style.dutchForm:style.colonialForm;
   // Preserve animated shutters, but replace their many scene nodes with a

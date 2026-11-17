@@ -365,7 +365,7 @@ export class CityDevelopment {
     const ruralTarget = this.compactPlanning ? 1 : 3;
     const supply = () => {
       const plots = available();
-      return { rural: plots.filter(p => this.isFarmPlot(p)).length, urban: plots.filter(p => !['farm','quarry'].includes(p.type) && p.width <= 8 && p.depth <= 8).length };
+      return { rural: plots.filter(p => this.isFarmPlot(p)).length, urban: plots.filter(p => !['farm','quarry'].includes(p.type) && p.width <= 20 && p.depth <= 20 && p.width*p.depth <= 64).length };
     };
     let stock = supply();
     // A full urban catalogue must never stop the search for agricultural land.
@@ -375,7 +375,7 @@ export class CityDevelopment {
     const budget = this.hasSearchedPlots ? 24 : 96;
     this.hasSearchedPlots = true;
     const ruralSizes = [[10, 10], [8, 12], [12, 12], [16, 12], [8, 8]];
-    const urbanSizes = this.compactPlanning ? [[3,3],[2,3],[3,2],[2,2]] : [[4, 5], [6, 6], [5, 7], [4, 4]];
+    const urbanSizes = [[3,3],[2,10],[10,2],[3,6],[6,3],[4,8],[8,4],[2,6],[6,2],[4,4],[5,7],[7,5],[2,3],[3,2],[2,2]];
     const center = this.city.world.spawnCenter;
     if(this.compactPlanning){
       // Keep one outdoor parcel for orchards and crops needed during a full construction queue.
@@ -392,7 +392,7 @@ export class CityDevelopment {
         const point=!index?[0,0]:edge===0?[-r+n,-r]:edge===1?[r,-r+n]:edge===2?[r-n,r]:[-r,r-n];
         const x=Math.floor(center.x)+point[0]*stride,y=Math.floor(center.y)+point[1]*stride;
         if(x<1||y<1||x>=this.city.world.width-2||y>=this.city.world.height-2)continue;
-        for(const [w,d]of urbanSizes)if(this.createPlot(x,y,w,d)){stock=supply();break;}
+        for(let size=0;size<urbanSizes.length;size++){const [w,d]=urbanSizes[(this.nextPlotId+size)%urbanSizes.length];if(this.createPlot(x,y,w,d)){stock=supply();break;}}
       }
       if(stock.urban>=count&&stock.rural>=ruralTarget)return;
       // Scan every origin from the centre outward so small gaps stay usable.
@@ -404,7 +404,7 @@ export class CityDevelopment {
         const x=Math.floor(center.x)+point[0],y=Math.floor(center.y)+point[1];
         if(x<1||y<1||x>=this.city.world.width-2||y>=this.city.world.height-2)continue;
         let created=null;
-        if(stock.urban<count)for(const [w,d]of urbanSizes){created=this.createPlot(x,y,w,d);if(created)break;}
+        if(stock.urban<count)for(let size=0;size<urbanSizes.length;size++){const [w,d]=urbanSizes[(this.nextPlotId+size)%urbanSizes.length];created=this.createPlot(x,y,w,d);if(created)break;}
         if(!created&&stock.rural<ruralTarget)created=this.createPlot(x,y,8,8,{type:'farm'});
         if(created)stock=supply();
         if(stock.urban>=count&&stock.rural>=ruralTarget)return;
@@ -480,7 +480,7 @@ export class CityDevelopment {
     width ??= p.width; depth ??= p.depth;
     if(width*depth<MIN_PLOT_CELLS||p.width*p.depth<MIN_PLOT_CELLS)return city.fail('Terrenos e prédios precisam de pelo menos 4 células de área.');
     if ((p.type === 'quarry' && !['quarry','iron_mine','bauxite_mine'].includes(type)) || (p.type==='farm' && type!=='farm')) return null;
-    if (![width, depth].every(Number.isInteger) || width < 1 || depth < 1 || width*depth<MIN_PLOT_CELLS || p.width*p.depth<MIN_PLOT_CELLS || width > p.width || depth > p.depth || (kind==='building' && (width>8 || depth>8))) return null;
+    if (![width, depth].every(Number.isInteger) || width < 1 || depth < 1 || width*depth<MIN_PLOT_CELLS || p.width*p.depth<MIN_PLOT_CELLS || width > p.width || depth > p.depth || (kind==='building' && (width>20 || depth>20 || width*depth>64))) return null;
     if(type==='farm'&&kind==='building'&&(width<2||depth<2))return null;
     const terrain=chooseBuildingSite(city,p.x,p.y,width,depth,{plotId,type:farmSiteType(type,kind),rotation});if(terrain.error)return null;
     floors = kind === 'open-air' ? 1 : floors;

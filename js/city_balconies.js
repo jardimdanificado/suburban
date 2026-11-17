@@ -1,4 +1,4 @@
-import {buildingFloorDesign} from './city_facade_patterns.js';
+import {buildingFloorDesign,buildingFacadeComposition} from './city_facade_patterns.js';
 import {buildingPoint,modelSize,CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {HOUSE_STYLES} from './city_culture.js?v=colonial-colored-trim-1';
 const homes=new Set(['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing']);
@@ -45,24 +45,30 @@ export function buildingLeisureSpaces(b){
  const columnKey=c=>`${c.side}:${c.along}`;
  const columns=floors.map(rows=>new Map(rows.map(c=>[columnKey(c),c])));
  const candidates=(floors[0]||[]).filter(c=>columns.every(rows=>rows.has(columnKey(c))));
- // Keep balconies on one principal facade, away from corners and each other.
- // Repeated bays provide structure even when intermediate floors omit balconies.
- const side=['front','back','left','right'].find(side=>candidates.some(c=>c.side===side));
- const length=['front','back'].includes(side)?width:depth;
- const onSide=candidates.filter(c=>c.side===side),inner=onSide.filter(c=>c.along>1&&c.along<length-1);
- const available=inner.length?inner:onSide;
- const targets=length>=5?[length/3,length*2/3]:[length/2],pattern=[];
- for(const target of targets){
-  const candidate=[...available].sort((a,b)=>Math.abs(a.along-target)-Math.abs(b.along-target)||a.along-b.along).find(c=>pattern.every(p=>Math.abs(p.along-c.along)>=2));
-  if(candidate)pattern.push(candidate);
+ // Each family keeps a distinct arrangement: a centered stack, opposite
+ // fronts, corner wings, or paired bays. Materials stay uniform throughout.
+ const {family}=buildingFacadeComposition(b);
+ const preferred=[['front'],['front','back'],['front','right'],['front','left']][family];
+ const sides=preferred.filter(side=>candidates.some(c=>c.side===side));
+ if(!sides.length){const fallback=['front','back','left','right'].find(side=>candidates.some(c=>c.side===side));if(fallback)sides.push(fallback);}
+ const pattern=[];
+ for(const side of sides){
+  const length=['front','back'].includes(side)?width:depth;
+  const onSide=candidates.filter(c=>c.side===side),inner=onSide.filter(c=>c.along>1&&c.along<length-1);
+  const available=family===0&&length>=4?onSide:inner.length?inner:onSide;
+  const targets=family===0&&length>=4?[.5,length-.5]:[length/2];
+  for(const target of targets){
+   const candidate=[...available].sort((a,b)=>Math.abs(a.along-target)-Math.abs(b.along-target)||a.along-b.along).find(c=>pattern.every(p=>p.unit.id!==c.unit.id&&(p.side!==c.side||Math.abs(p.along-c.along)>=2)));
+   if(candidate)pattern.push(candidate);
+  }
  }
  for(let floor=1;floor<b.floors;floor++){
   const design=buildingFloorDesign(b,floor);
   if(!design.balconies)continue;
-  const rows=columns[floor-1],floorPattern=design.index===2?pattern.slice(0,1):pattern;
+  const rows=columns[floor-1],floorPattern=design.index===2?pattern.slice(-1):design.index===3?pattern.slice(0,1):pattern;
   for(const column of floorPattern.length?floorPattern:pattern.slice(0,1)){
    const candidate=rows.get(columnKey(column)),alongLength=['front','back'].includes(candidate.side)?width:depth;
-   add(candidate,Math.min(design.index===2?.68:homes.has(b.type)?.82:Math.max(.9,width-.4),alongLength-.14),balconyDepth,design.index===3,styleVariant);
+   add(candidate,Math.min(design.index===2?.82:homes.has(b.type)?(family===3?2.2:family===1?1.25:.92):Math.max(.9,width-.4),alongLength-.14),balconyDepth,design.index===3||family===2,styleVariant);
   }
  }
  if((homes.has(b.type)&&(HOUSE_STYLES[b.architecture]||HOUSE_STYLES.modern).roofKind==='flat')||b.type==='office_tower'){

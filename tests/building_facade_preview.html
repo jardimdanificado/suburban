@@ -7,7 +7,7 @@ import {syncCityBuildings} from '../js/city_renderer_3d.js';
 import {CityHousing} from '../js/city_housing.js';
 import {architectureFor} from '../js/city_culture.js';
 import {buildingEntrance} from '../js/city_building_geometry.js';
-import {buildingFloorDesign} from '../js/city_facade_patterns.js';
+import {buildingBlankFacadeMask,buildingFloorDesign,buildingFacadeComposition} from '../js/city_facade_patterns.js';
 try{
  const scene=new THREE.Scene();scene.background=new THREE.Color(0xdce3df);
  scene.add(new THREE.HemisphereLight(0xffffff,0x89968b,2));
@@ -17,20 +17,20 @@ try{
  const world={width:128,height:128,map:new Uint8Array(128*128).fill(3),seed:0,revision:0,getTile:()=>3,clock:{hour:12,minute:0,day:1}};
  const city={buildingTypes:{popular_housing:{rent:120,price:120000}},currency:{price:v=>v},units:new Map(),minute:0};
  const housing=new CityHousing(city),entities=[],ids=[];
- for(const period of [2,3,4]){
-  const id=Array.from({length:200},(_,i)=>i+1).find(id=>buildingFloorDesign({id},1).period===period&&architectureFor('popular_housing',id).startsWith('dutch_colonial'));
+ for(const family of [0,1,2,3]){
+  const id=Array.from({length:200},(_,i)=>i+1).find(id=>buildingFacadeComposition({id}).family===family&&architectureFor('popular_housing',id).startsWith('dutch_colonial')&&(family!==2||buildingBlankFacadeMask({id,width:5,depth:3},2)===8));
   ids.push(id);
  }
  for(const [i,id] of ids.entries()){
-  const entity={id,x:3+i*8,y:4,properties:{}},b={id,type:'popular_housing',width:4,depth:3,floors:6,rotation:0,architecture:architectureFor('popular_housing',id),entity,units:[],constructionKind:'building'};
+  const entity={id,x:3+i*9,y:4,properties:{}},b={id,type:'popular_housing',width:[4,3,5,6][i],depth:3,floors:[4,6,5,4][i],rotation:0,architecture:architectureFor('popular_housing',id),entity,units:[],constructionKind:'building'};
   b.door=buildingEntrance(entity.x,entity.y,b.width,b.depth);entity.properties.cityBuilding=b;
   for(let z=0;z<b.floors;z++)housing.addFloor(b,z,'treasury');entities.push(entity);
  }
  const view={scene,getSurfaceElevation:()=>0};syncCityBuildings(view,THREE,entities,world);
- const camera=new THREE.OrthographicCamera(-18,18,11,-11,.1,200);camera.position.set(33,24,38);camera.lookAt(13,5,5);
+ const camera=new THREE.OrthographicCamera(-22,22,13.75,-13.75,.1,200);camera.position.set(35,27,43);camera.lookAt(18,5,5);
  let shaderErrors=0;renderer.debug.onShaderError=()=>shaderErrors++;
  renderer.render(scene,camera);
- document.querySelector('#status').textContent='Ciclos de 2, 3 e 4 andares · mesmos materiais · eixos fixos';
+ document.querySelector('#status').textContent='Quatro composições · paredes lisas ocasionais · ciclos de 2 a 4 andares';
  window.facadePreview={renderer,scene,camera,view,entities,shaderErrors};document.body.dataset.ready='true';
 }catch(error){document.querySelector('#status').textContent=error.stack;document.body.dataset.ready='error';}
 </script>

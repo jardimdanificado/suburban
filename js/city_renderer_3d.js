@@ -232,7 +232,7 @@ function artworkWallExists(building,unit,side){
   if(occupied.has(`${unit.x+dx},${unit.y+dy},${unit.z}`))return false;
   if(entry?.unitId===unit.id&&entry.bit===bit)return false;
   if(buildingLeisureSpaces(building).some(space=>space.kind==='balcony'&&space.unitId===unit.id&&space.doorBit===bit))return false;
-  if(unit.hasWindow&&unit.id!==entry?.unitId){let facade=0;for(const [x,y,mask]of [[0,-1,1],[1,0,8],[0,1,2],[-1,0,4]])if(!occupied.has(`${unit.x+x},${unit.y+y},${unit.z}`))facade|=mask;let blocked=entry?.unitId===unit.id?entry.bit:0;for(const space of buildingLeisureSpaces(building))if(space.kind==='balcony'&&space.unitId===unit.id)blocked|=space.doorBit;const safe=facade&~blocked,windowBit=buildingFacadeWindowMask(building,unit,safe);if(windowBit===bit)return false;}
+  if(unit.hasWindow&&unit.id!==entry?.unitId){let facade=0;for(const [x,y,mask]of [[0,-1,1],[1,0,8],[0,1,2],[-1,0,4]])if(!occupied.has(`${unit.x+x},${unit.y+y},${unit.z}`))facade|=mask;let blocked=entry?.unitId===unit.id?entry.bit:0;for(const space of buildingLeisureSpaces(building))if(space.kind==='balcony'&&space.unitId===unit.id)blocked|=space.doorBit;const safe=facade&~blocked,windowBit=buildingFacadeWindowMask(building,unit,safe);if(windowBit&bit)return false;}
   return true;
 }
 function addMountedBanner(THREE,group,face,piece,{standalone=false}={}){
@@ -532,14 +532,14 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
     if ((b.constructionKind === 'open-air' && b.type !== 'market') || b.type === 'greengrocer') { syncOpenAir(renderer, THREE, entity, b, world); continue; }
     let group = renderer.cityMeshes.get(entity.id);
     const bridgeDoors=renderer.skybridgeDoors?.get(b.id),bridgeDoorKey=bridgeDoors?[...bridgeDoors].map(([id,mask])=>`${id}:${mask}`).join('|'):'';
-    if (group && (group.userData.buildingStyleVersion!==33 || group.userData.architecture!==b.architecture || group.userData.bridgeDoorKey!==bridgeDoorKey || group.userData.floorCount !== b.floors || group.userData.layoutRevision !== (b.layoutRevision||0) || group.userData.rotation !== (b.rotation||0)||group.userData.paintRevision!==(b.paintRevision||0)||group.userData.campaignPaintId!==(b.campaignPaint?.id??null))) {
+    if (group && (group.userData.buildingStyleVersion!==35 || group.userData.architecture!==b.architecture || group.userData.bridgeDoorKey!==bridgeDoorKey || group.userData.floorCount !== b.floors || group.userData.layoutRevision !== (b.layoutRevision||0) || group.userData.rotation !== (b.rotation||0)||group.userData.paintRevision!==(b.paintRevision||0)||group.userData.campaignPaintId!==(b.campaignPaint?.id??null))) {
       renderer.parkPalmWindDecorations.delete(entity.id);
       renderer.cityMeshVisualRevision=(renderer.cityMeshVisualRevision||0)+1;
       renderer.scene.remove(group); group.traverse(object => { object.geometry?.dispose(); object.material?.dispose();object.userData.partyFlagTexture?.dispose();object.userData.mineSignTexture?.dispose();object.userData.marketSignTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null;
     }
     if (!group) {
       renderer.cityMeshVisualRevision=(renderer.cityMeshVisualRevision||0)+1;
-      group = new THREE.Group();group.userData.buildingStyleVersion=33;group.userData.architecture=b.architecture;group.userData.cityBuilding=b;group.userData.bridgeDoorKey=bridgeDoorKey;group.userData.floorCount = b.floors;group.userData.paintRevision=b.paintRevision||0;group.userData.layoutRevision=b.layoutRevision||0;group.userData.rotation=b.rotation||0;group.userData.campaignPaintId=b.campaignPaint?.id??null;
+      group = new THREE.Group();group.userData.buildingStyleVersion=35;group.userData.architecture=b.architecture;group.userData.cityBuilding=b;group.userData.bridgeDoorKey=bridgeDoorKey;group.userData.floorCount = b.floors;group.userData.paintRevision=b.paintRevision||0;group.userData.layoutRevision=b.layoutRevision||0;group.userData.rotation=b.rotation||0;group.userData.campaignPaintId=b.campaignPaint?.id??null;
       const material = buildingMaterial(renderer,THREE,'wall',0xffffff,buildingTextureVariant(b.id??entity.id));material.side=THREE.DoubleSide;material.vertexColors=true;material.needsUpdate=true;
       const style = HOUSE_STYLES[b.architecture] || HOUSE_STYLES.modern;
       const residential = ['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'].includes(b.type),mine=['iron_mine','bauxite_mine','clay_pit','sand_pit'].includes(b.type);
@@ -554,10 +554,11 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
         let openingMask=0;
         if(u.hasWindow&&safeWindowSides&&u.id!==entranceDoor?.unitId){
           openingMask=buildingFacadeWindowMask(b,u,safeWindowSides);
-          if(openingMask){
-            const sideName=({1:'back',2:'front',4:'left',8:'right'})[openingMask],localSide=facadeLocalSide(sideName,b.rotation),localCell=facadeLocalCell(b,u),along=localSide==='front'||localSide==='back'?localCell.x+.5:localCell.y+.5;
+          for(const [bit,sideName] of [[1,'back'],[2,'front'],[4,'left'],[8,'right']]){
+            if(!(openingMask&bit))continue;
+            const localSide=facadeLocalSide(sideName,b.rotation),localCell=facadeLocalCell(b,u),along=localSide==='front'||localSide==='back'?localCell.x+.5:localCell.y+.5;
             const coveredByBalcony=leisureSpaces.some(space=>space.kind==='balcony'&&space.floor===u.z&&space.side===localSide&&Math.abs(along-(space.doorAlong??space.along))<=space.width/2+.16);
-            if(coveredByBalcony)openingMask=0;
+            if(coveredByBalcony)openingMask&=~bit;
           }
         }
         if(openingMask&&(!(facadeMask&openingMask)||(doorMask&openingMask)))openingMask=0;

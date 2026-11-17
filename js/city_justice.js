@@ -1,3 +1,4 @@
+import {upperGraffitiSurfaces,reachUpperGraffiti} from './city_graffiti_access.js';
 import {ensureWallArtDesign} from './city_wall_art.js';
 import {graffitiContent} from './city_graffiti_text.js';
 import {nearbyGraffitiSurfaces,graffitiSurfaceExists,graffitiSurfaceLabel,fitGraffitiToWall} from './city_graffiti_surfaces.js';
@@ -810,11 +811,11 @@ export class CityJustice {
     const city=this.city;
     if(!c||c.entity.destroyed||c.dead||c.custody||c.graffitiMission||c.task&&!['walk','leisure','social'].includes(c.task)||c.conversation||c.mobilityTrip||c.ridingVehicleId||c.indoorLocation||c.deliveryId||c.cleaningJobId||city.urgentNeed?.(c)||!city.society.isAdult(c)||(c.traits?.honesty??.5)>.35||(c.traits?.riskTolerance??.5)<.5||(c.skills?.artistic??0)<4||city.minute-(c.lastGraffitiAttemptAt??-Infinity)<60||city.minute-(c.lastGraffitiAt??-Infinity)<1440)return false;
     c.lastGraffitiAttemptAt=city.minute;const darkness=city.hour<7||city.hour>=19;if(city.random()>(darkness?0.35:0.12))return false;
-    const targets=nearbyGraffitiSurfaces(city,c);let route=null;
+    const upper=upperGraffitiSurfaces(city,c),ground=nearbyGraffitiSurfaces(city,c),targets=upper.length&&city.random()<.4?[...upper,...ground]:[...ground,...upper];let route=null;
     for(const support of targets){const path=city.findPath(c.entity,support.approach);if(path!==null){route={support,path};break;}}
     if(!route)return false;
     const content=graffitiContent(city,c);
-    c.graffitiMission={status:'to-surface',surface:route.support,...content,startedAt:city.minute,completeAt:null,waitingReason:null};c.task='urban-graffiti';c.path=route.path;
+    c.graffitiMission={status:'to-surface',surface:route.support,artKind:route.support.accessPoint&&city.random()<.3?'painting':'graffiti',...content,startedAt:city.minute,completeAt:null,waitingReason:null};c.task='urban-graffiti';c.path=route.path;
     if(!c.path.length&&dist(c.entity,route.support.approach)>.1)c.path=[route.support.approach];
     c.targetId=null;c.action=`Indo pichar: ${graffitiSurfaceLabel(route.support).toLowerCase()}`;return true;
   }
@@ -838,15 +839,16 @@ export class CityJustice {
   updateGraffitiMission(c){
     const city=this.city,mission=c.graffitiMission,piece=this.art.find(item=>item.id===mission?.artId&&!item.entity.destroyed),building=mission?.material==='fezes'?city.building(mission.targetBuildingId):null,target=mission?.surface?mission.surface.approach:mission?.material==='fezes'?mission.targetPoint:piece?.entity;if(!mission)return false;
     const urgent=city.urgentNeed?.(c);if(!(mission.surface?graffitiSurfaceExists(city,mission.surface):mission.material==='fezes'?building&&target:piece)||urgent&&!(urgent==='food'&&c.needs.food>=8)||c.custody||c.dead||c.entity.destroyed||(c.unconsciousUntil||0)>city.minute||(c.surrenderedUntil||0)>city.minute||c.combatFlee){this.releaseFecesArtMaterial(mission,false);c.graffitiMission=null;c.task=null;c.path=[];c.targetId=null;c.action='Desistiu da pichação';return false;}
+    if(mission.surface?.accessPoint&&!reachUpperGraffiti(city,c,mission)){if(mission.accessFailed){c.graffitiMission=null;c.task=null;c.path=[];}return true;}
     if(c.path.length){c.action=mission.surface?`Indo pichar: ${graffitiSurfaceLabel(mission.surface).toLowerCase()}`:'Indo pichar uma obra urbana';return true;}
-    if(mission.surface&&dist(c.entity,target)>.2){const path=city.findPath(c.entity,target);if(path===null){c.graffitiMission=null;c.task=null;c.path=[];c.action='Desistiu: superfície sem acesso';return false;}c.path=path.length?path:[target];return true;}
-    if(dist(c.entity,target)>1.35){const targets=mission.material==='fezes'?[target]:[{x:Math.floor(target.x)+.5,y:Math.floor(target.y)-.5},{x:Math.floor(target.x)+1.5,y:Math.floor(target.y)+.5},{x:Math.floor(target.x)+.5,y:Math.floor(target.y)+1.5},{x:Math.floor(target.x)-.5,y:Math.floor(target.y)+.5}].filter(point=>city.walkable(Math.floor(point.x),Math.floor(point.y)));const routes=targets.map(point=>({point,path:city.findPath(c.entity,point)})).filter(route=>route.path!==null).sort((a,b)=>a.path.length-b.path.length);if(!routes.length){mission.status='blocked';mission.waitingReason='sem rota acessível até a obra';c.action='Desistiu: não encontrou acesso à obra';this.releaseFecesArtMaterial(mission,false);c.graffitiMission=null;c.task=null;c.targetId=null;return false;}c.path=routes[0].path;if(!c.path.length)c.path=[routes[0].point];return true;}
+    if(mission.surface&&!mission.surface.accessPoint&&dist(c.entity,target)>.2){const path=city.findPath(c.entity,target);if(path===null){c.graffitiMission=null;c.task=null;c.path=[];c.action='Desistiu: superfície sem acesso';return false;}c.path=path.length?path:[target];return true;}
+    if(!mission.surface?.accessPoint&&dist(c.entity,target)>1.35){const targets=mission.material==='fezes'?[target]:[{x:Math.floor(target.x)+.5,y:Math.floor(target.y)-.5},{x:Math.floor(target.x)+1.5,y:Math.floor(target.y)+.5},{x:Math.floor(target.x)+.5,y:Math.floor(target.y)+1.5},{x:Math.floor(target.x)-.5,y:Math.floor(target.y)+.5}].filter(point=>city.walkable(Math.floor(point.x),Math.floor(point.y)));const routes=targets.map(point=>({point,path:city.findPath(c.entity,point)})).filter(route=>route.path!==null).sort((a,b)=>a.path.length-b.path.length);if(!routes.length){mission.status='blocked';mission.waitingReason='sem rota acessível até a obra';c.action='Desistiu: não encontrou acesso à obra';this.releaseFecesArtMaterial(mission,false);c.graffitiMission=null;c.task=null;c.targetId=null;return false;}c.path=routes[0].path;if(!c.path.length)c.path=[routes[0].point];return true;}
     if(mission.surface&&mission.completeAt==null){mission.status='painting';mission.completeAt=city.minute+Math.max(2,Math.round(12-(c.skills.artistic||0)*.08));}
     if(city.minute<mission.completeAt){c.action=mission.surface?`Pichando: ${graffitiSurfaceLabel(mission.surface).toLowerCase()}`:'Pichando uma obra urbana';return true;}
     if(mission.surface){
-      const support=mission.surface,point=support.position,art=this.createArtwork({kind:'graffiti',message:mission.message,creatorId:c.id,buildingId:support.buildingId??null,x:point.x,y:point.y,truth:null,color:0x222128,support,subjectId:mission.subjectId??null,partyId:mission.partyId??null});
+      const support=mission.surface,point=support.position,art=this.createArtwork({kind:mission.artKind||'graffiti',message:mission.message,creatorId:c.id,buildingId:support.buildingId??null,x:point.x,y:point.y,truth:null,color:0x222128,support,subjectId:mission.subjectId??null,partyId:mission.partyId??null});
       if(art&&mission.politicalKind){art.politicalKind=mission.politicalKind;art.corruptionCaseId=mission.corruptionCaseId??null;}
-      const layer=art?this.defaceArtwork(art.id,c.id,mission.message,{truth:null,color:0x222128}):null;
+      const layer=art?(mission.artKind==='painting'?this.crimeRecord('graffiti',c.id,city.building(support.buildingId)?.ownerId??null,{artId:art.id,buildingId:support.buildingId,position:{x:point.x,y:point.y},scene:{buildingId:support.buildingId,unitId:support.unitId,floor:support.floor,height:point.z},purpose:'unauthorized-wall-painting'})||art:this.defaceArtwork(art.id,c.id,mission.message,{truth:null,color:0x222128})):null;
       if(layer)c.lastGraffitiAt=city.minute;
       c.graffitiMission=null;c.task=null;c.path=[];c.targetId=null;c.action=layer?`Pichou: ${graffitiSurfaceLabel(support).toLowerCase()}`:'A pichação não foi concluída';return !!layer;
     }

@@ -39,3 +39,13 @@ test('public works register a spaced frontier parcel when the catalogue is occup
  const site=dev.publicBuildingSite('clinic');assert(site,dev.publicLandReport?.reason);
  assert(dev.publicLandReport.created);assert(gap(occupied,site.lot)>=3);
 });
+
+test('urban catalogue includes narrow and wide parcels and counts elongated lots as stock',()=>{
+ const {city,dev}=fixture();dev.ensurePlots(18);
+ const urban=dev.plots.filter(p=>!['farm','quarry'].includes(p.type));
+ assert(urban.some(p=>p.width===2&&p.depth===10));
+ assert(urban.some(p=>p.width===10&&p.depth===2));
+ assert(new Set(urban.map(p=>`${p.width}x${p.depth}`)).size>=6);
+ const count=dev.plots.length;city.minute=120;dev.ensurePlots(18);
+ assert.equal(dev.plots.length,count,'elongated plots must count toward the existing supply');
+});

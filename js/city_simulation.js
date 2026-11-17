@@ -706,7 +706,7 @@ export class CitySimulation {
     width ??= type === 'farm' && kind==='open-air' ? 10 : 3 + Math.floor(this.random() * 3);
     depth ??= type === 'farm' && kind==='open-air' ? 10 : 3 + Math.floor(this.random() * 2);
     floors ??= 2 + Math.floor(this.random() * 4);
-    if (![x, y, width, depth, floors].every(Number.isInteger) || width < 1 || depth < 1 || width*depth<MIN_PLOT_CELLS || floors < 1 || width > (kind === 'open-air' ? 20 : 8) || depth > (kind === 'open-air' ? 20 : 8) || floors > 12) return this.fail('Área mínima de 4 células (2×2, 4×1 ou 1×4). Limites: 20×20 ao ar livre, 8×8 em edifícios e 12 andares.');
+    if (![x, y, width, depth, floors].every(Number.isInteger) || width < 1 || depth < 1 || width*depth<MIN_PLOT_CELLS || floors < 1 || width > 20 || depth > 20 || (kind === 'building' && width*depth > 64) || floors > 12) return this.fail('Área mínima de 4 células (2×2, 4×1 ou 1×4). Limites: lados de até 20 células, 64 células por andar em edifícios, 20×20 ao ar livre e 12 andares.');
     if (kind === 'open-air') floors = 1;
     if(type==='farm'&&kind==='building'&&(width<2||depth<2))return this.fail('Fazendas verticais precisam de pelo menos 2×2 células, com passagem para as escadas.');
     const {access,...terrain}=chooseBuildingSite(this,x,y,width,depth,{plotId,type:farmSiteType(type,kind),rotation});

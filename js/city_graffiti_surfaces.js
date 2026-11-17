@@ -1,4 +1,4 @@
-import {buildingEntranceDoor} from './city_building_geometry.js?v=banner-placement-2';
+import {CITY_FLOOR_HEIGHT,buildingEntranceDoor} from './city_building_geometry.js?v=banner-placement-2';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
 import {surfaceElevation,tileAt,terrainWalkable,PAVED_ROAD_TILES} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {roadRetainingFaces} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
@@ -12,21 +12,21 @@ const publicGround=(city,x,y)=>terrainWalkable(city.world,x,y)&&!city.buildings.
 export function graffitiWallHasWindow(building,support){
   const units=building.units||[],edge=edges[support.side],p=support.position;
   const x=Math.floor(p.x-building.entity.x-edge.dx*.05),y=Math.floor(p.y-building.entity.y-edge.dy*.05);
-  const unit=units.find(u=>u.z===0&&u.x===x&&u.y===y);if(!unit?.hasWindow)return false;
-  const entrance=buildingEntranceDoor(building);if(entrance?.unitId===unit.id)return false;
+  const unit=units.find(u=>u.z===(support.floor??0)&&u.x===x&&u.y===y);if(!unit?.hasWindow)return false;
+  const entrance=buildingEntranceDoor(building);if((support.floor??0)===0&&entrance?.unitId===unit.id)return false;
   const occupied=new Set([...units,...(building.circulation||[])].map(u=>`${u.x},${u.y},${u.z}`));
   let safe=0;
-  for(const [dx,dy,bit] of [[0,-1,1],[0,1,2],[-1,0,4],[1,0,8]])if(!occupied.has(`${x+dx},${y+dy},0`))safe|=bit;
+  for(const [dx,dy,bit] of [[0,-1,1],[0,1,2],[-1,0,4],[1,0,8]])if(!occupied.has(`${x+dx},${y+dy},${support.floor??0}`))safe|=bit;
   for(const space of buildingLeisureSpaces(building))if(space.kind==='balcony'&&space.unitId===unit.id)safe&=~space.doorBit;
   const opening=safe&3?(safe&2?2:1):safe&4?4:safe&8?8:0;
   return opening===[1,8,2,4][support.side];
 }
 
-// Use the full ground-floor wall unless its actual opening needs clearance.
+// Use the full wall unless its actual opening needs clearance.
 export function fitGraffitiToWall(city,support){
   if(support?.kind!=='street-graffiti'||support.surface!=='wall')return false;
   const b=city.building(support.buildingId);if(!b||b.entity.destroyed)return false;
-  const base=b.terrain?.base??surfaceElevation(city.world,support.position.x,support.position.y),window=graffitiWallHasWindow(b,support),z=base+(window ? .25 : .9),height=window ? .42 : 1.64;
+  const base=b.terrain?.base??surfaceElevation(city.world,support.position.x,support.position.y),window=graffitiWallHasWindow(b,support),z=base+(support.floor??0)*CITY_FLOOR_HEIGHT+(window ? .25 : .9),height=window ? .42 : 1.64;
   if(support.position.z===z&&support.height===height)return false;
   support.position={...support.position,z};support.height=height;return true;
 }
@@ -81,7 +81,7 @@ export function nearbyGraffitiSurfaces(city,c,radius=4){
 export function graffitiSurfaceExists(city,support){
   if(support?.kind!=='street-graffiti')return false;
   if(support.surface==='wall'){
-    const b=city.building(support.buildingId);if(!b||b.entity.destroyed)return false;
+    const b=city.building(support.buildingId);if(!b||b.entity.destroyed||(support.floor??0)>=(b.floors||1)||support.unitId!=null&&!b.units?.some(u=>u.id===support.unitId))return false;
     const edge=edges[support.side],boundary=support.side===0?b.entity.y:support.side===1?b.entity.x+b.width:support.side===2?b.entity.y+b.depth:b.entity.x;
     return Math.abs((support.side%2?support.position.x-edge.dx*.025:support.position.y-edge.dy*.025)-boundary)<.01;
   }

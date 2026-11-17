@@ -172,6 +172,7 @@ export function syncCitizenInterior(city,c){
   const site=city.building(s.buildingId);if(site&&site.constructionKind!=='open-air'&&s.layoutRevision===(site.layoutRevision||0)&&city.units.has(s.targetUnitId))return !s.path.length;
  }
  normalizeInterior(city,c);
+ if(c.graffitiMission?.surface?.accessPoint&&task==='urban-graffiti')return !s?.path?.length;
  if(task==='police-investigation')return true;
  if(task==='custody-water'&&c.custodyWaterDelivery&&s?.buildingId===c.custodyWaterDelivery.jailId)return !s.exiting&&!s.path.length;
   if(task==='custody'&&c.custody&&s?.buildingId===c.custody.jailId&&s.targetRoomType==='cell'&&!s.exiting)return !s.path.length;

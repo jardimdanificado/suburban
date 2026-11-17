@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CityHousing} from '../js/city_housing.js';
 import {modelSize} from '../js/city_building_geometry.js';
-import {buildingFloorDesign,buildingFacadeWindowMask} from '../js/city_facade_patterns.js';
+import {buildingBlankFacadeMask,buildingFacadeComposition,buildingFloorDesign,buildingFacadeWindowMask} from '../js/city_facade_patterns.js';
 import {buildingLeisureSpaces} from '../js/city_balconies.js';
 
 function building(type,rotation=0){
@@ -62,26 +62,26 @@ test('buildings use two, three or four floor types without depending on height',
    assert.deepEqual(buildingFloorDesign(b,floor+first.period),design);
    assert.deepEqual(buildingFloorDesign({...b,floors:20},floor),design);
   }
-  assert.equal(styles.size,1);
+  assert(styles.size>=1&&styles.size<=2);
  }
  assert.deepEqual([...periods].sort(),[2,3,4]);
 });
 
-test('window rhythm leaves most facade bays solid and repeats by floor type',()=>{
+test('window groups preserve solid bays and repeat by floor type',()=>{
  for(let rotation=0;rotation<4;rotation++){
   const b=building('super_popular_housing',rotation),{period}=buildingFloorDesign(b,1);
   for(let floor=1;floor<=period;floor++){
-   let windows=0;
+   let windows=0,faces=0;
    for(const u of b.units.filter(u=>u.z===floor)){
     const mask=(u.y===0?1:0)|(u.y===b.depth-1?2:0)|(u.x===0?4:0)|(u.x===b.width-1?8:0);
     const opening=buildingFacadeWindowMask(b,u,mask);
-    if(opening)windows++;
+    windows+=[1,2,4,8].filter(bit=>opening&bit).length;
+    faces+=[1,2,4,8].filter(bit=>mask&bit).length;
     assert.equal(opening&~mask,0);
     assert.equal(buildingFacadeWindowMask(b,{...u,z:floor+period},mask),opening);
     assert.equal(buildingFacadeWindowMask(b,{...u,hasWindow:false},mask),0);
    }
-   const count=b.units.filter(u=>u.z===floor).length;
-   assert(windows>0);assert(windows<=count/2);
+   assert(windows>=(buildingBlankFacadeMask(b,floor)?6:8));assert(windows<faces);
   }
  }
 });
@@ -95,19 +95,19 @@ test('small facades keep a window bay and never open a blocked side',()=>{
    windows+=!!buildingFacadeWindowMask(b,u,2);
    assert.equal(buildingFacadeWindowMask(b,u,0),0);
   }
-  assert.equal(windows,1);
+  assert.equal(windows,length);
  }
 });
 
-test('balconies share one material and occupy spaced bays on one facade',()=>{
+test('balcony compositions share one material and keep bays apart',()=>{
  for(let rotation=0;rotation<4;rotation++){
   const b=building('popular_housing',rotation),spaces=buildingLeisureSpaces(b).filter(s=>s.kind==='balcony');
-  assert.equal(new Set(spaces.map(s=>s.side)).size,1);
+  assert(new Set(spaces.map(s=>s.side)).size<=2);
   assert.equal(new Set(spaces.map(s=>s.balconyStyle)).size,1);
   for(let floor=1;floor<b.floors;floor++){
    const bays=spaces.filter(s=>s.floor===floor);
    assert(bays.length<=2);
-   for(let i=0;i<bays.length;i++)for(let j=i+1;j<bays.length;j++)assert(Math.abs(bays[i].along-bays[j].along)>=2);
+   for(let i=0;i<bays.length;i++)for(let j=i+1;j<bays.length;j++)assert(bays[i].side!==bays[j].side||Math.abs(bays[i].along-bays[j].along)>=2);
   }
  }
 });
@@ -117,6 +117,53 @@ test('window bays stay vertically aligned across different floor types',()=>{
  for(const u of b.units.filter(u=>u.z===1)){
   const mask=(u.y===0?1:0)|(u.y===b.depth-1?2:0)|(u.x===0?4:0)|(u.x===b.width-1?8:0);
   const opening=buildingFacadeWindowMask(b,u,mask);
-  for(let floor=2;floor<b.floors;floor++)assert.equal(buildingFacadeWindowMask(b,{...u,z:floor},mask),opening);
+  for(let floor=2;floor<b.floors;floor++)assert.equal(buildingFacadeWindowMask(b,{...u,z:floor},mask),opening&~buildingBlankFacadeMask(b,floor));
  }
+});
+
+test('three-module fronts have two windows and corner rooms can open on both faces',()=>{
+ for(let id=1;id<=30;id++){
+  const b={id,width:3,depth:3};
+  for(const side of [1,2,4,8]){
+   let count=0;
+   for(let along=0;along<3;along++){
+    const horizontal=!!(side&3),u={x:horizontal?along:0,y:horizontal?0:along,z:1,hasWindow:true};
+    if(buildingFacadeWindowMask(b,u,side))count++;
+   }
+   assert.equal(count,2);
+  }
+  assert.equal(buildingFacadeWindowMask(b,{x:0,y:0,z:1,hasWindow:true},5),5);
+ }
+});
+
+test('all four facade compositions occur deterministically',()=>{
+ const families=new Set();
+ for(let id=1;id<=50;id++){
+  const b={id},composition=buildingFacadeComposition(b);families.add(composition.family);
+  assert.deepEqual(buildingFacadeComposition({...b,floors:12}),composition);
+ }
+ assert.equal(families.size,4);
+});
+
+test('occasional plain walls repeat on one secondary facade without removing the other openings',()=>{
+ let plainBuildings=0,activeBuildings=0;
+ for(let id=1;id<=60;id++){
+  const b={id,width:4,depth:3,rotation:0},plain=buildingBlankFacadeMask(b,2),{period}=buildingFloorDesign(b,2);
+  if(plain)plainBuildings++;else activeBuildings++;
+  assert.equal(buildingBlankFacadeMask(b,0),0);
+  assert.equal(buildingBlankFacadeMask(b,1),0);
+  assert.equal(buildingBlankFacadeMask(b,2+period),plain);
+  if(!plain)continue;
+  assert([1,4,8].includes(plain));
+  assert.equal(buildingFloorDesign(b,2).balconies,false);
+  for(let y=0;y<b.depth;y++)for(let x=0;x<b.width;x++){
+   const u={x,y,z:2,hasWindow:true};
+   assert.equal(buildingFacadeWindowMask(b,u,plain),0);
+   assert.equal(buildingFacadeWindowMask(b,u,15)&~plain,buildingFacadeWindowMask(b,{...u,z:1},15)&~plain);
+  }
+  const rotatedBits=new Set();
+  for(let rotation=0;rotation<4;rotation++)rotatedBits.add(buildingBlankFacadeMask({...b,rotation},2));
+  assert.equal(rotatedBits.size,4);
+ }
+ assert(plainBuildings>10&&plainBuildings<30);assert(activeBuildings>0);
 });
