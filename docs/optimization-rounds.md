@@ -317,3 +317,29 @@ No benchmark completo da seed 1794658272, arquipélago, 512 moradores, 128×128,
 O pico horário de demanda passou do minuto 551 para o minuto 1211; o pico durante investimento passou do minuto 1332 para o minuto 1092. A revisão isolada melhorou cerca de 17%, mas a virada diária e o maior pico global não melhoraram nesta execução. As medidas completas são execuções individuais e variam. O checksum permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
 
 Validação: 31 testes passaram nas suítes `production_flow`, `economic_reform` e `economy_daily_listings`. O teste de descoberta de vagas em fazendas remotas falhou também na cópia anterior, com a mesma ausência da candidatura esperada. Não foram adicionados testes que apenas reproduzissem a nova forma de iteração. Para repetir o benchmark completo, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
+
+## Rodada 16 — reutilização de travessias entre limites de tempo diferentes
+
+A decomposição do minuto 1023 mostrou buscas de travessia de aproximadamente 4 a 8 ms dentro da escolha de tarefas. O cache de geometria incluía o orçamento de tempo na chave: consultar o mesmo casco, origem e destino com outro limite podia refazer toda a busca, mesmo após encontrar a rota mínima.
+
+Agora o cache mantém a rota mínima encontrada e testa seu custo contra cada novo limite. Uma busca recusada com limite finito só é reutilizada para limites menores ou iguais; um limite maior ainda dispara nova busca. Os critérios de casco, bicicleta, origem, destino, relocação, minuto e revisão de obstáculos permanecem. Disponibilidade, capacidade, acesso e escolha da embarcação continuam sendo avaliados fora desse cache.
+
+A nova regressão fazia 4.170 leituras de terreno na versão anterior ao relaxar o orçamento de uma travessia já conhecida. Agora exige menos de 100 leituras e preserva exatamente a rota. Também verifica recusa com orçamento menor, reutilização de uma falha para orçamento ainda menor e recuperação com orçamento maior após uma falha limitada.
+
+Em um cenário controlado de 32×24, após uma cotação inicial, 40 consultas com limites diferentes reduziram a mediana de 0,355 para 0,032 ms e o percentil 95 de 2,687 para 0,126 ms. As leituras de terreno caíram de 166.800 para 640. O hash das 40 rotas completas permaneceu idêntico. Esse cenário mede especificamente a reutilização entre orçamentos, não o custo total da cidade.
+
+No benchmark completo da seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos sem LOD de fast-forward:
+
+| Medida local | Antes | Depois |
+| --- | ---: | ---: |
+| Pico de escolha de tarefas, minuto 1023 | 66,8 ms | 69,8 ms |
+| Pico agregado de buscas de caminho, minuto 1023 | 55,2 ms | 58,2 ms |
+| Pico de busca de banheiros | 28,0 ms | 26,6 ms |
+| Pico de veículos, minuto 947 | 40,8 ms | 38,0 ms |
+| Percentil 95 das atualizações | 55,8 ms | 57,6 ms |
+| Maior atualização completa | 155,4 ms | 161,0 ms |
+| Tempo total medido | 33,616 s | 34,317 s |
+
+O pico de banheiros passou do minuto 907 para o minuto 1023. A execução completa não demonstrou ganho global: os picos gerais e o tempo total ficaram maiores. As medidas individuais variam; a melhoria comprovada nesta rodada é a eliminação da busca repetida entre orçamentos no cenário controlado. O checksum completo permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
+
+Validação: 51 testes passaram nas suítes `boat_towing`, `boat_crossings`, `boat_boarding`, `boat_trip_routine`, `boat_rider_motion` e `worker_state_export`. A regressão foi repetida após acrescentar a verificação de reutilização de falhas limitadas e passou. Para repetir o benchmark completo, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.

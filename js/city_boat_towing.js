@@ -97,9 +97,14 @@ function pop(heap){const root=heap[0],last=heap.pop();if(heap.length){let i=0;wh
 // Owned rigs may launch, land and relaunch without a port. Other boats stay afloat after disembarkation.
 function crossingRoute(city,boat,bike,goal,{relocate=false,limitSeconds=Infinity}={}){
  const cache=terrainQuotes(city).crossings;
- const key=`${boat.boatClass}:${boat.pickLength||2.8}:${boat.pickWidth||.75}:${bike?.good}:${Math.floor(boat.x)},${Math.floor(boat.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}:${relocate}:${limitSeconds}`;
- if(cache.has(key))return cache.get(key);
- return rememberQuote(cache,key,computeCrossingRoute(city,boat,bike,goal,{relocate,limitSeconds}));
+ const key=`${boat.boatClass}:${boat.pickLength||2.8}:${boat.pickWidth||.75}:${bike?.good}:${Math.floor(boat.x)},${Math.floor(boat.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}:${relocate}`;
+ const quote=cache.get(key);
+ // A completed shortest route is independent of the passenger's time budget.
+ // A failed bounded search only rules out budgets no larger than its own.
+ if(quote?.route)return quote.route.seconds>limitSeconds?null:quote.route;
+ if(quote&&quote.limitSeconds>=limitSeconds)return null;
+ const route=computeCrossingRoute(city,boat,bike,goal,{relocate,limitSeconds});
+ rememberQuote(cache,key,{route,limitSeconds});return route;
 }
 function computeCrossingRoute(city,boat,bike,goal,{relocate=false,limitSeconds=Infinity}={}){
  const {width,height}=city.world,size=width*height,sx=Math.floor(boat.x),sy=Math.floor(boat.y),gx=Math.floor(goal.x),gy=Math.floor(goal.y);

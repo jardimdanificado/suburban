@@ -326,3 +326,23 @@ test('a ferry search checks shore walkability once per cell without requiring a 
  assert.ok(path.some(p=>p.transportMode==='walkAfter'));
  assert.ok(calls<=cells.size+4,`repeated shore checks: ${calls} calls for ${cells.size} cells`);
 });
+
+test('crossing quotes reuse complete routes across time budgets without treating bounded failure as final',()=>{
+ const {city,person,boat,goal}=fixture({bike:false,boatOnLand:false});
+ const path=planBoatTrip(city,person.entity,goal,{boat});assert.ok(path);
+ const seconds=path[0].boatPlan.seconds;
+ const getTile=city.world.getTile;let reads=0;
+ city.world.getTile=function(...args){reads++;return getTile.apply(this,args);};
+ const relaxed=planBoatTrip(city,person.entity,goal,{boat,maxSeconds:seconds+1});
+ assert.deepEqual(relaxed,path);
+ assert.ok(reads<100,`completed crossing was searched again: ${reads} tile reads`);
+ assert.equal(planBoatTrip(city,person.entity,goal,{boat,maxSeconds:seconds-.01}),null,'a known route must still respect a tighter budget');
+ // Invalidate geometry and first ask with too little time. The later, larger
+ // budget must continue to search rather than treating that refusal as final.
+ city.minute++;
+ assert.equal(planBoatTrip(city,person.entity,goal,{boat,maxSeconds:seconds-.01}),null);
+ reads=0;
+ assert.equal(planBoatTrip(city,person.entity,goal,{boat,maxSeconds:seconds-.02}),null);
+ assert.ok(reads<100,`a smaller failed budget repeated the search: ${reads} tile reads`);
+ assert.deepEqual(planBoatTrip(city,person.entity,goal,{boat,maxSeconds:seconds+2}),path);
+});
