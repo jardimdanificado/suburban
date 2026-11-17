@@ -4,7 +4,25 @@ import {findTerrainPath} from './city_terrain.js?v=entrance-retaining-clearance-
 export const CROSSING_RULES=Object.freeze({boardingSeconds:3,recruitRadius:10,maxCandidates:32,routeLimit:64});
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const living=c=>c&&!c.entity.destroyed&&!c.dead&&!c.custody;
-const ground=(city,from,to)=>findTerrainPath(city.world,from,to,city.occupied,{preferRoads:false});
+// Geometry can be shared across quotes; availability, fares and passenger
+// capacity are still checked for every request. Keep this bounded cache out
+// of saves and discard it on the next minute or terrain/obstacle change.
+const groundRoutes=new WeakMap();
+function ground(city,from,to){
+ const world=city.world,revision=`${city.minute}:${world.width}:${world.height}:${world.revision||0}:${city.structureRevision||0}:${city.obstacleRevision||0}:${city.occupied.size}`;
+ let cache=groundRoutes.get(city);
+ if(!cache||cache.revision!==revision||cache.world!==world||cache.map!==world.map||cache.occupied!==city.occupied){
+  cache={revision,world,map:world.map,occupied:city.occupied,paths:new Map()};groundRoutes.set(city,cache);
+ }
+ const key=`${Math.floor(from.x)},${Math.floor(from.y)}:${Math.floor(to.x)},${Math.floor(to.y)}`;
+ if(!cache.paths.has(key)){
+  const path=findTerrainPath(world,from,to,city.occupied,{preferRoads:false});
+  if(cache.paths.size>=256)cache.paths.delete(cache.paths.keys().next().value);
+  cache.paths.set(key,path);
+ }
+ const path=cache.paths.get(key);
+ return path?.map(p=>({...p}))??null;
+}
 const length=(from,path)=>{let total=0;for(const p of path){total+=distance(from,p);from=p;}return total;};
 const accountAccess=(city,c,account)=>c.accountId===account||city.building?.(c.jobId)?.accountId===account||(c.businessIds||[]).some(id=>city.building?.(id)?.accountId===account);
 export function crossingFare(city,boat,count){return Math.ceil(city.currency.price(BOAT_CLASSES[boat.boatClass].capacity>=8?45:20)/Math.max(1,count));}

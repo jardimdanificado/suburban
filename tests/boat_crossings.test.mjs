@@ -4,7 +4,7 @@ import {CitySimulation} from '../js/city_simulation.js';
 import {CityStateGraph} from '../js/city_state.js';
 import {CityVehicles} from '../js/city_vehicles.js';
 import {planBoatTrip,advanceLocalBoatTrip} from '../js/city_boat_towing.js';
-import {crossingFare,dispatchRegularCrossings} from '../js/city_boat_crossings.js';
+import {crossingFare,dispatchRegularCrossings,planSharedCrossing} from '../js/city_boat_crossings.js';
 
 function fixture(count=3){
  const width=32,height=24,map=new Uint8Array(width*height);for(let y=0;y<height;y++)for(let x=12;x<18;x++)map[y*width+x]=2;
@@ -148,4 +148,51 @@ test('a walk shorter than boarding and sailing skips both crossing access search
  assert.equal(candidate.task,'work');
  assert.equal(candidate.targetId,18);
  assert.equal(farShoreReads,0,'a faster walk must not search the inaccessible far shore');
+});
+
+
+function waitingCrossing(){
+ const f=fixture(3);
+ for(const c of f.citizens.slice(1))c.sleep={active:true};
+ f.leader.path=planBoatTrip(f.city,f.leader.entity,f.goal);
+ advanceLocalBoatTrip(f.city,f.leader,.01);
+ for(const c of f.citizens.slice(1))c.sleep.active=false;
+ return f;
+}
+test('late crossing quotes reuse geometry while rechecking capacity and keeping independent paths',()=>{
+ const f=waitingCrossing(),[a,b]=f.citizens.slice(1);
+ const has=f.city.occupied.has.bind(f.city.occupied);let reads=0;
+ f.city.occupied.has=key=>{reads++;return has(key);};
+ const first=planSharedCrossing(f.city,a.entity,f.goal);
+ assert.ok(first);assert.ok(reads>0);
+ reads=0;
+ const second=planSharedCrossing(f.city,b.entity,f.goal);
+ assert.ok(second);assert.equal(reads,0,'same cell geometry must not repeat terrain searches');
+ const original=second[0].x;
+ first[0].x=-100;first.length=0;
+ assert.equal(second[0].x,original);
+ assert.equal(planSharedCrossing(f.city,a.entity,f.goal)[0].x,original);
+ const group=f.leader.localBoatTrip.sharedCrossing;
+ group.members=Array.from({length:7},(_,i)=>({citizenId:100+i}));
+ assert.equal(planSharedCrossing(f.city,a.entity,f.goal),null,'cached geometry cannot reserve a seat in a full hull');
+ assert.equal(f.payments.length,0);
+});
+test('crossing geometry retries failures after obstacle, terrain and minute changes',()=>{
+ const f=waitingCrossing(),c=f.citizens[1],quote=()=>planSharedCrossing(f.city,c.entity,f.goal);
+ assert.ok(quote());
+ const cell=`${Math.floor(f.goal.x)},${Math.floor(f.goal.y)}`;
+ f.city.occupied.add(cell);f.city.obstacleRevision++;
+ assert.equal(quote(),null);
+ f.city.occupied.delete(cell);f.city.obstacleRevision++;
+ assert.ok(quote(),'a failed quote cannot survive obstacle removal');
+ const index=Math.floor(f.goal.y)*f.city.world.width+Math.floor(f.goal.x);
+ f.city.world.map[index]=2;f.city.world.revision++;
+ assert.equal(quote(),null);
+ f.city.world.map[index]=0;f.city.world.revision++;
+ assert.ok(quote(),'a failed quote cannot survive terrain restoration');
+ const has=f.city.occupied.has.bind(f.city.occupied);let reads=0;
+ f.city.occupied.has=key=>{reads++;return has(key);};
+ assert.ok(quote());assert.equal(reads,0);
+ f.city.minute++;
+ assert.ok(quote());assert.ok(reads>0,'the next minute must refresh geometry');
 });

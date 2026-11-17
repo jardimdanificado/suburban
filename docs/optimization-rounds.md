@@ -125,3 +125,25 @@ Na seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos simu
 Os tempos representam uma execução por versão. A maior atualização geral não melhorou; outras fontes de picos permanecem. O checksum completo do benchmark continuou `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
 
 Validação: 46 testes passaram nas suítes `boat_crossings`, `boat_towing`, `boat_boarding`, `boat_trip_routine`, `boat_rider_motion` e `worker_state_export`. O novo teste mantém tarefa, destino e recusa de um passageiro cuja caminhada é mais rápida; as consultas à margem inacessível caem de 16 para zero. Esse teste falhou na versão anterior e passou após a alteração. Os casos existentes continuam verificando travessias úteis mesmo quando há uma conexão terrestre. Para repetir a medição, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
+
+## Rodada 7 — geometria reutilizada nas consultas a travessias abertas
+
+A instrumentação do minuto 878 encontrou 44 buscas terrestres da avaliação de travessias coletivas, mas apenas 25 pares distintos de células. Essas buscas consumiram 53,9 ms naquela execução instrumentada; um mesmo par foi calculado quatro vezes. O mapa local introduzido na rodada 5 cobria apenas o recrutamento inicial, não pedidos posteriores de outros moradores a barcos que ainda embarcavam.
+
+Agora as buscas terrestres desse módulo usam um cache privado por cidade, limitado a 256 rotas e descartado no minuto seguinte ou quando mudam terreno, estruturas, obstáculos, dimensões ou os objetos do mapa e da ocupação. Resultados sem caminho também podem ser reutilizados. Cada consumidor recebe listas e pontos próprios. Lotação, disponibilidade dos moradores e tarifas continuam sendo avaliadas por pedido; somente geometria é compartilhada. O cache fica em um `WeakMap` do módulo e não integra o grafo salvo.
+
+Na seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos simulados sem LOD de fast-forward:
+
+| Medida local | Antes | Depois |
+| --- | ---: | ---: |
+| Tempo acumulado nas buscas de caminho do passo da simulação | 2,924 s | 2,837 s |
+| Pico agregado dessas buscas | 80,3 ms | 81,2 ms |
+| Tempo acumulado de movimento | 2,764 s | 2,675 s |
+| Pico de movimento | 46,0 ms | 54,8 ms |
+| Percentil 95 das atualizações | 59,9 ms | 57,0 ms |
+| Maior atualização completa | 156,4 ms | 148,8 ms |
+| Tempo total medido | 34,179 s | 33,497 s |
+
+São execuções individuais, sujeitas a variação. O ganho agregado foi pequeno; os picos de buscas e movimento não diminuíram nesta comparação. O checksum completo do benchmark permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
+
+Validação: 48 testes passaram nas suítes `boat_crossings`, `boat_towing`, `boat_boarding`, `boat_trip_routine`, `boat_rider_motion` e `worker_state_export`. A regressão de consultas tardias caiu de 4.208 verificações de obstáculos para zero na segunda consulta equivalente; falhou na versão anterior e passou após a alteração. Os novos testes verificam cópias independentes, recusa por lotação mesmo com geometria em cache, remoção de obstáculos, alteração e restauração do terreno, invalidação de falhas e renovação no minuto seguinte. Para repetir a medição, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
