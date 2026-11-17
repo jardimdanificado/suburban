@@ -314,7 +314,15 @@ export class CityEconomy {
       }
     }
     for(const b of this.city.buildings)if(b.active&&!b.entity.destroyed&&(civicSpec(b)||justiceServiceSpec(b)))for(const [g,n]of Object.entries(b.inputDemand||{})){totalInputDemandByGood.set(g,(totalInputDemandByGood.get(g)||0)+n);inputDemandByGood.set(g,(inputDemandByGood.get(g)||0)+n);}
-    for (const c of activeCitizens) for (const [good, preference] of Object.entries(c.foodPreferences || {})) if (preference > 0) foodPreferenceByGood.set(good, (foodPreferenceByGood.get(good) || 0) + preference);
+    // Read tastes in the same own-key order without allocating a pair for
+    // every resident and food on each demand review.
+    for (const c of activeCitizens) {
+      const preferences=c.foodPreferences;if(!preferences)continue;
+      for (const good of Object.keys(preferences)) {
+        const preference=preferences[good];
+        if(preference>0)foodPreferenceByGood.set(good,(foodPreferenceByGood.get(good)||0)+preference);
+      }
+    }
     const oil=this.lightingSupplyReport=oilSupply(this),oilGap=Math.max(0,oil.oilRequired-oil.millPotential-oil.millPlanned);
     let publisherAudienceByGood;
     const publisherNeed=good=>{

@@ -294,3 +294,26 @@ Na seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos sem 
 O pico de investimento caiu cerca de 25%; o percentil 95 global não melhorou nesta execução. São medições individuais, sujeitas a variação. O checksum do benchmark permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
 
 Validação: 24 testes passaram nas suítes `bank_business_queries`, `service_investment_banks` e `economic_reform`. Cinco novas regressões verificam ordem e elegibilidade dos bancos, mudanças de caixa e atividade, bancos privados e municipais, seleção explícita de candidatos e reserva alimentar com loja ausente, inativa, destruída ou ativa. Elas também verificam empréstimo, recusa, saldos e transferências. Na versão anterior, as cinco preservaram essas expectativas funcionais e falharam apenas no contador de materializações da lista completa; depois, o contador ficou em zero. Para repetir o benchmark, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
+
+## Rodada 15 — menos alocações ao somar preferências alimentares
+
+A investigação da virada diária separou relações sociais, economia e contratação. Dentro da revisão de demanda, a agregação de estoques e preferências apresentou custo elevado. O trecho de preferências usava `Object.entries` para cada morador: na cidade de 512 pessoas, eram 53.760 pares temporários por revisão, antes mesmo de descartar preferências negativas ou neutras.
+
+Agora esse trecho percorre `Object.keys` e lê cada valor diretamente. Mantém a ordem das propriedades próprias enumeráveis, a ordem dos moradores, o descarte de valores não positivos e a soma original. Continua lendo preferências atuais a cada revisão, sem cache ou mudança nos saves. A alteração elimina os pares temporários desse trecho; ainda existe uma lista de chaves por morador.
+
+Em uma medição isolada de demanda com essa cidade, cinco aquecimentos e 40 amostras reduziram a mediana de 8,22 para 6,83 ms e o percentil 95 de 9,50 para 9,13 ms. Os hashes de demandas, plano produtivo, insumos dos prédios e relatório de óleo coincidiram em três situações: preferências normais, registros ausentes/mistos com propriedades herdadas e alteração posterior de preferências mutáveis.
+
+No benchmark completo da seed 1794658272, arquipélago, 512 moradores, 128×128, em 1.200 minutos sem LOD de fast-forward:
+
+| Medida local | Antes | Depois |
+| --- | ---: | ---: |
+| Pico de demanda na atualização econômica horária | 19,7 ms | 16,4 ms |
+| Pico de demanda na busca de investimento | 16,7 ms | 14,3 ms |
+| Percentil 95 das atualizações | 57,0 ms | 55,8 ms |
+| Preparação da virada diária, minuto 1440 | 98,0 ms | 110,6 ms |
+| Maior atualização completa | 157,1 ms | 173,5 ms |
+| Tempo total medido | 33,810 s | 33,163 s |
+
+O pico horário de demanda passou do minuto 551 para o minuto 1211; o pico durante investimento passou do minuto 1332 para o minuto 1092. A revisão isolada melhorou cerca de 17%, mas a virada diária e o maior pico global não melhoraram nesta execução. As medidas completas são execuções individuais e variam. O checksum permaneceu `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
+
+Validação: 31 testes passaram nas suítes `production_flow`, `economic_reform` e `economy_daily_listings`. O teste de descoberta de vagas em fazendas remotas falhou também na cópia anterior, com a mesma ausência da candidatura esperada. Não foram adicionados testes que apenas reproduzissem a nova forma de iteração. Para repetir o benchmark completo, use o comando da rodada 1 com `SUBURBAN_BENCH_CITY_MINUTES=1200`.
