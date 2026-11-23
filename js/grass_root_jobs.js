@@ -74,7 +74,7 @@ export class GrassRootJobs{
       }
       if(job.sent)return true;
       if(this.workerJob)return true;
-      job.id=++this.serial;job.sent=true;this.workerJob=job;
+      job.id=++this.serial;job.sent=true;job.sentAt=this.now();this.workerJob=job;
       const positions=job.positions.slice(),colors=job.colors?.slice();
       this.worker.postMessage({id:job.id,positions,colors,excluded:[...job.excludedCells],axis:job.axis,details:job.details,tint:job.tint},[positions.buffer,...(colors?[colors.buffer]:[])]);
       return true;
@@ -83,7 +83,16 @@ export class GrassRootJobs{
       return false;
     }
   }
+  abandonWorker(){
+    this.worker?.terminate();this.worker=null;this.workerJob=null;this.workerFailed=true;
+  }
   advance(budgetMs=3){
+    // A worker can be suspended or killed by the device (background tab, low
+    // memory). Without a deadline its field would keep a terrain build waiting
+    // forever while every frame spends the full budget polling it. Fall back to
+    // the incremental generator, which produces the same roots.
+    const active=this.workerJob;
+    if(active&&active.sentAt!=null&&this.now()-active.sentAt>2000)this.abandonWorker();
     const deadline=this.now()+budgetMs;
     let job=this.selectJob();
     while(this.now()<deadline){

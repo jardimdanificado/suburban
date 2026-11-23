@@ -15,10 +15,10 @@ export const clothingPreference=(id,key)=>{let seed=preferenceSeeds.get(key);if(
 export function brandPreference(c,id){if(!c||id==null)return 0;c.brandPreferences??={};return c.brandPreferences[id]??=clothingPreference(c.id,`marca:${id}`);}
 export function companyPreference(c,b){return b?brandPreference(c,b.id)*2:0;}
 export function garmentScore(c,g){const affinity=colorAffinity(c,g.color),patterned=['camisa estampada','vestido estampado'].includes(g.piece),partyIssue=g.partyOwnerId!=null&&g.partyOwnerId===c.political?.partyId;return g.condition*.55+(100-(g.dirt||0))*.3+g.quality*.15+clothingPreference(c.id,g.piece)*10+clothingPreference(c.id,g.style)*8+brandPreference(c,g.brandId)*7+affinity*12+(patterned?40:0)+(partyIssue?32:0)+(affinity<=-.65&&!partyIssue?-120:0);}
-export function wornGarment(c){return companyUniform(c)||(c?.wearingIndex===-1?null:c?.wardrobe?.[Number.isInteger(c?.wearingIndex)?c.wearingIndex:0]);}
+export function wornGarment(c,uniform=companyUniform(c)){return uniform||(c?.wearingIndex===-1?null:c?.wardrobe?.[Number.isInteger(c?.wearingIndex)?c.wearingIndex:0]);}
 export function wornHeadwear(c){return Number.isInteger(c?.headwearIndex)&&c.headwearIndex>=0?c.wardrobe?.[c.headwearIndex]:null;}
 export function wornFootwear(c){return Number.isInteger(c?.footwearIndex)&&c.footwearIndex>=0?c.wardrobe?.[c.footwearIndex]:null;}
-export function wornLowerGarment(c){if(companyUniform(c))return null;return Number.isInteger(c?.lowerWearIndex)&&c.lowerWearIndex>=0?c.wardrobe?.[c.lowerWearIndex]:null;}
+export function wornLowerGarment(c,uniform=companyUniform(c)){if(uniform)return null;return Number.isInteger(c?.lowerWearIndex)&&c.lowerWearIndex>=0?c.wardrobe?.[c.lowerWearIndex]:null;}
 export function wornHandwear(c){return Number.isInteger(c?.handwearIndex)&&c.handwearIndex>=0?c.wardrobe?.[c.handwearIndex]:null;}
 function identifyGarment(city,g){g.garmentId??=`garment-${city.nextGarmentId=(city.nextGarmentId||0)+1}`;g.ownerHistory??=[];return g;}
 function changeOwner(city,g,ownerId,ownerName,event){identifyGarment(city,g);const previous=g.ownerHistory.at(-1);if(previous?.ownerId===ownerId)return;g.storedAtFurnitureId=null;g.storedInBuildingId=null;g.ownerHistory.push({ownerId,ownerName,minute:city.minute,event});g.ownerHistory=g.ownerHistory.slice(-16);}

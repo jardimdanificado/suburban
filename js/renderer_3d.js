@@ -40,6 +40,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import {NightLighting,hasOutdoorTorch} from "./night_lighting.js?v=building-occlusion-2";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds,citizenBuildingSurfaceHeight } from "./city_building_geometry.js";
+import { cachedLightBlockerBoxes } from './light_blocker_cache.js?v=light-blocker-cache-1';
 import { syncCityBuildings } from "./city_renderer_3d.js?v=street-graffiti-visible-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
@@ -6887,7 +6888,7 @@ export class RCT3DRenderer {
     this._terrainPrefetchKeys=build;
     // Terrain and installation share one allowance. Worker generation must
     // not leave the former 3 ms root reservation unused each frame.
-    this.advanceTerrainBuilds?.(world,visible,gridEnabled,Math.max(.5,7-(performance.now()-preparationStart)));
+    this.advanceTerrainBuilds?.(world,visible,gridEnabled,Math.max(.5,(this._terrainFrameBudget??7)-(performance.now()-preparationStart)));
     for (const key of this.visibleTerrainChunkKeys) {
       if (visible.has(key)) continue;
       const chunk = this.terrainChunks.get(key);
@@ -7862,6 +7863,18 @@ export class RCT3DRenderer {
   render(world, entities, time, dt, simSpeed = 1.0, visionCreature = null, visualizedGroupId = null) {
     if (!this.width || !this.height || !world) return;
     const profileStart = this.profileFrame ? performance.now() : 0;
+    const renderStartedAt = profileStart || performance.now();
+    const previousRenderAt = this._lastRenderStartedAt;
+    if (previousRenderAt != null) {
+      const interval = renderStartedAt - previousRenderAt;
+      if (interval > 0 && interval < 500) this._renderIntervalMs = this._renderIntervalMs == null ? interval : this._renderIntervalMs * .92 + interval * .08;
+    }
+    this._lastRenderStartedAt = renderStartedAt;
+    // Old phones cannot spare the full terrain allowance on every frame. Keep
+    // the full 7 ms once the render loop is near 60 fps, and shrink it as the
+    // measured frame interval grows so terrain streaming does not cause stutter.
+    const terrainFrameBudget = this._renderIntervalMs == null ? 7 : Math.max(1.5, Math.min(7, 7 - (this._renderIntervalMs - 16.7) * .45));
+    this._terrainFrameBudget = terrainFrameBudget;
     this.mapWidth=world.width;this.mapHeight=world.height;
     this.currentWorld = world;
     this.currentMap = world.map;
@@ -7961,7 +7974,7 @@ export class RCT3DRenderer {
     this.rebuildTerrainIfNeeded(world, minTx, maxTx, minTy, maxTy, visionCreature,terrainPreparationStart);
     // Share the existing 4 ms terrain + 3 ms roots allowance. When terrain is
     // waiting on roots, its unused time helps finish visible lawns sooner.
-    this.grassRootJobs?.advance(Math.max(.5,7-(performance.now()-terrainPreparationStart)));
+    this.grassRootJobs?.advance(Math.max(.5,(this._terrainFrameBudget??7)-(performance.now()-terrainPreparationStart)));
     scheduleTerrainIdleWork(this,world);
     this.syncWaterPollution(world);
     const profileTerrain = this.profileFrame ? performance.now() : 0;
@@ -9484,10 +9497,8 @@ export class RCT3DRenderer {
     this.terrainTracks.update(this.renderer,world,entities,dt*effectiveSpeed,this.cityCitizenModels,citizenRenderOffsets,this);
     syncMovementDust(THREE,this,world,entities,citizenRenderOffsets,dt*effectiveSpeed,this.graphicOptions.dust!==false);
     const activeCam = this.isPerspectiveActive() ? this.fpCamera : this.camera;
-    const lightBlockers=(this.cityDevelopment?.city?.buildings||[])
-      .filter(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&b.type!=='quarry')
-      .map(b=>{const x=b.entity.x,z=b.entity.y,base=b.terrain?.base??this.getSurfaceElevation(map,x,z);
-        return {min:[x,base,z],max:[x+b.width,base+(b.floors||1)*CITY_FLOOR_HEIGHT,z+b.depth]};});
+    this._lightBlockerElevation??=(map,x,z)=>this.getSurfaceElevation(map,x,z);
+    const lightBlockers=cachedLightBlockerBoxes(this._lightBlockerCache??={},this.cityDevelopment?.city,map,this._lightBlockerElevation,this.currentWorldRevision);
     this.nightLighting?.update(this.nightLightPool,activeCam,this.scene,lightBlockers);
     const shadowNow=performance.now(),shadowCameraDx=this.camX-this._lastShadowRefreshCamX,shadowCameraDy=this.camY-this._lastShadowRefreshCamY;
     this._shadowFramesSinceRefresh++;

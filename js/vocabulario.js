@@ -384933,8 +384933,10 @@ export const vocabulario = {
 
 // Tags are computed from the existing lexicon instead of being duplicated on
 // every entry. This keeps the source compact while exposing the full catalog.
-const semAcento = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
-const normalizaLexema = value => String(value ?? '').normalize('NFC').trim().toLocaleLowerCase('pt-BR');
+// pt-BR has no locale-specific case mapping, so toLowerCase is identical to
+// toLocaleLowerCase('pt-BR') and avoids the slower locale-aware path.
+const semAcento = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const normalizaLexema = value => String(value ?? '').normalize('NFC').trim().toLowerCase();
 const funcoesGramaticais = new Map(), cacheAnaliseLexical = new Map(), cacheClassesLexicais=new Map();
 const prefixosLexicais = new Set(vocabulario.prefixos.map(normalizaLexema)), sufixosLexicais = new Set(vocabulario.sufixos.map(normalizaLexema));
 let palavrasNormalizadas = null, indiceVerbos = null;
@@ -385126,10 +385128,19 @@ const ADJUNTOS_TEMPO={
 };
 let indicePalavrasPorTema=null;
 const bancosGramaticais=new Map();
+function palavrasDosTemas(themes){
+  indicePalavrasPorTema??=new Map();
+  const pendentes=[...new Set(themes)].filter(theme=>!indicePalavrasPorTema.has(theme));
+  if(pendentes.length){
+    // One catalog pass fills every requested theme; the warm-up asks for five.
+    const patterns=pendentes.map(theme=>temasLexicais[theme]),lists=pendentes.map(()=>[]);
+    for(const word of vocabulario.palavras){const key=semAcento(word);for(let index=0;index<patterns.length;index++)if(patterns[index]?.test(key))lists[index].push(word);}
+    pendentes.forEach((theme,index)=>indicePalavrasPorTema.set(theme,lists[index]));
+  }
+  return pendentes;
+}
 function palavrasDoTema(theme){
-  indicePalavrasPorTema??=new Map();if(indicePalavrasPorTema.has(theme))return indicePalavrasPorTema.get(theme);
-  const pattern=temasLexicais[theme],words=pattern?vocabulario.palavras.filter(word=>pattern.test(semAcento(word))):[];
-  indicePalavrasPorTema.set(theme,words);return words;
+  palavrasDosTemas([theme]);return indicePalavrasPorTema.get(theme)||[];
 }
 let raizesLexicaisCache=null;
 function raizesLexicais(){
@@ -385140,8 +385151,11 @@ function raizesLexicais(){
 const nucleosDerivadosCache=new Map();
 function nucleosValidados(theme){
   if(nucleosDerivadosCache.has(theme))return nucleosDerivadosCache.get(theme);
-  const set=catalogoSet(),sufixos=vocabulario.sufixos.map(normalizaLexema),pattern=temasLexicais[theme],anchored=new RegExp(`^(?:${pattern.source})`),raizes=raizesLexicais(),nouns=[],verbs=[],adjectives=[];
-  for(const word of set){
+  const set=catalogoSet(),sufixos=vocabulario.sufixos.map(normalizaLexema),pattern=temasLexicais[theme],anchored=new RegExp(`^(?:${pattern.source})`),raizes=raizesLexicais(),nouns=[],verbs=[],adjectives=[],vistos=new Set();
+  // The theme list is much smaller than the full catalog and keeps first
+  // occurrence order, so dedupe by normalized form reproduces the set scan.
+  for(const source of palavrasDoTema(theme)){
+    const word=normalizaLexema(source);if(vistos.has(word))continue;vistos.add(word);
     if(word.length<3||word.length>10||word.includes('-')||!anchored.test(semAcento(word)))continue;
     const info=classificarPalavraCompleta(word);
     if(!info.classes.includes('substantivo')||info.classes.includes('substantivo próprio provável')||info.confianca<.7)continue;
@@ -385151,7 +385165,7 @@ function nucleosValidados(theme){
     nouns.push({word,gender,weight:180*(raizes.get(word.slice(0,5))||1),nucleo:true});
   }
   nouns.sort((a,b)=>b.weight-a.weight||a.word.length-b.word.length);
-  for(const word of set){
+  for(const word of vistos){
     if(word.length<4||word.length>10||word.includes('-')||!anchored.test(semAcento(word))||!/^(?:[\p{L}]+)(?:ar|er|ir)$/u.test(word))continue;
     const root=raizes.get(word.slice(0,5))||0;if(root>45)continue;
     if(!conjugarVerbo(word,{tempo:'presente',pessoa:3}))continue;
@@ -385193,7 +385207,9 @@ function bancoGramatical(theme){
 // Build the lazy lexical caches before the simulation needs them. The first
 // autonomous graffiti used to pay ~900 ms while generating its text at 8:30.
 export function aquecerCatalogos(){
-  for(const theme of ['cidade','moradia','alimentacao','saude','politica'])bancoGramatical([theme]);
+  const themes=['cidade','moradia','alimentacao','saude','politica'];
+  palavrasDosTemas(themes);
+  for(const theme of themes)bancoGramatical([theme]);
 }
 function pluralizarFrase(word){
   if(/ção$/u.test(word))return word.slice(0,-3)+'ções';if(/são$/u.test(word))return word.slice(0,-3)+'sões';

@@ -112,7 +112,12 @@ export class NightLighting {
     material.needsUpdate=true;
   }
   updateBlockers(boxes,lightsChanged) {
-    const signature=JSON.stringify(boxes);
+    const revision=boxes?.revision;
+    // The renderer reuses the same box list until city structure or terrain
+    // changes, so a matching revision needs no serialization or comparison.
+    if(revision!==undefined&&boxes===this.blockerSource&&revision===this.blockerRevision&&!lightsChanged)return;
+    const signature=revision!==undefined?`${revision}:${boxes.length}`:JSON.stringify(boxes);
+    this.blockerSource=boxes;this.blockerRevision=revision;
     if(!lightsChanged&&signature===this.blockerSignature)return;
     this.blockerSignature=signature;
     const lists=[];let width=2;
@@ -135,11 +140,14 @@ export class NightLighting {
   }
   update(sources,camera,scene,blockers=[]) {
     const g=this.grid,changed=g.update(sources);
+    this.uniforms.nightLightCount.value=g.count;
+    // Daytime and unlit interiors have no candidates. Skip blocker rebuilds
+    // and the full scene material scan until a light actually exists.
+    if(!g.count)return;
     this.updateBlockers(blockers,changed);
     camera.updateMatrixWorld();
-    this.uniforms.nightLightCount.value=g.count;
     this.uniforms.nightLightCameraWorld.value=camera.matrixWorld;
-    if(g.count){
+    {
       // Transform each source once on the CPU, as Three.js does. Per-fragment
       // matrix multiplication would repeat this work for every nearby light.
       const m=camera.matrixWorldInverse.elements;

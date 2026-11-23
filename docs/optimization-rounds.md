@@ -369,3 +369,75 @@ Na comparação alternada da seed 1794658272, arquipélago, 512 moradores, 128×
 O pico de escolha de tarefas passou do minuto 1023 para o minuto 1017 e não melhorou; o de banheiros passou para o minuto 912. O ganho isolado foi de aproximadamente 20%, e a comparação alternada mostrou cerca de 2% no tempo acumulado. Esses resultados não provam eliminação de todos os picos. Os snapshots usados nas medições diferem somente pela mudança desta rodada, preservando fora da comparação as alterações paralelas de poeira e renderização. Os checksums das comparações sequencial e alternada permaneceram `e45047d1e763c09f5510d07095ea4107926c90d5f8fcc8f7318aab0015b2d84d`.
 
 Validação: 52 testes passaram nas suítes `boat_towing`, `boat_crossings`, `boat_boarding`, `boat_trip_routine`, `boat_rider_motion` e `worker_state_export`. A nova regressão intercala sucesso, busca sem rota e novo sucesso na mesma cidade, depois redimensiona o mapa e compara a rota com uma cidade sem workspace anterior. O benchmark alternado passou por verificação de sintaxe e execução de dois minutos por versão, com estados iguais. Para repetir a comparação alternada, use `node scripts/benchmark-paired-simulation.mjs ANTES DEPOIS`, fornecendo dois diretórios de fontes; as variáveis `SUBURBAN_BENCH_SEED`, `SUBURBAN_BENCH_PRESET`, `SUBURBAN_BENCH_POPULATION`, `SUBURBAN_BENCH_SIZE` e `SUBURBAN_BENCH_CITY_MINUTES` substituem os padrões deste cenário. O benchmark sequencial continua usando o comando da rodada 1.
+
+## Rodada 18 — caixas de oclusão noturna reaproveitadas e dia sem varredura da cena
+
+O renderizador reconstruía a lista de caixas dos edifícios em todo quadro: filtrava o cadastro, montava um objeto por prédio e consultava a elevação quando faltava `terrain.base`. Em seguida, `NightLighting.updateBlockers` serializava a lista inteira com `JSON.stringify` para comparar com o quadro anterior. Mesmo de dia, quando não há fonte de luz noturna, o mesmo caminho rodava e a cena inteira era percorrida para decorar materiais.
+
+Agora a lista fica em cache no renderizador e só é refeita quando mudam a cidade, o mapa, a revisão do terreno ou `structureRevision`. A lista leva sua revisão, então uma reutilização idêntica não serializa nem compara caixas. Quando a grade não tem nenhuma luz visível, `NightLighting.update` publica contagem zero e retorna antes de reconstruir oclusores e antes de percorrer a cena. A primeira fonte noturna volta a decorar os materiais no mesmo quadro em que aparece, antes do desenho.
+
+Não há mudança de posição, tamanho, altura, ordem dos prédios, raio das luzes ou pixels. A lista continua excluindo construções destruídas, abertas e pedreiras. A revisão de estrutura, terreno e mapa invalida o cache; a textura de oclusores continua sendo comparada quando precisa ser refeita.
+
+O ensaio isolado `node scripts/benchmark-light-blockers.mjs` usa 1.000 prédios, 32 luzes e 1.200 quadros. Ele mede apenas o caminho de caixas, serialização e varredura de materiais, não WebGL nem um quadro completo do jogo:
+
+| Cenário | Antes | Depois |
+| --- | ---: | ---: |
+| Dia, 1.200 quadros | 566,5 ms | 0,44 ms |
+| Noite estática, 1.200 quadros | 573,8 ms | 34,0 ms |
+| Caixas + serialização por quadro, dia | ~0,47 ms | ~0,0004 ms |
+
+O checksum da textura de oclusores foi `468cdf1a32f241dbf1d616930c6159828f046887f2abe8963e1a578f62dffafb`. Esses números medem o trabalho removido no caminho isolado; não provam FPS nem eliminam todos os picos gráficos.
+
+Validação: 10 testes passaram em `night_lighting` e `light_blocker_cache`. Eles cobrem reutilização sem leitura de elevação, invalidação por estrutura, terreno, mapa e cidade, exclusão de prédios destruídos/abertos/pedreiras, ausência de serialização em revisões reutilizadas, salto da varredura de cena no dia e reconstrução dos oclusores quando a revisão muda ou a luz retorna. Também passaram 30 testes de viewport, câmera 3P, visibilidade interna, água, grama e ruas.
+
+## Rodada 19 — caches de pose e de adereços na montagem dos cidadãos
+
+Cada cidadão resolvia a mesma pose e o mesmo lote de corpo a cada quadro. A montagem consultava o mapa de poses pelo nome e depois o mapa interno pelo objeto de aparência. Nos adereços, o nome composto era refeito e dois mapas eram consultados por item, mesmo quando a pose, a peça e a malha não mudavam. Em multidões, esse caminho custa mais que desenhar os corpos.
+
+Agora o registro de movimento guarda a última pose resolvida e a identidade da aparência. Enquanto os dois continuarem iguais, a montagem usa o lote já resolvido sem consultar os mapas. O adereço também guarda a peça, a pose, o lote e a malha atuais; a consulta completa só volta quando um deles muda ou quando o lote cresce e troca de malha. Os caches continuam por cidadão e por pose, então novos trajes e novas combinações ainda aparecem no mesmo quadro em que mudam. Nenhuma posição, cor, ordem de instância ou pixel muda.
+
+O ensaio isolado `node scripts/benchmark-citizen-render.mjs` usa 1.024 cidadãos, poses variáveis e roupas, e mede apenas CPU da montagem, sem GPU nem quadro completo. Com `SUBURBAN_BENCH_FRAMES=600`, a mediana de três execuções caiu de 941,9 ms para 838,9 ms, cerca de 11% menos. O checksum foi `e540ba00d585a2939c257e90f3490aaf0d49455dafca14df9a8a82fc8e094829` nas duas versões.
+
+Validação: 27 testes passaram em `citizen_models` e `citizen_batches`. A regressão nova repete quadros idênticos e confirma a reutilização do lote resolvido e do lote de adereço sem criar chaves novas. Os testes existentes continuam cobrindo crescimento de lotes, saias, chapéus, cores políticas e poses sentadas.
+
+## Rodada 20 — forma do corpo guardada junto ao movimento
+
+Depois da rodada 19, a montagem ainda consultava um `WeakMap` por cidadão em todo quadro para obter a forma do corpo. A consulta devolvia o mesmo objeto quase sempre, porque peso e altura mudam pouco.
+
+Agora a forma fica no registro de movimento, ao lado da pose resolvida. O caminho por quadro compara peso e altura já disponíveis e reutiliza o objeto; o `WeakMap` só volta a ser usado quando o corpo muda. A forma continua a mesma para corpo, roupa e acessórios no mesmo quadro, e a atualização de peso ou altura aparece no quadro seguinte, como antes.
+
+O ensaio isolado `node scripts/benchmark-citizen-render.mjs`, com 1.024 cidadãos e `SUBURBAN_BENCH_FRAMES=600`, caiu de uma mediana de 838,9 ms na rodada 19 para 716,6 ms, cerca de 14,6% menos. Contra a linha de base da rodada 19, a queda acumulada é de aproximadamente 24%. O checksum continuou `e540ba00d585a2939c257e90f3490aaf0d49455dafca14df9a8a82fc8e094829`. O ensaio mede somente CPU de montagem, sem GPU nem quadro completo.
+
+Validação: 28 testes passaram em `citizen_models` e `citizen_batches`. A regressão nova confirma que a forma é reutilizada entre quadros idênticos e trocada quando peso ou altura mudam.
+
+## Rodada 21 — uniforme de empresa consultado uma vez por cidadão
+
+A aparência do cidadão consultava o uniforme da empresa duas vezes no mesmo quadro: uma para a peça de cima e outra para a peça de baixo. Cada consulta percorria tarefas, identificadores e o armário. O resultado era sempre o mesmo par de peças.
+
+Agora `appearanceFor` resolve o uniforme uma vez e passa o resultado para as duas buscas. As funções continuam aceitando a chamada antiga, então outros usos não mudam. Se o cidadão veste uniforme, a parte de baixo continua nula e a de cima continua vindo do uniforme; fora do serviço, as peças pessoais continuam iguais. Nenhuma peça, cor, ordem de desenho ou pixel muda.
+
+No ensaio isolado `node scripts/benchmark-citizen-render.mjs` com 1.024 cidadãos e 2.000 quadros, a comparação alternada contra a rodada 20 deu mediana de aproximadamente 1,136 ms por quadro contra 1,166 ms a 1,19 ms, cerca de 3% menos. O checksum continuou `bfacf9fa396ba2ba2ee371494068ce3ae29f1fe8a1baab381129d8f463225f58`. O ensaio mede apenas CPU de montagem.
+
+Validação: 34 testes passaram em `citizen_models`, `citizen_batches` e `company_identity`. As falhas de `system_audit` e `colors_paint` ligadas a roupas e pintura foram reproduzidas com a mudança revertida, portanto já existiam antes desta rodada.
+
+## Rodada 22 — catálogo lexical aquecido em uma passada
+
+O aquecimento dos catálogos normalizava o vocabulário inteiro uma vez por tema. Com 320.370 palavras e cinco temas, o mesmo texto passava pela decomposição Unicode e pela remoção de acentos cinco vezes em `palavrasDoTema` e mais cinco vezes em `nucleosValidados`. Esse trabalho bloqueava a inicialização da simulação antes de qualquer frase ser pedida.
+
+Agora os temas solicitados são preenchidos em uma única passada pelo vocabulário. O aquecimento pede os cinco temas de uma vez, e cada lista mantém a mesma ordem e o mesmo conteúdo de antes. `nucleosValidados` percorre a lista já filtrada do tema, deduplicada pela forma normalizada, em vez de varrer o catálogo completo de novo. A dobra de acentos e a normalização lexical trocaram `toLocaleLowerCase('pt-BR')` por `toLowerCase()`: para pt-BR não há mapeamento de caixa específico de locale, então o resultado é idêntico e o caminho é cerca de duas vezes mais rápido. Nenhuma palavra, frase, ordem de lista ou escolha aleatória muda.
+
+O ensaio isolado `node scripts/benchmark-vocabulary-warmup.mjs` mede `aquecerCatalogos()` e compara as frases geradas com uma semente fixa. A mediana de cinco execuções caiu de 2.045,4 ms para 747,3 ms, cerca de 63% menos. O checksum das frases continuou `142aa041dc9a2d9db4d2611cf727acf218a0f3b2a89701dd669ff353f747c136` nas duas versões. O heap retido depois do aquecimento ficou próximo: 50,7 MB antes e 56,8 MB depois, medidos no mesmo ensaio isolado.
+
+No ensaio completo da simulação da rodada 1, com a mesma seed e 400 minutos, o tempo total caiu de 11,65 s para 9,38 s e a velocidade efetiva subiu de 8,58 para 10,66. O checksum completo continuou `53949bbbcbb78c9c389ea10ca3fb7cc837ed5cb21d579b590ee8675d0c836509`.
+
+Validação: testes de `vocabulario_frases` e a nova regressão `vocabulary_warmup` passaram. A regressão executa o gerador em processos separados, com e sem aquecimento, e confirma o mesmo checksum; também aquece duas vezes e confirma que as listas de tema não mudam.
+
+## Rodada 23 — orçamento de terreno proporcional ao quadro e vigia do trabalhador de raízes
+
+O streaming de terreno reservava 7 ms fixos por quadro, mesmo quando o quadro já passava de 30 ms. Em aparelhos antigos, essa reserva competia com o desenho e transformava cada quadro em uma pausa previsível até os blocos visíveis terminarem. O orçamento agora acompanha o intervalo real entre quadros: perto de 60 fps a reserva continua em 7 ms; conforme o intervalo cresce, a reserva cai até 1,5 ms. O mesmo orçamento alimenta a construção dos blocos e o avanço das raízes de grama. A geometria, a ordem dos blocos, as texturas e os pixels não mudam: apenas a velocidade com que o terreno aparece se adapta ao aparelho.
+
+O trabalho de raízes também podia ficar preso para sempre. Se o trabalhador fosse suspenso ou encerrado pelo sistema, o bloco de terreno esperava as raízes indefinidamente e cada quadro gastava o orçamento inteiro tentando avançar um gerador parado. Agora um pedido sem resposta por mais de 2 segundos encerra o trabalhador e retoma o mesmo gerador incremental na thread principal, que produz exatamente as mesmas raízes. Um trabalhador saudável responde em dezenas de milissegundos e não é afetado.
+
+O ensaio `tests/night_city_benchmark.html?population=256` em Chromium headless com SwiftShader mediu 12 quadros por execução. Antes, a mediana ficou em 24,7 ms e 24,5 ms, com 8,2 ms e 8,9 ms na fase de terreno. Depois, a mediana ficou em 19,0 ms e 19,1 ms, com 2,7 ms e 3,3 ms na fase de terreno. O p95 caiu de 29,8 ms e 35,7 ms para 25,6 ms e 25,9 ms. Os números servem para comparar o mesmo ambiente, não para prever FPS em um telefone.
+
+Validação: 45 testes passaram nas suítes de otimização de água, trabalho ocioso de terreno, grama síncrona, cobertura de grama, grama volumétrica, tarefas de raízes e trabalhador de raízes. A nova regressão confirma que um trabalhador sem resposta é encerrado após o limite e que o gerador incremental entrega as mesmas raízes; os testes existentes continuam cobrindo respostas válidas, respostas obsoletas, falha imediata e orçamentos curtos.

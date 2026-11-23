@@ -241,3 +241,34 @@ test('a confirmed bench seat keeps bent legs when an earlier delivery is still m
  model.begin(.05,1);model.add(e,0);model.end();
  assert([...model.batches.entries()].some(([key,b])=>key.startsWith('sentado_no_banco:')&&b.count),'a stationary seated delivery worker must use bent legs, not the running body at the seat anchor');
 });
+
+test('identical frames reuse the resolved pose and headwear batch caches',async()=>{
+ const {model}=await models(),e=person(93),c=e.properties.citizen;
+ c.wardrobe=[{piece:'camiseta',color:'#e6bd43'},{piece:'calça',color:'#3c4f6b'}];c.wearingIndex=0;c.lowerWearIndex=1;
+ const draw=()=>{model.begin(.1,1);assert(model.add(e,2));model.end();};
+ draw();
+ const motion=model.motion.get(e),resolved=motion.resolvedPose,head=motion.accessoryTransforms[0].head,batchKeys=[...model.batches.keys()],headwearKeys=[...model.headwearBatches.keys()];
+ draw();draw();
+ assert.equal(motion.resolvedPose,resolved);
+ assert.equal(motion.accessoryTransforms[0].head,head);
+ assert.equal(motion.accessoryTransforms[0].mesh,head.mesh);
+ assert.deepEqual([...model.batches.keys()],batchKeys);
+ assert.deepEqual([...model.headwearBatches.keys()],headwearKeys);
+ assert.equal(head.count,1);
+});
+
+test('body shape stays cached beside the motion record until weight or height changes',async()=>{
+ const {model}=await models(),e=person(94),c=e.properties.citizen;
+ c.bodyWeightKg=70;c.bodyHeightCm=170;
+ const draw=()=>{model.begin(.1,1);assert(model.add(e,2));model.end();};
+ draw();
+ const motion=model.motion.get(e),shape=motion.bodyShape;
+ assert.equal(shape.weight,70);assert.equal(shape.height,170);
+ draw();
+ assert.equal(motion.bodyShape,shape);
+ c.bodyWeightKg=96;draw();
+ assert.notEqual(motion.bodyShape,shape);
+ assert.equal(motion.bodyShape.weight,96);assert(motion.bodyShape.fat>shape.fat);
+ c.bodyHeightCm=188;draw();
+ assert.equal(motion.bodyShape.height,188);
+});

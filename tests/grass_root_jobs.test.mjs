@@ -78,3 +78,15 @@ test('worker failure resumes the existing incremental generator',t=>{
  jobs.request(world,'field',surface,new Set(),10,()=>true,data=>actual=data);
  jobs.advance(100);worker.onerror();jobs.advance(100);assert.deepEqual(actual,grassRoots(positions));
 });
+
+test('an unresponsive worker falls back to the incremental generator',t=>{
+  const OriginalWorker=globalThis.Worker;let worker;
+  globalThis.Worker=class{constructor(){worker=this;}postMessage(){}terminate(){this.terminated=true;}};
+  t.after(()=>{if(OriginalWorker)globalThis.Worker=OriginalWorker;else delete globalThis.Worker;});
+  let clock=0;const jobs=new GrassRootJobs(()=>clock++),world={width:8,height:8};let actual;
+  jobs.request(world,'field',surface,new Set(),10,()=>true,data=>actual=data);
+  jobs.advance(10);assert.equal(worker.terminated,undefined);assert.equal(jobs.workerFailed,false);
+  clock=3000;jobs.advance(1000);
+  assert.equal(worker.terminated,true);assert.equal(jobs.workerFailed,true);assert.equal(jobs.worker,null);
+  jobs.advance(100000);assert.deepEqual(actual,grassRoots(positions));
+});

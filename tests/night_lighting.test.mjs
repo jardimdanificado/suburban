@@ -58,6 +58,32 @@ test('blocker rows include nearby buildings and update when a building changes',
  n.update([light],c,scene,[]);assert.equal(n.blockers.image.data[3],0);
 });
 
+test('reused blocker revisions skip serialization while daylight skips the scene scan',()=>{
+ const n=new NightLighting(THREE),c=camera(),light=source(),scan={calls:0,traverseVisible(){this.calls++;}};
+ const boxes=[{min:[8,0,18],max:[12,6,22]}];boxes.revision='terrain:1';
+ n.update([light],c,scan,boxes);
+ const scans=scan.calls;assert.equal(n.uniforms.nightLightCount.value,1);
+ const original=JSON.stringify;let serialized=0;JSON.stringify=(...args)=>{serialized++;return original(...args);};
+ try{for(let i=0;i<5;i++)n.update([light],c,scan,boxes);}finally{JSON.stringify=original;}
+ assert.equal(serialized,0);
+ assert.equal(scan.calls,scans+5);
+ light.visible=false;n.update([light],c,scan,boxes);
+ assert.equal(n.uniforms.nightLightCount.value,0);
+ assert.equal(scan.calls,scans+5);
+ light.visible=true;n.update([light],c,scan,boxes);
+ assert.equal(scan.calls,scans+6);
+});
+
+test('blocker revision changes still rebuild nearby rows',()=>{
+ const n=new NightLighting(THREE),c=camera(),light=source();
+ const boxes=[{min:[8,0,18],max:[12,6,22]}];boxes.revision='terrain:1';
+ n.update([light],c,scene,boxes);
+ assert.equal(n.blockers.image.data[3],1);
+ boxes[0]={min:[100,0,100],max:[104,6,104]};boxes.revision='terrain:2';
+ n.update([light],c,scene,boxes);
+ assert.equal(n.blockers.image.data[3],0);
+});
+
 test('carried torches emit outdoors only, including fueled torches taken indoors',()=>{
  const entity={properties:{citizen:{},heldItem:{resourceType:'torch',fuel:48}}};
  assert.equal(hasOutdoorTorch(entity),true);
