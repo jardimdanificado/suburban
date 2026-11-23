@@ -3,7 +3,7 @@ import { speedLabel } from "./simulation_time.js?v=ff3-ff4-steps-1";
 const BOOL = [[false, "OFF"], [true, "ON"]];
 const effect = (key, label, values, initial) => ({ key, label, values, default: initial, graphic: true });
 const GRAPHICS = [
-  { key: "resolution", label: "RESOLUCAO", values: [0.25, 0.5, 0.75, 1].map(v => [v, `${v * 100}%`]), default: 0.25 },
+  { key: "resolution", label: "RESOLUCAO", values: [0.25, 0.5, 0.75, 1].map(v => [v, `${v * 100}%`]), default: 0.5 },
   { key: "terrainOptimizations", label: "OTIMIZACOES DE TERRENO", values: BOOL, default: true },
   { key: "smoothMovement", label: "MOVIMENTO SUAVE", values: BOOL, default: true },
   { key: "shadows", label: "SOMBRAS", values: BOOL, default: true },
