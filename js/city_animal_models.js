@@ -1,18 +1,21 @@
 import { ANIMAL_CLIPS, ANIMAL_SPECIES, ANIMAL_SPECIES_IDS } from './animal_catalog.js';
 import { parseCitizenOBJ } from './city_citizen_models.js';
 
-export function animalAnimation(animal) {
+export function animalAnimation(animal, moving = false) {
   if (!animal) return 'idle';
   if (animal.dead || animal.state === 'sleep') return 'sleep';
+  if (moving) return 'walk';
   if (animal.state === 'eat') return 'eat';
-  if (animal.state === 'walk' || animal.state === 'flee') return 'walk';
   return 'idle';
 }
 
-export function animalFrame(clip, time, phase = 0, speed = 1) {
+export function animalFrame(clip, time, phase = 0, speed = 1, gait = null) {
   const frames = ANIMAL_CLIPS[clip] || ANIMAL_CLIPS.idle;
   if (frames.length === 1) return { clip, frame: frames[0] };
-  const fps = clip === 'walk' ? 10 * Math.max(0.7, Math.min(1.6, speed)) : clip === 'eat' ? 6 : 3;
+  if (clip === 'walk' && gait != null) {
+    return { clip, frame: frames[Math.floor(Math.max(0, gait)) % frames.length] };
+  }
+  const fps = clip === 'walk' ? 10 * Math.max(0.7, Math.min(1.6, speed)) : clip === 'eat' ? 5 : 1;
   const index = Math.floor(Math.max(0, time) * fps + phase) % frames.length;
   return { clip, frame: frames[index] };
 }
@@ -90,26 +93,32 @@ export class CityAnimalModels {
     const spec = ANIMAL_SPECIES[species];
     if (!spec) return false;
 
-    const clip = animalAnimation(animal);
-    const phase = ((entity.id || 0) % 17) * 0.37;
-    const { frame } = animalFrame(clip, this.clock, phase, spec.speed || 1);
-    const key = `${species}:${clip}:${frame}`;
-    const source = this.frames.get(key) || this.frames.get(`${species}:idle:0`);
-    if (!source) return false;
-
     let motion = this.motion.get(entity);
     if (!motion) {
-      motion = { x: entity.x, y: entity.y, angle: animal.angle || 0 };
+      motion = { x: entity.x, y: entity.y, lastSimX: entity.x, lastSimY: entity.y, gait: 0, moving: false, angle: animal.angle || 0 };
       this.motion.set(entity, motion);
     }
-    const alpha = 1 - Math.exp(-Math.max(0.001, this.frameDelta || 0.016) * 10);
-    motion.x += (entity.x - motion.x) * alpha;
-    motion.y += (entity.y - motion.y) * alpha;
+    const simStep = Math.hypot(entity.x - motion.lastSimX, entity.y - motion.lastSimY);
+    motion.lastSimX = entity.x;
+    motion.lastSimY = entity.y;
+    const alpha = 1 - Math.exp(-Math.max(0.001, this.frameDelta || 0.016) * 20);
+    motion.x = entity.x;
+    motion.y = entity.y;
+    motion.moving = (animal._renderMoving !== undefined ? animal._renderMoving : (animal.state === 'walk' || animal.state === 'flee')) && simStep > 0.0008;
+    if (motion.moving) motion.gait += (simStep * 12) / Math.max(0.45, spec.size || 0.8);
+
     const targetAngle = animal.angle ?? motion.angle;
     let deltaAngle = targetAngle - motion.angle;
     while (deltaAngle > Math.PI) deltaAngle -= Math.PI * 2;
     while (deltaAngle < -Math.PI) deltaAngle += Math.PI * 2;
     motion.angle += deltaAngle * alpha;
+
+    const clip = animalAnimation(animal, motion.moving);
+    const phase = ((entity.id || 0) % 17) * 0.37;
+    const { frame } = animalFrame(clip, this.clock, phase, spec.speed || 1, motion.gait);
+    const key = `${species}:${clip}:${frame}`;
+    const source = this.frames.get(key) || this.frames.get(`${species}:idle:0`);
+    if (!source) return false;
 
     let batch = this.batches.get(key);
     if (!batch) {

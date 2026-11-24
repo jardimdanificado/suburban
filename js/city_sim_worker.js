@@ -58,6 +58,22 @@ function vehiclePositions() {
   }
   return result;
 }
+const ANIMAL_STATE_CODE = { idle: 0, walk: 1, eat: 2, sleep: 3, flee: 4 };
+function animalPositions() {
+  const fauna = state.city.fauna?.animals;
+  if (!fauna?.size) return new Float64Array(0);
+  const animals = [...fauna.values()].filter(a => a.entity && !a.entity.destroyed);
+  const result = new Float64Array(animals.length * 5);
+  let at = 0;
+  for (const a of animals) {
+    result[at++] = a.id;
+    result[at++] = a.x ?? a.entity.x ?? 0;
+    result[at++] = a.y ?? a.entity.y ?? 0;
+    result[at++] = a.angle || 0;
+    result[at++] = a.dead ? 5 : (ANIMAL_STATE_CODE[a.state] ?? 0);
+  }
+  return result;
+}
 function vitals(){
   const people=state.city.citizens,stride=CITY_NEED_FIELDS.length+2,result=new Float64Array(people.length*stride);
   for(let i=0;i<people.length;i++){const c=people[i],at=i*stride;for(let j=0;j<CITY_NEED_FIELDS.length;j++)result[at+j]=c.needs[CITY_NEED_FIELDS[j]];result[at+CITY_NEED_FIELDS.length]=c.happiness;result[at+CITY_NEED_FIELDS.length+1]=c.mood;}
@@ -114,13 +130,13 @@ function snapshot(force = false, sync = false) {
   // object graph (measured: graph deltas cost ~8% more bytes and ~10% more
   // encode time than the packed array). The journal cadence, however, stays: it
   // trades the same bytes for lighter per-snapshot encoding and apply.
-  const packet = graph.encode(state,{packNeeds:true,packPositions:true,omitCitizenPaths:true,fieldTailPatches,historyEvery:sync?1:4}), motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions();
+  const packet = graph.encode(state,{packNeeds:true,packPositions:true,omitCitizenPaths:true,fieldTailPatches,historyEvery:sync?1:4}), motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions(), animals = animalPositions();
   lastSnapshotCost=performance.now()-started;
   if(lastSnapshotCost>maxSnapshotMs){maxSnapshotMs=lastSnapshotCost;maxSnapshotMinute=state.city.minute;}
   const checkpointIds=pendingCheckpointIds.splice(0);
-  const transfer=[motion.buffer, inside.buffer, vehicles.buffer];
+  const transfer=[motion.buffer, inside.buffer, vehicles.buffer, animals.buffer];
   if(packet.packedNeeds)transfer.push(packet.packedNeeds.buffer);
-  postMessage({ type: 'state', cityId, packet, checkpointIds, positions: motion, boatRiders:packBoatRiders(state.city.citizens), boatTows:packBoatTows(state.city.citizens), fishing:packFishing(state.city.citizens), benchSeats:packBenchSeats(state.city.citizens), inside, vehicles, tick, elapsed, sync, encodedWhileObserved: observed, workMs: lastSnapshotCost, workerMetrics:workerMetrics(true) }, transfer);
+  postMessage({ type: 'state', cityId, packet, checkpointIds, positions: motion, boatRiders:packBoatRiders(state.city.citizens), boatTows:packBoatTows(state.city.citizens), fishing:packFishing(state.city.citizens), benchSeats:packBenchSeats(state.city.citizens), inside, vehicles, animals, tick, elapsed, sync, encodedWhileObserved: observed, workMs: lastSnapshotCost, workerMetrics:workerMetrics(true) }, transfer);
   awaitingAck = true; lastSnapshot = lastMotion = performance.now(); dirty = forceSnapshotPending = false;
   return true;
 }
@@ -130,8 +146,8 @@ function sendMotion(force=false) {
   // Keep at most one compact packet in flight. A busy or suspended UI must
   // not accumulate stale positions and typed arrays while simulation continues.
   if(motionAck&&awaitingMotionAck)return;
-  const motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions(),needs=vitals();
-  postMessage({ type: 'motion', cityId, motionAck, minute:state.city.minute, positions: motion, boatRiders:packBoatRiders(state.city.citizens), boatTows:packBoatTows(state.city.citizens), fishing:packFishing(state.city.citizens), benchSeats:packBenchSeats(state.city.citizens), inside, vehicles, needs, tick, elapsed, workerMetrics:workerMetrics() }, [motion.buffer, inside.buffer, vehicles.buffer, needs.buffer]);
+  const motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions(), animals = animalPositions(), needs=vitals();
+  postMessage({ type: 'motion', cityId, motionAck, minute:state.city.minute, positions: motion, boatRiders:packBoatRiders(state.city.citizens), boatTows:packBoatTows(state.city.citizens), fishing:packFishing(state.city.citizens), benchSeats:packBenchSeats(state.city.citizens), inside, vehicles, animals, needs, tick, elapsed, workerMetrics:workerMetrics() }, [motion.buffer, inside.buffer, vehicles.buffer, animals.buffer, needs.buffer]);
   awaitingMotionAck=motionAck;
   lastMotion = performance.now();
 }

@@ -3,7 +3,7 @@ import {CharacterGameUI} from './js/character_game_ui.js';
 import {playing,controlledCitizen,movementVector} from './js/character_game.js';
 import { FreeCameraTouchControls } from './js/free_camera_touch_controls.js';
 import {CityFavorites} from './js/city_favorites.js?v=custom-history-limit-1';
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=game-approach-camera-9';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=fauna-motion-1';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=game-approach-camera-9";
 import { CityDesktop } from "./js/city_desktop.js?v=game-approach-camera-9";

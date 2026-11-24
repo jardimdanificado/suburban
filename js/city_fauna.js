@@ -106,10 +106,11 @@ export class CityFauna {
       stateUntil: city.minute + 3,
       targetX: null,
       targetY: null,
-      hunger: options.hunger ?? 75,
+      hunger: options.hunger ?? (45 + Math.floor(Math.random() * 35)),
       health: 100,
       provokedUntil: 0,
       dead: false,
+      deadAt: null,
       bornAt: city.minute,
     };
     entity.properties.cityAnimal = animal;
@@ -174,39 +175,208 @@ export class CityFauna {
     return closest;
   }
 
-  moveTowards(animal, tx, ty, speedScale = 1, dt = 0.45) {
+  moveTowards(animal, tx, ty, speedScale = 1, dt = 0.016) {
     const spec = ANIMAL_SPECIES[animal.species];
     const dx = tx - animal.x, dy = ty - animal.y;
     const dist = Math.hypot(dx, dy);
-    if (dist < 0.08) return true;
-    const step = Math.min(dist, (spec?.speed || 1) * speedScale * dt);
-    const nx = animal.x + (dx / dist) * step;
-    const ny = animal.y + (dy / dist) * step;
-    if (this.canOccupy(nx, ny, animal.species)) {
-      animal.x = nx;
-      animal.y = ny;
-      animal.entity.x = nx;
-      animal.entity.y = ny;
-      animal.angle = Math.atan2(dx, dy);
-      return dist - step < 0.1;
+    if (dist < 0.12) return true;
+    const step = Math.min(dist, (spec?.speed || 1) * 3.0 * speedScale * dt);
+    const baseAngle = Math.atan2(dx, dy);
+    for (const offset of [0, 0.55, -0.55, 1.1, -1.1, 1.65, -1.65]) {
+      const a = baseAngle + offset;
+      const nx = animal.x + Math.sin(a) * step;
+      const ny = animal.y + Math.cos(a) * step;
+      if (this.canOccupy(nx, ny, animal.species)) {
+        animal.x = nx;
+        animal.y = ny;
+        animal.entity.x = nx;
+        animal.entity.y = ny;
+        animal.angle = a;
+        return dist - step < 0.14 && offset === 0;
+      }
     }
     animal.targetX = null;
     animal.targetY = null;
     return true;
   }
 
+  findRoamTarget(animal) {
+    const spec = ANIMAL_SPECIES[animal.species];
+    const ranch = animal.buildingId != null ? this.city.building?.(animal.buildingId) : null;
+    const anchorX = ranch ? (ranch.door?.x ?? ranch.entity.x) : animal.x;
+    const anchorY = ranch ? (ranch.door?.y ?? ranch.entity.y) : animal.y;
+    const maxR = ranch ? FAUNA_RULES.ranchRadius : 9;
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const tx = Math.floor(anchorX) + Math.floor(Math.random() * (maxR * 2 + 1)) - maxR + 0.5;
+      const ty = Math.floor(anchorY) + Math.floor(Math.random() * (maxR * 2 + 1)) - maxR + 0.5;
+      if (Math.hypot(tx - animal.x, ty - animal.y) < 1.5) continue;
+      if (spec.nearWater ? this.matchesHabitat(Math.floor(tx), Math.floor(ty), animal.species) : this.canOccupy(tx, ty, animal.species)) {
+        return { x: tx, y: ty };
+      }
+    }
+    return null;
+  }
+
+  findPrey(predator) {
+    let closest = null, bestDist = 14;
+    for (const a of this.animals.values()) {
+      if (a === predator || a.dead || a.entity?.destroyed || a.category !== 'wild') continue;
+      const sp = ANIMAL_SPECIES[a.species];
+      if (!sp || sp.temperament === 'predator') continue;
+      const d = Math.hypot(a.x - predator.x, a.y - predator.y);
+      if (d < bestDist) { bestDist = d; closest = a; }
+    }
+    return closest ? { animal: closest, dist: bestDist } : null;
+  }
+
+  decideBehavior(animal, isNight) {
+    const spec = ANIMAL_SPECIES[animal.species];
+    if (!spec) return;
+    const minute = this.city.minute;
+
+    // 1. Immediate threat / predator reaction
+    const threat = this.nearbyThreat(animal);
+    if (threat && (spec.temperament === 'shy' || (spec.temperament === 'docile' && threat.dist < 2.5))) {
+      const dx = animal.x - threat.x, dy = animal.y - threat.y;
+      const len = Math.hypot(dx, dy) || 1;
+      animal.state = 'flee';
+      animal.action = 'Fugindo de morador';
+      animal.targetX = animal.x + (dx / len) * 6;
+      animal.targetY = animal.y + (dy / len) * 6;
+      animal.stateTimer = 2.5;
+      return;
+    }
+
+    if (threat && (animal.provokedUntil > minute || (spec.temperament === 'predator' && animal.hunger < 35))) {
+      animal.state = 'walk';
+      animal.action = 'Atacando ameaça';
+      animal.targetX = threat.x;
+      animal.targetY = threat.y;
+      animal.stateTimer = 2.0;
+      if (threat.dist < 1.3 && threat.citizen && !threat.citizen.dead) {
+        threat.citizen.needs.health = Math.max(0, (threat.citizen.needs.health ?? 100) - 8);
+        animal.hunger = Math.min(100, animal.hunger + 15);
+      }
+      return;
+    }
+
+    // 2. Predator hunting wild prey
+    if (spec.temperament === 'predator' && animal.hunger < 65) {
+      const prey = this.findPrey(animal);
+      if (prey) {
+        if (prey.dist < 1.2) {
+          prey.animal.dead = true;
+          prey.animal.state = 'sleep';
+          prey.animal.action = 'Abatido';
+          animal.state = 'eat';
+          animal.action = `Devora ${ANIMAL_SPECIES[prey.animal.species]?.label?.toLowerCase() || 'presa'}`;
+          animal.targetX = null;
+          animal.targetY = null;
+          animal.hunger = Math.min(100, animal.hunger + 40);
+          animal.stateTimer = 3.0;
+          return;
+        }
+        animal.state = 'walk';
+        animal.action = `Caçando ${ANIMAL_SPECIES[prey.animal.species]?.label?.toLowerCase() || 'presa'}`;
+        animal.targetX = prey.animal.x;
+        animal.targetY = prey.animal.y;
+        animal.stateTimer = 2.0;
+        return;
+      }
+    }
+
+    if (animal.stateTimer > 0) return;
+
+    // 3. Sleep at night
+    if (isNight && spec.temperament !== 'predator' && Math.random() < 0.45) {
+      animal.state = 'sleep';
+      animal.action = 'Dormindo';
+      animal.targetX = null;
+      animal.targetY = null;
+      animal.stateTimer = 8 + Math.random() * 8;
+      return;
+    }
+
+    // 4. Graze grass or forage for non-predators
+    if (spec.temperament !== 'predator' && animal.hunger < 82) {
+      const tile = tileAt(this.city.world, Math.floor(animal.x), Math.floor(animal.y));
+      if (spec.grazesGrass) {
+        if ((tile === 0 || tile === 9) && Math.random() < 0.65) {
+          animal.state = 'eat';
+          animal.action = 'Pastando grama';
+          animal.targetX = null;
+          animal.targetY = null;
+          animal.stateTimer = 3.0 + Math.random() * 2.0;
+          return;
+        }
+        const spot = this.findGrazeSpot(animal);
+        if (spot) {
+          animal.state = 'walk';
+          animal.action = 'Procurando pasto';
+          animal.targetX = spot.x;
+          animal.targetY = spot.y;
+          animal.stateTimer = 4.0;
+          return;
+        }
+      } else if (Math.random() < 0.55) {
+        animal.state = 'eat';
+        animal.action = 'Forrageando';
+        animal.targetX = null;
+        animal.targetY = null;
+        animal.stateTimer = 2.5 + Math.random() * 2.0;
+        return;
+      }
+    }
+
+    // 5. Roam or brief rest
+    if (Math.random() < 0.78) {
+      const target = this.findRoamTarget(animal);
+      if (target) {
+        animal.state = 'walk';
+        animal.action = animal.buildingId != null ? 'Circulando no pasto' : 'Explorando o habitat';
+        animal.targetX = target.x;
+        animal.targetY = target.y;
+        animal.stateTimer = 4.5;
+        return;
+      }
+    }
+    animal.state = 'idle';
+    animal.action = 'Observando';
+    animal.targetX = null;
+    animal.targetY = null;
+    animal.stateTimer = 1.2 + Math.random() * 1.8;
+  }
+
   update(dt = 0.016) {
     if (!dt || dt <= 0) return;
     const stepDt = Math.min(0.25, dt);
+    const hour = Math.floor((this.city.minute % 1440) / 60);
+    const isNight = hour >= 22 || hour < 5;
+
     for (const animal of this.animals.values()) {
       if (animal.dead || animal.entity?.destroyed) continue;
-      if (animal.targetX == null || (animal.state !== 'walk' && animal.state !== 'flee')) continue;
-      const arrived = this.moveTowards(animal, animal.targetX, animal.targetY, animal.state === 'flee' ? 1.85 : 1.15, stepDt);
-      if (arrived) {
-        animal.targetX = null;
-        animal.targetY = null;
-        animal.state = 'idle';
-        animal.stateUntil = this.city.minute + 1;
+      animal.stateTimer = Math.max(0, (animal.stateTimer ?? 0) - stepDt);
+      animal.thinkTimer = (animal.thinkTimer ?? 0) - stepDt;
+
+      if (animal.thinkTimer <= 0) {
+        animal.thinkTimer = 0.4 + Math.random() * 0.5;
+        this.decideBehavior(animal, isNight);
+      }
+
+      if (animal.state === 'eat') {
+        animal.hunger = Math.min(100, animal.hunger + 8 * stepDt);
+      }
+
+      if (animal.targetX != null && (animal.state === 'walk' || animal.state === 'flee')) {
+        const arrived = this.moveTowards(animal, animal.targetX, animal.targetY, animal.state === 'flee' ? 1.75 : 1.0, stepDt);
+        if (arrived) {
+          animal.targetX = null;
+          animal.targetY = null;
+          animal.state = 'idle';
+          animal.action = 'Observando';
+          animal.stateTimer = 0.8 + Math.random() * 1.2;
+          animal.thinkTimer = 0.3;
+        }
       }
     }
   }
@@ -265,7 +435,9 @@ export class CityFauna {
     target.provokedUntil = this.city.minute + 10;
     if (target.health <= 0) {
       target.dead = true;
+      target.deadAt = this.city.minute;
       target.state = 'sleep';
+      target.action = 'Abatido';
       const spec = ANIMAL_SPECIES[target.species];
       const bag = lodge?.inventory || (hunter.inventory ??= {});
       for (const [good, qty] of Object.entries(spec?.products || {})) {
@@ -282,90 +454,36 @@ export class CityFauna {
     const hour = Math.floor((minute % 1440) / 60);
     const isNight = hour >= 22 || hour < 5;
 
-    for (const animal of this.animals.values()) {
-      if (animal.dead || animal.entity?.destroyed) continue;
-      const spec = ANIMAL_SPECIES[animal.species];
-      if (!spec) continue;
-
-      animal.hunger = Math.max(0, animal.hunger - FAUNA_RULES.hungerPerMinute);
-
-      // Threat / predator check
-      const threat = this.nearbyThreat(animal);
-      if (threat && (spec.temperament === 'shy' || (spec.temperament === 'docile' && threat.dist < 2.5))) {
-        const dx = animal.x - threat.x, dy = animal.y - threat.y;
-        const len = Math.hypot(dx, dy) || 1;
-        animal.state = 'flee';
-        animal.targetX = animal.x + (dx / len) * 4;
-        animal.targetY = animal.y + (dy / len) * 4;
-        animal.stateUntil = minute + 2;
-      } else if (threat && (animal.provokedUntil > minute || (spec.temperament === 'predator' && animal.hunger < 35))) {
-        animal.state = 'walk';
-        animal.targetX = threat.x;
-        animal.targetY = threat.y;
-        animal.stateUntil = minute + 2;
-        if (threat.dist < 1.2 && threat.citizen && !threat.citizen.dead) {
-          threat.citizen.needs.health = Math.max(0, (threat.citizen.needs.health ?? 100) - 8);
-          animal.hunger = Math.min(100, animal.hunger + 15);
+    for (const [id, animal] of this.animals) {
+      if (animal.entity?.destroyed) { this.animals.delete(id); continue; }
+      if (animal.dead) {
+        if (animal.deadAt != null && minute - animal.deadAt >= 120) {
+          animal.entity.destroyed = true;
+          this.animals.delete(id);
         }
+        continue;
       }
-
-      if (animal.state === 'flee' || (animal.targetX != null && animal.state === 'walk')) {
-        if (minute >= animal.stateUntil) {
+      if (animal.state === 'eat') {
+        animal.hunger = Math.min(100, animal.hunger + 8);
+      } else {
+        animal.hunger = Math.max(0, animal.hunger - FAUNA_RULES.hungerPerMinute);
+      }
+      if (animal.hunger <= 0) {
+        animal.health = Math.max(0, (animal.health ?? 100) - 2.5);
+        if (animal.health <= 0) {
+          animal.dead = true;
+          animal.deadAt = minute;
+          animal.state = 'sleep';
+          animal.action = 'Morto por inanição';
           animal.targetX = null;
           animal.targetY = null;
-          animal.state = 'idle';
-          animal.stateUntil = minute + 1;
+          continue;
         }
-        continue;
+      } else if (animal.hunger > 50 && animal.health < 100) {
+        animal.health = Math.min(100, animal.health + 0.5);
       }
-
-      if (animal.state === 'eat') {
-        if (minute >= animal.stateUntil) {
-          animal.hunger = Math.min(100, animal.hunger + FAUNA_RULES.grazeRestore);
-          animal.state = 'idle';
-          animal.stateUntil = minute + 1;
-        }
-        continue;
-      }
-
-      if (minute < animal.stateUntil) continue;
-
-      // Decide next action
-      if (isNight && spec.temperament !== 'predator' && Math.random() < 0.55) {
-        animal.state = 'sleep';
-        animal.stateUntil = minute + 6 + Math.floor(Math.random() * 8);
-      } else if (spec.grazesGrass && animal.hunger < 82) {
-        const tile = tileAt(this.city.world, Math.floor(animal.x), Math.floor(animal.y));
-        if ((tile === 0 || tile === 9) && Math.random() < 0.55) {
-          animal.state = 'eat';
-          animal.stateUntil = minute + 2;
-        } else {
-          const spot = this.findGrazeSpot(animal);
-          if (spot) {
-            animal.state = 'walk';
-            animal.targetX = spot.x;
-            animal.targetY = spot.y;
-            animal.stateUntil = minute + 5;
-          } else {
-            animal.state = 'idle';
-            animal.stateUntil = minute + 1;
-          }
-        }
-      } else if (Math.random() < 0.8) {
-        const tx = Math.floor(animal.x) + Math.floor(Math.random() * 13) - 6 + 0.5;
-        const ty = Math.floor(animal.y) + Math.floor(Math.random() * 13) - 6 + 0.5;
-        if (this.canOccupy(tx, ty, animal.species)) {
-          animal.state = 'walk';
-          animal.targetX = tx;
-          animal.targetY = ty;
-          animal.stateUntil = minute + 6;
-        } else {
-          animal.state = 'idle';
-          animal.stateUntil = minute + 1;
-        }
-      } else {
-        animal.state = 'idle';
-        animal.stateUntil = minute + 1 + Math.floor(Math.random() * 2);
+      if (animal.stateTimer <= 0 || animal.thinkTimer == null) {
+        this.decideBehavior(animal, isNight);
       }
     }
   }

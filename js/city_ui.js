@@ -352,8 +352,7 @@ export class CityUI {
     p.kv('Dieta / Temperamento',`${dietLabel} · ${tempLabel}`);
     p.kv('Localização',`${animal.x.toFixed(1)}, ${animal.y.toFixed(1)}`);
     if(ranch)p.kv('Rancho / Propriedade',ranch.entity.properties.name);
-    p.bar('Saciedade',animal.hunger??100,100,C.green);
-    p.bar('Saúde',animal.health??100,100,C.gold);
+    p.meters([['Saciedade',animal.hunger??100,C.green],['Saúde',animal.health??100,C.gold]]);
     const products=Object.entries(spec.products||{}).map(([g,q])=>`${q}× ${ANIMAL_GOODS[g]?.label||GOODS[g]?.label||g}`).join(', ');
     if(products)p.kv('Recursos possíveis',products);
     p.buttons([

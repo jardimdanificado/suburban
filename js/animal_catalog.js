@@ -176,7 +176,7 @@ export const ANIMAL_SPECIES = Object.freeze({
 });
 
 export const ANIMAL_CLIPS = Object.freeze({
-  idle: [0, 1, 2, 3],
+  idle: [0],
   walk: [0, 1, 2, 3, 4, 5, 6, 7],
   eat: [0, 1, 2, 3, 4, 5],
   sleep: [0],

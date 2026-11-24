@@ -44,7 +44,7 @@ import { syncCityBuildings } from "./city_renderer_3d.js?v=street-graffiti-visib
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=head-flag-crown-1';
-import { CityAnimalModels } from './city_animal_models.js';
+import { CityAnimalModels } from './city_animal_models.js?v=fauna-motion-1';
 import { flagNightFactor } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1-canvas-readback-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainStoneSurface,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces,roadRailingAllowed} from './road_terrain_geometry.js?v=low-water-shore-4';
@@ -6133,7 +6133,7 @@ export class RCT3DRenderer {
         continue;
       }
       if (e.properties.cityAnimal) {
-        const size = r.size || 1, rad = Math.max(0.45, 0.55 * size), h = map ? this.getSurfaceElevation(map, e.x, e.y) : 1.0;
+        const size = e.properties.render?.size || 1, rad = Math.max(0.45, 0.55 * size), h = map ? this.getSurfaceElevation(map, e.x, e.y) : 1.0;
         const box = new THREE.Box3(new THREE.Vector3(e.x - rad, h, e.y - rad), new THREE.Vector3(e.x + rad, h + Math.max(0.7, 1.2 * size), e.y + rad));
         const hit = ray.intersectBox(box, new THREE.Vector3());
         if (hit) { const d = ray.origin.distanceTo(hit); if (d < closestDist) { closestDist = d; bestEntId = e.id; this.selectedCityUnitId = null; } }

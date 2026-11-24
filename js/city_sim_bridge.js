@@ -123,11 +123,11 @@ export class CitySimulationBridge {
     this.city = city; this.city.profileDiagnostics=profiling; this.entities = entities; this.time = time; this.changed = changed; this.notice = notice; this.noticeTarget = noticeTarget;
     this.graph = new CityStateGraph(); this.state = { city, entities, nextId };
     this.active = false; this.baselineReady = false; this.commandId = 0; this.pending = new Map(); this.restores = [];
-    this.motion = new Map();this.motionSamples=new Map();this.interiorMotion=new Map();this.vehicleMotion=new Map(); this.lastPositionUpdate = performance.now();
+    this.motion = new Map();this.motionSamples=new Map();this.interiorMotion=new Map();this.vehicleMotion=new Map();this.animalMotion=new Map(); this.lastPositionUpdate = performance.now();
     this.checkpointWaiters=new Map();this.checkpointId=0;this.exportWaiters=new Map();this.exportId=0;
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=game-approach-camera-9', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=fauna-motion-1', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', cityId:this.cityId, packet: this.graph.encode(this.state),profileDiagnostics:profiling,stateFeatures:{motionAck:true,fieldTailPatches:this.graph.supportsFieldTailPatches===true} });
@@ -268,6 +268,7 @@ export class CitySimulationBridge {
     for(const [id,sample] of this.motionSamples)if(sample.seen!==this.city._uiRevision)this.motionSamples.delete(id);
     applyBoatRiders(this.city,data.boatRiders);applyBoatTows(this.city,data.boatTows);applyFishing(this.city,data.fishing);applyBenchSeats(this.city,data.benchSeats);
     this.applyVehiclePositions(data.vehicles);
+    this.applyAnimalPositions(data.animals, now);
     this.changed({ terrain: terrainChanged, terrainTiles, entities: structureChanged });
     this.metrics={...this.metrics,...data.workerMetrics,encodeMs:data.workMs,applyMs:performance.now()-receiveStarted,changedNodes:data.packet.nodes.length,...(nodeKinds?{nodeKinds}:{}),newEvents:(data.packet.histories||[]).reduce((n,h)=>n+h.entries.length,0)};
     this.worker.postMessage({ type: 'ack', cityId:this.cityId });
@@ -305,6 +306,7 @@ export class CitySimulationBridge {
     receiveInteriorMotion(this,data.inside,now,this.time.paused);
     applyBoatRiders(this.city,data.boatRiders);applyBoatTows(this.city,data.boatTows);applyFishing(this.city,data.fishing);applyBenchSeats(this.city,data.benchSeats);
     this.applyVehiclePositions(data.vehicles);
+    this.applyAnimalPositions(data.animals, now);
   }
   applyVehiclePositions(positions,now=performance.now()) {
     if(!positions)return;
@@ -327,6 +329,33 @@ export class CitySimulationBridge {
     for(const id of this.vehicleMotion.keys())if(!live.has(id))this.vehicleMotion.delete(id);
     this.synchronizeRiders();
   }
+  applyAnimalPositions(positions, now = performance.now()) {
+    if (!positions || !this.city.fauna?.animals) return;
+    const states = ['idle', 'walk', 'eat', 'sleep', 'flee'];
+    const live = new Set();
+    for (let i = 0; i < positions.length; i += 5) {
+      const a = this.city.fauna.animals.get(positions[i]);
+      if (!a?.entity) continue;
+      live.add(a.id);
+      let motion = this.animalMotion.get(a.id);
+      if (!motion) { motion = { entity: a.entity, vehicle: a, to: { x: a.x, y: a.y } }; this.animalMotion.set(a.id, motion); }
+      motion.entity = a.entity; motion.vehicle = a;
+      const x = positions[i + 1], y = positions[i + 2], angle = positions[i + 3], code = positions[i + 4];
+      a.dead = code === 5;
+      a.state = a.dead ? 'sleep' : (states[code] || 'idle');
+      const moved = Math.hypot(x - (motion.to.x ?? x), y - (motion.to.y ?? y));
+      const reset = !motion.points?.length || this.time?.paused || this.motionOptions?.smoothMovement === false || moved >= 8;
+      motion.snap = this.motionOptions?.smoothMovement === false;
+      queueMotion(motion, x, y, now, { reset });
+      motion.points.at(-1).angle = angle; motion.points[0].angle ??= angle;
+      motion.targetAngle = angle;
+      const bufferedSpan = motion.points.length >= 2 ? Math.hypot(motion.points.at(-1).x - motion.points[0].x, motion.points.at(-1).y - motion.points[0].y) : 0;
+      a._renderMoving = !a.dead && (a.state === 'walk' || a.state === 'flee') && (moved > 0.001 || bufferedSpan > 0.005);
+      if (reset) { a.x = x; a.y = y; a.entity.x = x; a.entity.y = y; a.angle = angle; }
+      else { sampleVehicleMotion(motion, now); a.x = a.entity.x; a.y = a.entity.y; }
+    }
+    for (const id of this.animalMotion.keys()) if (!live.has(id)) this.animalMotion.delete(id);
+  }
   synchronizeRiders(){
     for(const v of this.city.vehicles?.units?.values()||[]){
       if(!v.entity)continue;
@@ -348,6 +377,7 @@ export class CitySimulationBridge {
       if(sampleCitizenMotion(this.city.world,motion,now,this.motionOptions?.smoothMovement!==false))this.motion.delete(motion.id);
     }
     if(!this.time.paused)for(const motion of this.vehicleMotion.values())if(!motion.snap)sampleVehicleMotion(motion,now);
+    if(!this.time.paused)for(const motion of this.animalMotion.values())if(!motion.snap){sampleVehicleMotion(motion,now);if(motion.vehicle){motion.vehicle.x=motion.entity.x;motion.vehicle.y=motion.entity.y;}}
     this.synchronizeRiders();
   }
   fail(message) {
@@ -361,8 +391,9 @@ export class CitySimulationBridge {
     this.city.lighting.siteBuckets=null;
     for (const motion of this.motion.values()) { motion.entity.x = motion.to.x; motion.entity.y = motion.to.y; }
     for(const motion of this.vehicleMotion.values()){motion.entity.x=motion.to.x;motion.entity.y=motion.to.y;if(motion.vehicle)motion.vehicle.angle=motion.targetAngle;}
+    for(const motion of this.animalMotion.values()){motion.entity.x=motion.to.x;motion.entity.y=motion.to.y;if(motion.vehicle)motion.vehicle.angle=motion.targetAngle;}
     for(const pending of this.pending.values())pending.resolve?.({ok:false,message:String(message)});
-    this.pending.clear(); this.motion.clear();this.motionSamples.clear();this.interiorMotion.clear();this.vehicleMotion.clear();
+    this.pending.clear(); this.motion.clear();this.motionSamples.clear();this.interiorMotion.clear();this.vehicleMotion.clear();this.animalMotion.clear();
     console.error('Simulação em segundo plano indisponível:', message);
     this.notice(wasRunning?`Simulação pausada após erro: ${String(message).split('\n')[0]}`:'Simulação em segundo plano indisponível; execução local ativada.');
   }

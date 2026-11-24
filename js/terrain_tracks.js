@@ -287,18 +287,19 @@ export class TerrainTracks {
     if(dt<=0)return;
     const stamps=[];
     for(const entity of entities){
-      const citizen=entity.properties?.citizen,vehicle=entity.properties?.cityVehicle;
-      if(!citizen&&!vehicle)continue;
+      const citizen=entity.properties?.citizen,vehicle=entity.properties?.cityVehicle,animal=entity.properties?.cityAnimal;
+      if(!citizen&&!vehicle&&!animal)continue;
       const elevated=citizen&&(citizen.skybridgeZ>0||citizen._renderIndoorPosition?.z>0||citizen.furnitureUse?.seated||citizen.furnitureUse?.pose==='lying');
-      if(entity.destroyed||citizen&&(citizen.ridingVehicleId||citizen.indoorLocation||elevated)||vehicle&&(vehicle.boatClass&&!vehicle.towedByVehicleId||vehicle.ferrying||vehicle.scrapped)) {this.motion.reset(entity);this.sandCarry.reset(entity);this.dirtCarry.reset(entity);continue;}
+      if(entity.destroyed||animal?.dead||citizen&&(citizen.ridingVehicleId||citizen.indoorLocation||elevated)||vehicle&&(vehicle.boatClass&&!vehicle.towedByVehicleId||vehicle.ferrying||vehicle.scrapped)) {this.motion.reset(entity);this.sandCarry.reset(entity);this.dirtCarry.reset(entity);continue;}
       const motion=citizen&&models?.motion?.get(entity),visible=motion&&Number.isFinite(motion.bodyX)&&Number.isFinite(motion.bodyZ)&&motion.bodyFrame===models.frameToken;
       const offset=offsets?.get(entity.id),x=visible?motion.bodyX:entity.x+(offset?.x||0),z=visible?motion.bodyZ:entity.y+(offset?.y||0);
       if(bounds&&(x<bounds.renderedMinTx-2||x>bounds.renderedMaxTx+2||z<bounds.renderedMinTy-2||z>bounds.renderedMaxTy+2)){this.motion.reset(entity);this.sandCarry.reset(entity);this.dirtCarry.reset(entity);continue;}
-      const angle=vehicle?vehicle.angle||0:motion?.renderAngle||0;
+      const angle=vehicle?vehicle.angle||0:animal?animal.angle||0:motion?.renderAngle||0;
       const previous=this.motion.history.get(entity);
       if(!previous||previous.vehicle!==(vehicle?.good||null)||this.time-previous.time>1||Math.hypot(x-previous.x,z-previous.z)>3){this.sandCarry.reset(entity);this.dirtCarry.reset(entity);}
       const dimensions=vehicle?.towedByVehicleId&&BOAT_HULL_DIMENSIONS[vehicle.boatClass],hull=dimensions?{width:dimensions.width*(vehicle.boatClass==='canoe'?1:BOAT_CLASSES[vehicle.boatClass].scale),length:dimensions.length*(vehicle.boatClass==='canoe'?1:BOAT_CLASSES[vehicle.boatClass].scale)}:null;
-      const contacts=this.motion.move(entity,{x,z,angle,vehicle:vehicle?.good||null,scale:motion?.bodySize||1,hull},this.time);
+      const scale=animal?Math.max(.35,(entity.properties.render?.size||.8)*.7):(motion?.bodySize||1);
+      const contacts=this.motion.move(entity,{x,z,angle,vehicle:vehicle?.good||null,scale,hull},this.time);
       stamps.push(...contacts);
       stamps.push(...this.sandCarry.contacts(entity,contacts,world));
       stamps.push(...this.dirtCarry.contacts(entity,contacts,world,[TILE_ROAD_GRASS,TILE_ROAD_HILL,TILE_FLOOR,TILE_HILL],'dirt',

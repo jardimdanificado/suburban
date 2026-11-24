@@ -143,19 +143,21 @@ test('CityAnimalModels loads OBJ frames and batches visible animals', async () =
   });
   const ok = await models.loading;
   assert.equal(ok, true);
-  assert.equal(models.frames.size, 456);
+  assert.equal(models.frames.size, 384);
 
   const world = createWorld(24, 24, 0);
   const city = createMockCity(world);
-  const cow = city.fauna.spawn(8, 8, 'vaca');
+  const cow = city.fauna.spawn(8, 8, 'vaca', { hunger: 95 });
   assert.ok(cow.entity.properties.brain?.animal);
   cow.state = 'walk';
+  cow.stateTimer = 2;
   cow.targetX = 12;
   cow.targetY = 8;
   const startX = cow.x;
   city.fauna.update(0.5);
   assert.ok(cow.x > startX, 'update(dt) should move walking animal smoothly');
-  assert.equal(animalAnimation(cow), 'walk');
+  assert.equal(animalAnimation(cow, true), 'walk');
+  assert.equal(animalAnimation(cow, false), 'idle');
   assert.equal(animalFrame('walk', 0).clip, 'walk');
 
   models.begin(0.016, 1);
@@ -191,4 +193,50 @@ test('ranches spawn livestock, feed restores hunger, and hunting harvests produc
   assert.equal(deer.dead, true);
   assert.ok(hunter.inventory.carne_caca > 0);
   assert.ok(hunter.inventory.couro > 0);
+});
+
+test('CitySimulationBridge smoothly interpolates animal motion between worker packets', async () => {
+  const { CitySimulationBridge } = await import('../js/city_sim_bridge.js');
+  const world = createWorld(32, 32, 0);
+  const city = createMockCity(world);
+  const cow = city.fauna.spawn(10, 10, 'vaca');
+  const bridge = new CitySimulationBridge({ city, entities: city.entities, nextId: 100, time: { paused: false } });
+
+  // Packet 1 at t=1000, Packet 2 at t=1100, Packet 3 at t=1200
+  bridge.applyAnimalPositions(new Float64Array([cow.id, 10, 10, 0, 1]), 1000);
+  bridge.applyAnimalPositions(new Float64Array([cow.id, 11, 10, 0, 1]), 1100);
+  bridge.applyAnimalPositions(new Float64Array([cow.id, 12, 10, 0, 1]), 1200);
+
+  // Sample at t=1230 (buffer target = 1050 -> halfway between 10 and 11)
+  bridge.interpolate(1230);
+  assert.ok(cow.entity.x > 10.1 && cow.entity.x < 10.9, `expected smooth mid-segment x, got ${cow.entity.x}`);
+  assert.equal(cow._renderMoving, true);
+});
+
+test('animals die from starvation, decay, and omnivores forage', () => {
+  const world = createWorld(32, 32, 0);
+  const city = createMockCity(world);
+  const pig = city.fauna.spawn(10, 10, 'porco', { hunger: 50 });
+  const starving = city.fauna.spawn(14, 14, 'veado', { hunger: 0 });
+  starving.health = 5;
+  starving.stateTimer = 10;
+
+  city.minute++;
+  city.fauna.updateMinute();
+  city.minute++;
+  city.fauna.updateMinute();
+  assert.equal(starving.dead, true);
+  assert.equal(starving.action, 'Morto por inanição');
+
+  city.minute += 120;
+  city.fauna.updateMinute();
+  assert.equal(starving.entity.destroyed, true);
+  assert.equal(city.fauna.animals.has(starving.id), false);
+
+  // Omnivore foraging restores hunger
+  pig.state = 'eat';
+  pig.stateTimer = 3;
+  const before = pig.hunger;
+  city.fauna.update(0.25);
+  assert.ok(pig.hunger > before, 'eating should restore hunger');
 });
