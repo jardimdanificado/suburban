@@ -34,7 +34,7 @@ export function cachedConstructionFootprint(owner,development){
 // Parks, quarries and mines keep their natural lawn. Other built lots clear their footprint;
 // office tenants share the enclosing tower's footprint instead of adding one.
 export function buildingClearsGrass(building) {
-  return !!building.entity&&!building.entity.destroyed&&!['park','quarry','iron_mine'].includes(building.type)&&!building.officeTenantOf;
+  return !!building.entity&&!building.entity.destroyed&&!['park','quarry','iron_mine','cattle_ranch','dairy_farm','sheep_farm','pig_farm','poultry','hay_farm'].includes(building.type)&&!building.officeTenantOf;
 }
 export function grassExclusionSignature(buildings) {
   return buildings.filter(buildingClearsGrass).map(b=>`${b.id??''}:${b.type}:${b.entity.x},${b.entity.y},${b.width},${b.depth}`).sort().join(';');

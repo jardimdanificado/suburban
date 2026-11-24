@@ -240,3 +240,25 @@ test('animals die from starvation, decay, and omnivores forage', () => {
   city.fauna.update(0.25);
   assert.ok(pig.hunger > before, 'eating should restore hunger');
 });
+
+test('pastures preserve grass and grazed cells clear temporarily then regrow', async () => {
+  const { buildingClearsGrass } = await import('../js/city_site_footprints.js');
+  const world = createWorld(32, 32, 0);
+  const city = createMockCity(world);
+  const ranch = { id: 200, type: 'cattle_ranch', active: true, width: 7, depth: 7, door: { x: 10, y: 10 }, entity: { x: 10, y: 10, destroyed: false }, units: [{}], inventory: {} };
+  assert.equal(buildingClearsGrass(ranch), false, 'pastures must keep grass');
+  city.buildings = [ranch];
+  city.fauna.syncRanches();
+  const herd = [...city.fauna.animals.values()].filter(a => a.buildingId === ranch.id);
+  assert.ok(herd.length >= 2);
+  for (const a of herd) {
+    assert.ok(a.x >= 10 && a.x <= 17 && a.y >= 10 && a.y <= 17, 'ranch animals should spawn inside pasture');
+  }
+
+  city.fauna.grazeCell(12, 12, 90);
+  assert.equal(city.fauna.grazedTiles.has('12,12'), true);
+  assert.ok(city.fauna.grazeRevision > 0);
+  city.minute += 90;
+  city.fauna.updateMinute();
+  assert.equal(city.fauna.grazedTiles.has('12,12'), false, 'grazed grass should regrow after 90 minutes');
+});

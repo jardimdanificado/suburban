@@ -781,7 +781,8 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
     group = new THREE.Group(); group.userData.signature = signature;
     addBuildingDetails(THREE,group,b,{outdoor:true,ground:surfaceElevation(world,entity.x+b.width/2,entity.y+b.depth/2)});
     const patches = new THREE.InstancedMesh(new THREE.BoxGeometry(.94, .045, .94), new THREE.MeshLambertMaterial({ color: b.type === 'quarry' ? 0x94988d : b.type==='farm'?0x795c3d:['market','greengrocer'].includes(b.type)?0xb5a68d:0x6e7940 }), b.units.length);
-    patches.receiveShadow = true;if(['bike_rack','park'].includes(b.type))patches.visible=false;group.add(patches); group.userData.patches = patches;
+    const pasture=['cattle_ranch','dairy_farm','sheep_farm','pig_farm','poultry','hay_farm'].includes(b.type);
+    patches.receiveShadow = true;if(['bike_rack','park'].includes(b.type)||pasture)patches.visible=false;group.add(patches); group.userData.patches = patches;
     if(b.type==='farm'){patches.visible=false;const cropPlants=createFarmPlants(THREE,b);group.add(cropPlants.group);group.userData.cropPlants=cropPlants;}
     if(b.type==='quarry'||OPEN_PIT_MINES.has(b.type)){
       patches.visible=false;
@@ -800,7 +801,23 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
       const rope=new THREE.Mesh(new THREE.CylinderGeometry(.018,.018,.86,5),iron);rope.position.set(x,ground+.9,z);hoist.add(rope);
       for(const object of hoist.children){object.castShadow=true;object.receiveShadow=true;}group.add(hoist);
     }
-    if(['farm','park'].includes(b.type))addFarmFence(THREE,group,b,world,HOUSE_STYLES[architectureFor(b.type,b.id,world.seed??0)]||HOUSE_STYLES.modern);
+    if(['farm','park'].includes(b.type)||pasture)addFarmFence(THREE,group,b,world,HOUSE_STYLES[architectureFor(b.type,b.id,world.seed??0)]||HOUSE_STYLES.modern);
+    if(pasture){
+      const woodMat=new THREE.MeshLambertMaterial({color:0x6d4c32}),hayMat=new THREE.MeshLambertMaterial({color:0xd9b85b}),stoneMat=new THREE.MeshLambertMaterial({color:0x7e837e}),waterMat=new THREE.MeshLambertMaterial({color:0x3d8fb8});
+      const fx=Math.max(1.2,b.width*.28),fz=Math.max(1.2,b.depth*.32),fh=surfaceElevation(world,entity.x+fx,entity.y+fz);
+      // Comedouro (feed trough with hay/feed)
+      const feeder=new THREE.Group();
+      for(const dx of [-.55,.55]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.1,.42,.56),woodMat);leg.position.set(dx,.21,0);feeder.add(leg);}
+      const trough=new THREE.Mesh(new THREE.BoxGeometry(1.35,.26,.54),woodMat);trough.position.set(0,.42,0);feeder.add(trough);
+      const hay=new THREE.Mesh(new THREE.BoxGeometry(1.2,.16,.42),hayMat);hay.position.set(0,.53,0);feeder.add(hay);
+      feeder.position.set(fx,fh,fz);feeder.traverse(o=>{o.castShadow=true;o.receiveShadow=true;});group.add(feeder);
+      // Bebedouro / cocho (water trough)
+      const wx=Math.max(1.2,b.width*.72),wz=Math.max(1.2,b.depth*.68),wh=surfaceElevation(world,entity.x+wx,entity.y+wz);
+      const drinker=new THREE.Group();
+      const basin=new THREE.Mesh(new THREE.BoxGeometry(1.25,.38,.62),stoneMat);basin.position.set(0,.19,0);drinker.add(basin);
+      const water=new THREE.Mesh(new THREE.BoxGeometry(1.06,.08,.44),waterMat);water.position.set(0,.36,0);drinker.add(water);
+      drinker.position.set(wx,wh,wz);drinker.traverse(o=>{o.castShadow=true;o.receiveShadow=true;});group.add(drinker);
+    }
     if(['market','greengrocer'].includes(b.type)){const fixtures=marketFixtures(THREE,b);group.add(fixtures);group.userData.retailFixtures=fixtures;}
     if(b.type==='bike_rack'){
       const metal=new THREE.MeshLambertMaterial({color:0x89999e});

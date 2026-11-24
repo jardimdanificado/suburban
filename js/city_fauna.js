@@ -36,10 +36,23 @@ export class CityFauna {
   constructor(city) {
     this.city = city;
     this.animals = new Map();
+    this.grazedTiles = new Map();
+    this.grazeRevision = 0;
     this.nextAnimalId = 1;
   }
 
-  canOccupy(x, y, species) {
+  grazeCell(tx, ty, duration = 90) {
+    const key = `${tx},${ty}`;
+    const due = this.city.minute + duration;
+    if (!this.grazedTiles.has(key)) {
+      this.grazedTiles.set(key, due);
+      this.grazeRevision++;
+    } else {
+      this.grazedTiles.set(key, due);
+    }
+  }
+
+  canOccupy(x, y, species, buildingId = null) {
     const spec = ANIMAL_SPECIES[species];
     if (!spec) return false;
     const city = this.city, world = city.world;
@@ -50,7 +63,7 @@ export class CityFauna {
     if (ROAD_TILES.has(tile) || world.hasSidewalk?.(ix, iy)) return false;
     const key = `${ix},${iy}`;
     if (city.occupied?.has(key)) return false;
-    if (city.development?.plots?.some(p => ix >= p.x && ix < p.x + p.width && iy >= p.y && iy < p.y + p.depth)) return false;
+    if (city.development?.plots?.some(p => (buildingId == null || p.buildingId !== buildingId) && ix >= p.x && ix < p.x + p.width && iy >= p.y && iy < p.y + p.depth)) return false;
     return true;
   }
 
@@ -77,7 +90,7 @@ export class CityFauna {
   spawn(x, y, species, options = {}) {
     const spec = ANIMAL_SPECIES[species];
     if (!spec) return null;
-    if (!options.force && !this.canOccupy(x, y, species)) return null;
+    if (!options.force && !this.canOccupy(x, y, species, options.buildingId ?? null)) return null;
     if (!options.livestock && this.wildCount() >= FAUNA_RULES.maxWildAnimals) return null;
 
     const city = this.city;
@@ -148,12 +161,17 @@ export class CityFauna {
   findGrazeSpot(animal) {
     const spec = ANIMAL_SPECIES[animal.species];
     if (!spec?.grazesGrass) return null;
+    const ranch = animal.buildingId != null ? this.city.building?.(animal.buildingId) : null;
     const cx = Math.floor(animal.x), cy = Math.floor(animal.y);
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const tx = cx + Math.floor(Math.random() * 7) - 3;
-      const ty = cy + Math.floor(Math.random() * 7) - 3;
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const tx = ranch
+        ? Math.floor(ranch.entity.x + 0.5 + Math.random() * Math.max(1, ranch.width - 1))
+        : cx + Math.floor(Math.random() * 7) - 3;
+      const ty = ranch
+        ? Math.floor(ranch.entity.y + 0.5 + Math.random() * Math.max(1, ranch.depth - 1))
+        : cy + Math.floor(Math.random() * 7) - 3;
       const tile = tileAt(this.city.world, tx, ty);
-      if ((tile === 0 || tile === 9) && this.canOccupy(tx, ty, animal.species)) {
+      if ((tile === 0 || tile === 9) && !this.grazedTiles.has(`${tx},${ty}`) && this.canOccupy(tx, ty, animal.species, animal.buildingId)) {
         return { x: tx + 0.5, y: ty + 0.5 };
       }
     }
@@ -186,7 +204,7 @@ export class CityFauna {
       const a = baseAngle + offset;
       const nx = animal.x + Math.sin(a) * step;
       const ny = animal.y + Math.cos(a) * step;
-      if (this.canOccupy(nx, ny, animal.species)) {
+      if (this.canOccupy(nx, ny, animal.species, animal.buildingId)) {
         animal.x = nx;
         animal.y = ny;
         animal.entity.x = nx;
@@ -203,14 +221,15 @@ export class CityFauna {
   findRoamTarget(animal) {
     const spec = ANIMAL_SPECIES[animal.species];
     const ranch = animal.buildingId != null ? this.city.building?.(animal.buildingId) : null;
-    const anchorX = ranch ? (ranch.door?.x ?? ranch.entity.x) : animal.x;
-    const anchorY = ranch ? (ranch.door?.y ?? ranch.entity.y) : animal.y;
-    const maxR = ranch ? FAUNA_RULES.ranchRadius : 9;
     for (let attempt = 0; attempt < 12; attempt++) {
-      const tx = Math.floor(anchorX) + Math.floor(Math.random() * (maxR * 2 + 1)) - maxR + 0.5;
-      const ty = Math.floor(anchorY) + Math.floor(Math.random() * (maxR * 2 + 1)) - maxR + 0.5;
-      if (Math.hypot(tx - animal.x, ty - animal.y) < 1.5) continue;
-      if (spec.nearWater ? this.matchesHabitat(Math.floor(tx), Math.floor(ty), animal.species) : this.canOccupy(tx, ty, animal.species)) {
+      const tx = ranch
+        ? ranch.entity.x + 0.6 + Math.random() * Math.max(1, ranch.width - 1.2)
+        : Math.floor(animal.x) + Math.floor(Math.random() * 19) - 9 + 0.5;
+      const ty = ranch
+        ? ranch.entity.y + 0.6 + Math.random() * Math.max(1, ranch.depth - 1.2)
+        : Math.floor(animal.y) + Math.floor(Math.random() * 19) - 9 + 0.5;
+      if (Math.hypot(tx - animal.x, ty - animal.y) < 1.2) continue;
+      if (spec.nearWater ? this.matchesHabitat(Math.floor(tx), Math.floor(ty), animal.species) : this.canOccupy(tx, ty, animal.species, animal.buildingId)) {
         return { x: tx, y: ty };
       }
     }
@@ -299,9 +318,10 @@ export class CityFauna {
 
     // 4. Graze grass or forage for non-predators
     if (spec.temperament !== 'predator' && animal.hunger < 82) {
-      const tile = tileAt(this.city.world, Math.floor(animal.x), Math.floor(animal.y));
+      const tx = Math.floor(animal.x), ty = Math.floor(animal.y), tile = tileAt(this.city.world, tx, ty);
       if (spec.grazesGrass) {
-        if ((tile === 0 || tile === 9) && Math.random() < 0.65) {
+        if ((tile === 0 || tile === 9) && !this.grazedTiles.has(`${tx},${ty}`) && Math.random() < 0.65) {
+          this.grazeCell(tx, ty);
           animal.state = 'eat';
           animal.action = 'Pastando grama';
           animal.targetX = null;
@@ -390,13 +410,12 @@ export class CityFauna {
       for (const a of this.animals.values()) {
         if (!a.dead && !a.entity?.destroyed && a.buildingId === b.id) count++;
       }
-      const target = Math.min(4, Math.max(2, (b.units?.length || 1) * 2));
-      const bx = b.door?.x ?? b.entity.x;
-      const by = b.door?.y ?? b.entity.y;
-      for (let attempt = 0; attempt < 16 && count < target; attempt++) {
+      const target = Math.min(6, Math.max(2, Math.floor(((b.width || 4) * (b.depth || 4)) / 8)));
+      const bx = b.entity.x, by = b.entity.y, bw = Math.max(2, b.width || 4), bd = Math.max(2, b.depth || 4);
+      for (let attempt = 0; attempt < 20 && count < target; attempt++) {
         const species = speciesList[count % speciesList.length];
-        const x = Math.floor(bx) + Math.floor(Math.random() * 5) - 2;
-        const y = Math.floor(by) + Math.floor(Math.random() * 5) - 2;
+        const x = Math.floor(bx + 0.5 + Math.random() * (bw - 1));
+        const y = Math.floor(by + 0.5 + Math.random() * (bd - 1));
         if (this.spawn(x, y, species, { livestock: true, buildingId: b.id })) count++;
       }
     }
@@ -451,6 +470,12 @@ export class CityFauna {
   updateMinute() {
     const minute = this.city.minute;
     if (minute % 15 === 0) this.syncRanches();
+    for (const [key, due] of this.grazedTiles) {
+      if (minute >= due) {
+        this.grazedTiles.delete(key);
+        this.grazeRevision++;
+      }
+    }
     const hour = Math.floor((minute % 1440) / 60);
     const isNight = hour >= 22 || hour < 5;
 

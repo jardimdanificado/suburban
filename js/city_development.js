@@ -470,13 +470,13 @@ export class CityDevelopment {
     if (!p || p.ownerId !== accountId || p.projectId || !Number.isSafeInteger(price) || price < 1 || !Number.isSafeInteger(rent) || rent < 0) return false;
     Object.assign(p, { price, rent, forSale: p.ownerId === 'treasury' || !!forSale, forRent: p.ownerId !== 'treasury' && !!forRent }); return true;
   }
-  beginProject(accountId, plotId, type, { kind = ['farm','quarry','iron_mine','bauxite_mine','park','bike_rack'].includes(type) ? 'open-air' : 'building', floors = null, crop = null, sell = false, width = null, depth = null, builderId = null, selfBuild = false, priority = 0, micro = false, rotation = null } = {}) {
+  beginProject(accountId, plotId, type, { kind = ['farm','quarry','iron_mine','bauxite_mine','park','bike_rack','cattle_ranch','dairy_farm','sheep_farm','pig_farm','poultry','hay_farm'].includes(type) ? 'open-air' : 'building', floors = null, crop = null, sell = false, width = null, depth = null, builderId = null, selfBuild = false, priority = 0, micro = false, rotation = null } = {}) {
     if(OFFICE_ONLY_TYPES.has(type))return this.city.fail('Esta atividade precisa ocupar um andar em um empresarial.');
     const city = this.city, p = this.plots.find(p => p.id === plotId), owner = this.clientCitizen(accountId);
     if(type==='farm'&&kind==='building'&&!canFarmVertically(crop))return city.fail('Árvores e palmeiras precisam de cultivo ao ar livre.');
     const autoFloors=floors===null;
     floors ??= ['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing','office_tower'].includes(type)?3:businessFloors(type,plotId);
-    if ((kind === 'open-air' && !['farm', 'quarry','iron_mine','bauxite_mine', 'park', 'bike_rack', 'leisure', 'greengrocer'].includes(type)) || !p || p.ownerId !== accountId || p.buildingId || p.projectId || !owner || !city.buildingTypes[type] || !['open-air', 'building'].includes(kind) || !Number.isInteger(floors) || floors < 1 || floors > 8 || (type === 'farm' && (!city.economy.crops[crop] || kind==='building'&&!canFarmVertically(crop)))) return null;
+    if ((kind === 'open-air' && !['farm', 'quarry','iron_mine','bauxite_mine', 'park', 'bike_rack', 'leisure', 'greengrocer','cattle_ranch','dairy_farm','sheep_farm','pig_farm','poultry','hay_farm'].includes(type)) || !p || p.ownerId !== accountId || p.buildingId || p.projectId || !owner || !city.buildingTypes[type] || !['open-air', 'building'].includes(kind) || !Number.isInteger(floors) || floors < 1 || floors > 8 || (type === 'farm' && (!city.economy.crops[crop] || kind==='building'&&!canFarmVertically(crop)))) return null;
     width ??= p.width; depth ??= p.depth;
     if(width*depth<MIN_PLOT_CELLS||p.width*p.depth<MIN_PLOT_CELLS)return city.fail('Terrenos e prédios precisam de pelo menos 4 células de área.');
     if ((p.type === 'quarry' && !['quarry','iron_mine','bauxite_mine'].includes(type)) || (p.type==='farm' && type!=='farm')) return null;

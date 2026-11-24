@@ -6845,11 +6845,12 @@ export class RCT3DRenderer {
     }
     const footprint=cachedConstructionFootprint(this,this.cityDevelopment),siteCells=footprint.cells;
     const groundPaint=(city?.justice?.art||[]).filter(piece=>!piece.entity.destroyed&&piece.support?.kind==='street-graffiti'&&piece.support.surface==='ground').map(piece=>`${piece.support.tileX},${piece.support.tileY}`).sort();
-    const grassSignature=`${this._terrainFarmSignatureCache.grassValue}|sites:${footprint.signature}|paint:${groundPaint.join(';')}`;
+    const grassSignature=`${this._terrainFarmSignatureCache.grassValue}|sites:${footprint.signature}|paint:${groundPaint.join(';')}|graze:${city?.fauna?.grazeRevision||0}`;
     if(this._grassCoverageCity!==city||this._grassCoverageSignature!==grassSignature){
       this._grassCoverageCity=city;this._grassCoverageSignature=grassSignature;
       this._grassExclusionCells=grassExclusionCells(city?.buildings||[],siteCells);
       for(const cell of groundPaint)this._grassExclusionCells.add(cell);
+      for(const cell of city?.fauna?.grazedTiles?.keys?.()||[])this._grassExclusionCells.add(cell);
       this._farmSoilCells=grassExclusionCells((city?.buildings||[]).filter(b=>b.type==='farm'&&b.constructionKind!=='building'),[]);
       this._grassChunkSignatures=null;this._farmChunkSignatures=null;
     }

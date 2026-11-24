@@ -703,15 +703,15 @@ export class CitySimulation {
     if(removed)this.cardboardRevision=(this.cardboardRevision||0)+1;
     return removed;
   }
-  addBuilding(type, x, y, { width, depth, floors, free = false, plotId = null, ownerAccountId = 'treasury', crop = null, kind = ['farm','quarry','iron_mine','bauxite_mine','park','bike_rack'].includes(type) ? 'open-air' : 'building', materialSource = null, rotation = null } = {}) {
+  addBuilding(type, x, y, { width, depth, floors, free = false, plotId = null, ownerAccountId = 'treasury', crop = null, kind = ['farm','quarry','iron_mine','bauxite_mine','park','bike_rack','cattle_ranch','dairy_farm','sheep_farm','pig_farm','poultry','hay_farm'].includes(type) ? 'open-air' : 'building', materialSource = null, rotation = null } = {}) {
     if(OFFICE_ONLY_TYPES.has(type)&&!free)return this.fail('Esta atividade precisa ocupar um andar em um empresarial.');
     const spec = BUILDING_TYPES[type];
     if (['quarry','iron_mine','bauxite_mine'].includes(type) && this.world.map && !quarryDeposits(this.world, x, y, width || 4, depth || 4).length) return this.fail('A mina precisa ter uma tile de rocha preta adjacente.');
     if (!spec) return this.fail('Tipo de prédio inválido.');
-    if (!['open-air', 'building'].includes(kind) || (kind === 'open-air' && !['farm', 'quarry','iron_mine','bauxite_mine', 'park', 'bike_rack', 'leisure', 'greengrocer'].includes(type))) return this.fail('Tipo de ocupação incompatível com esta construção.');
+    if (!['open-air', 'building'].includes(kind) || (kind === 'open-air' && !['farm', 'quarry','iron_mine','bauxite_mine', 'park', 'bike_rack', 'leisure', 'greengrocer','cattle_ranch','dairy_farm','sheep_farm','pig_farm','poultry','hay_farm'].includes(type))) return this.fail('Tipo de ocupação incompatível com esta construção.');
     if(type==='farm'&&kind==='building'&&!canFarmVertically(crop))return this.fail('Fazendas verticais não aceitam árvores ou palmeiras. Escolha uma cultura de pequeno porte.');
-    width ??= type === 'farm' && kind==='open-air' ? 10 : 3 + Math.floor(this.random() * 3);
-    depth ??= type === 'farm' && kind==='open-air' ? 10 : 3 + Math.floor(this.random() * 2);
+    width ??= type === 'farm' && kind==='open-air' ? 10 : ['cattle_ranch','dairy_farm','sheep_farm','pig_farm','poultry','hay_farm'].includes(type) ? 7 : 3 + Math.floor(this.random() * 3);
+    depth ??= type === 'farm' && kind==='open-air' ? 10 : ['cattle_ranch','dairy_farm','sheep_farm','pig_farm','poultry','hay_farm'].includes(type) ? 7 : 3 + Math.floor(this.random() * 2);
     floors ??= 2 + Math.floor(this.random() * 4);
     if (![x, y, width, depth, floors].every(Number.isInteger) || width < 1 || depth < 1 || width*depth<MIN_PLOT_CELLS || floors < 1 || width > 20 || depth > 20 || (kind === 'building' && width*depth > 64) || floors > 12) return this.fail('Área mínima de 4 células (2×2, 4×1 ou 1×4). Limites: lados de até 20 células, 64 células por andar em edifícios, 20×20 ao ar livre e 12 andares.');
     if (kind === 'open-air') floors = 1;
