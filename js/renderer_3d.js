@@ -45,6 +45,7 @@ import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=head-flag-crown-1';
 import { CityAnimalModels } from './city_animal_models.js?v=fauna-motion-1';
+import { syncBirdNests } from './city_bird_nests.js';
 import { flagNightFactor } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1-canvas-readback-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainStoneSurface,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces,roadRailingAllowed} from './road_terrain_geometry.js?v=low-water-shore-4';
@@ -6850,7 +6851,7 @@ export class RCT3DRenderer {
       this._grassCoverageCity=city;this._grassCoverageSignature=grassSignature;
       this._grassExclusionCells=grassExclusionCells(city?.buildings||[],siteCells);
       for(const cell of groundPaint)this._grassExclusionCells.add(cell);
-      for(const cell of city?.fauna?.grazedTiles?.keys?.()||[])this._grassExclusionCells.add(cell);
+      this._grazedCircles=[...(city?.fauna?.grazedTiles?.values?.()||[])].filter(p=>p&&Number.isFinite(p.x));
       this._farmSoilCells=grassExclusionCells((city?.buildings||[]).filter(b=>b.type==='farm'&&b.constructionKind!=='building'),[]);
       this._grassChunkSignatures=null;this._farmChunkSignatures=null;
     }
@@ -7596,7 +7597,7 @@ export class RCT3DRenderer {
         if (zoomDetail.grassAxis&&(matKey === String(TILE_FLOOR) || matKey === String(TILE_HILL))) {
           const materialKey=matKey===String(TILE_HILL)?'volumetricHillGrass':'volumetricGrass';
           if(this.terrainOptimizationsEnabled===false||this._terrainSynchronousBuild){
-            const grass=createVolumetricGrassMesh(THREE,geom,this.materials[materialKey],{excludedCells:this._grassExclusionCells,materialKey,bladesPerAxis:zoomDetail.grassAxis});
+            const grass=createVolumetricGrassMesh(THREE,geom,this.materials[materialKey],{excludedCells:this._grassExclusionCells,excludedCircles:this._grazedCircles,materialKey,bladesPerAxis:zoomDetail.grassAxis});
             tintGrass(grass);chunk.terrain.add(grass);
             if(zoomDetail.smallDetails){const details=createGrassDetailsMesh(THREE,grass,this.materials.grassDetails);if(details)chunk.terrain.add(details);}
           }else{
@@ -7623,9 +7624,9 @@ export class RCT3DRenderer {
           const rootKey=`${minTx},${maxTx},${minTy},${maxTy}:${materialKey}:${signature}`;
           const rootChunkKey=`${Math.floor(minTx/this.terrainChunkSize)},${Math.floor(minTy/this.terrainChunkSize)}`;
           const tint=tintGrass({material:grassMaterial,geometry:{getAttribute:key=>key==='grassRoot'?{count:0}:{}},userData:{}});
-          const ready=jobs.request(world,rootKey,geom,this._grassExclusionCells,zoomDetail.grassAxis,()=>!chunk.disposed,install,()=>this.visibleTerrainChunkKeys.has(rootChunkKey)?1:0,{details:zoomDetail.smallDetails,tint});
+          const ready=jobs.request(world,rootKey,geom,this._grassExclusionCells,zoomDetail.grassAxis,()=>!chunk.disposed,install,()=>this.visibleTerrainChunkKeys.has(rootChunkKey)?1:0,{details:zoomDetail.smallDetails,tint,excludedCircles:this._grazedCircles});
           if(!ready)chunk.pendingRoots=(chunk.pendingRoots||0)+1;
-          grass=createVolumetricGrassMesh(THREE,geom,this.materials[materialKey],{excludedCells:this._grassExclusionCells,materialKey,bladesPerAxis:zoomDetail.grassAxis,rootData:ready??emptyRoots});
+          grass=createVolumetricGrassMesh(THREE,geom,this.materials[materialKey],{excludedCells:this._grassExclusionCells,excludedCircles:this._grazedCircles,materialKey,bladesPerAxis:zoomDetail.grassAxis,rootData:ready??emptyRoots});
           if(!ready?.tints)tintGrass(grass);chunk.terrain.add(grass);
           if(ready&&zoomDetail.smallDetails){const details=createGrassDetailsMesh(THREE,grass,this.materials.grassDetails,ready.details);if(details)chunk.terrain.add(details);}
           }
@@ -8799,7 +8800,7 @@ export class RCT3DRenderer {
         citizenModelOptions.indoorBounds=interiorBuilding&&interiorBuilding.constructionKind!=='open-air'?{minX:interiorBuilding.entity.x,maxX:interiorBuilding.entity.x+interiorBuilding.width,minY:interiorBuilding.entity.y,maxY:interiorBuilding.entity.y+interiorBuilding.depth}:null;
         const animal=e.properties?.cityAnimal;
         const ax=Math.floor(e.x),ay=Math.floor(e.y),animalTile=animal&&world?(world.getTile?world.getTile(ax,ay):world.map?.[ay]?.[ax]):null;
-        const animalSurfaceH=animal&&animalTile===TILE_WATER?Math.max(surfaceH,WATER_LEVEL-(animal.species==='jacare'?.08:.02)):surfaceH;
+        const animalSurfaceH=(animal&&animalTile===TILE_WATER?Math.max(surfaceH,WATER_LEVEL-(animal.species==='jacare'?.08:.02)):surfaceH)+(animal?.altitude||0);
         const modelRendered=(cityCitizen&&this.cityCitizenModels.add(e,surfaceH,citizenModelOptions))||(animal&&this.cityAnimalModels.add(e,animalSurfaceH,{perspective:perspectiveActive,selected:this.selectedEntityId===e.id}));
         if(modelRendered){
           activeIds.add(e.id);const previous=this.entitySprites.get(e.id);if(previous)previous.visible=false;
@@ -9447,6 +9448,7 @@ export class RCT3DRenderer {
     this.cityCitizenBatches.end();
     this.cityCitizenModels.end();
     this.cityAnimalModels.end();
+    syncBirdNests(THREE,this,this.cityDevelopment?.city?.fauna,map);
     syncSubstanceSmoke(THREE,this,this.cityDevelopment?.city,time);
     syncConstructionDust(THREE,this,this.cityDevelopment,time,this.graphicOptions.dust!==false);
     // Clean inactive dynamic billboards

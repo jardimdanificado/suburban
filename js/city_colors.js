@@ -39,3 +39,19 @@ export function colorAffinity(c,value){
 export function favoriteColors(c){initializeColors(c);return [...COLOR_PALETTE].sort((a,b)=>colorAffinity(c,b.hex)-colorAffinity(c,a.hex));}
 export function factoryColors(b){return b.paintPalette??=Array.from({length:4},(_,i)=>COLOR_PALETTE[(Math.imul(b.id+7,13)+i*7)%COLOR_PALETTE.length].hex);}
 export function buildingColor(b){return b?.wallColor??b?.architectureColor??b?.color;}
+export function pickGraffitiColor(c,random=Math.random){
+ if(!c)return 0x222128;
+ const ranked=favoriteColors(c),pool=ranked.slice(0,Math.min(5,ranked.length));
+ const chosen=pool[Math.floor(random()*pool.length)]||ranked[0];
+ if(!chosen?.hex)return 0x222128;
+ const base=rgb(chosen.hex);
+ // Allow any RGB tint near the tagger's preferred hue without falling into disliked shades.
+ for(let attempt=0;attempt<4;attempt++){
+  const r=Math.max(0,Math.min(255,base[0]+Math.round((random()-.5)*48)));
+  const g=Math.max(0,Math.min(255,base[1]+Math.round((random()-.5)*48)));
+  const b=Math.max(0,Math.min(255,base[2]+Math.round((random()-.5)*48)));
+  const intColor=(r<<16)|(g<<8)|b;
+  if(!dislikesColor(c,`#${intColor.toString(16).padStart(6,'0')}`))return intColor;
+ }
+ return parseInt(chosen.hex.slice(1),16);
+}

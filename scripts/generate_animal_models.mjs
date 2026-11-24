@@ -186,6 +186,8 @@ function buildQuadruped(spec, p) {
     jaguar: { rx: 0.21, ry: 0.2, bl: 1.04, lh: 0.46, lr: 0.055, nr: 0.12, nl: 0.24, hr: 0.14, hl: 0.26, sr: 0.085, sl: 0.14, ears: 'cat', tail: 0.68 },
     maned_wolf: { rx: 0.17, ry: 0.18, bl: 0.86, lh: 0.64, lr: 0.04, nr: 0.1, nl: 0.34, hr: 0.11, hl: 0.26, sr: 0.06, sl: 0.2, ears: 'tall', mane: true, tail: 0.44 },
     rabbit: { rx: 0.13, ry: 0.12, bl: 0.4, lh: 0.14, lr: 0.032, nr: 0.075, nl: 0.12, hr: 0.09, hl: 0.16, sr: 0.05, sl: 0.08, ears: 'rabbit', tail: 0.09 },
+    coati: { rx: 0.15, ry: 0.14, bl: 0.62, lh: 0.22, lr: 0.036, nr: 0.09, nl: 0.18, hr: 0.1, hl: 0.22, sr: 0.045, sl: 0.18, ears: 'cat', tail: 0.56 },
+    iguana: { rx: 0.14, ry: 0.11, bl: 0.72, lh: 0.16, lr: 0.032, nr: 0.08, nl: 0.16, hr: 0.095, hl: 0.2, sr: 0.055, sl: 0.12, tail: 0.75 },
   };
   const c = configs[spec.bodyPlan] || configs.bovine;
   const bodyY = (p.sleep ? c.ry * 0.95 : c.lh + c.ry * 0.85) + p.bob;
@@ -285,6 +287,15 @@ function buildBird(spec, p) {
     toucan: { rx: 0.12, ry: 0.12, bl: 0.34, lh: 0.16, nh: 0.14, hr: 0.08, bkL: 0.24 },
     macaw: { rx: 0.12, ry: 0.12, bl: 0.38, lh: 0.16, nh: 0.14, hr: 0.08, bkL: 0.11, longTail: true },
     rhea: { rx: 0.22, ry: 0.2, bl: 0.66, lh: 0.68, nh: 0.48, hr: 0.085, bkL: 0.14 },
+    songbird: { rx: 0.09, ry: 0.09, bl: 0.22, lh: 0.1, nh: 0.08, hr: 0.055, bkL: 0.07 },
+    hummingbird: { rx: 0.065, ry: 0.065, bl: 0.16, lh: 0.05, nh: 0.06, hr: 0.042, bkL: 0.14, longTail: true },
+    parrot: { rx: 0.11, ry: 0.11, bl: 0.3, lh: 0.12, nh: 0.1, hr: 0.075, bkL: 0.09, longTail: true },
+    owl: { rx: 0.14, ry: 0.15, bl: 0.28, lh: 0.14, nh: 0.06, hr: 0.11, bkL: 0.06 },
+    raptor: { rx: 0.15, ry: 0.14, bl: 0.42, lh: 0.22, nh: 0.14, hr: 0.08, bkL: 0.11, longTail: true },
+    woodpecker: { rx: 0.1, ry: 0.1, bl: 0.28, lh: 0.12, nh: 0.12, hr: 0.065, bkL: 0.14 },
+    kingfisher: { rx: 0.11, ry: 0.1, bl: 0.28, lh: 0.1, nh: 0.1, hr: 0.075, bkL: 0.16 },
+    spoonbill: { rx: 0.13, ry: 0.12, bl: 0.42, lh: 0.46, nh: 0.36, hr: 0.06, bkL: 0.24 },
+    swallow: { rx: 0.08, ry: 0.075, bl: 0.22, lh: 0.07, nh: 0.06, hr: 0.05, bkL: 0.05, longTail: true },
   };
   const c = configs[spec.bodyPlan] || configs.chicken;
   const bodyY = (p.sleep ? c.ry * 0.95 : c.lh + c.ry * 0.85) + p.bob;
@@ -373,7 +384,7 @@ function buildPrimate(spec, p) {
 
 function buildAnimalMesh(spec, clip, frame) {
   const p = frameParams(clip, frame);
-  if (['chicken', 'duck', 'heron', 'toucan', 'macaw', 'rhea'].includes(spec.bodyPlan)) return buildBird(spec, p);
+  if (['chicken', 'duck', 'heron', 'toucan', 'macaw', 'rhea', 'songbird', 'hummingbird', 'parrot', 'owl', 'raptor', 'woodpecker', 'kingfisher', 'spoonbill', 'swallow'].includes(spec.bodyPlan)) return buildBird(spec, p);
   if (spec.bodyPlan === 'caiman') return buildReptile(p);
   if (spec.bodyPlan === 'sloth' || spec.bodyPlan === 'monkey') return buildPrimate(spec, p);
   return buildQuadruped(spec, p);

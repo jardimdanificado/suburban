@@ -26,7 +26,7 @@ export class GrassRootJobs{
     cell.listeners.push({isAlive,onReady,priority});
     if(!cell.pending){
       cell.pending=true;
-      const job={cell,positions:surface.getAttribute('position').array,colors:surface.getAttribute('color')?.array,excludedCells,axis:bladesPerAxis,details:options.details,tint:options.tint,steps:grassRootSteps(surface.getAttribute('position').array,surface.getAttribute('color')?.array,excludedCells,{bladesPerAxis})};
+      const job={cell,positions:surface.getAttribute('position').array,colors:surface.getAttribute('color')?.array,excludedCells,excludedCircles:options.excludedCircles||null,axis:bladesPerAxis,details:options.details,tint:options.tint,steps:grassRootSteps(surface.getAttribute('position').array,surface.getAttribute('color')?.array,excludedCells,{bladesPerAxis,excludedCircles:options.excludedCircles||null})};
       this.queue.push(job);this.startWorker(job);
     }
     return null;
@@ -76,7 +76,7 @@ export class GrassRootJobs{
       if(this.workerJob)return true;
       job.id=++this.serial;job.sent=true;this.workerJob=job;
       const positions=job.positions.slice(),colors=job.colors?.slice();
-      this.worker.postMessage({id:job.id,positions,colors,excluded:[...job.excludedCells],axis:job.axis,details:job.details,tint:job.tint},[positions.buffer,...(colors?[colors.buffer]:[])]);
+      this.worker.postMessage({id:job.id,positions,colors,excluded:[...job.excludedCells],excludedCircles:job.excludedCircles,axis:job.axis,details:job.details,tint:job.tint},[positions.buffer,...(colors?[colors.buffer]:[])]);
       return true;
     }catch(error){
       this.workerError=String(error);this.workerFailed=true;this.worker?.terminate();this.worker=null;this.workerJob=null;job.sent=false;

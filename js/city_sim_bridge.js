@@ -333,16 +333,17 @@ export class CitySimulationBridge {
     if (!positions || !this.city.fauna?.animals) return;
     const states = ['idle', 'walk', 'eat', 'sleep', 'flee'];
     const live = new Set();
-    for (let i = 0; i < positions.length; i += 5) {
+    for (let i = 0; i < positions.length; i += 6) {
       const a = this.city.fauna.animals.get(positions[i]);
       if (!a?.entity) continue;
       live.add(a.id);
       let motion = this.animalMotion.get(a.id);
       if (!motion) { motion = { entity: a.entity, vehicle: a, to: { x: a.x, y: a.y } }; this.animalMotion.set(a.id, motion); }
       motion.entity = a.entity; motion.vehicle = a;
-      const x = positions[i + 1], y = positions[i + 2], angle = positions[i + 3], code = positions[i + 4];
+      const x = positions[i + 1], y = positions[i + 2], angle = positions[i + 3], code = positions[i + 4], altitude = positions[i + 5] || 0;
       a.dead = code === 5;
       a.state = a.dead ? 'sleep' : (states[code] || 'idle');
+      a.altitude = altitude;
       const moved = Math.hypot(x - (motion.to.x ?? x), y - (motion.to.y ?? y));
       const reset = !motion.points?.length || this.time?.paused || this.motionOptions?.smoothMovement === false || moved >= 8;
       motion.snap = this.motionOptions?.smoothMovement === false;

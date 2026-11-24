@@ -63,7 +63,7 @@ function animalPositions() {
   const fauna = state.city.fauna?.animals;
   if (!fauna?.size) return new Float64Array(0);
   const animals = [...fauna.values()].filter(a => a.entity && !a.entity.destroyed);
-  const result = new Float64Array(animals.length * 5);
+  const result = new Float64Array(animals.length * 6);
   let at = 0;
   for (const a of animals) {
     result[at++] = a.id;
@@ -71,6 +71,7 @@ function animalPositions() {
     result[at++] = a.y ?? a.entity.y ?? 0;
     result[at++] = a.angle || 0;
     result[at++] = a.dead ? 5 : (ANIMAL_STATE_CODE[a.state] ?? 0);
+    result[at++] = a.altitude || 0;
   }
   return result;
 }

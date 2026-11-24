@@ -144,7 +144,7 @@ test('CityAnimalModels loads OBJ frames and batches visible animals', async () =
   });
   const ok = await models.loading;
   assert.equal(ok, true);
-  assert.equal(models.frames.size, 384);
+  assert.equal(models.frames.size, 768);
 
   const world = createWorld(24, 24, 0);
   const city = createMockCity(world);
@@ -204,9 +204,9 @@ test('CitySimulationBridge smoothly interpolates animal motion between worker pa
   const bridge = new CitySimulationBridge({ city, entities: city.entities, nextId: 100, time: { paused: false } });
 
   // Packet 1 at t=1000, Packet 2 at t=1100, Packet 3 at t=1200
-  bridge.applyAnimalPositions(new Float64Array([cow.id, 10, 10, 0, 1]), 1000);
-  bridge.applyAnimalPositions(new Float64Array([cow.id, 11, 10, 0, 1]), 1100);
-  bridge.applyAnimalPositions(new Float64Array([cow.id, 12, 10, 0, 1]), 1200);
+  bridge.applyAnimalPositions(new Float64Array([cow.id, 10, 10, 0, 1, 0]), 1000);
+  bridge.applyAnimalPositions(new Float64Array([cow.id, 11, 10, 0, 1, 0]), 1100);
+  bridge.applyAnimalPositions(new Float64Array([cow.id, 12, 10, 0, 1, 0]), 1200);
 
   // Sample at t=1230 (buffer target = 1050 -> halfway between 10 and 11)
   bridge.interpolate(1230);
@@ -317,4 +317,37 @@ test('wild animals can be tamed, traded, ridden as mounts, or kept as companions
   assert.equal(horse.ownerId, buyer.id);
   assert.equal(balances.c1, 68000);
   assert.equal(balances.c2, 32000);
+});
+
+test('circular grazing clears only a circle, arboreal animals climb trees, and 20+ birds nest on trees/balconies/fences/roofs', async () => {
+  const { grassRoots } = await import('../js/volumetric_grass.js');
+  // 1x1 tile from (0,0) to (1,1)
+  const pos = new Float32Array([0,0,0, 0,0,1, 1,0,1, 0,0,0, 1,0,1, 1,0,0]);
+  const col = new Float32Array(pos.length).fill(1);
+  const full = grassRoots(pos, col, new Set(), { bladesPerAxis: 6 });
+  const grazed = grassRoots(pos, col, new Set(), { bladesPerAxis: 6, excludedCircles: [{ x: 0.5, z: 0.5, r2: 0.35 * 0.35 }] });
+  assert.ok(grazed.roots.length > 0 && grazed.roots.length < full.roots.length, 'only circular patch should be cleared, not whole tile');
+
+  const birds = ANIMAL_SPECIES_IDS.filter(id => ANIMAL_SPECIES[id].canFly);
+  assert.ok(birds.length >= 20, `expected >= 20 flying bird species, got ${birds.length}`);
+  assert.ok(ANIMAL_SPECIES.preguica.speed <= 0.2 && ANIMAL_SPECIES.preguica.arboreal);
+  for (const id of ['mico_leao', 'sagui', 'quati', 'iguana']) {
+    assert.equal(ANIMAL_SPECIES[id].arboreal, true);
+  }
+
+  const world = createWorld(32, 32, 0);
+  const city = createMockCity(world);
+  city.nature.plants.set(1, { id: 1, x: 10, y: 10, entity: { destroyed: false, properties: { tree: true } } });
+  const sloth = city.fauna.spawn(10, 10, 'preguica', { hunger: 50 });
+  sloth.stateTimer = 0;
+  city.fauna.decideBehavior(sloth, false);
+  assert.ok(sloth.altitude > 1.0, 'sloth should climb into tree canopy');
+
+  // Nests on all 4 surface types
+  for (const surface of ['tree', 'balcony', 'fence', 'roof']) {
+    const nest = city.fauna.placeNest({ x: 10.5, y: 10.5, z: 2.0, surface, species: 'bem_te_vi' });
+    assert.equal(nest.surface, surface);
+  }
+  const bird = city.fauna.spawn(10, 10, 'bem_te_vi');
+  assert.ok(city.fauna.tryBuildNest(bird), 'bird should build a nest');
 });

@@ -3,7 +3,7 @@ import { tileAt, ROAD_TILES } from './city_terrain.js?v=entrance-retaining-clear
 import { TILE_WATER } from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 
 export const FAUNA_RULES = Object.freeze({
-  maxWildAnimals: 120,
+  maxWildAnimals: 180,
   spawnPerSpeciesMin: 1,
   grazeRestore: 22,
   feedRestore: 45,
@@ -36,19 +36,80 @@ export class CityFauna {
   constructor(city) {
     this.city = city;
     this.animals = new Map();
+    this.nests = new Map();
     this.grazedTiles = new Map();
     this.grazeRevision = 0;
     this.nextAnimalId = 1;
+    this.nextNestId = 1;
   }
 
-  grazeCell(tx, ty, duration = 90) {
+  placeNest({ x, y, z = 1.8, surface = 'tree', buildingId = null, plantId = null, species = 'sabia', ownerId = null, eggs = 2 } = {}) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    if (!['tree', 'balcony', 'fence', 'roof'].includes(surface)) return null;
+    const nest = {
+      id: `nest:${this.nextNestId++}`,
+      x,
+      y,
+      z,
+      surface,
+      buildingId,
+      plantId,
+      species,
+      ownerId,
+      eggs,
+      createdAt: this.city.minute,
+    };
+    this.nests.set(nest.id, nest);
+    return nest;
+  }
+
+  findTreeSpot(x, y, maxDist = 10) {
+    let best = null, bestDist = maxDist;
+    for (const plant of this.city.nature?.plants?.values?.() || []) {
+      if (plant.entity?.destroyed || !plant.entity?.properties?.tree) continue;
+      const d = Math.hypot(plant.x + 0.5 - x, plant.y + 0.5 - y);
+      if (d < bestDist) { bestDist = d; best = plant; }
+    }
+    return best;
+  }
+
+  tryBuildNest(bird) {
+    if (!bird || bird.nestId && this.nests.has(bird.nestId)) return this.nests.get(bird.nestId);
+    const bx = bird.x, by = bird.y;
+    const candidates = [];
+    const tree = this.findTreeSpot(bx, by, 14);
+    if (tree) candidates.push({ x: tree.x + 0.5, y: tree.y + 0.5, z: 2.1, surface: 'tree', plantId: tree.id });
+    for (const b of this.city.buildings || []) {
+      if (b.entity?.destroyed) continue;
+      const d = Math.hypot(b.entity.x + (b.width || 3) * 0.5 - bx, b.entity.y + (b.depth || 3) * 0.5 - by);
+      if (d > 16) continue;
+      if (['farm', 'park', 'cattle_ranch', 'dairy_farm', 'sheep_farm', 'pig_farm', 'poultry', 'hay_farm'].includes(b.type)) {
+        candidates.push({ x: b.entity.x + 0.5, y: b.entity.y + 0.5, z: 0.95, surface: 'fence', buildingId: b.id });
+      } else if (b.constructionKind !== 'open-air') {
+        const balcony = b.units?.find?.(u => u.roomType === 'balcony');
+        if (balcony) {
+          candidates.push({ x: b.entity.x + balcony.x + 0.5, y: b.entity.y + balcony.y + 0.5, z: (balcony.z || 0) * 2.2 + 0.9, surface: 'balcony', buildingId: b.id });
+        } else {
+          candidates.push({ x: b.entity.x + (b.width || 3) * 0.5, y: b.entity.y + (b.depth || 3) * 0.5, z: (b.floors || 1) * 2.2 + 0.15, surface: 'roof', buildingId: b.id });
+        }
+      }
+    }
+    if (!candidates.length) return null;
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    const nest = this.placeNest({ ...pick, species: bird.species, ownerId: bird.id, eggs: 1 + Math.floor(Math.random() * 3) });
+    if (nest) bird.nestId = nest.id;
+    return nest;
+  }
+
+  grazeCell(tx, ty, duration = 90, exactX = tx + 0.5, exactZ = ty + 0.5, radius = 0.38) {
     const key = `${tx},${ty}`;
     const due = this.city.minute + duration;
+    const patch = { x: exactX, z: exactZ, r2: radius * radius, due };
     if (!this.grazedTiles.has(key)) {
-      this.grazedTiles.set(key, due);
+      this.grazedTiles.set(key, patch);
       this.grazeRevision++;
     } else {
-      this.grazedTiles.set(key, due);
+      this.grazedTiles.set(key, patch);
     }
   }
 
@@ -119,6 +180,9 @@ export class CityFauna {
       riderId: null,
       x: entity.x,
       y: entity.y,
+      altitude: 0,
+      inTreePlantId: null,
+      nestId: null,
       angle: Math.random() * Math.PI * 2,
       state: 'idle', // idle | walk | eat | sleep | flee
       stateUntil: city.minute + 3,
@@ -327,6 +391,64 @@ export class CityFauna {
       }
     }
 
+    // 2.5 Arboreal animals climb trees to eat and sleep
+    if (spec.arboreal && animal.stateTimer <= 0) {
+      const tree = this.findTreeSpot(animal.x, animal.y, 12);
+      if (tree) {
+        const tx = tree.x + 0.5, ty = tree.y + 0.5;
+        const dist = Math.hypot(tx - animal.x, ty - animal.y);
+        if (dist <= 0.9) {
+          animal.inTreePlantId = tree.id;
+          animal.altitude = 1.6 + (animal.id % 5) * 0.14;
+          animal.targetX = null;
+          animal.targetY = null;
+          if (isNight || animal.hunger >= 75) {
+            animal.state = 'sleep';
+            animal.action = 'Dormindo na árvore';
+            animal.stateTimer = 5 + Math.random() * 5;
+          } else {
+            animal.state = 'eat';
+            animal.action = 'Alimentando-se na copa';
+            animal.stateTimer = 3.5 + Math.random() * 2.5;
+          }
+          return;
+        }
+        animal.altitude = 0;
+        animal.inTreePlantId = null;
+        animal.state = 'walk';
+        animal.action = 'Indo para árvore';
+        animal.targetX = tx;
+        animal.targetY = ty;
+        animal.stateTimer = 5.0;
+        return;
+      }
+    }
+
+    // 2.6 Flying birds build nests, fly, and perch
+    if (spec.canFly && animal.stateTimer <= 0) {
+      if (!animal.nestId && Math.random() < 0.25) this.tryBuildNest(animal);
+      const nest = animal.nestId ? this.nests.get(animal.nestId) : null;
+      if (isNight && nest) {
+        const d = Math.hypot(nest.x - animal.x, nest.y - animal.y);
+        if (d <= 0.8) {
+          animal.altitude = nest.z;
+          animal.state = 'sleep';
+          animal.action = 'No ninho';
+          animal.targetX = null;
+          animal.targetY = null;
+          animal.stateTimer = 6 + Math.random() * 6;
+          return;
+        }
+        animal.state = 'walk';
+        animal.action = 'Voando para o ninho';
+        animal.targetX = nest.x;
+        animal.targetY = nest.y;
+        animal.altitude = Math.max(2.2, nest.z);
+        animal.stateTimer = 4.0;
+        return;
+      }
+    }
+
     if (animal.stateTimer > 0) return;
 
     // 3. Sleep at night
@@ -344,7 +466,7 @@ export class CityFauna {
       const tx = Math.floor(animal.x), ty = Math.floor(animal.y), tile = tileAt(this.city.world, tx, ty);
       if (spec.grazesGrass) {
         if ((tile === 0 || tile === 9) && !this.grazedTiles.has(`${tx},${ty}`) && Math.random() < 0.65) {
-          this.grazeCell(tx, ty);
+          this.grazeCell(tx, ty, 90, animal.x, animal.y);
           animal.state = 'eat';
           animal.action = 'Pastando grama';
           animal.targetX = null;
@@ -429,17 +551,34 @@ export class CityFauna {
       }
 
       if (animal.targetX != null && (animal.state === 'walk' || animal.state === 'flee')) {
+        const spec = ANIMAL_SPECIES[animal.species];
+        if (spec?.canFly) animal.altitude = Math.max(animal.altitude || 0, 2.0);
         const arrived = this.moveTowards(animal, animal.targetX, animal.targetY, animal.state === 'flee' ? 1.75 : 1.0, stepDt);
         if (arrived) {
           animal.targetX = null;
           animal.targetY = null;
-          if (animal.action === 'Procurando pasto') {
-            this.grazeCell(Math.floor(animal.x), Math.floor(animal.y));
+          if (animal.action === 'Indo para árvore' && spec?.arboreal) {
+            animal.altitude = 1.6 + (animal.id % 5) * 0.14;
+            animal.state = 'eat';
+            animal.action = 'Alimentando-se na copa';
+            animal.stateTimer = 3.5 + Math.random() * 2.5;
+            animal.thinkTimer = 0.5;
+          } else if (animal.action === 'Voando para o ninho' && animal.nestId && this.nests.has(animal.nestId)) {
+            const nest = this.nests.get(animal.nestId);
+            animal.altitude = nest.z;
+            animal.state = 'sleep';
+            animal.action = 'No ninho';
+            animal.stateTimer = 6.0;
+            animal.thinkTimer = 0.5;
+          } else if (animal.action === 'Procurando pasto') {
+            this.grazeCell(Math.floor(animal.x), Math.floor(animal.y), 90, animal.x, animal.y);
+            animal.altitude = 0;
             animal.state = 'eat';
             animal.action = 'Pastando grama';
             animal.stateTimer = 3.0 + Math.random() * 2.0;
             animal.thinkTimer = 0.5;
           } else {
+            animal.altitude = 0;
             animal.state = 'idle';
             animal.action = 'Observando';
             animal.stateTimer = 0.8 + Math.random() * 1.2;
@@ -594,7 +733,8 @@ export class CityFauna {
   updateMinute() {
     const minute = this.city.minute;
     if (minute % 15 === 0) this.syncRanches();
-    for (const [key, due] of this.grazedTiles) {
+    for (const [key, patch] of this.grazedTiles) {
+      const due = patch?.due ?? patch;
       if (minute >= due) {
         this.grazedTiles.delete(key);
         this.grazeRevision++;

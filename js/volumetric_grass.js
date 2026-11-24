@@ -13,7 +13,7 @@ export function grassRoots(positions,colors,excludedCells=new Set(),options={}){
   const job=grassRootSteps(positions,colors,excludedCells,options);
   let step=job.next();while(!step.done)step=job.next();return step.value;
 }
-export function* grassRootSteps(positions, colors, excludedCells = new Set(), {bladesPerAxis = BLADES_PER_AXIS,acceptRoot=null} = {}) {
+export function* grassRootSteps(positions, colors, excludedCells = new Set(), {bladesPerAxis = BLADES_PER_AXIS,acceptRoot=null,excludedCircles=null} = {}) {
   const axis=Math.max(0,Math.floor(bladesPerAxis));
   if(!axis)return {roots:new Float32Array(),shapes:new Float32Array(),shades:new Float32Array()};
   // Allocate numeric buffers once instead of growing three boxed-number arrays
@@ -42,6 +42,7 @@ export function* grassRootSteps(positions, colors, excludedCells = new Set(), {b
       let row=occupied.get(z);
       if(row?.has(x))continue;
       if(excludedCells.size&&excludedCells.has(`${Math.floor(px)},${Math.floor(pz)}`))continue;
+      if(excludedCircles?.length){let grazed=false;for(let c=0;c<excludedCircles.length;c++){const p=excludedCircles[c],dx=px-p.x,dz=pz-p.z;if(dx*dx+dz*dz<=p.r2){grazed=true;break;}}if(grazed)continue;}
       if(!row){row=new Set();occupied.set(z,row);}
       row.add(x);
       const seed = hash(x, z, 71);
@@ -146,8 +147,8 @@ export function createVolumetricGrassMaterial(THREE, base, time, tracks = null, 
   return material;
 }
 
-export function createVolumetricGrassMesh(THREE, surface, material, {excludedCells, materialKey = 'volumetricGrass',bladesPerAxis=BLADES_PER_AXIS,rootData=null} = {}) {
-  const {roots, shapes, shades} = rootData??grassRoots(surface.getAttribute('position').array, surface.getAttribute('color')?.array, excludedCells,{bladesPerAxis});
+export function createVolumetricGrassMesh(THREE, surface, material, {excludedCells, excludedCircles=null, materialKey = 'volumetricGrass',bladesPerAxis=BLADES_PER_AXIS,rootData=null} = {}) {
+  const {roots, shapes, shades} = rootData??grassRoots(surface.getAttribute('position').array, surface.getAttribute('color')?.array, excludedCells,{bladesPerAxis,excludedCircles});
   const geometry = new THREE.InstancedBufferGeometry();
   // A rigid triangle has a sharp silhouette without intermediate curved joints.
   const blade=grassBladeSurface();
