@@ -130,6 +130,7 @@ function frameParams(clip, frame) {
       headPitch: 0.06 * Math.cos(t * 2),
       headYaw: Math.sin(t) * 0.05,
       tailYaw: Math.sin(t) * 0.32,
+      wingFlap: Math.sin(t) * 1.05,
       sleep: false,
     };
   }
@@ -278,7 +279,7 @@ function buildQuadruped(spec, p) {
   return m;
 }
 
-function buildBird(spec, p) {
+function buildBird(spec, p, clip) {
   const m = createMesh();
   const configs = {
     chicken: { rx: 0.14, ry: 0.13, bl: 0.34, lh: 0.18, nh: 0.14, hr: 0.07, bkL: 0.09 },
@@ -328,6 +329,21 @@ function buildBird(spec, p) {
     { x: 0, y: bodyY + 0.03, z: -c.bl * 0.48, rx: c.rx * 0.45, ry: 0.04 },
     { x: Math.sin(p.tailYaw) * tl * 0.3, y: bodyY + 0.08, z: -c.bl * 0.48 - tl, rx: c.rx * 0.15, ry: 0.02 },
   ], 6);
+
+  // Sculpted wings: wide and flapping in walk/flight for flying birds, folded otherwise
+  const flapping = clip === 'walk' && spec.canFly;
+  const span = flapping ? c.rx * 3.8 : c.rx * 0.55;
+  const flap = flapping ? (p.wingFlap || 0) : -0.35;
+  for (const s of [-1, 1]) {
+    const wx0 = s * c.rx * 0.85, wy0 = bodyY + c.ry * 0.25;
+    const wx1 = wx0 + s * Math.cos(flap * 0.6) * span * 0.5, wy1 = wy0 + Math.sin(flap) * span * 0.55;
+    const wx2 = wx0 + s * Math.cos(flap * 0.85) * span, wy2 = wy0 + Math.sin(flap * 1.15) * span * 0.95;
+    m.addChain([
+      { x: wx0, y: wy0, z: c.bl * 0.12, rx: 0.025, ry: c.bl * 0.34, yaw: s * 0.2 },
+      { x: wx1, y: wy1, z: c.bl * 0.02, rx: 0.02, ry: c.bl * 0.28, yaw: s * 0.3 },
+      { x: wx2, y: wy2, z: -c.bl * 0.15, rx: 0.01, ry: c.bl * 0.14, yaw: s * 0.35 },
+    ], 5);
+  }
   return m;
 }
 
@@ -384,7 +400,7 @@ function buildPrimate(spec, p) {
 
 function buildAnimalMesh(spec, clip, frame) {
   const p = frameParams(clip, frame);
-  if (['chicken', 'duck', 'heron', 'toucan', 'macaw', 'rhea', 'songbird', 'hummingbird', 'parrot', 'owl', 'raptor', 'woodpecker', 'kingfisher', 'spoonbill', 'swallow'].includes(spec.bodyPlan)) return buildBird(spec, p);
+  if (['chicken', 'duck', 'heron', 'toucan', 'macaw', 'rhea', 'songbird', 'hummingbird', 'parrot', 'owl', 'raptor', 'woodpecker', 'kingfisher', 'spoonbill', 'swallow'].includes(spec.bodyPlan)) return buildBird(spec, p, clip);
   if (spec.bodyPlan === 'caiman') return buildReptile(p);
   if (spec.bodyPlan === 'sloth' || spec.bodyPlan === 'monkey') return buildPrimate(spec, p);
   return buildQuadruped(spec, p);

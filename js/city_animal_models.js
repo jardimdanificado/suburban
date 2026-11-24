@@ -162,9 +162,12 @@ export class CityAnimalModels {
     while (deltaAngle < -Math.PI) deltaAngle += Math.PI * 2;
     motion.angle += deltaAngle * alpha;
 
-    const clip = animalAnimation(animal, motion.moving);
+    const flying = !!spec.canFly && (animal.altitude || 0) > 0.4 && !animal.dead;
+    const clip = flying ? 'walk' : animalAnimation(animal, motion.moving);
     const phase = ((entity.id || 0) % 17) * 0.37;
-    const { frame } = animalFrame(clip, this.clock, phase, spec.speed || 1, motion.gait);
+    const { frame } = flying
+      ? animalFrame('walk', this.clock, phase, 1.6)
+      : animalFrame(clip, this.clock, phase, spec.speed || 1, motion.gait);
     const key = `${species}:${clip}:${frame}`;
     const source = this.frames.get(key) || this.frames.get(`${species}:idle:0`);
     if (!source) return false;
