@@ -112,6 +112,11 @@ export class CityFauna {
       species,
       category: options.livestock ? 'livestock' : 'wild',
       buildingId: options.buildingId ?? null,
+      tamed: !!options.tamed,
+      ownerId: options.ownerId ?? null,
+      accountId: options.accountId ?? null,
+      role: spec.role || 'companion',
+      riderId: null,
       x: entity.x,
       y: entity.y,
       angle: Math.random() * Math.PI * 2,
@@ -253,8 +258,26 @@ export class CityFauna {
     if (!spec) return;
     const minute = this.city.minute;
 
-    // 1. Immediate threat / predator reaction
-    const threat = this.nearbyThreat(animal);
+    if (animal.riderId != null) return;
+
+    // 0. Tamed companion follows owner
+    if (animal.tamed && animal.role === 'companion' && animal.ownerId != null) {
+      const owner = this.city.society?.citizen?.(animal.ownerId) || this.city.citizens?.find(c => c.id === animal.ownerId);
+      if (owner && !owner.dead && owner.entity && !owner.entity.destroyed) {
+        const dist = Math.hypot(owner.entity.x - animal.x, owner.entity.y - animal.y);
+        if (dist > 3.0) {
+          animal.state = 'walk';
+          animal.action = 'Acompanhando tutor';
+          animal.targetX = owner.entity.x;
+          animal.targetY = owner.entity.y;
+          animal.stateTimer = 2.5;
+          return;
+        }
+      }
+    }
+
+    // 1. Immediate threat / predator reaction (wild/untamed only)
+    const threat = animal.tamed ? null : this.nearbyThreat(animal);
     if (threat && (spec.temperament === 'shy' || (spec.temperament === 'docile' && threat.dist < 2.5))) {
       const dx = animal.x - threat.x, dy = animal.y - threat.y;
       const len = Math.hypot(dx, dy) || 1;
@@ -375,6 +398,24 @@ export class CityFauna {
 
     for (const animal of this.animals.values()) {
       if (animal.dead || animal.entity?.destroyed) continue;
+      if (animal.riderId != null) {
+        const rider = this.city.society?.citizen?.(animal.riderId) || this.city.citizens?.find(c => c.id === animal.riderId);
+        if (!rider || rider.dead || rider.entity?.destroyed || rider.ridingAnimalId !== animal.id) {
+          animal.riderId = null;
+          animal.state = 'idle';
+        } else {
+          const dx = rider.entity.x - animal.x, dy = rider.entity.y - animal.y;
+          const moved = Math.hypot(dx, dy) > 0.002;
+          if (moved) animal.angle = Math.atan2(dx, dy);
+          animal.x = rider.entity.x;
+          animal.y = rider.entity.y;
+          animal.entity.x = rider.entity.x;
+          animal.entity.y = rider.entity.y;
+          animal.state = moved ? 'walk' : 'idle';
+          animal.action = 'Servindo de montaria';
+          continue;
+        }
+      }
       animal.stateTimer = Math.max(0, (animal.stateTimer ?? 0) - stepDt);
       animal.thinkTimer = (animal.thinkTimer ?? 0) - stepDt;
 
@@ -392,10 +433,18 @@ export class CityFauna {
         if (arrived) {
           animal.targetX = null;
           animal.targetY = null;
-          animal.state = 'idle';
-          animal.action = 'Observando';
-          animal.stateTimer = 0.8 + Math.random() * 1.2;
-          animal.thinkTimer = 0.3;
+          if (animal.action === 'Procurando pasto') {
+            this.grazeCell(Math.floor(animal.x), Math.floor(animal.y));
+            animal.state = 'eat';
+            animal.action = 'Pastando grama';
+            animal.stateTimer = 3.0 + Math.random() * 2.0;
+            animal.thinkTimer = 0.5;
+          } else {
+            animal.state = 'idle';
+            animal.action = 'Observando';
+            animal.stateTimer = 0.8 + Math.random() * 1.2;
+            animal.thinkTimer = 0.3;
+          }
         }
       }
     }
@@ -465,6 +514,81 @@ export class CityFauna {
       return { status: 'harvested', animal: target, products: spec?.products || {} };
     }
     return { status: 'wounded', animal: target, health: target.health };
+  }
+
+  tameAnimal(citizen, animal) {
+    if (!citizen || !animal || animal.dead || animal.entity?.destroyed) return false;
+    const spec = ANIMAL_SPECIES[animal.species];
+    if (!spec?.tameable) return false;
+    animal.tamed = true;
+    animal.category = 'tamed';
+    animal.ownerId = citizen.id;
+    animal.accountId = citizen.accountId || null;
+    animal.role = spec.role || 'companion';
+    animal.state = 'idle';
+    animal.action = animal.role === 'mount' ? 'Montaria domesticada' : 'Companhia';
+    animal.targetX = null;
+    animal.targetY = null;
+    citizen.animalIds ??= [];
+    if (!citizen.animalIds.includes(animal.id)) citizen.animalIds.push(animal.id);
+    return true;
+  }
+
+  mountAnimal(citizen, animal) {
+    if (!citizen || !animal || animal.dead || animal.entity?.destroyed) return false;
+    if (!animal.tamed || animal.role !== 'mount') return false;
+    if (animal.riderId != null && animal.riderId !== citizen.id) return false;
+    if (citizen.ridingAnimalId != null && citizen.ridingAnimalId !== animal.id) this.dismountAnimal(citizen);
+    animal.riderId = citizen.id;
+    animal.state = 'idle';
+    animal.action = 'Servindo de montaria';
+    animal.targetX = null;
+    animal.targetY = null;
+    citizen.ridingAnimalId = animal.id;
+    return true;
+  }
+
+  dismountAnimal(citizen) {
+    if (!citizen || citizen.ridingAnimalId == null) return false;
+    const animal = this.animals.get(citizen.ridingAnimalId);
+    if (animal && animal.riderId === citizen.id) {
+      animal.riderId = null;
+      animal.state = 'idle';
+      animal.action = 'Montaria em repouso';
+    }
+    citizen.ridingAnimalId = null;
+    return true;
+  }
+
+  mountSpeedFor(citizen) {
+    if (citizen?.ridingAnimalId == null) return 1;
+    const animal = this.animals.get(citizen.ridingAnimalId);
+    if (!animal || animal.dead || animal.riderId !== citizen.id) return 1;
+    return ANIMAL_SPECIES[animal.species]?.mountSpeed || 1.5;
+  }
+
+  tradeAnimal(seller, buyer, animal, price = null) {
+    if (!buyer || !animal || animal.dead || animal.entity?.destroyed) return false;
+    const spec = ANIMAL_SPECIES[animal.species];
+    const amount = price ?? spec?.marketPrice ?? 4000;
+    const buyerAcc = buyer.accountId;
+    const sellerAcc = seller?.accountId || animal.accountId || 'treasury';
+    if (!buyerAcc || !this.city.transfer?.(buyerAcc, sellerAcc, amount, `Compra de ${spec?.label || animal.species}`)) {
+      return false;
+    }
+    if (animal.riderId != null) {
+      const prevRider = this.city.society?.citizen?.(animal.riderId) || this.city.citizens?.find(c => c.id === animal.riderId);
+      if (prevRider) this.dismountAnimal(prevRider);
+    }
+    if (seller?.animalIds) seller.animalIds = seller.animalIds.filter(id => id !== animal.id);
+    animal.tamed = true;
+    animal.category = 'tamed';
+    animal.ownerId = buyer.id;
+    animal.accountId = buyerAcc;
+    animal.role = spec?.role || 'companion';
+    buyer.animalIds ??= [];
+    if (!buyer.animalIds.includes(animal.id)) buyer.animalIds.push(animal.id);
+    return true;
   }
 
   updateMinute() {

@@ -346,19 +346,35 @@ export class CityUI {
     const dietLabel={herbivore:'Herbívoro',omnivore:'Onívoro',carnivore:'Carnívoro'}[spec.diet]||spec.diet;
     const tempLabel={docile:'Dócil',shy:'Arisco',defensive:'Defensivo',predator:'Predador'}[spec.temperament]||spec.temperament;
     const ranch=animal.buildingId!=null?this.city.building(animal.buildingId):null;
+    const owner=animal.ownerId!=null?this.city.society?.citizen?.(animal.ownerId):null;
+    const playerCitizen=this.city.characterGame?.citizenId!=null?this.city.society?.citizen?.(this.city.characterGame.citizenId):this.city.citizens?.find(c=>!c.dead);
+    const roleLabel=spec.role==='mount'?'Montaria':'Companhia';
     p.heading(`CRIATURA · ${(spec.label||animal.species).toUpperCase()}`);
-    if(spec.scientific)p.note(`${spec.scientific} · ${animal.category==='livestock'?'Pecuária':'Fauna silvestre'}`);
-    p.kv('Comportamento atual',animal.dead?'Abatido':stateLabel);
+    if(spec.scientific)p.note(`${spec.scientific} · ${animal.tamed?'Domesticado':animal.category==='livestock'?'Pecuária':'Fauna silvestre'} · ${roleLabel}`);
+    p.kv('Comportamento atual',animal.dead?(animal.action||'Abatido'):(animal.action||stateLabel));
     p.kv('Dieta / Temperamento',`${dietLabel} · ${tempLabel}`);
     p.kv('Localização',`${animal.x.toFixed(1)}, ${animal.y.toFixed(1)}`);
+    if(owner)p.kv('Tutor',owner.entity.properties.name);
     if(ranch)p.kv('Rancho / Propriedade',ranch.entity.properties.name);
+    if(spec.marketPrice)p.kv('Valor de mercado',money(spec.marketPrice));
     p.meters([['Saciedade',animal.hunger??100,C.green],['Saúde',animal.health??100,C.gold]]);
     const products=Object.entries(spec.products||{}).map(([g,q])=>`${q}× ${ANIMAL_GOODS[g]?.label||GOODS[g]?.label||g}`).join(', ');
     if(products)p.kv('Recursos possíveis',products);
-    p.buttons([
+    const actions=[
       {label:'LOCALIZAR NO MAPA',click:()=>{this.camera(animal.x,animal.y);if(!this.host)this.visible=false;}},
       ...(this.host?.controls?.observe?[{label:'SEGUIR EM 3ª PESSOA',click:()=>this.host.controls.observe('third',animal.id)},{label:'SEGUIR NO MAPA',click:()=>this.host.controls.observe('follow',animal.id)}]:[]),
-    ]);
+    ];
+    if(!animal.dead&&playerCitizen&&this.city.fauna){
+      if(!animal.tamed&&spec.tameable)actions.push({label:'DOMESTICAR',click:()=>{this.city.fauna.tameAnimal(playerCitizen,animal);}});
+      else if(animal.tamed&&animal.role==='mount'){
+        if(animal.riderId===playerCitizen.id)actions.push({label:'DESMONTAR',click:()=>{this.city.fauna.dismountAnimal(playerCitizen);}});
+        else if(animal.riderId==null)actions.push({label:'MONTAR',click:()=>{this.city.fauna.mountAnimal(playerCitizen,animal);}});
+      }
+      if(animal.tamed&&animal.ownerId!==playerCitizen.id&&spec.marketPrice){
+        actions.push({label:`COMPRAR (${money(spec.marketPrice)})`,click:()=>{this.city.fauna.tradeAnimal(owner,playerCitizen,animal,spec.marketPrice);}});
+      }
+    }
+    p.buttons(actions);
   }
   artworkInspector(p,piece) {
     contextActions(this,p,{artwork:piece});

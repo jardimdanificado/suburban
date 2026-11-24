@@ -85,6 +85,7 @@ test('CityFauna spawns wild animals in habitats and cows/oxen graze wild grass',
 
   for (let i = 0; i < 10; i++) {
     city.minute++;
+    city.fauna.update(0.25);
     city.fauna.updateMinute();
   }
   assert.ok(cow.hunger > 40 || cow.state === 'eat' || cow.state === 'walk', 'cow should graze or seek grass');
@@ -274,4 +275,46 @@ test('all 24 species generate diffuse textures and tangent-space normal maps', a
     const created = createAnimalSpeciesTextures(THREE, species);
     assert.ok(created.map && created.normalMap);
   }
+});
+
+test('wild animals can be tamed, traded, ridden as mounts, or kept as companions', () => {
+  const world = createWorld(32, 32, 0);
+  const city = createMockCity(world);
+  const balances = { c1: 50000, c2: 50000 };
+  city.transfer = (from, to, amt) => {
+    if ((balances[from] || 0) < amt) return false;
+    balances[from] -= amt;
+    balances[to] = (balances[to] || 0) + amt;
+    return true;
+  };
+  const seller = { id: 1, accountId: 'c1', dead: false, entity: { x: 10, y: 10, destroyed: false } };
+  const buyer = { id: 2, accountId: 'c2', dead: false, entity: { x: 11, y: 10, destroyed: false } };
+  city.citizens.push(seller, buyer);
+
+  const horse = city.fauna.spawn(10, 10, 'cavalo');
+  const rabbit = city.fauna.spawn(15, 15, 'coelho');
+  assert.equal(city.fauna.tameAnimal(seller, horse), true);
+  assert.equal(city.fauna.tameAnimal(seller, rabbit), true);
+  assert.equal(horse.role, 'mount');
+  assert.equal(rabbit.role, 'companion');
+
+  // Smaller companion cannot be mounted, and follows owner
+  assert.equal(city.fauna.mountAnimal(seller, rabbit), false);
+  city.fauna.decideBehavior(rabbit, false);
+  assert.equal(rabbit.action, 'Acompanhando tutor');
+
+  // Mount can be ridden, boosts speed, and dismounted
+  assert.equal(city.fauna.mountAnimal(seller, horse), true);
+  assert.ok(city.fauna.mountSpeedFor(seller) > 2);
+  seller.entity.x = 13;
+  city.fauna.update(0.1);
+  assert.equal(horse.x, 13);
+  assert.equal(city.fauna.dismountAnimal(seller), true);
+  assert.equal(city.fauna.mountSpeedFor(seller), 1);
+
+  // Trading transfers ownership and conserves money
+  assert.equal(city.fauna.tradeAnimal(seller, buyer, horse, 18000), true);
+  assert.equal(horse.ownerId, buyer.id);
+  assert.equal(balances.c1, 68000);
+  assert.equal(balances.c2, 32000);
 });

@@ -175,6 +175,21 @@ export const ANIMAL_SPECIES = Object.freeze({
   },
 });
 
+const MOUNT_SPECIES = { cavalo: 2.25, boi: 1.55, vaca: 1.45, anta: 1.6, ema: 1.9 };
+const ANIMAL_PRICES = {
+  cavalo: 18000, boi: 14000, vaca: 12000, anta: 11000, ema: 8500,
+  onca: 16000, lobo_guara: 12500, arara: 9500, tucano: 7500, jacare: 9000,
+  veado: 7200, ovelha: 6500, cabra: 6200, porco: 5800, capivara: 4500,
+  macaco: 6800, tamandua: 6000, preguica: 5500, javali: 5200, garca: 4800,
+  tatu: 3200, pato: 2600, galinha: 2400, coelho: 2200,
+};
+for (const [id, spec] of Object.entries(ANIMAL_SPECIES)) {
+  spec.tameable = true;
+  spec.role = MOUNT_SPECIES[id] ? 'mount' : 'companion';
+  spec.mountSpeed = MOUNT_SPECIES[id] || 0;
+  spec.marketPrice = ANIMAL_PRICES[id] || 4000;
+}
+
 export const ANIMAL_CLIPS = Object.freeze({
   idle: [0],
   walk: [0, 1, 2, 3, 4, 5, 6, 7],

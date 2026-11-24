@@ -1747,7 +1747,7 @@ export class CitySimulation {
       if(load?.pickedUp&&!c.mobilityTrip&&(c.deliveryLoad||load.quantity)>this.vehicles.cargoCapacity(c)){c.action='Aguardando veículo para transportar a carga';continue;}
       if(!c.path.length&&c.skybridgeZ&&!c.skybridgeId){c.skybridgeZ=0;c.skybridgeId=null;}
       if (c.conversation || c.workMeal || !c.path.length) continue;
-      let distance = dt * (this.society.isAdult(c) ? 4 : 2.5) * (c.playerControlled&&this.characterGame?.input?.run&&c.needs.energy>12?1.65:1) * this.justice.mobilityFactor(c) * bodyMovementSpeedFactor(c);
+      let distance = dt * (this.society.isAdult(c) ? 4 : 2.5) * (c.playerControlled&&this.characterGame?.input?.run&&c.needs.energy>12?1.65:1) * this.justice.mobilityFactor(c) * bodyMovementSpeedFactor(c) * (this.fauna?.mountSpeedFor?.(c) ?? 1);
       while (distance > 0 && c.path.length) {
         const p = c.path[0];
         if(p.skybridgeEntry||p.skybridgeExit){
