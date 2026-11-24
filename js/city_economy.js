@@ -130,6 +130,7 @@ export class CityEconomy {
     requirements(this.city,b);
     Object.defineProperty(b, 'wage', { get: () => this.city.currency.price(Math.max(b.baseWage,this.city.politics?.policy?.minimumWage||0)), set: value => { b.baseWage = value / this.city.currency.priceIndex; }, configurable: true });
   }
+  isBusiness(b) { return !!b && PRIVATE_TYPES.has(b.type) && b.active && !b.entity.destroyed; }
   get businesses() { return this.city.buildings.filter(b => PRIVATE_TYPES.has(b.type) && b.active && !b.entity.destroyed); }
   initialize() {
     this.appointMayor();
@@ -606,9 +607,13 @@ export class CityEconomy {
       nextStage('refreshDemandMs');this.updateDemand();nextStage('privateFoundingMs');
       const investors = this.city.citizens.filter(c => !c.playerManaged && this.city.society.isAdult(c) && !this.city.politics.officeHolder(c) && c.businessIds.length < 10).sort((a, b) => b.balance * (.8 + (b.traits?.riskTolerance ?? .5) * .4) - a.balance * (.8 + (a.traits?.riskTolerance ?? .5) * .4) || a.id - b.id);
       const opportunities = this.demands.filter(d => d.score >= 30).map(d => ({ ...d, priority: d.score * (.9 + this.city.random() * .2) })).sort((a, b) => b.priority - a.priority);
+      const businesses = this.businesses;
+      const activeProjects = this.city.development.projects.filter(p => p.status !== 'completed' && !p.cancelled);
       for (const opportunity of opportunities) {
         if(ESSENTIAL_SERVICES.has(opportunity.type))continue;
-        const same = [...this.businesses, ...this.city.development.projects.filter(p => p.status !== 'completed' && !p.cancelled)].filter(b => b.type === opportunity.type && (opportunity.type !== 'farm' || b.crop === opportunity.crop));
+        const same = [];
+        for (const b of businesses) if (b.type === opportunity.type && (opportunity.type !== 'farm' || b.crop === opportunity.crop)) same.push(b);
+        for (const p of activeProjects) if (p.type === opportunity.type && (opportunity.type !== 'farm' || p.crop === opportunity.crop)) same.push(p);
         if (same.some(b => b.status) || (same.length && opportunity.score < 60)) continue;
         const starter=investors.find(c=>!c.jobId&&!c.businessIds.length&&!c.startupProjectId);
         const rawLot=this.city.development.plots.find(p=>p.ownerId==='treasury'&&p.forSale&&!p.buildingId&&!p.projectId&&(opportunity.type==='farm'?this.city.development.isFarmPlot(p):p.width<=8&&p.depth<=8&&(['quarry','iron_mine','bauxite_mine'].includes(opportunity.type)?p.type==='quarry':!['farm','quarry'].includes(p.type))));
@@ -625,7 +630,7 @@ export class CityEconomy {
       const pending = this.city.development.projects.filter(p => p.accountId === 'treasury' && !p.cancelled && p.status !== 'completed');
       const buildingSlotsFull = pending.filter(p => !p.service || p.service === 'building').length >= 2;
       const needs=this.city.welfare.conditions();
-      const stapleFarms=this.businesses.filter(b=>b.type==='farm'&&!['girassol','trigo'].includes(b.crop)&&!CROPS[b.crop]?.nonFood);
+      const stapleFarms=businesses.filter(b=>b.type==='farm'&&!['girassol','trigo'].includes(b.crop)&&!CROPS[b.crop]?.nonFood);
       const pendingStaples=this.city.development.projects.filter(p=>p.type==='farm'&&!['girassol','trigo'].includes(p.crop)&&!p.cancelled&&p.status!=='completed');
       const stapleCapacity=stapleFarms.reduce((n,b)=>n+this.farmCapacity(b).daily,0)+pendingStaples.reduce((n,p)=>n+Math.max(0,(p.width||10)*(p.depth||10)-2)*240/Math.max(120,CROPS[p.crop]?.grow||120),0);
       const foodFarmMissing=stapleCapacity<needs.population*1.5;
@@ -638,7 +643,7 @@ export class CityEconomy {
         // Open-air farming does not consume a masonry construction slot.
         if (buildingSlotsFull && opportunity.type !== 'farm') continue;
         if (pending.some(p => p.type === opportunity.type && p.crop === opportunity.crop)) continue;
-        if (opportunity.score < 100 && this.businesses.some(b => b.type === opportunity.type && (b.type !== 'farm' || b.crop === opportunity.crop))) continue;
+        if (opportunity.score < 100 && businesses.some(b => b.type === opportunity.type && (b.type !== 'farm' || b.crop === opportunity.crop))) continue;
         if (this.city.treasury < this.quote(opportunity.type) + this.city.currency.price(100000)) continue;
         const lots = this.city.development.plots.filter(p => p.ownerId === 'treasury' && !p.buildingId && !p.projectId && (opportunity.type === 'farm' ? this.city.development.isFarmPlot(p) : p.width <= 8 && p.depth <= 8 && (['quarry', 'iron_mine', 'bauxite_mine'].includes(opportunity.type) ? p.type === 'quarry' : !['quarry', 'farm'].includes(p.type))));
         for (const lot of lots) {
@@ -736,6 +741,7 @@ export class CityEconomy {
       else if(holder&&expected<recorded){const excess=Math.min(holder.inventory.pao||0,Math.max(0,(holder.inventory.pao||0)-expected));if(excess){holder.inventory.pao-=excess;this.initialStock.pao=Math.max(0,recorded-excess);city.log('Estoque inicial de pão reduzido para dois dias de refeições.','economy',[],{kind:'public-food-reserve-reduced',buildingId:holder.id,quantity:excess});}}
       if(holder)this.publicFoodReserveRevision=2;
     }
+    const businesses=this.businesses;
     for(const store of publicStores){
       // Older saves could put the full multi-week reserve in a small refectory,
       // leaving inventoryFree() at zero and permanently disabling replenishment.
@@ -748,7 +754,7 @@ export class CityEconomy {
         for(const good of foodGoods){
           if(!this.accepts(store,good))continue;
           const claim=importDepotClaim(depot,store,good);if(!(store.worldIncoming?.[good])&&!(store.importIncoming?.[good])&&depot?.inventory[good]>0&&claim>0)local.push({seller:depot,good,price:0,available:Math.min(depot.inventory[good],claim)});
-          for(const seller of this.businesses){
+          for(const seller of businesses){
             const makes=seller.type==='farm'&&seller.crop===good||seller.type==='bakery'&&good==='pao'||seller.type==='kitchen'&&Object.hasOwn(INDUSTRIES.kitchen.outputs,good)||Object.hasOwn(INDUSTRIES[seller.type]?.outputs||{},good);
             if(!makes||seller.inventory[good]<1||city.findPath(seller.door,store.door)===null||city.logistics.transportLimit(seller,store)<1)continue;
             const agreement=this.supplyAgreements.find(a=>a.sellerId===seller.id&&a.buyerId===store.id&&a.good===good&&a.until>city.minute),price=agreement?.unitPrice??this.goods[good].price;
@@ -1103,7 +1109,7 @@ export class CityEconomy {
       case 9: this.city.paint.hourly();updateClothes(this.city); updateCompanyUniforms(this.city); this.householdPurchases(); this.city.publications.hourly(); break;
       case 10: this.city.sanitation.hourly(); this.city.workMeals.purchase(); break;
       case 11:
-        {const city=this.city,marketScarce=Object.values(this.market||{}).some(row=>row.demand>10&&row.stock<2),economySignature=`${city.buildings.length}:${this.businesses.length}:${city.citizens.length}:${city.development.projects.length}`,demandDue=reducedCadence(city,this,'economic-demand',120,180,economySignature),marketDue=reducedCadence(city,this,'market-prices',marketScarce?30:120,120,`${city.buildings.length}:${marketScarce}`),supplyDue=reducedCadence(city,this,'supply-chain-planning',120,240,`${city.buildings.length}:${city.development.projects.length}`);
+        {const city=this.city,businesses=this.businesses,marketScarce=Object.values(this.market||{}).some(row=>row.demand>10&&row.stock<2),economySignature=`${city.buildings.length}:${businesses.length}:${city.citizens.length}:${city.development.projects.length}`,demandDue=reducedCadence(city,this,'economic-demand',120,180,economySignature),marketDue=reducedCadence(city,this,'market-prices',marketScarce?30:120,120,`${city.buildings.length}:${marketScarce}`),supplyDue=reducedCadence(city,this,'supply-chain-planning',120,240,`${city.buildings.length}:${city.development.projects.length}`);
         if(!city.profileDiagnostics){if(demandDue)this.updateDemand(true);if(marketDue)updateMarket(this);if(supplyDue)planSupplyChains(this);tradeSharesHourly(city);break;}
         const parts={};let started=performance.now();if(demandDue)this.updateDemand(true);parts.demandMs=performance.now()-started;started=performance.now();if(marketDue)updateMarket(this);parts.marketMs=performance.now()-started;started=performance.now();if(supplyDue)planSupplyChains(this);parts.supplyPlanMs=performance.now()-started;started=performance.now();tradeSharesHourly(city);parts.shareTradingMs=performance.now()-started;return parts;}
       case 12: {

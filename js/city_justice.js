@@ -339,9 +339,10 @@ export class CityJustice {
   }
   updateStreetGraffitiSupports(){
     for(const piece of this.art){
-      if(!piece.entity.destroyed&&fitGraffitiToWall(this.city,piece.support))this.artRevision++;
-      if(!piece.entity.destroyed&&piece.support?.kind==='street-graffiti'&&!graffitiSurfaceExists(this.city,piece.support)){
-      piece.entity.destroyed=true;piece.destroyedAt=this.city.minute;piece.supportLostAt=this.city.minute;this.artRevision++;
+      if(piece.entity.destroyed||piece.support?.kind!=='street-graffiti')continue;
+      if(fitGraffitiToWall(this.city,piece.support))this.artRevision++;
+      if(!graffitiSurfaceExists(this.city,piece.support)){
+        piece.entity.destroyed=true;piece.destroyedAt=this.city.minute;piece.supportLostAt=this.city.minute;this.artRevision++;
       }
     }
   }

@@ -56,10 +56,10 @@ export class CityLife {
     }
     return false;
   }
-  recoverBlockedPosition(c) {
+  recoverBlockedPosition(c,worldRevision=this.city.world.revision||0,obstacleRevision=this.city.obstacleRevision||0,occupiedCount=this.city.occupied.size) {
     const city=this.city;
     if(c.entity.destroyed||c.indoorLocation||c.mobilityTrip||c.localBoatTrip||c.sharedBoatRide||c.fishingJob?.boatId&&c.fishingJob.stage!=='tow'||c.ridingVehicleId||c.skybridgeTransit||c.skybridgeZ)return false;
-    const worldRevision=city.world.revision||0,obstacleRevision=city.obstacleRevision||0,occupiedCount=city.occupied.size,checked=this.positionChecks.get(c);
+    const checked=this.positionChecks.get(c);
     // A citizen following a route computed against the current terrain and
     // obstacle revisions cannot become blocked on a later waypoint. Avoid
     // probing walkability on every tile while the route and map stay valid.
@@ -72,10 +72,13 @@ export class CityLife {
     // Repair invalid ground positions, including walls and water after a route interruption.
     const building=city.buildings.find(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&c.entity.x>=b.entity.x&&c.entity.x<b.entity.x+b.width&&c.entity.y>=b.entity.y&&c.entity.y<b.entity.y+b.depth);
     let destination=building?.door;
-    if(!destination)for(let radius=1;radius<=3&&!destination;radius++)for(let dx=-radius;dx<=radius&&!destination;dx++)for(let dy=-radius;dy<=radius;dy++){
-      const x=Math.floor(c.entity.x)+dx,y=Math.floor(c.entity.y)+dy;
-      const candidate={x:x+.5,y:y+.5},hub=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);
-      if(city.walkable(x,y)&&(!hub||city.findPath(candidate,hub.door)!==null)){destination=candidate;break;}
+    if(!destination){
+      const hub=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);
+      for(let radius=1;radius<=3&&!destination;radius++)for(let dx=-radius;dx<=radius&&!destination;dx++)for(let dy=-radius;dy<=radius;dy++){
+        const cx=Math.floor(c.entity.x)+dx,cy=Math.floor(c.entity.y)+dy;
+        const candidate={x:cx+.5,y:cy+.5};
+        if(city.walkable(cx,cy)&&(!hub||city.findPath(candidate,hub.door)!==null)){destination=candidate;break;}
+      }
     }
     if(!destination||!city.walkable(Math.floor(destination.x),Math.floor(destination.y)))return false;
     const goal=c.path.at(-1);c.entity.x=destination.x;c.entity.y=destination.y;

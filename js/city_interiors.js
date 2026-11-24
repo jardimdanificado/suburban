@@ -154,11 +154,11 @@ export function syncCitizenInterior(city,c){
   if(Math.hypot(c.entity.x-target.entity.x,c.entity.y-target.entity.y)>1.5){const path=city.findPath(c.entity,target.entity);if(path!==null)c.path=path;return false;}return true;
  }
 
- if(c.playerControlled&&c.indoorLocation&&!c.indoorLocation.exiting&&['player-enter','player-explore'].includes(c.task))return !c.indoorLocation.path?.length;
+ if(c.playerControlled&&c.indoorLocation&&!c.indoorLocation.exiting&&(c.task==='player-enter'||c.task==='player-explore'))return !c.indoorLocation.path?.length;
  if(c.funeralInterior&&c.task==='funeral')return !c.indoorLocation?.path?.length;
  const task=c.workMeal?'workmeal':c.task,s=c.indoorLocation,queued=!!c.serviceQueue&&c.serviceQueue.buildingId===c.targetId&&c.serviceQueue.kind===task;
  // Outdoor field workers cannot have an indoor destination to validate.
- if(!s&&['work','manage'].includes(task)&&(c.fishingJob||c.forestryJob||c.mechanicJob||c.paintWorkId))return true;
+ if(!s&&(task==='work'||task==='manage')&&(c.fishingJob||c.forestryJob||c.mechanicJob||c.paintWorkId))return true;
  // An outdoor citizen with no indoor activity has nothing to release or route.
  // Avoid resolving buildings and construction projects on every movement tick.
  if(!s&&(c.entity.destroyed||c.mobilityTrip||c.ridingVehicleId||c.path.length&&!queued||c.deliveryId||!INDOOR_TASKS.has(task)))return true;
@@ -176,7 +176,7 @@ export function syncCitizenInterior(city,c){
  if(task==='police-investigation')return true;
  if(task==='custody-water'&&c.custodyWaterDelivery&&s?.buildingId===c.custodyWaterDelivery.jailId)return !s.exiting&&!s.path.length;
   if(task==='custody'&&c.custody&&s?.buildingId===c.custody.jailId&&s.targetRoomType==='cell'&&!s.exiting)return !s.path.length;
- const fieldWork=['work','manage'].includes(task)&&(c.mechanicJob||c.fishingJob||c.forestryJob||c.paintWorkId),targetId=c.workMeal?.siteId??c.targetId,project=task==='construction'?city.development.projects.find(p=>p.id===c.workProjectId):null,b=city.building(project?.service==='expansion'?project.buildingId:targetId),previous=c.indoorLocation,gig=task==='informal-service'?city.gigs?.get(c.informalJobId):null;
+ const fieldWork=(task==='work'||task==='manage')&&(c.mechanicJob||c.fishingJob||c.forestryJob||c.paintWorkId),targetId=c.workMeal?.siteId??c.targetId,project=task==='construction'?city.development.projects.find(p=>p.id===c.workProjectId):null,b=city.building(project?.service==='expansion'?project.buildingId:targetId),previous=c.indoorLocation,gig=task==='informal-service'?city.gigs?.get(c.informalJobId):null;
  // Open-air employers such as quarries have no interior floor to wait on.
  // Keeping interview candidates outdoors lets the renderer use their actual
  // ground height instead of the site's highest terrain sample.
