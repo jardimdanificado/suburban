@@ -936,7 +936,31 @@ export class CityJustice {
     }
     return false;
   }
-  reactToArt(){if(this.lastArtReactionMinute===this.city.minute)return;this.lastArtReactionMinute=this.city.minute;const city=this.city;for(const piece of this.art)if(!piece.entity.destroyed&&(!piece.campaignDecorationId||piece.layers.length)){const layer=piece.layers.at(-1)||piece,layerId=piece.layers.at(-1)?.id??0,subject=city.society.citizen(piece.subjectId);for(const c of city.citizens){if(c.entity.destroyed||!this.artObserverAt(c,piece,2.6)||(piece.seenBy[c.id]??-Infinity)>city.minute-240||!this.canObserve(c,piece.entity,piece.scene||{buildingId:null,unitId:null,floor:null,height:0}))continue;if(this.considerArtProtest(c,piece)&&piece.entity.destroyed)break;piece.seenBy[c.id]=city.minute;const knowsWrongdoing=this.knowsArtWrongdoing(c,piece.subjectId),reception=layer.narrative?narrativeReception(c,layer.narrative):artworkReception(c,piece,layer,{knowsWrongdoing});this.commissionCounterArtwork(c,piece,layer,reception);const accepts=reception.acceptance,prior=piece.opinions?.[c.id],reading=prior?.layerId===layerId&&typeof prior.agreesWithMessage==='boolean'?prior:null,believes=reading?reading.agreesWithMessage:city.random()<accepts,effect=reading?reading.targetEffect:believes?(reception.effect??1.5):-(reception.effect??0)*.25;
+  reactToArt(){
+    if(this.lastArtReactionMinute===this.city.minute)return;this.lastArtReactionMinute=this.city.minute;
+    const city=this.city;
+    let hasActiveArt=false;
+    for(const piece of this.art)if(!piece.entity.destroyed&&(!piece.campaignDecorationId||piece.layers.length)){hasActiveArt=true;break;}
+    if(!hasActiveArt)return;
+    const buckets=new Map(),orderMap=new Map(),citizens=city.citizens;
+    for(let i=0;i<citizens.length;i++){
+      const c=citizens[i];if(c.entity.destroyed)continue;
+      const pos=c.indoorLocation?this.observationPosition(c):c.entity;if(!pos)continue;
+      const cx=Math.floor(pos.x/4),cy=Math.floor(pos.y/4),bkey=((cx&0xFFFF)<<16)|(cy&0xFFFF);
+      let list=buckets.get(bkey);if(!list){list=[];buckets.set(bkey,list);}
+      list.push(c);orderMap.set(c,i);
+    }
+    const nearby=[];
+    for(const piece of this.art)if(!piece.entity.destroyed&&(!piece.campaignDecorationId||piece.layers.length)){
+      const layer=piece.layers.at(-1)||piece,layerId=piece.layers.at(-1)?.id??0,subject=city.society.citizen(piece.subjectId);
+      const px=Math.floor(piece.entity.x/4),py=Math.floor(piece.entity.y/4);
+      nearby.length=0;
+      for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
+        const list=buckets.get((((px+dx)&0xFFFF)<<16)|((py+dy)&0xFFFF));
+        if(list)for(let j=0;j<list.length;j++){const c=list[j];if(!c.entity.destroyed&&(piece.seenBy[c.id]??-Infinity)<=city.minute-240&&this.artObserverAt(c,piece,2.6))nearby.push(c);}
+      }
+      if(nearby.length>1)nearby.sort((a,b)=>orderMap.get(a)-orderMap.get(b));
+      for(const c of nearby){if(!this.canObserve(c,piece.entity,piece.scene||{buildingId:null,unitId:null,floor:null,height:0}))continue;if(this.considerArtProtest(c,piece)&&piece.entity.destroyed)break;piece.seenBy[c.id]=city.minute;const knowsWrongdoing=this.knowsArtWrongdoing(c,piece.subjectId),reception=layer.narrative?narrativeReception(c,layer.narrative):artworkReception(c,piece,layer,{knowsWrongdoing});this.commissionCounterArtwork(c,piece,layer,reception);const accepts=reception.acceptance,prior=piece.opinions?.[c.id],reading=prior?.layerId===layerId&&typeof prior.agreesWithMessage==='boolean'?prior:null,believes=reading?reading.agreesWithMessage:city.random()<accepts,effect=reading?reading.targetEffect:believes?(reception.effect??1.5):-(reception.effect??0)*.25;
       this.observeArtwork(c,piece,reception,{believes,effect});if(piece.copyOfArtId!=null){const sourceArt=this.art.find(item=>item.id===piece.copyOfArtId),record=this.caseRecord(piece.caseId);if(record&&!record.discovery&&(sourceArt?.creatorId===c.id||sourceArt?.opinions?.[c.id]))record.discovery={citizenId:c.id,noticedAt:city.minute,basis:piece.forgery?'identified-art-forgery':'recognized-pirated-art'};}if(layer.narrative){piece.narrativeReadings??=[];piece.narrativeReadings.push({citizenId:c.id,layerId,minute:city.minute,believes,confidence:Math.round(accepts*100),familiarity:reception.familiarity,contradiction:reception.contradiction});if(piece.narrativeReadings.length>32)piece.narrativeReadings.shift();}
       const relations=city.relationships;layer.socialFactId??=relations.nextFactId++;const memory={id:layer.socialFactId,kind:'public-art',actorId:layer.creatorId??piece.creatorId,targetId:piece.subjectId,aboutId:piece.subjectId??layer.narrative?.participantIds[0]??piece.creatorId,minute:layer.minute??piece.createdAt,eventId:layer.eventId??piece.eventId,truth:null,artId:piece.id,narrative:layer.narrative?structuredClone(layer.narrative):null,description:`Mensagem urbana: “${layer.message}”.`};relations.facts.set(memory.id,memory);if(relations.facts.size>768)relations.facts.delete(relations.facts.keys().next().value);city.relationships.remember(c,memory,{otherId:subject?.id??null,firsthand:false,truth:null,impact:effect,accepted:believes});if(subject&&c.political&&!c.political.memories.some(m=>m.kind==='observer-opinion'&&m.artId===piece.id&&m.layerId===layerId))city.politics.remember(c,{kind:'observer-opinion',artId:piece.id,layerId,candidateId:subject.id,truth:null,believes,effect,description:`Viu arte urbana sobre ${subject.entity.properties.name}: ${layer.message}`});c.mood=Math.max(-25,Math.min(25,(c.mood||0)+effect));
     }}}

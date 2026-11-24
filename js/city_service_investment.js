@@ -97,7 +97,8 @@ export class CityServiceInvestment {
   invest({initialOnly=false,types=null}={}) {
     const city = this.city;
     city.development.ensurePlots();
-    const existingTypes=initialOnly?new Set(city.economy.businesses.map(b=>b.type)):null;
+    const businesses=city.economy.businesses;
+    const existingTypes=initialOnly?new Set(businesses.map(b=>b.type)):null;
     const selectedTypes=[...ESSENTIAL_SERVICES].filter(type=>(!types||types.includes(type))&&(!existingTypes||!existingTypes.has(type)));
     const wasteSnapshot=selectedTypes.some(type=>WASTE_SERVICES.has(type))?city.sanitation.wasteMetrics():null;
     const demands=selectedTypes.map(type=>({type,...this.demand(type,wasteSnapshot)})).filter(d=>d.score>=60).sort((a,b)=>(a.type==='builder'?-1:b.type==='builder'?1:b.score-a.score));
@@ -123,12 +124,16 @@ export class CityServiceInvestment {
       const candidates = eligibleFounders.filter(c=>!projectAccounts.has(c.accountId)).sort((a,b) => Number(!!a.jobId)-Number(!!b.jobId) || (b.skills[skill]||0)-(a.skills[skill]||0) || a.id-b.id);
       // Failed loan attempts do not open firms or consume quarry deposits.
       // Re-evaluate this classification for the next service demand.
-      const initialChain=!city.economy.businesses.some(b=>b.type===demand.type&&(demand.type!=='quarry'||city.economy.quarryStatus(b).remaining>0));
+      const initialChain=!businesses.some(b=>b.type===demand.type&&(demand.type!=='quarry'||city.economy.quarryStatus(b).remaining>0));
       let project = null;
+      let availableBanks=city.bank.available(banks);
       for (const founder of candidates) {
         let loan = null;
         const need = Math.max(0,plan.total-founder.balance);
-        if (need && founder.creditAllowed!==false) for (const bank of city.bank.available(banks)) { loan = city.bank.lendForBusiness(bank,founder,need,{type:demand.type,initialChain,score:demand.score,budget:plan.total}); if (loan) break; }
+        if (need && founder.creditAllowed!==false && availableBanks.length) {
+          for (const bank of availableBanks) { loan = city.bank.lendForBusiness(bank,founder,need,{type:demand.type,initialChain,score:demand.score,budget:plan.total}); if (loan) break; }
+          availableBanks=city.bank.available(banks);
+        }
         if (founder.balance < plan.total) continue;
         if (city.development.buyPlot(founder.accountId,plot.id)) project = this.start(founder.accountId,plan,loan);
         if (project) {projectAccounts.add(founder.accountId);break;}

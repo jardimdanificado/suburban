@@ -1689,7 +1689,7 @@ export class CitySimulation {
     // Spread hourly work across minutes; keep the same order and one run per hour.
     if (this.minute % 60 === 0) this.hourlyPhase = 0;
     let economyHourly=null;
-    if (this.hourlyPhase != null && this.hourlyPhase < 13) {
+    if (this.hourlyPhase != null && this.hourlyPhase < 14) {
       const phase=this.hourlyPhase++;
       if(this.profileDiagnostics){const started=performance.now(),parts=this.economy.hourly(phase);economyHourly={phase,ms:performance.now()-started,...(parts||{})};}
       else this.economy.hourly(phase);

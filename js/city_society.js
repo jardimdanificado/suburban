@@ -7,6 +7,7 @@ const meaningfulRelationView=view=>view&&(view.kinship||view.affection>=30||view
 const topics = ['o bairro', 'o trabalho', 'os planos para o futuro', 'a família', 'a cidade', 'música', 'comida', 'o dia a dia'];
 const NO_NEIGHBORS=Object.freeze([]);
 const ageCache=new WeakMap();
+const contactTileCounts=new WeakMap();
 
 export class CitySociety {
   constructor(city) {
@@ -141,15 +142,16 @@ export class CitySociety {
     const contactInterval=this.city.fastForward?(this.city.fastForward2?30:15):5;
     if(this.city.minute%contactInterval===0){
     const contactStart=profiling?performance.now():0;
-    const buckets = new Map(),stride=Math.ceil(this.city.world.width/2)+4,tileCounts=new Map();
+    const buckets = new Map(),width=this.city.world.width,height=this.city.world.height,stride=Math.ceil(width/2)+4,totalTiles=width*height;
+    let tileCounts=contactTileCounts.get(this);if(!tileCounts||tileCounts.length!==totalTiles){tileCounts=new Uint16Array(totalTiles);contactTileCounts.set(this,tileCounts);}else tileCounts.fill(0);
     const residents=this.city.citizens,contactBudget=Math.max(12,Math.ceil(residents.length*.1));
-    for(const c of residents)if(!c.entity.destroyed&&!c.indoorLocation){const key=Math.floor(c.entity.x)+Math.floor(c.entity.y)*this.city.world.width;tileCounts.set(key,(tileCounts.get(key)||0)+1);}
+    for(const c of residents)if(!c.entity.destroyed&&!c.indoorLocation){const tx=Math.floor(c.entity.x),ty=Math.floor(c.entity.y);if(tx>=0&&ty>=0&&tx<width&&ty<height)tileCounts[tx+ty*width]++;}
     const offset=(this.city.minute*37)%Math.max(1,residents.length);
     let contacts=0;
     for(let residentIndex=0;residentIndex<residents.length&&contacts<contactBudget;residentIndex++){
       const c=residents[(offset+residentIndex)%residents.length];
       if (!this.canSocialize(c)) continue;
-      if(!c.indoorLocation&&(tileCounts.get(Math.floor(c.entity.x)+Math.floor(c.entity.y)*this.city.world.width)||0)>1)continue;
+      if(!c.indoorLocation){const tx=Math.floor(c.entity.x),ty=Math.floor(c.entity.y);if(tx>=0&&ty>=0&&tx<width&&ty<height&&tileCounts[tx+ty*width]>1)continue;}
       const x = Math.floor(c.entity.x / 2), y = Math.floor(c.entity.y / 2);
       for (let dx = -1; dx <= 1 && !c.conversation; dx++) for (let dy = -1; dy <= 1 && !c.conversation; dy++) {
         const nearby = buckets.get(x+dx+(y+dy)*stride) || NO_NEIGHBORS;

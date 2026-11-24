@@ -1089,7 +1089,7 @@ export class CityEconomy {
   }
   hourly(phase = null) {
     // A direct call still performs a complete hour (tools and initialization).
-    if (phase === null) { for (let i = 0; i < 13; i++) this.hourly(i); return; }
+    if (phase === null) { for (let i = 0; i < 14; i++) this.hourly(i); return; }
     switch (phase) {
       case 0: this.city.currency.hourly(); this.city.welfare.hourly(); break;
       case 1: this.city.lighting.hourly(); break;
@@ -1114,9 +1114,15 @@ export class CityEconomy {
         const parts={};let started=performance.now();if(demandDue)this.updateDemand(true);parts.demandMs=performance.now()-started;started=performance.now();if(marketDue)updateMarket(this);parts.marketMs=performance.now()-started;started=performance.now();if(supplyDue)planSupplyChains(this);parts.supplyPlanMs=performance.now()-started;started=performance.now();tradeSharesHourly(city);parts.shareTradingMs=performance.now()-started;return parts;}
       case 12: {
         if(this.city.fastForward&&reducedCadence(this.city,this,'quarry-expansion',120,180,`${this.city.buildings.length}:${this.city.development.projects.length}:${this.city.quarryRevision||0}`))this.serviceInvestment.invest({types:['quarry']});
-        if(!this.city.profileDiagnostics){this.city.vehicles.hourly();if(this.city.fastForward||this.city.hour%2===0){this.investInHousing();this.invest();}break;}
+        if(!this.city.profileDiagnostics){this.city.vehicles.hourly();if(this.city.fastForward||this.city.hour%2===0)this.investInHousing();break;}
         const parts={};let started=performance.now();this.city.vehicles.hourly();parts.vehiclesMs=performance.now()-started;
-        if(this.city.fastForward||this.city.hour%2===0){started=performance.now();this.investInHousing();parts.housingInvestmentMs=performance.now()-started;started=performance.now();this.invest();parts.businessInvestmentMs=performance.now()-started;parts.businessSearch=this.lastInvestmentSearchProfile;}
+        if(this.city.fastForward||this.city.hour%2===0){started=performance.now();this.investInHousing();parts.housingInvestmentMs=performance.now()-started;}
+        return parts;
+      }
+      case 13: {
+        if(!this.city.profileDiagnostics){if(this.city.fastForward||this.city.hour%2===0)this.invest();break;}
+        const parts={};
+        if(this.city.fastForward||this.city.hour%2===0){const started=performance.now();this.invest();parts.businessInvestmentMs=performance.now()-started;parts.businessSearch=this.lastInvestmentSearchProfile;}
         return parts;
       }
     }

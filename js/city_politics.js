@@ -38,9 +38,17 @@ export class CityPolitics {
     city.log(`${c.entity.properties.name} assumiu a prefeitura: ${reason.toLowerCase()}.`,'government',[old?.id,c.id].filter(id=>id!=null),{kind:'mayor-appointed',buildingId:hall?.id,electionId:election?.id});
   }
   conditions() {
-    const city=this.city,people=city.citizens.filter(c=>!c.entity.destroyed),n=Math.max(1,people.length);
-    return { happiness:people.reduce((s,c)=>s+c.happiness,0)/n, homeless:people.filter(c=>!c.homeUnitId).length/n,
-      hunger:people.filter(c=>c.needs.food<30).length/n, employment:people.filter(c=>c.jobId||c.businessIds.length).length/n };
+    const citizens=this.city.citizens;
+    let count=0,happinessSum=0,homeless=0,hunger=0,employment=0;
+    for(let i=0;i<citizens.length;i++){
+      const c=citizens[i];if(c.entity.destroyed)continue;
+      count++;happinessSum+=c.happiness;
+      if(!c.homeUnitId)homeless++;
+      if(c.needs.food<30)hunger++;
+      if(c.jobId||c.businessIds.length)employment++;
+    }
+    const n=Math.max(1,count);
+    return { happiness:happinessSum/n, homeless:homeless/n, hunger:hunger/n, employment:employment/n };
   }
   updateApproval() {
     const now=this.conditions(),base=this.baseline||now;
