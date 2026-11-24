@@ -262,3 +262,16 @@ test('pastures preserve grass and grazed cells clear temporarily then regrow', a
   city.fauna.updateMinute();
   assert.equal(city.fauna.grazedTiles.has('12,12'), false, 'grazed grass should regrow after 90 minutes');
 });
+
+test('all 24 species generate diffuse textures and tangent-space normal maps', async () => {
+  const { generateAnimalTextureData, createAnimalSpeciesTextures } = await import('../js/animal_textures.js');
+  class DataTexture { constructor(data, w, h) { this.data = data; this.width = w; this.height = h; } }
+  const THREE = { DataTexture, RGBAFormat: 1, NearestFilter: 1, RepeatWrapping: 1, SRGBColorSpace: 'srgb' };
+  for (const species of ANIMAL_SPECIES_IDS) {
+    const tex = generateAnimalTextureData(species, 32);
+    assert.equal(tex.diffuse.length, 32 * 32 * 4);
+    assert.equal(tex.normal.length, 32 * 32 * 4);
+    const created = createAnimalSpeciesTextures(THREE, species);
+    assert.ok(created.map && created.normalMap);
+  }
+});

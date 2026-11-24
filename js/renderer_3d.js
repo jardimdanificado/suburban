@@ -8797,7 +8797,10 @@ export class RCT3DRenderer {
         const vehicleAngle=cityCitizen?.ridingVehicleId?this.cityDevelopment?.city?.vehicles?.units.get(cityCitizen.ridingVehicleId)?.angle:null;
         citizenModelOptions.hidden=isPossessed;citizenModelOptions.dimmed=!inCurZone;citizenModelOptions.vehicleAngle=vehicleAngle;citizenModelOptions.visualOffset=citizenRenderOffsets.get(e.id)||null;
         citizenModelOptions.indoorBounds=interiorBuilding&&interiorBuilding.constructionKind!=='open-air'?{minX:interiorBuilding.entity.x,maxX:interiorBuilding.entity.x+interiorBuilding.width,minY:interiorBuilding.entity.y,maxY:interiorBuilding.entity.y+interiorBuilding.depth}:null;
-        const modelRendered=(cityCitizen&&this.cityCitizenModels.add(e,surfaceH,citizenModelOptions))||(e.properties?.cityAnimal&&this.cityAnimalModels.add(e,surfaceH,{perspective:perspectiveActive,selected:this.selectedEntityId===e.id}));
+        const animal=e.properties?.cityAnimal;
+        const animalTile=animal&&world?tileAt(world,Math.floor(e.x),Math.floor(e.y)):null;
+        const animalSurfaceH=animal&&animalTile===TILE_WATER?Math.max(surfaceH,WATER_LEVEL-(animal.species==='jacare'?.08:.02)):surfaceH;
+        const modelRendered=(cityCitizen&&this.cityCitizenModels.add(e,surfaceH,citizenModelOptions))||(animal&&this.cityAnimalModels.add(e,animalSurfaceH,{perspective:perspectiveActive,selected:this.selectedEntityId===e.id}));
         if(modelRendered){
           activeIds.add(e.id);const previous=this.entitySprites.get(e.id);if(previous)previous.visible=false;
         }else{

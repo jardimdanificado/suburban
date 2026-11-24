@@ -1,5 +1,34 @@
 import { ANIMAL_CLIPS, ANIMAL_SPECIES, ANIMAL_SPECIES_IDS } from './animal_catalog.js';
+import { createAnimalSpeciesTextures } from './animal_textures.js';
 import { parseCitizenOBJ } from './city_citizen_models.js';
+
+function parseAnimalUVs(text) {
+  const uvs = [], faceUVs = [];
+  for (const line of text.split(/\r?\n/)) {
+    const row = line.trim();
+    if (!row || row.startsWith('#')) continue;
+    const parts = row.split(/\s+/), tag = parts.shift();
+    if (tag === 'vt') {
+      uvs.push([Number(parts[0]) || 0, Number(parts[1]) || 0]);
+    } else if (tag === 'f' && parts.length >= 3) {
+      const idx = parts.map(p => {
+        const vt = p.split('/')[1];
+        return vt ? Math.max(0, Number(vt) - 1) : 0;
+      });
+      for (let i = 1; i < idx.length - 1; i++) faceUVs.push([idx[0], idx[i], idx[i + 1]]);
+    }
+  }
+  const out = new Float32Array(faceUVs.length * 6);
+  let offset = 0;
+  for (const tri of faceUVs) {
+    for (const vi of tri) {
+      const uv = uvs[vi] || [0, 0];
+      out[offset++] = uv[0];
+      out[offset++] = uv[1];
+    }
+  }
+  return out;
+}
 
 export function animalAnimation(animal, moving = false) {
   if (!animal) return 'idle';
@@ -28,6 +57,7 @@ export class CityAnimalModels {
     this.fetchAsset = options.fetchAsset || (url => fetch(url));
     this.baseURL = options.baseURL || new URL('../data/animals/', import.meta.url);
     this.frames = new Map();
+    this.speciesMaterials = new Map();
     this.batches = new Map();
     this.activeBatches = new Set();
     this.motion = new WeakMap();
@@ -46,6 +76,20 @@ export class CityAnimalModels {
     this.loading = options.autoLoad === false ? Promise.resolve(false) : this.load();
   }
 
+  getMaterial(species) {
+    let mat = this.speciesMaterials.get(species);
+    if (mat) return mat;
+    if (this.THREE.DataTexture) {
+      const { map, normalMap } = createAnimalSpeciesTextures(this.THREE, species);
+      mat = new this.THREE.MeshLambertMaterial({ color: 0xffffff, map, normalMap });
+    } else {
+      mat = this.material;
+    }
+    if (this.decorateMaterial && mat !== this.material) this.decorateMaterial(mat);
+    this.speciesMaterials.set(species, mat);
+    return mat;
+  }
+
   async load() {
     try {
       const tasks = [];
@@ -55,10 +99,15 @@ export class CityAnimalModels {
             tasks.push((async () => {
               const response = await this.fetchAsset(new URL(`${species}/${clip}/${frame}.obj`, this.baseURL));
               if (!response.ok) throw Error(`Falha em ${species}/${clip}/${frame}.obj (${response.status})`);
-              const data = parseCitizenOBJ(await response.text());
+              const text = await response.text();
+              const data = parseCitizenOBJ(text);
+              const uvs = parseAnimalUVs(text);
               const geometry = new this.THREE.BufferGeometry();
               geometry.setAttribute('position', new this.THREE.Float32BufferAttribute(data.positions, 3));
               geometry.setAttribute('normal', new this.THREE.Float32BufferAttribute(data.normals, 3));
+              if (uvs.length === (data.positions.length / 3) * 2) {
+                geometry.setAttribute('uv', new this.THREE.Float32BufferAttribute(uvs, 2));
+              }
               geometry.computeBoundingSphere();
               this.frames.set(`${species}:${clip}:${frame}`, geometry);
             })());
@@ -128,7 +177,7 @@ export class CityAnimalModels {
     this.activeBatches.add(batch);
     if (batch.count === batch.capacity) {
       const capacity = Math.max(16, batch.capacity * 2);
-      const mesh = new this.THREE.InstancedMesh(source, this.material, capacity);
+      const mesh = new this.THREE.InstancedMesh(source, this.getMaterial(species), capacity);
       mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);
       mesh.frustumCulled = false;
       mesh.castShadow = false;
@@ -154,8 +203,7 @@ export class CityAnimalModels {
     this.scale.set(size, size, size);
     this.matrix.compose(this.position, this.quaternion, this.scale);
     batch.mesh.setMatrixAt(batch.count, this.matrix);
-    this.color.setHex(entity.properties.render?.color ?? spec.color ?? 0xd9d2c5);
-    if (options.selected) this.color.offsetHSL?.(0, -0.1, 0.22);
+    this.color.setHex(options.selected ? 0xfff3b0 : (this.THREE.DataTexture ? 0xffffff : (entity.properties.render?.color ?? spec.color ?? 0xd9d2c5)));
     batch.mesh.setColorAt(batch.count, this.color);
     batch.count++;
     return true;

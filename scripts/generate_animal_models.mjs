@@ -88,15 +88,25 @@ function createMesh() {
   }
 
   function toOBJ(name) {
-    let minY = Infinity;
-    for (const v of vertices) if (v[1] < minY) minY = v[1];
+    let minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const v of vertices) {
+      if (v[1] < minY) minY = v[1];
+      if (v[1] > maxY) maxY = v[1];
+      if (v[2] < minZ) minZ = v[2];
+      if (v[2] > maxZ) maxZ = v[2];
+    }
     const shiftY = Number.isFinite(minY) ? -minY : 0;
+    const spanY = Math.max(0.1, maxY - minY);
+    const spanZ = Math.max(0.1, maxZ - minZ);
     const lines = [`o ${name}`];
     for (const [x, y, z] of vertices) {
       lines.push(`v ${x.toFixed(5)} ${(y + shiftY).toFixed(5)} ${z.toFixed(5)}`);
+      const u = Math.max(0, Math.min(1, (z - minZ) / spanZ));
+      const vCoord = Math.max(0, Math.min(1, (y - minY) / spanY));
+      lines.push(`vt ${u.toFixed(4)} ${vCoord.toFixed(4)}`);
     }
     for (const [a, b, c] of faces) {
-      lines.push(`f ${a} ${b} ${c}`);
+      lines.push(`f ${a}/${a} ${b}/${b} ${c}/${c}`);
     }
     return lines.join('\n') + '\n';
   }
