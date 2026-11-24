@@ -347,7 +347,12 @@ test('circular grazing clears only a circle, arboreal animals climb trees, and 2
   for (const surface of ['tree', 'balcony', 'fence', 'roof']) {
     const nest = city.fauna.placeNest({ x: 10.5, y: 10.5, z: 2.0, surface, species: 'bem_te_vi' });
     assert.equal(nest.surface, surface);
+    assert.equal(nest.entity.properties.cityNest, nest);
   }
   const bird = city.fauna.spawn(10, 10, 'bem_te_vi');
   assert.ok(city.fauna.tryBuildNest(bird), 'bird should build a nest');
+
+  // Garça cannot walk on water, only fly over it
+  assert.equal(city.fauna.canOccupy(0, 0, 'garca', null, 0), false);
+  assert.equal(city.fauna.canOccupy(0, 0, 'garca', null, 2.5), true);
 });

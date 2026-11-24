@@ -85,7 +85,7 @@ export const TABS = [
 export const VIEWS = {
   market: [['overview','PANORAMA'],['shares','AÇÕES'],['people','PESSOAS'],['companies','EMPRESAS'],['locations','LOCALIZAÇÕES'],['goods','MERCADO'],['sales','VENDAS'],['analysis','ANÁLISE DE DEMANDA']],
   economy: [['overview','EMPRESAS'],['vacancies','VAGAS'],['applications','SELEÇÕES'],['workers','FUNCIONÁRIOS'],['analysis','ANÁLISE']],
-  city: [['overview', 'PANORAMA'], ['needs', 'NECESSIDADES'], ['activity', 'ATIVIDADE'], ['services','SAÚDE E LAZER'], ['analysis','ANÁLISE DE NECESSIDADES'], ['nature','VEGETAÇÃO']],
+  city: [['overview', 'PANORAMA'], ['needs', 'NECESSIDADES'], ['activity', 'ATIVIDADE'], ['services','SAÚDE E LAZER'], ['analysis','ANÁLISE DE NECESSIDADES'], ['nature','VEGETAÇÃO'], ['fauna','FAUNA']],
   government: [['overview', 'PREFEITURA'], ['elections','POLÍTICA'], ['identity','IDENTIDADE'], ['contracts', 'CONTRATOS'], ['finance', 'TESOURO']],
   land: [['plots', 'TERRENOS'], ['projects', 'OBRAS']],
   production: [['stocks', 'ESTOQUES'], ['demand', 'DEMANDAS'], ['flow', 'MOVIMENTAÇÕES'], ['lighting','ILUMINAÇÃO'],['analysis','ANÁLISE DAS CADEIAS']],
@@ -332,6 +332,7 @@ export class CityUI {
     if(this.selected?.properties?.cityUrbanArt)return this.artworkInspector(p,this.selected.properties.cityUrbanArt);
     if(this.selected?.properties?.cityPlant)return this.plantInspector(p,this.selected.properties.cityPlant);
     if(this.selected?.properties?.cityAnimal)return this.animalInspector(p,this.selected.properties.cityAnimal);
+    if(this.selected?.properties?.cityNest)return this.nestInspector(p,this.selected.properties.cityNest);
     if(this.selected?.properties?.worldVessel)return renderWorldVessel(this,p,this.selected.properties.worldVessel);
     if(this.selected?.properties.cityVehicle)return renderVehicle(this,p,this.selected.properties.cityVehicle);
     const c = this.selected?.properties.citizen, b = this.selected?.properties.cityBuilding;
@@ -905,6 +906,7 @@ export class CityUI {
   overview(p) {
     const city=this.city,s=city.stats(), view=this.view();
     if(view==='nature'){this.naturePanel(p);return;}
+    if(view==='fauna'){this.faunaPanel(p);return;}
     if(view==='analysis'){this.analytics(p);return;}
     if(view==='overview'){
       p.metrics([
@@ -1298,6 +1300,31 @@ export class CityUI {
     if(selected&&!this.host)this.plantInspector(p,selected);
     else p.note('Selecione uma planta para abrir sua ficha em uma janela própria.');
     p.button('HISTÓRICO DA VEGETAÇÃO',()=>{this.go('log').logCategory='nature';});
+  }
+  nestInspector(p,nest) {
+    const spec=ANIMAL_SPECIES[nest.species]||{};
+    const surfaceLabel={tree:'Árvore',balcony:'Sacada',fence:'Cerca',roof:'Telhado'}[nest.surface]||nest.surface;
+    p.heading(`NINHO · ${(spec.label||nest.species).toUpperCase()}`);
+    p.kv('Superfície',surfaceLabel);
+    p.kv('Ovos no ninho',`${nest.eggs||0}`);
+    p.kv('Coordenadas',`${nest.x.toFixed(1)}, ${nest.y.toFixed(1)} · alt ${nest.z.toFixed(1)}m`);
+    p.buttons([{label:'LOCALIZAR NO MAPA',click:()=>{this.camera(nest.x,nest.y);if(!this.host)this.visible=false;}}]);
+  }
+  faunaPanel(p) {
+    const fauna=this.city.fauna;
+    if(!fauna){p.note('Sistema de fauna não inicializado.');return;}
+    const animals=[...fauna.animals.values()],nests=[...fauna.nests.values()];
+    const wild=animals.filter(a=>!a.dead&&a.category==='wild').length,livestock=animals.filter(a=>!a.dead&&a.category==='livestock').length,tamed=animals.filter(a=>!a.dead&&a.tamed).length,dead=animals.filter(a=>a.dead).length;
+    p.heading('FAUNA, PECUÁRIA E NINHOS');
+    p.metrics([['SILVESTRES',wild,C.green],['PECUÁRIA',livestock,C.gold],['DOMESTICADOS',tamed,C.cyan],['NINHOS',nests.length,C.gold],['CADÁVERES',dead,C.red]]);
+    const rows=animals.filter(a=>this.matches(`${ANIMAL_SPECIES[a.species]?.label||a.species} ${a.action||''} ${a.category} ${Math.floor(a.x)} ${Math.floor(a.y)}`));
+    const page=Math.min(this.faunaPage||0,Math.max(0,Math.ceil(rows.length/30)-1));
+    p.table([{label:'Espécie',weight:2},{label:'Categoria'},{label:'Ação',weight:2},{label:'Posição'}],rows.slice(page*30,page*30+30).map(a=>({cells:[ANIMAL_SPECIES[a.species]?.label||a.species,a.dead?'Cadáver':a.tamed?'Domesticado':a.category==='livestock'?'Pecuária':'Silvestre',a.action||a.state,`${Math.floor(a.x)}, ${Math.floor(a.y)}`],selected:this.selected?.id===a.id,click:()=>{this.camera(a.x,a.y);if(this.host){const state=this.host.create(`animal:${a.id}`,'city',{title:ANIMAL_SPECIES[a.species]?.label||'Criatura',entity:a.entity,kind:'dossier'});state.detailTab='fauna';state.resetScroll();}}})));
+    p.buttons([{label:'ANTERIOR',click:()=>{this.faunaPage=Math.max(0,page-1);}},{label:'PRÓXIMA',click:()=>{this.faunaPage=page+1;}}]);
+    if(nests.length){
+      p.heading('NINHOS DE PÁSSAROS');
+      p.table([{label:'Espécie',weight:2},{label:'Local'},{label:'Ovos'},{label:'Posição'}],nests.slice(0,20).map(n=>({cells:[ANIMAL_SPECIES[n.species]?.label||n.species,{tree:'Árvore',balcony:'Sacada',fence:'Cerca',roof:'Telhado'}[n.surface]||n.surface,`${n.eggs||0}`,`${Math.floor(n.x)}, ${Math.floor(n.y)}`],selected:this.selected?.id===n.entityId,click:()=>{this.camera(n.x,n.y);if(this.host){const state=this.host.create(`nest:${n.entityId}`,'city',{title:n.entity?.properties?.name||'Ninho',entity:n.entity,kind:'dossier'});state.detailTab='fauna';state.resetScroll();}}})));
+    }
   }
   plantInspector(p,plant) {
     const spec=PLANT_SPECIES[plant.species]||{},stage={seedling:'Muda',young:'Jovem',mature:'Madura'},formLabels={tree:'Árvore',palm:'Palmeira',fan_palm:'Palmeira-leque',broad_leaf:'Folhagem tropical de folhas largas',foliage:'Planta ornamental de folhagem',flowering:'Planta ornamental florida'},age=Math.max(0,this.city.minute-(plant.plantedAt||0)),growth=Math.max(1,spec.grow||1),percent=Math.min(100,Math.round(age/growth*100));

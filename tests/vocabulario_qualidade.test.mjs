@@ -86,3 +86,42 @@ test('curated variants multiply the sentences for a low seed range', () => {
   assert(new Set(frases).size >= 30, `apenas ${new Set(frases).size} frases únicas`);
 });
 
+test('discourse engine reaches every advanced construction', () => {
+  const frases = [];
+  for (const tema of TEMAS_DO_JOGO) {
+    for (let seed = 0; seed < 40; seed++) {
+      frases.push(gerarFrase({ tema, random: seeded(seed * 53 + 17), complexidade: 'complexa' }));
+    }
+  }
+  const padroes = {
+    clivada: /^(?:Foi|Foram) .+ que /u,
+    passivaSintetica: /(?:^|[;,])\s*\p{L}+-se (?:a|o|as|os)\b/iu,
+    atribuicao: /\b(?:anunciou|informou|afirmou|confirmou|prometeu|anunciaram|informaram|afirmaram|confirmaram|prometeram) que (?:vai|vão)\b/u,
+    adjuntoFronteado: /^(?:No|Na|Nos|Nas|Em|Com|Sem|Sob|Entre|Durante|Desde|Após|Antes|Até) [^,]+,/u,
+    elipseDeSujeito: /,? e (?:\p{L}+ ){0,3}(?:reform|ampli|pint|cobr|contrat|acompanh|oferec|orient|visit|plant|limp|organiz|vend|entreg|discut|fiscaliz|aprov|invest|regulariz|ilumin|ajud|aument|propor|esper|abr)/iu,
+    retomada: /\b(?:A administração|A gestão|O executivo|O poder público|O distrito|A metrópole|Os habitantes|Os residentes|A instituição|As instituições|O colegiado|A pasta|A mídia|A companhia|A firma|A indústria|A empreiteira|A associação|Os estudantes|Os docentes|Os agentes|Os ecologistas|Os locatários|Os usuários|Os condutores)\b/u,
+  };
+  for (const [nome, padrao] of Object.entries(padroes)) {
+    assert(frases.some(frase => padrao.test(frase)), `construção ausente: ${nome}`);
+  }
+});
+
+test('style changes the voice without losing determinism', () => {
+  const gerar = (estilo, seed) => gerarFrase({
+    tema: 'cidade', random: seeded(seed), complexidade: 'complexa', estilo,
+  });
+  for (const estilo of ['auto', 'popular', 'jornal', 'oficial']) {
+    assert.equal(gerar(estilo, 31), gerar(estilo, 31), `estilo ${estilo} não determinístico`);
+  }
+  assert.throws(() => gerarFrase({ tema: 'cidade', random: seeded(1), estilo: 'telegráfico' }), RangeError);
+
+  const colher = estilo => Array.from({ length: 80 }, (_, seed) => gerar(estilo, seed * 7 + 1));
+  const popular = colher('popular');
+  const jornal = colher('jornal');
+  assert.notDeepEqual(popular, jornal);
+  const avancado = /^(?:Foi|Foram) .+ que |\p{L}+-se (?:a|o|as|os)\b|\b(?:anunciou|informou|afirmou) que vai\b/iu;
+  const contar = lista => lista.filter(frase => avancado.test(frase)).length;
+  assert(contar(jornal) > contar(popular), 'o registro jornalístico deveria usar mais vozes marcadas');
+});
+
+

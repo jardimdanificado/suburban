@@ -4,6 +4,7 @@
 // gerador antigo, que derivava palavras do catálogo geral sem validação.
 import { conjugarVerbo } from './vocabulario.js';
 import { SUBSTANTIVOS, VERBOS_TRANSITIVOS } from './lexico_sinonimos.js';
+import { CENAS_EXTRA } from './cenas_extra.js';
 
 const TEMAS = [
   'politica', 'cidade', 'trabalho', 'economia', 'moradia', 'familia',
@@ -361,9 +362,16 @@ export const CENAS = {
   ],
 };
 
+// As cenas extras completam os pares de mesmo ator usados pela elipse e
+// ampliam o repertório sem tocar nas cenas base.
+for (const [tema, extras] of Object.entries(CENAS_EXTRA)) {
+  if (CENAS[tema]) CENAS[tema].push(...extras);
+}
+
 const ADVERBIOS = [
   'de fato', 'aos poucos', 'em geral', 'muitas vezes',
-  'cada vez mais', 'quase sempre', 'na prática',
+  'cada vez mais', 'quase sempre', 'na prática', 'de imediato',
+  'por enquanto', 'a médio prazo', 'em conjunto', 'pouco a pouco',
 ];
 
 const ADJUNTOS = {
@@ -378,6 +386,7 @@ const ADJUNTOS = {
 const INTROS = [
   'Na prática', 'No bairro', 'Com o tempo', 'Segundo os moradores',
   'Do ponto de vista local', 'Na avaliação da comunidade', 'Ao longo do ano',
+  'No dia a dia', 'Olhando de perto', 'Do lado de cá',
 ];
 
 const PARTICIPIOS = {
@@ -401,14 +410,71 @@ const PASSIVAVEIS = new Set([
   'formar', 'sediar', 'ocupar', 'alagar', 'reforçar', 'apreender',
 ]);
 
-const GRUPOS = [
-  { joiners: [' e ', '; ', ', e '], subjuntivo: false },
-  { joiners: [' mas ', ' porém, ', ' contudo, ', ' todavia, ', '; ainda assim, '], subjuntivo: false },
-  { joiners: [' porque ', ' já que ', ' pois '], subjuntivo: false },
-  { joiners: [' quando ', ' enquanto ', ' sempre que '], subjuntivo: false, temporal: true },
-  { joiners: [' se ', ' caso ', ' desde que ', ' embora ', ' antes que '], subjuntivo: true },
-  { joiners: ['. Além disso, ', '. Ao mesmo tempo, ', ': '], subjuntivo: false },
-];
+// Relações de discurso. Cada uma tem conectores próprios e, quando precisa,
+// modo subjuntivo. O encadeamento não é sorteio puro: TRANSICOES define quais
+// relações combinam com a anterior (causa pede consequência, concessão pede
+// réplica), o que evita frases apenas justapostas.
+const RELACOES = {
+  adicao: { joiners: [' e ', '; ', ', e '] },
+  oposicao: { joiners: [', mas ', ', porém, ', ', contudo, ', ', todavia, ', '; ainda assim, '] },
+  causa: { joiners: [' porque ', ' já que ', ' pois '] },
+  condicao: { joiners: [' se ', ' caso ', ' desde que ', ' antes que '], subjuntivo: true },
+  concessao: { joiners: [' embora '], subjuntivo: true },
+  tempo: { joiners: [' quando ', ' enquanto ', ' sempre que '], temporal: true },
+  conclusao: { joiners: ['; por isso, ', ', por isso, ', ' e, por isso, '] },
+  adicaoForte: { joiners: ['. Além disso, ', '. Ao mesmo tempo, '] },
+};
+
+const TRANSICOES = {
+  afirmacao: ['oposicao', 'causa', 'adicao', 'condicao', 'adicaoForte', 'tempo'],
+  adicao: ['oposicao', 'causa', 'condicao', 'tempo'],
+  oposicao: ['causa', 'adicaoForte', 'adicao'],
+  causa: ['conclusao', 'oposicao', 'adicao'],
+  condicao: ['conclusao', 'oposicao', 'adicao'],
+  concessao: ['oposicao'],
+  tempo: ['oposicao', 'adicao'],
+  conclusao: ['oposicao', 'adicaoForte'],
+  adicaoForte: ['oposicao', 'causa'],
+};
+
+// Registro. As probabilidades mudam a voz, nunca a gramática.
+const PERFIS = {
+  auto: { passiva: 0.16, clivada: 0.10, passivaSe: 0.08, atribuicao: 0.04, frente: 0.20, inversao: 0.06, negacao: 0.08, adverbio: 0.18, adjunto: 0.35 },
+  popular: { passiva: 0.01, clivada: 0, passivaSe: 0, atribuicao: 0, frente: 0.06, inversao: 0.03, negacao: 0.10, adverbio: 0.12, adjunto: 0.18 },
+  jornal: { passiva: 0.18, clivada: 0.14, passivaSe: 0.18, atribuicao: 0.10, frente: 0.24, inversao: 0.05, negacao: 0.05, adverbio: 0.12, adjunto: 0.30 },
+  oficial: { passiva: 0.30, clivada: 0.04, passivaSe: 0.22, atribuicao: 0.08, frente: 0.10, inversao: 0, negacao: 0.04, adverbio: 0.10, adjunto: 0.22 },
+};
+
+// Verbos que aceitam a passiva sintética sem mudar de sentido. Ficam de fora
+// os que, com "se", viram outra coisa: formar-se (diplomar-se), ocupar-se de,
+// empregar-se, tratar-se de, apresentar-se, reunir-se.
+const PASSIVA_SE = new Set([
+  'aprovar', 'debater', 'analisar', 'fiscalizar', 'julgar', 'assinar',
+  'votar', 'reformar', 'recuperar', 'ampliar', 'construir', 'entregar',
+  'regularizar', 'iniciar', 'vistoriar', 'criar', 'organizar', 'contratar',
+  'garantir', 'arrecadar', 'anunciar', 'atender', 'investigar', 'condenar',
+  'determinar', 'instalar', 'plantar', 'limpar', 'distribuir', 'produzir',
+  'renovar', 'adaptar', 'melhorar', 'exibir', 'atingir', 'preservar',
+  'reduzir', 'consertar', 'sediar', 'alagar', 'reforçar', 'apreender',
+]);
+
+const DIZER = {
+  singular: ['anunciou', 'informou', 'afirmou', 'confirmou', 'prometeu'],
+  plural: ['anunciaram', 'informaram', 'afirmaram', 'confirmaram', 'prometeram'],
+};
+
+// A inversão só soa natural com verbo de movimento ou estado e adjunto
+// locativo. Com complemento preposicional ("investir na drenagem") ela vira
+// frase artificial, então esses casos ficam na ordem direta.
+const INVERSIVEIS = new Set([
+  'caminhar', 'conversar', 'descansar', 'brincar', 'passar', 'acordar',
+  'almoçar', 'voltar', 'chegar', 'treinar', 'ensaiar', 'cair', 'crescer',
+  'parar', 'protestar', 'lutar',
+]);
+
+const ADJUNTO_FRONTAVEL = /^(?:em|no|na|nos|nas|ao|aos|à|às|do|da|dos|das|pelo|pela|pelos|pelas|com|sem|sob|entre|durante|desde|após|antes|até)\b/iu;
+const ADJUNTO_INVERSIVEL = /^(?:em|no|na|nos|nas)\b/iu;
+
 
 const SLOGANS = {
   politica: [
@@ -600,18 +666,45 @@ function emFrase(frase) {
   return `${{ a: 'na', o: 'no', as: 'nas', os: 'nos' }[partes[1]]} ${partes[2]}`;
 }
 
-function montarOracao(cena, random, { level = 'variada', subjuntivo = false, modoSubjuntivo = 'presente', tempoFixo = null, permitirAdjunto = true, intro = false } = {}) {
+// Atribuição de fala só combina com ator que pode falar. Uma praça ou um
+// índice econômico não anunciam nada; instituições e pessoas anunciam.
+const FALANTES = /^(?:A prefeitura|O governo|A câmara|A oposição|Os partidos|Os eleitores|A candidatura|O conselho|A comissão|O prefeito|Os vereadores|A população|O tribunal|A gestão|O sindicato|O movimento|A imprensa|O secretário|A coalizão|A empresa|Os trabalhadores|A cooperativa|Os funcionários|O mercado|Os desempregados|A fábrica|A loja|Os servidores|O banco|Os pequenos|Os consumidores|Os moradores|Os comerciantes|Os vizinhos|A secretaria|A equipe|A polícia|A guarda|Os juízes|A defensoria|Os agentes|As vítimas|O Ministério|A justiça|Os enfermeiros|Os médicos|Os dentistas|Os profissionais|Os professores|Os alunos|Os estudantes|Os artistas|Os atletas|Os idosos|As crianças|Os pais|As famílias|Os feirantes|Os agricultores|Os ambientalistas|Os pescadores|Os voluntários|A clínica|A escola|A universidade|A biblioteca|O teatro|O museu|A banda|O time|O clube|A padaria|O restaurante|O açougue|O hospital|O posto|A farmácia|Os jovens|As mães|O pai|Os filhos|Os irmãos|O casal|A creche|A vizinhança|O agente|O pronto-socorro)\b/iu;
+
+// Evita repetir no adjunto uma palavra já usada no objeto ou no complemento:
+// "investir mais recursos ... com mais recursos".
+function adjuntoDoTempo(cena, tempo, random) {
+  const opcoes = ADJUNTOS[tempo] || ADJUNTOS.presente;
+  const ocupado = `${cena.o ? objetoFrase(cena.o) : ''} ${cena.c || ''}`.toLocaleLowerCase('pt-BR');
+  const palavrasOcupadas = new Set(ocupado.split(/\s+/u).filter(palavra => palavra.length > 3));
+  const livres = opcoes.filter(opcao => !opcao.toLocaleLowerCase('pt-BR')
+    .split(/\s+/u)
+    .some(palavra => palavra.length > 3 && palavrasOcupadas.has(palavra)));
+  return livres.length ? escolhe(livres, random) : null;
+}
+
+function montarOracao(cena, random, {
+  level = 'variada', subjuntivo = false, modoSubjuntivo = 'presente',
+  tempoFixo = null, permitirAdjunto = true, intro = false, estilo = 'auto',
+  permitirPassiva = true, permitirFronteamento = true, meta = null,
+} = {}) {
+  const perfil = PERFIS[estilo] || PERFIS.auto;
   const plural = sujeitoPlural(cena.s);
   const tempo = tempoFixo || (subjuntivo ? (modoSubjuntivo === 'futuro' ? 'futuro-subjuntivo' : 'subjuntivo-presente') : escolherTempo(level, random));
-  const passiva = Boolean(cena.o) && !subjuntivo && level !== 'simples'
-    && PASSIVAVEIS.has(cena.v) && random() < 0.16;
-  const negacao = !subjuntivo && level !== 'simples' && random() < 0.08 ? 'não ' : '';
-  const adverbio = !subjuntivo && level !== 'simples' && random() < 0.18
+  const passiva = permitirPassiva && Boolean(cena.o) && !subjuntivo && level !== 'simples'
+    && PASSIVAVEIS.has(cena.v) && random() < perfil.passiva;
+  const negacao = !subjuntivo && level !== 'simples' && random() < perfil.negacao ? 'não ' : '';
+  const adverbio = !subjuntivo && level !== 'simples' && random() < perfil.adverbio
     ? `${escolhe(ADVERBIOS, random)} `
     : '';
-  const adjunto = permitirAdjunto && !subjuntivo && level !== 'simples' && random() < 0.35
-    ? ` ${escolhe(ADJUNTOS[tempo] || ADJUNTOS.presente, random)}`
-    : '';
+  const adjuntoOpcao = permitirAdjunto && !subjuntivo && level !== 'simples' && random() < perfil.adjunto
+    ? adjuntoDoTempo(cena, tempo, random)
+    : null;
+  const adjunto = adjuntoOpcao ? ` ${adjuntoOpcao}` : '';
+  // Adjunto preposicional vai para a frente e rende outra ordem sintática:
+  // "No conselho municipal, a prefeitura aprovou o orçamento".
+  const frente = permitirFronteamento && !passiva && !intro && !subjuntivo
+    && level !== 'simples' && permitirAdjunto && Boolean(cena.c)
+    && ADJUNTO_FRONTAVEL.test(cena.c) && random() < perfil.frente;
 
   let oracao;
   if (passiva) {
@@ -625,13 +718,111 @@ function montarOracao(cena, random, { level = 'variada', subjuntivo = false, mod
   } else {
     const verbo = tempo === 'futuro-subjuntivo' ? conjugarFuturoSubjuntivo(cena.v, plural) : conjugar(cena.v, tempo, plural);
     const objeto = cena.o ? ` ${objetoFrase(cena.o)}` : '';
-    const complemento = cena.c ? ` ${cena.c}` : '';
+    const complemento = cena.c && !frente ? ` ${cena.c}` : '';
     oracao = `${cena.s} ${adverbio}${negacao}${verbo}${objeto}${complemento}${adjunto}`;
   }
 
+  if (frente) oracao = `${minusculaInicial(cena.c)}, ${minusculaInicial(oracao)}`;
+  if (meta) Object.assign(meta, {
+    tipo: passiva ? 'passiva' : 'ativa',
+    tempo,
+    sujeito: cena.s,
+    frente,
+  });
   if (!intro) return oracao;
   return `${escolhe(INTROS, random)}, ${minusculaInicial(oracao)}`;
 }
+
+// Remove o sujeito da oração para coordenar dois predicados com elipse:
+// "A prefeitura reformou a praça e ampliou a ciclovia".
+function semSujeito(oracao, sujeito) {
+  return oracao.startsWith(`${sujeito} `) ? oracao.slice(sujeito.length + 1) : oracao;
+}
+
+// "Foi a prefeitura que reformou a praça": destaca o agente e muda a ordem.
+function montarClivada(cena, random, opts) {
+  const oracao = montarOracao(cena, random, {
+    ...opts, intro: false, permitirPassiva: false, permitirFronteamento: false, meta: null,
+  });
+  const copula = sujeitoPlural(cena.s) ? 'Foram' : 'Foi';
+  return `${copula} ${minusculaInicial(cena.s)} que ${semSujeito(oracao, cena.s)}`;
+}
+
+// Passiva sintética: "Reformou-se a praça". O verbo concorda com o paciente.
+function montarPassivaSe(cena, random) {
+  const tempo = escolhe(['presente', 'pretérito-perfeito', 'pretérito-imperfeito'], random);
+  const plural = artigoPlural(cena.o.d);
+  const verbo = conjugar(cena.v, tempo, plural);
+  const complemento = cena.c ? ` ${cena.c}` : '';
+  const adjuntoOpcao = random() < 0.22 ? adjuntoDoTempo(cena, tempo, random) : null;
+  const adjunto = adjuntoOpcao ? ` ${adjuntoOpcao}` : '';
+  return `${verbo}-se ${objetoFrase(cena.o)}${complemento}${adjunto}`;
+}
+
+// Atribuição de fala: "A prefeitura anunciou que vai reformar a praça".
+function montarAtribuicao(cena, random) {
+  const plural = sujeitoPlural(cena.s);
+  const verboFala = escolhe(plural ? DIZER.plural : DIZER.singular, random);
+  const auxiliar = plural ? 'vão' : 'vai';
+  const complemento = cena.c ? ` ${cena.c}` : '';
+  return `${cena.s} ${verboFala} que ${auxiliar} ${cena.v} ${objetoFrase(cena.o)}${complemento}`;
+}
+
+// Inversão locativa: "No parque, caminham os moradores".
+function montarInversao(cena, random, opts) {
+  const plural = sujeitoPlural(cena.s);
+  const tempo = escolherTempo(opts.level || 'variada', random);
+  const verbo = conjugar(cena.v, tempo, plural);
+  return `${minusculaInicial(cena.c)}, ${verbo} ${minusculaInicial(cena.s)}`;
+}
+
+// Escolhe a construção sintática da primeira oração. As formas avançadas só
+// entram em oração principal: depois de um conector elas soariam artificiais.
+function realizarOracao(cena, random, opts = {}) {
+  const perfil = PERFIS[opts.estilo] || PERFIS.auto;
+  if ((opts.level || 'variada') === 'simples' || opts.subjuntivo) {
+    return montarOracao(cena, random, opts);
+  }
+  const rolagem = random();
+  const limiteClivada = perfil.clivada;
+  const limiteSe = limiteClivada + perfil.passivaSe;
+  const limiteAtribuicao = limiteSe + perfil.atribuicao;
+  const limiteInversao = limiteAtribuicao + perfil.inversao;
+  if (rolagem < limiteClivada) {
+    if (opts.meta) opts.meta.tipo = 'clivada';
+    return montarClivada(cena, random, opts);
+  }
+  if (rolagem < limiteSe && cena.o && PASSIVA_SE.has(cena.v)) {
+    if (opts.meta) opts.meta.tipo = 'passiva-se';
+    return montarPassivaSe(cena, random);
+  }
+  if (rolagem < limiteAtribuicao && cena.o && FALANTES.test(cena.s)) {
+    if (opts.meta) opts.meta.tipo = 'atribuicao';
+    return montarAtribuicao(cena, random);
+  }
+  if (rolagem < limiteInversao && !cena.o && cena.c && INVERSIVEIS.has(cena.v) && ADJUNTO_INVERSIVEL.test(cena.c)) {
+    if (opts.meta) opts.meta.tipo = 'inversao';
+    return montarInversao(cena, random, opts);
+  }
+  return montarOracao(cena, random, opts);
+}
+
+// Retomada por descrição definida, mantendo o artigo da cena:
+// "A prefeitura ... A administração ...". Evita repetir o sujeito inteiro.
+function retomadaDe(sujeito, random) {
+  const partes = sujeito.match(/^(A|O|As|Os|Um|Uma|Uns|Umas)\s+(.+)$/u);
+  if (!partes) return null;
+  const opcoes = SUBSTANTIVOS[partes[2].split(' ')[0].toLocaleLowerCase('pt-BR')];
+  if (!opcoes || !opcoes.length) return null;
+  return `${partes[1]} ${escolhe(opcoes, random)}`;
+}
+
+function escolherRelacao(anterior, random, usadas) {
+  const opcoes = TRANSICOES[anterior] || TRANSICOES.afirmacao;
+  const disponiveis = opcoes.filter(relacao => !usadas.has(relacao));
+  return escolhe(disponiveis.length ? disponiveis : opcoes, random);
+}
+
 
 function cenasDosTemas(temas) {
   return temas.flatMap(tema => CENAS[tema]);
@@ -668,27 +859,115 @@ function aplicarVariantes(cena, random) {
   return { s: sujeito, v: verbo, o: objeto, c: cena.c };
 }
 
-export function gerarFrase({ tema = null, random = Math.random, complexidade = 'variada' } = {}) {
+// Palavras de conteúdo servem para não repetir o mesmo substantivo em duas
+// orações: "o trânsito mudou ... o crescimento do trânsito".
+const PALAVRAS_FUNCIONAIS = new Set([
+  'para', 'pelo', 'pela', 'pelos', 'pelas', 'com', 'sem', 'entre', 'durante',
+  'desde', 'após', 'antes', 'sobre', 'mais', 'menos', 'todos', 'todas',
+  'cada', 'muito', 'muita', 'muitos', 'muitas', 'outro', 'outra', 'outros',
+  'outras', 'novo', 'nova', 'novos', 'novas', 'local', 'locais', 'atual',
+  'atuais', 'central', 'centrais', 'público', 'pública', 'públicos',
+  'públicas', 'popular', 'populares', 'comunitário', 'comunitária',
+  'comunitários', 'comunitárias', 'municipal', 'municipais', 'estadual',
+  'estaduais', 'federal', 'federais', 'grande', 'grandes', 'pequeno',
+  'pequena', 'pequenos', 'pequenas', 'melhor', 'melhores', 'pior', 'piores',
+]);
+
+function palavrasConteudo(cena) {
+  const texto = `${cena.s} ${cena.o ? `${cena.o.d} ${cena.o.n}` : ''} ${cena.c || ''}`;
+  return new Set(texto
+    .toLocaleLowerCase('pt-BR')
+    .split(/[^\p{L}\p{N}-]+/u)
+    .filter(palavra => palavra.length > 4 && !PALAVRAS_FUNCIONAIS.has(palavra)));
+}
+
+function cenaDoMesmoSujeito(cenas, sujeitoBase, usadas, random) {
+  const opcoes = cenas.filter(cena => cena.s === sujeitoBase && !usadas.has(cena));
+  return opcoes.length ? escolhe(opcoes, random) : null;
+}
+
+// Em oposição e concessão, outro ator rende mais sentido que o mesmo. Em
+// qualquer relação, evita repetir palavra de conteúdo da cena anterior.
+function escolherCenaParaRelacao(cenas, usadas, relacao, baseAtual, random) {
+  const livres = cenas.filter(cena => !usadas.has(cena));
+  let pool = livres.length ? livres : cenas;
+  const anteriores = palavrasConteudo(baseAtual);
+  const semRepeticao = pool.filter(cena =>
+    ![...palavrasConteudo(cena)].some(palavra => anteriores.has(palavra)));
+  if (semRepeticao.length) pool = semRepeticao;
+  if ((relacao === 'oposicao' || relacao === 'concessao') && pool.length > 1) {
+    const opostas = pool.filter(cena => cena.s !== baseAtual.s);
+    if (opostas.length) return escolhe(opostas, random);
+  }
+  return escolhe(pool, random);
+}
+
+export function gerarFrase({ tema = null, random = Math.random, complexidade = 'variada', estilo = 'auto' } = {}) {
   if (typeof random !== 'function') throw new TypeError('random precisa ser uma função');
+  if (!PERFIS[estilo]) throw new RangeError(`Estilo desconhecido: ${estilo}`);
   const temas = temasResolvidos(tema);
   const cenas = cenasDosTemas(temas);
   if (!cenas.length) throw new RangeError(`Os temas ${temas.join(', ')} não têm cenas suficientes`);
   const level = complexidade === 'simples' ? 'simples' : complexidade === 'complexa' ? 'complexa' : 'variada';
   const usadas = new Set();
-  const primeira = escolhe(cenas, random);
-  usadas.add(primeira);
-  let frase = montarOracao(aplicarVariantes(primeira, random), random, {
-    level,
-    intro: level !== 'simples' && random() < 0.1,
+  const relacoesUsadas = new Set();
+
+  const primeiraBase = escolhe(cenas, random);
+  usadas.add(primeiraBase);
+  const primeira = aplicarVariantes(primeiraBase, random);
+  const meta = {};
+  let frase = realizarOracao(primeira, random, {
+    level, estilo, meta,
+    intro: level !== 'simples' && random() < 0.08,
   });
+  let baseAtual = primeiraBase;
+  let sujeitoAtual = meta.sujeito || primeira.s;
+  let tempoAtual = meta.tempo || null;
+  let podeElidir = meta.tipo === 'ativa' && Boolean(tempoAtual);
+  let relacaoAnterior = 'afirmacao';
 
   const extras = level === 'simples' ? 0 : level === 'complexa' ? (random() < 0.45 ? 2 : 1) : (random() < 0.55 ? 1 : 0);
   for (let i = 0; i < extras; i++) {
-    const grupo = i > 0 ? GRUPOS[5] : escolhe(GRUPOS, random);
-    const conector = escolhe(grupo.joiners, random);
-    let subjuntivo = grupo.subjuntivo;
-    let modoSubjuntivo = conector === ' se ' ? 'futuro' : 'presente';
+    const relacao = escolherRelacao(relacaoAnterior, random, relacoesUsadas);
+    relacoesUsadas.add(relacao);
+    relacaoAnterior = relacao;
+
+    // Mesmo ator: coordena os predicados e cala o sujeito repetido.
+    if (relacao === 'adicao' && podeElidir && tempoAtual && random() < 0.6) {
+      const parBase = cenaDoMesmoSujeito(cenas, baseAtual.s, usadas, random);
+      if (parBase) {
+        usadas.add(parBase);
+        const par = aplicarVariantes(parBase, random);
+        const oracao = montarOracao({ ...par, s: sujeitoAtual }, random, {
+          level, estilo, tempoFixo: tempoAtual,
+          permitirPassiva: false, permitirFronteamento: false, permitirAdjunto: false,
+        });
+        frase += ` e ${minusculaInicial(semSujeito(oracao, sujeitoAtual))}`;
+        baseAtual = parBase;
+        podeElidir = true;
+        continue;
+      }
+    }
+
+    const grupo = RELACOES[relacao];
+    let conector = escolhe(grupo.joiners, random);
+    // Sem tempo conhecido (clivada, atribuição, inversão), "ao mesmo tempo"
+    // não tem com o que concordar; a adição simples serve melhor.
+    if (conector === '. Ao mesmo tempo, ' && !tempoAtual) conector = '. Além disso, ';
+    const base = escolherCenaParaRelacao(cenas, usadas, relacao, baseAtual, random);
+    usadas.add(base);
+    let cena = aplicarVariantes(base, random);
+
+    // O ator volta: retoma por descrição definida em vez de repetir o nome.
+    if (base.s === baseAtual.s && relacao !== 'adicao' && random() < 0.5) {
+      const retomada = retomadaDe(sujeitoAtual, random);
+      if (retomada) cena = { ...cena, s: retomada };
+    }
+
+    let subjuntivo = Boolean(grupo.subjuntivo);
+    let modoSubjuntivo = 'presente';
     let tempoFixo = null;
+    if (grupo.subjuntivo) modoSubjuntivo = conector === ' se ' ? 'futuro' : 'presente';
     if (grupo.temporal) {
       if (conector === ' enquanto ') {
         subjuntivo = false;
@@ -698,20 +977,33 @@ export function gerarFrase({ tema = null, random = Math.random, complexidade = '
         modoSubjuntivo = 'futuro';
       }
     }
-    let cena = escolhe(cenas, random);
-    for (let tentativa = 0; tentativa < 6 && usadas.has(cena) && usadas.size < cenas.length; tentativa++) cena = escolhe(cenas, random);
-    usadas.add(cena);
-    const oracao = montarOracao(aplicarVariantes(cena, random), random, { level, subjuntivo, modoSubjuntivo, tempoFixo, permitirAdjunto: false });
+
+    // "Ao mesmo tempo" exige simultaneidade: a oração herda o tempo da
+    // anterior em vez de sortear outro.
+    if (conector === '. Ao mesmo tempo, ' && tempoAtual && !tempoAtual.includes('subjuntivo')) {
+      subjuntivo = false;
+      tempoFixo = tempoAtual;
+    }
+
+    const metaExtra = {};
+    const oracao = montarOracao(cena, random, {
+      level, estilo, subjuntivo, modoSubjuntivo, tempoFixo, meta: metaExtra,
+      permitirAdjunto: false,
+    });
     frase += `${conector}${minusculaInicial(oracao)}`;
+    baseAtual = base;
+    sujeitoAtual = cena.s;
+    tempoAtual = metaExtra.tempo || tempoFixo;
+    podeElidir = metaExtra.tipo === 'ativa' && !subjuntivo && Boolean(tempoAtual);
   }
 
   return `${capitalizar(frase)}.`;
 }
 
-export function gerarFraseTematica(tema, { random = Math.random, complexidade = 'variada' } = {}) {
+export function gerarFraseTematica(tema, { random = Math.random, complexidade = 'variada', estilo = 'auto' } = {}) {
   if (!tema) throw new RangeError(`Tema desconhecido: ${tema}`);
   temasResolvidos(tema);
-  return gerarFrase({ tema, random, complexidade });
+  return gerarFrase({ tema, random, complexidade, estilo });
 }
 
 export function gerarTituloTematico(tema = 'arte', { random = Math.random } = {}) {

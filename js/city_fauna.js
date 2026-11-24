@@ -46,8 +46,21 @@ export class CityFauna {
   placeNest({ x, y, z = 1.8, surface = 'tree', buildingId = null, plantId = null, species = 'sabia', ownerId = null, eggs = 2 } = {}) {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
     if (!['tree', 'balcony', 'fence', 'roof'].includes(surface)) return null;
+    const spec = ANIMAL_SPECIES[species] || {};
+    const id = `nest:${this.nextNestId++}`;
+    const entity = this.city.createEntity({
+      x,
+      y,
+      properties: {
+        name: `Ninho de ${(spec.label || species).toLowerCase()}`,
+        species,
+        render: { size: 0.45 },
+      },
+    });
     const nest = {
-      id: `nest:${this.nextNestId++}`,
+      id,
+      entityId: entity.id,
+      entity,
       x,
       y,
       z,
@@ -59,6 +72,7 @@ export class CityFauna {
       eggs,
       createdAt: this.city.minute,
     };
+    entity.properties.cityNest = nest;
     this.nests.set(nest.id, nest);
     return nest;
   }
@@ -113,12 +127,13 @@ export class CityFauna {
     }
   }
 
-  canOccupy(x, y, species, buildingId = null) {
+  canOccupy(x, y, species, buildingId = null, altitude = 0) {
     const spec = ANIMAL_SPECIES[species];
     if (!spec) return false;
     const city = this.city, world = city.world;
     const ix = Math.floor(x), iy = Math.floor(y);
     if (ix < 0 || iy < 0 || ix >= world.width || iy >= world.height) return false;
+    if (spec.canFly && altitude > 0.5) return true;
     const tile = tileAt(world, ix, iy);
     if (!spec.terrain.includes(tile)) return false;
     if (ROAD_TILES.has(tile) || world.hasSidewalk?.(ix, iy)) return false;
@@ -273,7 +288,7 @@ export class CityFauna {
       const a = baseAngle + offset;
       const nx = animal.x + Math.sin(a) * step;
       const ny = animal.y + Math.cos(a) * step;
-      if (this.canOccupy(nx, ny, animal.species, animal.buildingId)) {
+      if (this.canOccupy(nx, ny, animal.species, animal.buildingId, animal.altitude || 0)) {
         animal.x = nx;
         animal.y = ny;
         animal.entity.x = nx;
@@ -445,6 +460,17 @@ export class CityFauna {
         animal.targetY = nest.y;
         animal.altitude = Math.max(2.2, nest.z);
         animal.stateTimer = 4.0;
+        return;
+      }
+      if (!isNight && Math.random() < 0.6) {
+        const fx = Math.max(1, Math.min(this.city.world.width - 2, Math.floor(animal.x) + Math.floor(Math.random() * 25) - 12 + 0.5));
+        const fy = Math.max(1, Math.min(this.city.world.height - 2, Math.floor(animal.y) + Math.floor(Math.random() * 25) - 12 + 0.5));
+        animal.state = 'walk';
+        animal.action = 'Voando';
+        animal.targetX = fx;
+        animal.targetY = fy;
+        animal.altitude = 2.2 + Math.random() * 1.4;
+        animal.stateTimer = 4.5;
         return;
       }
     }

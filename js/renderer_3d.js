@@ -6134,8 +6134,17 @@ export class RCT3DRenderer {
         continue;
       }
       if (e.properties.cityAnimal) {
-        const size = e.properties.render?.size || 1, rad = Math.max(0.45, 0.55 * size), h = map ? this.getSurfaceElevation(map, e.x, e.y) : 1.0;
-        const box = new THREE.Box3(new THREE.Vector3(e.x - rad, h, e.y - rad), new THREE.Vector3(e.x + rad, h + Math.max(0.7, 1.2 * size), e.y + rad));
+        const animal = e.properties.cityAnimal, size = e.properties.render?.size || 1, rad = Math.max(0.55, 0.65 * size);
+        const baseH = map ? this.getSurfaceElevation(map, e.x, e.y) : 1.0;
+        const h = baseH + (animal.altitude || 0) - (animal.species === 'jacare' && animal.altitude === 0 ? 0.15 : 0);
+        const box = new THREE.Box3(new THREE.Vector3(e.x - rad, h - 0.15, e.y - rad), new THREE.Vector3(e.x + rad, h + Math.max(0.75, 1.2 * size), e.y + rad));
+        const hit = ray.intersectBox(box, new THREE.Vector3());
+        if (hit) { const d = ray.origin.distanceTo(hit); if (d < closestDist) { closestDist = d; bestEntId = e.id; this.selectedCityUnitId = null; } }
+        continue;
+      }
+      if (e.properties.cityNest) {
+        const nest = e.properties.cityNest, h = (map ? this.getSurfaceElevation(map, e.x, e.y) : 1.0) + (nest.z || 0);
+        const box = new THREE.Box3(new THREE.Vector3(e.x - 0.45, h - 0.1, e.y - 0.45), new THREE.Vector3(e.x + 0.45, h + 0.45, e.y + 0.45));
         const hit = ray.intersectBox(box, new THREE.Vector3());
         if (hit) { const d = ray.origin.distanceTo(hit); if (d < closestDist) { closestDist = d; bestEntId = e.id; this.selectedCityUnitId = null; } }
         continue;
@@ -8800,7 +8809,7 @@ export class RCT3DRenderer {
         citizenModelOptions.indoorBounds=interiorBuilding&&interiorBuilding.constructionKind!=='open-air'?{minX:interiorBuilding.entity.x,maxX:interiorBuilding.entity.x+interiorBuilding.width,minY:interiorBuilding.entity.y,maxY:interiorBuilding.entity.y+interiorBuilding.depth}:null;
         const animal=e.properties?.cityAnimal;
         const ax=Math.floor(e.x),ay=Math.floor(e.y),animalTile=animal&&world?(world.getTile?world.getTile(ax,ay):world.map?.[ay]?.[ax]):null;
-        const animalSurfaceH=(animal&&animalTile===TILE_WATER?Math.max(surfaceH,WATER_LEVEL-(animal.species==='jacare'?.08:.02)):surfaceH)+(animal?.altitude||0);
+        const animalSurfaceH=(animal&&animalTile===TILE_WATER?WATER_LEVEL-(animal.species==='jacare'?.17:animal.species==='capivara'?.14:.06):surfaceH)+(animal?.altitude||0);
         const modelRendered=(cityCitizen&&this.cityCitizenModels.add(e,surfaceH,citizenModelOptions))||(animal&&this.cityAnimalModels.add(e,animalSurfaceH,{perspective:perspectiveActive,selected:this.selectedEntityId===e.id}));
         if(modelRendered){
           activeIds.add(e.id);const previous=this.entitySprites.get(e.id);if(previous)previous.visible=false;
