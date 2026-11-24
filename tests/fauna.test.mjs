@@ -1,0 +1,194 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { ANIMAL_SPECIES, ANIMAL_CLIPS, ANIMAL_SPECIES_IDS } from '../js/animal_catalog.js';
+import { parseCitizenOBJ } from '../js/city_citizen_models.js';
+import { CityFauna, FAUNA_RULES } from '../js/city_fauna.js';
+import { CityAnimalModels, animalAnimation, animalFrame } from '../js/city_animal_models.js';
+import { TILE_WATER } from '../js/world_gen.js';
+
+function createWorld(width = 32, height = 32, defaultTile = 0) {
+  const map = Array.from({ length: height }, () => Array.from({ length: width }, () => defaultTile));
+  for (let y = 0; y < height; y++) {
+    map[y][0] = TILE_WATER;
+    map[y][1] = 3; // sand shore
+  }
+  return {
+    width,
+    height,
+    map,
+    revision: 1,
+    getTile: (x, y) => map[y]?.[x] ?? 0,
+    hasSidewalk: () => false,
+  };
+}
+
+function createMockCity(world) {
+  let nextId = 1;
+  const entities = [];
+  const city = {
+    world,
+    minute: 600,
+    citizens: [],
+    occupied: new Set(),
+    development: { plots: [] },
+    nature: { plants: new Map() },
+    createEntity({ x, y, properties }) {
+      const entity = { id: nextId++, x, y, destroyed: false, properties: properties || {} };
+      entities.push(entity);
+      return entity;
+    },
+    entities,
+  };
+  city.fauna = new CityFauna(city);
+  return city;
+}
+
+test('animal catalog defines at least 20 wild and livestock species', () => {
+  assert.ok(ANIMAL_SPECIES_IDS.length >= 20, `expected >= 20 species, got ${ANIMAL_SPECIES_IDS.length}`);
+  const wild = ANIMAL_SPECIES_IDS.filter(id => ANIMAL_SPECIES[id].category === 'wild');
+  const livestock = ANIMAL_SPECIES_IDS.filter(id => ANIMAL_SPECIES[id].category === 'livestock');
+  assert.ok(wild.length >= 12);
+  assert.ok(livestock.length >= 6);
+  assert.equal(ANIMAL_SPECIES.vaca.grazesGrass, true);
+  assert.equal(ANIMAL_SPECIES.boi.grazesGrass, true);
+});
+
+test('all 24 species have grounded low-poly OBJ frames for every clip', () => {
+  for (const species of ANIMAL_SPECIES_IDS) {
+    for (const [clip, frames] of Object.entries(ANIMAL_CLIPS)) {
+      for (const frame of frames) {
+        const filePath = path.join('data', 'animals', species, clip, `${frame}.obj`);
+        assert.ok(fs.existsSync(filePath), `missing ${filePath}`);
+        const parsed = parseCitizenOBJ(fs.readFileSync(filePath, 'utf8'));
+        assert.ok(parsed.triangles >= 40, `${filePath} should have >= 40 triangles`);
+        assert.ok(parsed.bounds.min[1] >= -1e-4, `${filePath} should be grounded at y=0`);
+      }
+    }
+  }
+});
+
+test('CityFauna spawns wild animals in habitats and cows/oxen graze wild grass', () => {
+  const world = createWorld(48, 48, 0);
+  const city = createMockCity(world);
+  city.fauna.initialize();
+  assert.ok(city.fauna.animals.size > 0);
+  assert.ok(city.fauna.wildCount() <= FAUNA_RULES.maxWildAnimals);
+
+  // Spawn a hungry cow and a hungry ox on grass tiles and verify they graze
+  const cow = city.fauna.spawn(10, 10, 'vaca', { hunger: 40 });
+  const ox = city.fauna.spawn(12, 10, 'boi', { hunger: 40 });
+  assert.ok(cow && ox);
+  cow.stateUntil = city.minute;
+  ox.stateUntil = city.minute;
+
+  for (let i = 0; i < 10; i++) {
+    city.minute++;
+    city.fauna.updateMinute();
+  }
+  assert.ok(cow.hunger > 40 || cow.state === 'eat' || cow.state === 'walk', 'cow should graze or seek grass');
+  assert.ok(ox.hunger > 40 || ox.state === 'eat' || ox.state === 'walk', 'ox should graze or seek grass');
+});
+
+test('shy animals flee nearby citizens and provoked predators react', () => {
+  const world = createWorld(32, 32, 0);
+  const city = createMockCity(world);
+  const deer = city.fauna.spawn(10, 10, 'veado');
+  const jaguar = city.fauna.spawn(20, 20, 'onca', { hunger: 20 });
+  const citizen = { id: 1, dead: false, needs: { health: 100 }, entity: { x: 11, y: 10, destroyed: false } };
+  const preyCitizen = { id: 2, dead: false, needs: { health: 100 }, entity: { x: 20.5, y: 20, destroyed: false } };
+  city.citizens.push(citizen, preyCitizen);
+
+  city.minute++;
+  city.fauna.updateMinute();
+  assert.equal(deer.state, 'flee');
+  assert.ok(preyCitizen.needs.health < 100, 'hungry jaguar within range should attack');
+});
+
+test('CityAnimalModels loads OBJ frames and batches visible animals', async () => {
+  class Group { constructor() { this.children = []; } add(c) { this.children.push(c); } remove(c) { this.children = this.children.filter(x => x !== c); } }
+  class BufferAttribute { constructor(array, itemSize) { this.array = array; this.itemSize = itemSize; } }
+  class BufferGeometry {
+    constructor() { this.attributes = {}; }
+    setAttribute(k, v) { this.attributes[k] = v; }
+    computeBoundingSphere() {}
+    dispose() {}
+  }
+  class MeshLambertMaterial { constructor(opts) { Object.assign(this, opts); } dispose() {} }
+  class Matrix4 { compose() { return this; } }
+  class Vector3 { constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; } set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; } }
+  class Quaternion { setFromAxisAngle() { return this; } }
+  class Color { setHex() { return this; } }
+  class InstancedMesh {
+    constructor(geo, mat, cap) {
+      this.geometry = geo; this.material = mat; this.capacity = cap; this.count = 0;
+      this.instanceMatrix = { setUsage() {}, needsUpdate: false };
+      this.instanceColor = { needsUpdate: false };
+    }
+    setMatrixAt() {}
+    getMatrixAt() {}
+    setColorAt() {}
+    getColorAt() {}
+    dispose() {}
+  }
+  const THREE = { Group, BufferGeometry, Float32BufferAttribute: BufferAttribute, MeshLambertMaterial, Matrix4, Vector3, Quaternion, Color, InstancedMesh, DynamicDrawUsage: 1 };
+  const group = new Group();
+  const models = new CityAnimalModels(THREE, group, {
+    fetchAsset: async (url) => {
+      const rel = url.pathname.replace(/^.*\/data\/animals\//, '');
+      const text = fs.readFileSync(path.join('data', 'animals', rel), 'utf8');
+      return { ok: true, text: async () => text };
+    },
+  });
+  const ok = await models.loading;
+  assert.equal(ok, true);
+  assert.equal(models.frames.size, 456);
+
+  const world = createWorld(24, 24, 0);
+  const city = createMockCity(world);
+  const cow = city.fauna.spawn(8, 8, 'vaca');
+  assert.ok(cow.entity.properties.brain?.animal);
+  cow.state = 'walk';
+  cow.targetX = 12;
+  cow.targetY = 8;
+  const startX = cow.x;
+  city.fauna.update(0.5);
+  assert.ok(cow.x > startX, 'update(dt) should move walking animal smoothly');
+  assert.equal(animalAnimation(cow), 'walk');
+  assert.equal(animalFrame('walk', 0).clip, 'walk');
+
+  models.begin(0.016, 1);
+  assert.equal(models.add(cow.entity, 1.0), true);
+  models.end();
+  assert.equal(group.children.length, 1);
+  assert.equal(group.children[0].count, 1);
+});
+
+test('ranches spawn livestock, feed restores hunger, and hunting harvests products', async () => {
+  const { INDUSTRIES, INDUSTRIAL_FOODS } = await import('../js/city_industries.js');
+  assert.ok(INDUSTRIES.feed_mill && INDUSTRIES.cattle_ranch && INDUSTRIES.hunting_lodge && INDUSTRIES.tannery);
+  assert.ok(INDUSTRIAL_FOODS.includes('carne_bovina') && INDUSTRIAL_FOODS.includes('carne_caca') && INDUSTRIAL_FOODS.includes('churrasco'));
+
+  const world = createWorld(32, 32, 0);
+  const city = createMockCity(world);
+  const ranch = { id: 101, type: 'cattle_ranch', active: true, door: { x: 10, y: 10 }, entity: { x: 10, y: 10, destroyed: false }, units: [{}], inventory: { racao_bovina: 3 } };
+  city.buildings = [ranch];
+  city.fauna.syncRanches();
+  const herd = [...city.fauna.animals.values()].filter(a => a.buildingId === ranch.id);
+  assert.ok(herd.length >= 2);
+  herd.forEach(a => { a.hunger = 30; });
+  const fed = city.fauna.feedLivestock(ranch, 'racao_bovina');
+  assert.equal(fed, herd.length);
+  assert.ok(herd[0].hunger > 30);
+
+  const deer = city.fauna.spawn(20, 20, 'veado');
+  const hunter = { id: 5, entity: { x: 20.5, y: 20, destroyed: false }, inventory: { arco_caca: 1 } };
+  const hit1 = city.fauna.huntNearest(hunter, { species: 'veado' });
+  assert.equal(hit1.status, 'wounded');
+  const hit2 = city.fauna.huntNearest(hunter, { species: 'veado' });
+  assert.equal(hit2.status, 'harvested');
+  assert.equal(deer.dead, true);
+  assert.ok(hunter.inventory.carne_caca > 0);
+  assert.ok(hunter.inventory.couro > 0);
+});

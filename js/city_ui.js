@@ -1,4 +1,5 @@
 import {companyLogo,renderCompanyLogo} from './city_company_identity.js';
+import {ANIMAL_SPECIES,ANIMAL_GOODS} from './animal_catalog.js';
 import {graffitiSurfaceLabel,graffitiCameraFocus} from './city_graffiti_surfaces.js';
 import {renderMayorCampaign} from './city_mayor_ui.js';
 import {renderFamilyCampaign} from './city_family_ui.js';
@@ -330,6 +331,7 @@ export class CityUI {
   detail(p) {
     if(this.selected?.properties?.cityUrbanArt)return this.artworkInspector(p,this.selected.properties.cityUrbanArt);
     if(this.selected?.properties?.cityPlant)return this.plantInspector(p,this.selected.properties.cityPlant);
+    if(this.selected?.properties?.cityAnimal)return this.animalInspector(p,this.selected.properties.cityAnimal);
     if(this.selected?.properties?.worldVessel)return renderWorldVessel(this,p,this.selected.properties.worldVessel);
     if(this.selected?.properties.cityVehicle)return renderVehicle(this,p,this.selected.properties.cityVehicle);
     const c = this.selected?.properties.citizen, b = this.selected?.properties.cityBuilding;
@@ -337,6 +339,27 @@ export class CityUI {
     if (this.tab !== 'people' && b && !b.entity.destroyed) return this.building(p, b);
     p.heading('FICHA DE OBSERVAÇÃO'); p.note('Selecione alguém na lista para acompanhar sua rotina, seus vínculos e suas finanças. A seleção no mapa também abre a ficha.');
     if (this.tab === 'economy') this.demands(p);
+  }
+  animalInspector(p,animal) {
+    const spec=ANIMAL_SPECIES[animal.species]||{};
+    const stateLabel={idle:'Em repouso',walk:'Caminhando',eat:spec.grazesGrass?'Pastando grama':'Se alimentando',sleep:'Dormindo',flee:'Fugindo'}[animal.state]||'Ativo';
+    const dietLabel={herbivore:'Herbívoro',omnivore:'Onívoro',carnivore:'Carnívoro'}[spec.diet]||spec.diet;
+    const tempLabel={docile:'Dócil',shy:'Arisco',defensive:'Defensivo',predator:'Predador'}[spec.temperament]||spec.temperament;
+    const ranch=animal.buildingId!=null?this.city.building(animal.buildingId):null;
+    p.heading(`CRIATURA · ${(spec.label||animal.species).toUpperCase()}`);
+    if(spec.scientific)p.note(`${spec.scientific} · ${animal.category==='livestock'?'Pecuária':'Fauna silvestre'}`);
+    p.kv('Comportamento atual',animal.dead?'Abatido':stateLabel);
+    p.kv('Dieta / Temperamento',`${dietLabel} · ${tempLabel}`);
+    p.kv('Localização',`${animal.x.toFixed(1)}, ${animal.y.toFixed(1)}`);
+    if(ranch)p.kv('Rancho / Propriedade',ranch.entity.properties.name);
+    p.bar('Saciedade',animal.hunger??100,100,C.green);
+    p.bar('Saúde',animal.health??100,100,C.gold);
+    const products=Object.entries(spec.products||{}).map(([g,q])=>`${q}× ${ANIMAL_GOODS[g]?.label||GOODS[g]?.label||g}`).join(', ');
+    if(products)p.kv('Recursos possíveis',products);
+    p.buttons([
+      {label:'LOCALIZAR NO MAPA',click:()=>{this.camera(animal.x,animal.y);if(!this.host)this.visible=false;}},
+      ...(this.host?.controls?.observe?[{label:'SEGUIR EM 3ª PESSOA',click:()=>this.host.controls.observe('third',animal.id)},{label:'SEGUIR NO MAPA',click:()=>this.host.controls.observe('follow',animal.id)}]:[]),
+    ]);
   }
   artworkInspector(p,piece) {
     contextActions(this,p,{artwork:piece});

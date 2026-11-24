@@ -47,7 +47,7 @@ export function syncConstructionDust(THREE,renderer,development,time,enabled=tru
   const projects=new Map(development.projects.map(project=>[project.id,project]));
   for(const [projectId,crew]of workers){
     const project=projects.get(projectId);
-    if(!project||project.cancelled||project.status==='completed'||project.status==='blocked')continue;
+    if(!project||project.cancelled||project.status==='completed'||project.status==='blocked'||project.service==='road'||project.service==='road-repair'||project.type==='road')continue;
     const map=renderer.currentMap;
     for(const worker of crew){
       if(time-(state.lastEmit.get(worker.citizen)??-Infinity)<EMIT_INTERVAL*1000)continue;

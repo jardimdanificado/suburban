@@ -56,6 +56,16 @@ test('dust can be disabled',()=>{
   assert.equal(h.group.children[0].visible,false);
 });
 
+test('road construction raises no dust',()=>{
+  const h=harness();
+  for(const overrides of [{service:'road',type:'road'},{service:'road-repair',type:'road'}]){
+    const dev=fixture();
+    Object.assign(dev.projects[0],overrides);
+    syncConstructionDust(h.THREE,h.renderer,dev,1000,true);
+    assert.equal(h.field().geometry.drawRange.count,0);
+  }
+});
+
 test('grains are lit by scene lights with per-grain normals and dither',()=>{
   const h=harness();
   h.renderer.sunLight.intensity=.32;h.renderer.ambientLight.intensity=.24;

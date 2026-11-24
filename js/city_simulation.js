@@ -46,6 +46,7 @@ import { CityOfficialJournal } from './city_official_journal.js';
 import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js?v=colonial-colored-trim-1';
 import { CityRelationships } from './city_relationships.js?v=wardrobe-expansion-1';
 import { CityNature } from './city_nature.js?v=ff-growth-events-1';
+import { CityFauna } from './city_fauna.js';
 import {skybridgeLinks} from './city_skybridges.js?v=seeded-business-visual-v1';
 import { CityGovernment as CityPolitics } from './city_government.js?v=party-number-random-1';
 import { CityReputation } from './city_reputation.js';
@@ -207,6 +208,7 @@ export class CitySimulation {
     this.reputation = new CityReputation(this);
     this.relationships = new CityRelationships(this);
     this.nature = new CityNature(this);
+    this.fauna = new CityFauna(this);
     this.politics = new CityPolitics(this);
     this.publications = new CityPublications(this);
     this.officialJournal = new CityOfficialJournal(this);
@@ -678,6 +680,7 @@ export class CitySimulation {
     this.economy.initialize();
     this.vehicles.equipInitialWorkers();
     this.nature.initialize();
+    this.fauna.initialize();
     this.furniture.reconcile();
     this.log(`Cidade fundada sobre o relevo natural. Semente ${this.world.seed ?? this.initialSeed}: ${this.citizens.length} moradores e serviços conectados.`, 'city', [], { kind: 'foundation', seed: this.world.seed ?? this.initialSeed });
     this.syncClock();
@@ -1557,6 +1560,7 @@ export class CitySimulation {
     measureCivic('council',()=>this.politics.council.getChamber().minute());
     measureCivic('campaignMaterials',()=>this.politics.campaigns.getMaterials().minute());
     measureCivic('vehicles',()=>this.vehicles.minute());
+    measureCivic('fauna',()=>this.fauna?.updateMinute());
     const civicMs=performance.now()-profileMark;profileMark=performance.now();
     if (this.minute % 1440 === 0) { this.society.daily(); this.dailyEconomy(); }
     if (this.minute % 60 === 0) this.flushPayroll();
@@ -1777,6 +1781,7 @@ export class CitySimulation {
     }
     const movementMs=performance.now()-profileMark;profileMark=performance.now();
     this.vehicles.update(dt);
+    this.fauna?.update(dt);
     this.lastUpdateProfile={minute:this.minute,totalMs:performance.now()-profileStart,minuteStepsMs,mobilityMs,movementSetupMs,movementMs,vehicleMs:performance.now()-profileMark,step:this.lastStepProfile};
   }
   goodsStock(good) {

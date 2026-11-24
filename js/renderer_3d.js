@@ -44,6 +44,7 @@ import { syncCityBuildings } from "./city_renderer_3d.js?v=street-graffiti-visib
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=head-flag-crown-1';
+import { CityAnimalModels } from './city_animal_models.js';
 import { flagNightFactor } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1-canvas-readback-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainStoneSurface,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces,roadRailingAllowed} from './road_terrain_geometry.js?v=low-water-shore-4';
@@ -4962,6 +4963,11 @@ export class RCT3DRenderer {
       applyRetroDitherToMaterial(material,32,1.0);
       material.customProgramCacheKey=()=>`${cacheKey()}:citizen-smooth-dither-1`;
     }});
+    this.cityAnimalModels=new CityAnimalModels(THREE,this.entityGroup,{decorateMaterial:material=>{
+      const cacheKey=material.customProgramCacheKey.bind(material);
+      applyRetroDitherToMaterial(material,32,1.0);
+      material.customProgramCacheKey=()=>`${cacheKey()}:animal-smooth-dither-1`;
+    }});
     this.citizenViewProjection=new THREE.Vector3();
 
     // Floating UI Group (Emotes, Held Items & Clan House Flags)
@@ -5745,6 +5751,7 @@ export class RCT3DRenderer {
     this.visibleTerrainChunkKeys?.clear();
     this.cityCitizenBatches?.clear();
     this.cityCitizenModels?.clear();
+    this.cityAnimalModels?.clear();
     this.lastBuiltCamTileX = -9999;
     this.lastBuiltCamTileY = -9999;
     this.lastInstCamTileX = -9999;
@@ -6123,6 +6130,13 @@ export class RCT3DRenderer {
       if(e.properties.cityUrbanArt){
         const group=this.urbanArtMeshes?.get(e.properties.cityUrbanArt.id);
         if(group?.visible){group.updateWorldMatrix(true,true);const hit=this.raycaster.intersectObject(group,true)[0];if(hit&&hit.distance<closestDist){closestDist=hit.distance;bestEntId=e.id;this.selectedCityUnitId=null;}}
+        continue;
+      }
+      if (e.properties.cityAnimal) {
+        const size = r.size || 1, rad = Math.max(0.45, 0.55 * size), h = map ? this.getSurfaceElevation(map, e.x, e.y) : 1.0;
+        const box = new THREE.Box3(new THREE.Vector3(e.x - rad, h, e.y - rad), new THREE.Vector3(e.x + rad, h + Math.max(0.7, 1.2 * size), e.y + rad));
+        const hit = ray.intersectBox(box, new THREE.Vector3());
+        if (hit) { const d = ray.origin.distanceTo(hit); if (d < closestDist) { closestDist = d; bestEntId = e.id; this.selectedCityUnitId = null; } }
         continue;
       }
       if (e.properties.cityBuilding) {
@@ -8006,6 +8020,7 @@ export class RCT3DRenderer {
     const activeUiIds = this._activeUiIds;
     this.cityCitizenBatches.begin();
     this.cityCitizenModels.begin(dt,effectiveSpeed,this.simTick);
+    this.cityAnimalModels.begin(dt,effectiveSpeed);
     const perspectiveActive=this.isPerspectiveActive(),firstPersonActive=this.isFirstPersonActive(),thirdPersonActive=this.isThirdPersonActive();
     const activeElection=this.cityDevelopment?.city?.politics?.active;
     const activeElectionId=activeElection?.id,activeElectionStatus=activeElection?.status;
@@ -8781,7 +8796,7 @@ export class RCT3DRenderer {
         const vehicleAngle=cityCitizen?.ridingVehicleId?this.cityDevelopment?.city?.vehicles?.units.get(cityCitizen.ridingVehicleId)?.angle:null;
         citizenModelOptions.hidden=isPossessed;citizenModelOptions.dimmed=!inCurZone;citizenModelOptions.vehicleAngle=vehicleAngle;citizenModelOptions.visualOffset=citizenRenderOffsets.get(e.id)||null;
         citizenModelOptions.indoorBounds=interiorBuilding&&interiorBuilding.constructionKind!=='open-air'?{minX:interiorBuilding.entity.x,maxX:interiorBuilding.entity.x+interiorBuilding.width,minY:interiorBuilding.entity.y,maxY:interiorBuilding.entity.y+interiorBuilding.depth}:null;
-        const modelRendered=cityCitizen&&this.cityCitizenModels.add(e,surfaceH,citizenModelOptions);
+        const modelRendered=(cityCitizen&&this.cityCitizenModels.add(e,surfaceH,citizenModelOptions))||(e.properties?.cityAnimal&&this.cityAnimalModels.add(e,surfaceH,{perspective:perspectiveActive,selected:this.selectedEntityId===e.id}));
         if(modelRendered){
           activeIds.add(e.id);const previous=this.entitySprites.get(e.id);if(previous)previous.visible=false;
         }else{
@@ -9427,6 +9442,7 @@ export class RCT3DRenderer {
 
     this.cityCitizenBatches.end();
     this.cityCitizenModels.end();
+    this.cityAnimalModels.end();
     syncSubstanceSmoke(THREE,this,this.cityDevelopment?.city,time);
     syncConstructionDust(THREE,this,this.cityDevelopment,time,this.graphicOptions.dust!==false);
     // Clean inactive dynamic billboards

@@ -1,7 +1,8 @@
 import {FISH_GOODS,FISH_SPECIES} from './fishing_catalog.js';
+import {ANIMAL_GOODS} from './animal_catalog.js';
 import {SUBSTANCE_GOODS,SUBSTANCE_INDUSTRIES} from './city_substance_catalog.js';
 // Every batch reserves real inputs and requires paid, on-site work. Prices are cents.
-export const INDUSTRIAL_GOODS = {...FISH_GOODS,...SUBSTANCE_GOODS,...Object.fromEntries([
+export const INDUSTRIAL_GOODS = {...FISH_GOODS,...ANIMAL_GOODS,...SUBSTANCE_GOODS,...Object.fromEntries([
   ['bandeiras','Bandeiras de tecido',2400],['faixas','Faixas de campanha',3600],['tinta','Tinta de fachada',1200],['cesta','Cesta de carga',1400],['carrinho','Carrinho de carga',4800],['porrete','Porrete de madeira',900],['barra_ferro','Bastão de ferro',2100],['faca','Faca de trabalho',1800],['garrucha','Garrucha artesanal',18000],['marmita','Marmita completa',850],['marmita_simples','Marmita de arroz e feijão',600],['marmita_rustica','Marmita da roça',750],['madeira','Madeira',180],['tabuas','Tábuas',520],['carvao','Carvão vegetal',450],['minerio','Minério de ferro',600],['ferro','Ferro',1600],['ferramentas','Ferramentas',4200],
   ['argila','Argila',120],['tijolos','Tijolos',650],['areia','Areia',180],['vidro','Vidro',1200],['moveis','Móveis',4200],['fibras','Fibras vegetais',150],['tecido','Tecido',650],['roupas','Roupas',1900],
   ['leite','Leite',200],['queijo','Queijo',750],['ovos','Ovos',180],['farinha','Farinha',320],['massa','Macarrão',700],['conserva','Conserva',600],['sabao','Sabão',1000],
@@ -75,6 +76,16 @@ export const INDUSTRIES = {
   dairy_farm: industry('Fazenda leiteira',{milho:3},{leite:5},30,'agriculture','Leite depende de ração; integra pecuária e lavoura.','food'),
   cheesemaker: industry('Queijaria',{leite:4},{queijo:2},16,'baking','Conserva e agrega valor ao leite.','food'),
   poultry: industry('Granja',{milho:2},{ovos:4},22,'agriculture','Ovos diversificam a alimentação e demandam milho.','food'),
+  hay_farm: industry('Capineira e feno',{},{feno:5},28,'agriculture','Cultiva capim e feno para alimentação de rebanhos.'),
+  feed_mill: industry('Fábrica de ração',{milho:2,feno:2},{racao_bovina:3,racao_aves:3,racao_suina:3},22,'baking','Processa grãos e feno em rações balanceadas para pecuária.'),
+  cattle_ranch: industry('Rancho de pecuária',{racao_bovina:2,feno:2},{carne_bovina:4,leite:3,couro:2},34,'agriculture','Cria bois e vacas em pasto e cocho; fornece carne, leite e couro.','food'),
+  pig_farm: industry('Suinocultura',{racao_suina:2},{carne_suina:4,couro:1},26,'agriculture','Criação de suínos alimentados com ração balanceada.','food'),
+  sheep_farm: industry('Ovinocultura e caprinocultura',{feno:3},{la:3,leite:2,carne_ovina:2,couro:1},28,'agriculture','Cria ovelhas e cabras em pasto; fornece lã, leite, carne e couro.','food'),
+  tannery: industry('Curtume',{couro:3,carvao:1},{couro_curtido:3},24,'maintenance','Beneficia couro bruto em couro curtido para manufaturas.'),
+  bowyer: industry('Oficina de caça',{madeira:2,fibras:2},{arco_caca:2},20,'construction','Produz arcos de caça artesanais com madeira e fibras.'),
+  hunting_lodge: industry('Cabana de caça',{arco_caca:1},{carne_caca:3,couro:2,penas:1},24,'agriculture','Caçadores rastreiam fauna silvestre e abastecem a cidade com carne, couro e penas.','food'),
+  steakhouse: industry('Açougue e churrascaria',{carne_bovina:1,carvao:1},{churrasco:3},18,'baking','Prepara cortes assados com carne bovina e carvão.','food'),
+  meat_kitchen: industry('Cozinha de carnes',{carne_caca:1,arroz:1,feijao:1},{marmita_carne:3},18,'baking','Prepara marmitas com carne de caça, arroz e feijão.','food'),
   flour_mill: industry('Moinho de farinha',{trigo:3},{farinha:4},16,'baking','Processamento de cereais para massas.','food'),
   pasta_factory: industry('Fábrica de massas',{farinha:3,ovos:1},{massa:3},20,'baking','Conecta trigo, moagem e granjas às refeições.','food'),
   cannery: industry('Fábrica de conservas',{milho:2,cebola:1,vidro:1},{conserva:3},20,'baking','Transforma hortaliças e embalagens em alimento variado.','food'),
@@ -89,16 +100,20 @@ export const INDUSTRIES = {
   legal_office: industry('Escritório de advocacia',{}, {},1,'law','Atendimento jurídico particular e defesa criminal.','services'),
   bank: industry('Banco',{}, {},1,'commerce','Depósitos mantêm reserva integral; crédito usa somente capital próprio disponível.','services'),
 };
-export const INDUSTRIAL_FOODS = ['leite','queijo','ovos','massa','conserva','marmita','marmita_simples','marmita_rustica','marmita_peixe'];
+export const INDUSTRIAL_FOODS = ['leite','queijo','ovos','massa','conserva','marmita','marmita_simples','marmita_rustica','marmita_peixe','carne_bovina','carne_suina','carne_ovina','carne_caprina','carne_ave','carne_caca','churrasco','marmita_carne'];
 
 export const MEAL_COMPONENTS={
   marmita_peixe:{quality:4,ingredients:{file_peixe:1,arroz:1,tomate:1}},
+  marmita_carne:{quality:4,ingredients:{carne_caca:1,arroz:1,feijao:1}},
+  churrasco:{quality:4,ingredients:{carne_bovina:1,carvao:1}},
   marmita:{quality:4,ingredients:{feijao:2,arroz:2,alface:1,tomate:1}},
   marmita_simples:{quality:2,ingredients:{arroz:2,feijao:2}},
   marmita_rustica:{quality:3,ingredients:{mandioca:2,milho:2,tomate:1}},
 };
 export const KITCHEN_RECIPES=[
   {good:'marmita_peixe',quantity:2,labor:16,inputs:MEAL_COMPONENTS.marmita_peixe.ingredients},
+  {good:'marmita_carne',quantity:3,labor:18,inputs:MEAL_COMPONENTS.marmita_carne.ingredients},
+  {good:'churrasco',quantity:3,labor:18,inputs:MEAL_COMPONENTS.churrasco.ingredients},
   {good:'marmita',quantity:3,labor:18,inputs:MEAL_COMPONENTS.marmita.ingredients},
   {good:'marmita_simples',quantity:2,labor:12,inputs:MEAL_COMPONENTS.marmita_simples.ingredients},
   {good:'marmita_rustica',quantity:2,labor:15,inputs:MEAL_COMPONENTS.marmita_rustica.ingredients},
