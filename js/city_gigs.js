@@ -207,7 +207,9 @@ export class CityGigs{
    }else{
     const goal=this.frontagePoint(b);if(!goal||Math.hypot(worker.entity.x-goal.x,worker.entity.y-goal.y)>.4||worker.path.length)continue;
    }
-   if(job.artworkSupport?.phase!=='returning')job.progress+=job.kind==='art-installation'?Math.max(.5,1+(worker.skills?.artistic||0)/80):1;worker.action=job.artworkSupport?.phase==='returning'?'Voltando pela passarela após o serviço':job.kind==='repair'?'Fazendo pequeno reparo':job.kind==='gardening'?'Plantando no jardim':job.kind==='art-installation'?'Criando arte urbana':job.kind==='art-removal'?'Retirando obra de arte':job.kind==='art-cleaning'?'Limpando obra urbana':job.scope==='frontage'?'Limpando a frente do imóvel':'Fazendo faxina informal';city.economy.practice(worker,job.kind==='repair'?'construction':job.kind==='gardening'?'agriculture':job.kind==='art-installation'?'artistic':'cleaning');
+   if(job.artworkSupport?.phase!=='returning')job.progress+=job.kind==='art-installation'?Math.max(.5,1+(worker.skills?.artistic||0)/80):1;
+   if(job.kind==='art-cleaning'){const art=city.justice.art.find(a=>a.id===job.artId),layer=art?.layers?.find(l=>l.id===job.layerId);if(layer)layer.cleaningProgress=Math.min(1,job.progress/Math.max(1,job.required||18));}
+   worker.action=job.artworkSupport?.phase==='returning'?'Voltando pela passarela após o serviço':job.kind==='repair'?'Fazendo pequeno reparo':job.kind==='gardening'?'Plantando no jardim':job.kind==='art-installation'?'Criando arte urbana':job.kind==='art-removal'?'Retirando obra de arte':job.kind==='art-cleaning'?'Limpando obra urbana':job.scope==='frontage'?'Limpando a frente do imóvel':'Fazendo faxina informal';city.economy.practice(worker,job.kind==='repair'?'construction':job.kind==='gardening'?'agriculture':job.kind==='art-installation'?'artistic':'cleaning');
    if(job.progress<job.required)continue;
    if(job.kind==='art-installation'&&!job.artworkId){
     if(!this.consumeArtworkMaterial(job)){this.release(job,worker);job.waitingReason=`Aguardando material ou verba para ${job.artworkMaterial.good}`;continue;}

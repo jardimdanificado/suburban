@@ -44,7 +44,7 @@ import { syncCityBuildings } from "./city_renderer_3d.js?v=street-graffiti-visib
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=head-flag-crown-1';
-import { CityAnimalModels } from './city_animal_models.js?v=fauna-motion-1';
+import { CityAnimalModels } from './city_animal_models.js?v=fauna-scale-2';
 import { syncBirdNests } from './city_bird_nests.js';
 import { flagNightFactor } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1-canvas-readback-1';
@@ -9519,7 +9519,7 @@ export class RCT3DRenderer {
 
     // Draw WebGL Frame with Depth of Field & Chromatic Aberration in Perspective Modes
     const profilePrepared = this.profileFrame ? performance.now() : 0;
-    this.terrainTracks.update(this.renderer,world,entities,dt*effectiveSpeed,this.cityCitizenModels,citizenRenderOffsets,this,this.city);
+    this.terrainTracks.update(this.renderer,world,entities,dt*effectiveSpeed,this.cityCitizenModels,citizenRenderOffsets,this,this.cityDevelopment?.city);
     syncMovementDust(THREE,this,world,entities,citizenRenderOffsets,dt*effectiveSpeed,false);
     const activeCam = this.isPerspectiveActive() ? this.fpCamera : this.camera;
     const lightBlockers=(this.cityDevelopment?.city?.buildings||[])

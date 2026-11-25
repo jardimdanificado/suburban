@@ -1,4 +1,4 @@
-import { ANIMAL_CLIPS, ANIMAL_SPECIES, ANIMAL_SPECIES_IDS } from './animal_catalog.js';
+import { ANIMAL_CLIPS, ANIMAL_SPECIES, ANIMAL_SPECIES_IDS } from './animal_catalog.js?v=fauna-scale-2';
 import { createAnimalSpeciesTextures } from './animal_textures.js';
 import { parseCitizenOBJ } from './city_citizen_models.js';
 
@@ -213,7 +213,7 @@ export class CityAnimalModels {
       batch.capacity = capacity;
     }
 
-    const baseSize = (entity.properties.render?.size ?? spec.size ?? 1) * (options.perspective ? 1.05 : 1);
+    const baseSize = (spec.size ?? entity.properties.render?.size ?? 1) * (options.perspective ? 1.05 : 1);
     const carcassScale = animal.dead && animal.carcassMaxFood ? Math.max(0.35, 0.35 + 0.65 * (Math.max(0, animal.carcassFood ?? animal.carcassMaxFood) / animal.carcassMaxFood)) : 1;
     const size = baseSize * carcassScale;
     const bounds = animal.dead ? (this.frameBounds.get(key) || this.frameBounds.get(`${species}:idle:0`)) : null;
