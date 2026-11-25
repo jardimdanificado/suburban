@@ -99,8 +99,8 @@ export class MainMenu {
     this.gameModeOpen = false;
 
     // World generation parameters
-    this.selectedPreset = worldSettings.preset || randomWorldPreset();
-    this.selectedSettlementPreset = worldSettings.settlementPreset || randomSettlementPreset();
+    this.selectedPreset = worldSettings.preset || 'archipelago';
+    this.selectedSettlementPreset = worldSettings.settlementPreset || 'developed';
     this.selectedSize = worldSettings.size || 128;
     this.selectedPopulation = worldSettings.population || 512;
     this.selectedSeed = worldSettings.seed || 482910;

@@ -4,7 +4,7 @@ import {playing,controlledCitizen,movementVector} from './js/character_game.js';
 import { FreeCameraTouchControls } from './js/free_camera_touch_controls.js';
 import {CityFavorites} from './js/city_favorites.js?v=custom-history-limit-1';
 import { CitySimulationBridge } from './js/city_sim_bridge.js?v=fauna-motion-1';
-import { resolveWorldSettings, randomWorldPreset, randomSettlementPreset, WORLD_PRESETS } from './js/world_settings.js';
+import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=pathcache-fix-1";
 import { CityDesktop } from "./js/city_desktop.js?v=game-approach-camera-9";
 import { World } from "./js/world.js";
@@ -40,11 +40,7 @@ let gameCameraLocked=true;
 let gameIndoorCamera=null;
 const urlParams = new URLSearchParams(window.location.search);
 const worldSettings = resolveWorldSettings(urlParams);
-if (!urlParams.has('terrain')) {
-  worldSettings.preset = randomWorldPreset();
-  worldSettings.presetId = WORLD_PRESETS[worldSettings.preset].id;
-}
-worldSettings.settlementPreset = urlParams.get('settlement') || randomSettlementPreset();
+worldSettings.settlementPreset = urlParams.get('settlement') || 'developed';
 startupLoading.stage('Gerando terreno…', 0.1);
 await startupLoading.paint();
 const world = new World(worldSettings.presetId, worldSettings.seed, worldSettings.size);
@@ -943,7 +939,7 @@ booted = true;
   requestAnimationFrame(frame);
 }
 
-export async function startNewCity({ preset = randomWorldPreset(), settlementPreset = randomSettlementPreset(), seed = 482910, size = 256, population = 512 } = {}) {
+export async function startNewCity({ preset = 'archipelago', settlementPreset = 'developed', seed = 482910, size = 256, population = 512 } = {}) {
   startupLoading.open();
   startupLoading.stage('Preparando o mundo…', 0.05);
   await startupLoading.paint();

@@ -819,7 +819,11 @@ export function applyWindFoliageShader(mat, deformScale = 0.20, rootHeight = 0.2
       '#include <project_vertex>',
       `
       // Solid discrete shape morph / distortion on interval trigger
+      #ifdef USE_INSTANCING
       vec4 worldInstPos = instanceMatrix * vec4(position, 1.0);
+      #else
+      vec4 worldInstPos = modelMatrix * vec4(position, 1.0);
+      #endif
       float randSeed = fract(sin(dot(worldInstPos.xz, vec2(12.9898, 78.233))) * 43758.5453);
       
       // Variable interval of 15 to 25 simulation frames between shape changes

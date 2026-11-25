@@ -162,7 +162,7 @@ Falta prolongada de comida (12 horas a zero), água (seis horas a zero) ou saúd
 
 ## Relevo e sementes
 
-Sem semente na URL, cada carregamento sorteia terreno e paisagem. **Governo → Geração de terreno** permite escolher arquipélago, continente ou terras altas, repetir uma semente ou gerar outra cidade. Gerar terreno reinicia a partida.
+Sem parâmetro na URL, a partida começa em arquipélago com cidade inicial estruturada; a semente continua sorteada a cada carregamento. **Governo → Geração de terreno** permite trocar paisagem e cidade inicial, repetir uma semente ou gerar outra cidade. Gerar terreno reinicia a partida.
 
 ```text
 http://localhost:8000/?seed=47622&terrain=archipelago
