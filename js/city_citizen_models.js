@@ -10,7 +10,7 @@ import {CITIZEN_BODY_FACE_COUNT,CITIZEN_GARMENT_FACES} from './city_garment_face
 import {fittedSkirtSurface} from './city_citizen_skirts.js?v=anatomical-dress-skirt-1';
 import {createPoseWeightMorph,computeWeightMorphAttributes} from './city_citizen_weight_morph.js?v=anatomical-3d-morph-1';
 /** OBJ snapshots share one geometry per frame and one instanced draw per visible frame. */
-export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0],acenar:[0,1,2,3],comemorar:[0,1,2,3],conversar:[0,1,2,3],varrer:[0,1,2,3],cavar:[0,1,2,3],nadar:[0,1,2,3],dancar:[0,1,2,3],carregar:[0,1,2,3],caminhar:[0,1,2,3,4]});
+export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0],acenar:[0,1,2,3],comemorar:[0,1,2,3],conversar:[0,1,2,3],varrer:[0,1,2,3],cavar:[0,1,2,3],nadar:[0,1,2,3],dancar:[0,1,2,3],carregar:[0,1,2,3,4],caminhar:[0,1,2,3,4]});
 const citizenHasPath=c=>c?._renderPathActive??!!c?.path?.length;
 export function citizenIsSleeping(c){
  if(c?.task!=='energy'||!c.sleep?.active||citizenHasPath(c)||c.mobilityTrip||c.ridingVehicleId||c.deliveryId)return false;
@@ -28,7 +28,7 @@ const COMBINABLE_GARMENTS=new Set(['camisa','camiseta','regata','terno','casaco'
 const HEADWEAR_PIECES=new Set(['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','cesta']);
 const LOWER_PIECES=new Set(['sapatos','botas','calça','calça social','shorts','bermuda','sunga','saia','saia longa']);
 const RENDERED_ACCESSORIES=new Set(['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','cesta','sapatos','botas','calça','calça social','shorts','bermuda','sunga','saia','saia longa','luvas']);
-export function citizenAnimation(c,moving=false,allowSwim=true){
+export function citizenAnimation(c,moving=false,inWater=undefined){
   if(c.dead)return 'morto';
   if(c.unconsciousUntil)return 'derrotado';
   if(c.surrenderedUntil)return 'sentado_no_chao';
@@ -38,7 +38,7 @@ export function citizenAnimation(c,moving=false,allowSwim=true){
     if(BIKE_KINDS.has(c.ridingVehicleKind))return c.ridingAsPassenger?'sentado_no_banco':'seated';
     return GLIDE_KINDS.has(c.ridingVehicleKind)?'glide':'passenger';
   }
-  if(c.swimming&&allowSwim)return 'nadar';
+  if(inWater!==undefined?inWater:c.swimming)return 'nadar';
   if(moving){
     if(c.deliveryId||c.forestryJob?.stage==='return'||c.carryLoad)return 'carregar';
     return 'run';
@@ -514,7 +514,7 @@ if (vCitizenDirt.a > 0.05) {
     return {level,hex};
   }
   begin(dt=0,speed=1,simTick=null){this.frameToken++;this.animationPaused=speed<=0;this.frameDelta=Math.max(0,Math.min(.1,dt));this.clock+=this.frameDelta*Math.max(0,Math.min(2,speed));this.campaignFlagTime=Number.isFinite(simTick)?Math.floor(simTick/20)*.1:Math.floor(this.clock*3)/10;this.activeCampaignFlags.clear();this.flyCount=0;if(this.flyMesh)this.flyMesh.count=0;for(const batch of this.activeBatches){batch.count=0;if(batch.mesh)batch.mesh.count=0;if(batch.clothingMesh)batch.clothingMesh.count=0;}this.activeBatches.clear();for(const batch of this.activeHeadwearBatches){batch.count=0;if(batch.mesh)batch.mesh.count=0;}this.activeHeadwearBatches.clear();}
-  add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false,smoothMovement=false,vehicleAngle=null,visualOffset=null,indoorBounds=null,activeCampaignElectionId=null,activeCampaignStatus=null,shallowShore=false}={}){
+  add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false,smoothMovement=false,vehicleAngle=null,visualOffset=null,indoorBounds=null,activeCampaignElectionId=null,activeCampaignStatus=null,inWater=undefined}={}){
     if(!this.ready)return false;
     const c=entity.properties.citizen;if(!c)return false;
     if(hidden)return true;
@@ -560,7 +560,7 @@ if (vCitizenDirt.a > 0.05) {
     // the seated body back into the walking one at the seat anchor.
     const settledFurniture=!!c.furnitureUse?.seated||c.furnitureUse?.pose==='lying';
     const traveling=citizenHasPath(c)||!!c.indoorLocation?.path?.length||!settledFurniture&&(moved||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding');
-    const sleeping=citizenIsSleeping(c),lying=!sleeping&&!traveling&&c.furnitureUse?.pose==='lying',clip=citizenAnimation(c,traveling,!shallowShore),actionState=clip==='murro'||clip==='chute'||clip==='derrotado',actionToken=c.combatAnimation?.sequence??c.combatReaction?.sequence??c.unconsciousUntil??null;
+    const sleeping=citizenIsSleeping(c),lying=!sleeping&&!traveling&&c.furnitureUse?.pose==='lying',clip=citizenAnimation(c,traveling,inWater),actionState=clip==='murro'||clip==='chute'||clip==='derrotado',actionToken=c.combatAnimation?.sequence??c.combatReaction?.sequence??c.unconsciousUntil??null;
     // The seated OBJ pose puts the legs in the same vertical bands used by
     // the standing-body fat mask. Cap its morph so those vertices do not
     // balloon sideways while sitting; standing citizens retain the full shape.
@@ -610,7 +610,7 @@ if (vCitizenDirt.a > 0.05) {
       animateClothFlag(carrier.group.userData.cloth,this.campaignFlagTime??Math.floor(this.clock*3)/10,(entity.id%19)*.31);this.activeCampaignFlags.add(entity.id);
     }
     const dz=c.dirtZones,zoneToken=dz?`${Math.round(dz.feet||0)}:${Math.round(dz.legs||0)}:${Math.round(dz.arms||0)}:${Math.round(dz.head||0)}:${Math.round(dz.seat||0)}:${Math.round(dz.back||0)}:${Math.round(dz.side||0)}:${Math.round(dz.torso||0)}`:'';
-    const combatFlash=entity.combatFlash>0,garmentDirt=garment?.dirt||0,dirtVisual=this.citizenDirtVisual(c,garmentDirt),dirtMix=dirtVisual.level>0?Math.min(.75,dirtVisual.level/130):0,dirtToken=`${Math.round(dirtVisual.level)}:${dirtVisual.hex}:${zoneToken}`,dirtLevel01=dirtVisual.level>0?Math.min(1,dirtVisual.level/100):0;
+    const combatFlash=entity.combatFlash>0,garmentDirt=garment?.dirt||0,dirtVisual=this.citizenDirtVisual(c,garmentDirt),dirtMix=dirtVisual.level>22?Math.min(.68,(dirtVisual.level-22)/145):0,dirtToken=`${Math.round(dirtVisual.level)}:${dirtVisual.hex}:${zoneToken}`,dirtLevel01=dirtVisual.level>22?Math.min(1,(dirtVisual.level-22)/78):0;
     const bodyColorToken=combatFlash?'flash':dimmed?'dim':`${entity.properties.render.color??0xe8e8e8}:${dirtToken}`;
     if(!transformUnchanged||motion.bodyColorToken!==bodyColorToken){this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:entity.properties.render.color??0xe8e8e8);this.setInstanceColor(batch.mesh,batch.count,this.color);this.activeDirtColor.setHex(dirtVisual.hex);this.setInstanceDirt(batch.mesh,batch.count,this.activeDirtColor,dimmed||combatFlash?0:dirtLevel01,dz);motion.bodyColorToken=bodyColorToken;}
     const presenceColor=presence?.color,clothingColorUnchanged=transformUnchanged&&motion.clothingColorAppearance===appearance&&motion.clothingColorDirt===dirtToken&&motion.clothingColorCombat===combatFlash&&motion.clothingColorDimmed===dimmed&&motion.clothingColorPresence===presenceColor;
@@ -653,8 +653,8 @@ if (vCitizenDirt.a > 0.05) {
       this.setInstanceColor(boxBatch.mesh,boxBatch.count,this.color);
       boxBatch.count++;
     }
-    if((c.dead||dirtVisual.level>=55)&&!dimmed&&this.THREE.BoxGeometry&&this.THREE.MeshBasicMaterial){
-      const fliesPerCitizen=c.dead?6:Math.min(6,3+Math.floor((dirtVisual.level-55)/15));
+    if((c.dead||dirtVisual.level>=78)&&!dimmed&&this.THREE.BoxGeometry&&this.THREE.MeshBasicMaterial){
+      const fliesPerCitizen=c.dead?6:Math.min(6,3+Math.floor((dirtVisual.level-78)/8));
       if(this.flyCount+fliesPerCitizen>this.flyCapacity){
         const cap=Math.max(64,(this.flyCapacity||32)*2),geo=new this.THREE.BoxGeometry(.025,.016,.025),mat=new this.THREE.MeshBasicMaterial({color:0x16181c}),mesh=new this.THREE.InstancedMesh(geo,mat,cap);
         mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);mesh.frustumCulled=false;

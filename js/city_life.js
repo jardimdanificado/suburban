@@ -1,5 +1,6 @@
 import { makeIdentity, makeBuildingName, makeCityName } from './city_names.js';
 import {initializeBodyMetrics} from './city_body_metrics.js?v=citizen-access-1';
+import { TILE_WATER } from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 export const LIFE_RULES = { starvationMinutes: 720, dehydrationMinutes: 360, terminalHealthMinutes: 120, stalledMinutes: 120 };
 const NEED_KEYS=['food','water','energy','hygiene','toilet','social','leisure','health','shelter','safety'];
 export class CityLife {
@@ -69,6 +70,7 @@ export class CityLife {
     if(checked){checked.x=x;checked.y=y;checked.worldRevision=worldRevision;checked.obstacleRevision=obstacleRevision;checked.occupiedCount=occupiedCount;}
     else this.positionChecks.set(c,{x,y,worldRevision,obstacleRevision,occupiedCount});
     if(city.walkable(x,y))return false;
+    if(city.world.getTile(x,y)===TILE_WATER&&(c.swimming||c.path?.length||c.task==='swim-leisure'||c.task==='swim-hygiene'||c.task==='swim-exit'))return false;
     // Repair invalid ground positions, including walls and water after a route interruption.
     const building=city.buildings.find(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&c.entity.x>=b.entity.x&&c.entity.x<b.entity.x+b.width&&c.entity.y>=b.entity.y&&c.entity.y<b.entity.y+b.depth);
     let destination=building?.door;

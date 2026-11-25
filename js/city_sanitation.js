@@ -547,11 +547,12 @@ export class CitySanitation {
       c.dirtZones.torso = Math.min(100, (c.dirtZones.torso || 0) + amount * 0.7);
       c.dirtZones.legs = Math.min(100, (c.dirtZones.legs || 0) + amount * 0.7);
     }
+    const heavy = kind === 'sangue' || kind === 'bosta' || kind === 'tinta';
     if (c.needs && Number.isFinite(c.needs.hygiene)) {
-      c.needs.hygiene = Math.max(0, c.needs.hygiene - amount * 0.45);
+      c.needs.hygiene = Math.max(0, c.needs.hygiene - amount * (heavy ? 0.25 : 0.08));
     }
     const g = c.wardrobe?.[c.wearingIndex];
-    if (g) g.dirt = Math.min(100, (g.dirt || 0) + amount * 0.6);
+    if (g) g.dirt = Math.min(100, (g.dirt || 0) + amount * (heavy ? 0.35 : 0.15));
   }
   washCitizenDirt(c, fraction = 1) {
     if (!c?.dirtSources) return;

@@ -285,13 +285,14 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
     box(.14,.1,b.depth+.18,b.width+.02,cy,b.depth/2,light,'stone');
    }
    if(b.type==='courthouse'){
-    // Monumental multi-story colonnade, classical pediment, and rooftop justice dome.
+    // Monumental multi-story colonnade (never blocking the doorway), classical pediment, and rooftop justice dome.
     const porticoZ=b.depth+porch*.56,colH=Math.min(roof-.08,Math.max(1.72,Math.min(2,b.floors)*CITY_FLOOR_HEIGHT-.12));
     const columns=Math.max(4,Math.floor(b.width/1.05)-(Math.floor(b.width/1.05)%2)),columnStart=Math.max(.34,(b.width-(columns-1)*Math.min(1.15,(b.width-.68)/(columns-1)))/2),columnGap=(b.width-2*columnStart)/(columns-1);
     box(b.width+.32,.22,.34,b.width/2,.11,b.depth+.16,0xb8ad98,'stone');
     box(b.width+.18,.14,porch,b.width/2,colH+.07,b.depth+porch*.5,light,'stone');
     for(let i=0;i<columns;i++){
      const x=columnStart+i*columnGap;
+     if(frontDoorGap(x,.46))continue;
      cylinder(.13,colH-.22,x,colH/2+.02,porticoZ,light,'stone');
      cylinder(.2,.14,x,.2,porticoZ,0xc7bca7,'stone');
      cylinder(.2,.12,x,colH-.04,porticoZ,0xc7bca7,'stone');
@@ -301,16 +302,18 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
     const pedY=colH+.32,pedimentShape=new THREE.Shape();pedimentShape.moveTo(0,0);pedimentShape.lineTo(b.width/2,.58);pedimentShape.lineTo(b.width,0);pedimentShape.closePath();
     const pediment=new THREE.Mesh(new THREE.ExtrudeGeometry(pedimentShape,{depth:.14,bevelEnabled:false}),mat(light,'stone'));pediment.position.set(0,pedY,porticoZ-.04);pediment.castShadow=true;root.add(pediment);
     const seal=new THREE.Mesh(new THREE.TorusGeometry(.2,.038,6,16),mat(brass,'metal'));seal.position.set(b.width/2,pedY+.24,porticoZ+.12);root.add(seal);
-    // Rooftop stepped drum + dome + finial spire.
-    const drumR=Math.min(b.width,b.depth)*.26;
-    cylinder(drumR*1.12,.22,b.width/2,roof+.11,b.depth/2,light,'stone');
-    cylinder(drumR,.72,b.width/2,roof+.58,b.depth/2,light,'stone');
-    cylinder(drumR*1.08,.1,b.width/2,roof+.96,b.depth/2,brass,'metal');
-    const dome=new THREE.Mesh(new THREE.SphereGeometry(drumR*.96,12,8,0,Math.PI*2,0,Math.PI/2),mat(variant%2?copper:brass,'metal'));dome.position.set(b.width/2,roof+1.01,b.depth/2);dome.castShadow=true;root.add(dome);
-    cylinder(.04,.45,b.width/2,roof+1.01+drumR*.96+.2,b.depth/2,brass,'metal');
+    // Rooftop parapet balustrade + stepped drum + dome + finial spire.
+    for(const z of [.12,b.depth-.12])box(b.width-.2,.28,.1,b.width/2,roof+.14,z,light,'stone');
+    for(const x of [.12,b.width-.12])box(.1,.28,b.depth-.2,x,roof+.14,b.depth/2,light,'stone');
+    const drumR=Math.max(.45,Math.min(b.width,b.depth)*.28);
+    box(drumR*2.2,.28,drumR*2.2,b.width/2,roof+.14,b.depth/2,light,'stone');
+    cylinder(drumR,.86,b.width/2,roof+.71,b.depth/2,light,'stone');
+    cylinder(drumR*1.08,.11,b.width/2,roof+1.18,b.depth/2,brass,'metal');
+    const dome=new THREE.Mesh(new THREE.SphereGeometry(drumR*.96,12,8,0,Math.PI*2,0,Math.PI/2),mat(variant%2?copper:brass,'metal'));dome.position.set(b.width/2,roof+1.23,b.depth/2);dome.castShadow=true;root.add(dome);
+    cylinder(.045,.55,b.width/2,roof+1.23+drumR*.96+.25,b.depth/2,brass,'metal');
    }else{
     box(b.width+.16,.14,porch,b.width/2,1.74,frontZ,accent,'stone');
-    for(const x of [.28,b.width-.28]){cylinder(.09,1.66,x,.83,frontZ+porch*.34,light,'stone');box(.22,.12,.22,x,.12,frontZ+porch*.34,0xb8ad98,'stone');box(.22,.12,.22,x,1.66,frontZ+porch*.34,accent,'stone');}
+    for(const x of [.28,b.width-.28])if(!frontDoorGap(x,.4)){cylinder(.09,1.66,x,.83,frontZ+porch*.34,light,'stone');box(.22,.12,.22,x,.12,frontZ+porch*.34,0xb8ad98,'stone');box(.22,.12,.22,x,1.66,frontZ+porch*.34,accent,'stone');}
    }
    if(b.type==='police_station'){
     // Imposing precinct watchtower, radio mast, and shield crest.

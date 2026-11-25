@@ -234,6 +234,85 @@ function writeOBJ(filePath, name, bind, posed) {
 // For hanging arms: -rx swings arm forward (+Z), +rx swings arm backward (-Z);
 // for left arm (x < 0): -rz raises arm outward (-X), +rz tucks inward;
 // for right arm (x > 0): +rz raises arm outward (+X), -rz tucks inward.
+function rotateFromTo(p, pivot, fromDir, toDir, weight = 1) {
+  const fl = Math.hypot(...fromDir) || 1, tl = Math.hypot(...toDir) || 1;
+  const a = [fromDir[0] / fl, fromDir[1] / fl, fromDir[2] / fl];
+  const b = [toDir[0] / tl, toDir[1] / tl, toDir[2] / tl];
+  const d = Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]));
+  const angle = Math.acos(d) * weight;
+  if (angle < 1e-6) return p;
+  let ax = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  let al = Math.hypot(...ax);
+  if (al < 1e-6) ax = [1, 0, 0], al = 1;
+  const k = [ax[0] / al, ax[1] / al, ax[2] / al];
+  const v = sub(p, pivot), cos = Math.cos(angle), sin = Math.sin(angle);
+  const kdotv = k[0] * v[0] + k[1] * v[1] + k[2] * v[2];
+  const kcrossv = [k[1] * v[2] - k[2] * v[1], k[2] * v[0] - k[0] * v[2], k[0] * v[1] - k[1] * v[0]];
+  return add(pivot, [
+    v[0] * cos + kcrossv[0] * sin + k[0] * kdotv * (1 - cos),
+    v[1] * cos + kcrossv[1] * sin + k[1] * kdotv * (1 - cos),
+    v[2] * cos + kcrossv[2] * sin + k[2] * kdotv * (1 - cos),
+  ]);
+}
+
+function buildCarryFromRun(frame) {
+  const data = parseCitizenOBJ(fs.readFileSync(path.join('data', 'model', 'run', `${frame}.obj`), 'utf8'));
+  const runVerts = new Map();
+  const runFaceKeys = [];
+  for (let f = 0; f < CITIZEN_BODY_FACE_COUNT; f++) {
+    const fk = [];
+    for (let c = 0; c < 3; c++) {
+      const i = f * 9 + c * 3;
+      const p = [data.positions[i], data.positions[i + 1], data.positions[i + 2]];
+      const k = p.join(',');
+      if (!runVerts.has(k)) runVerts.set(k, p);
+      fk.push(k);
+    }
+    runFaceKeys.push(fk);
+  }
+  const vertsOf = (ids, off = 0) => {
+    const s = new Set();
+    for (const id of ids) for (const k of runFaceKeys[id + off]) s.add(k);
+    return s;
+  };
+  const intersect = (a, b) => [...a].filter(x => b.has(x));
+  const centerOf = (keys) => mean([...keys].map(k => runVerts.get(k)));
+
+  for (const [off, sideSign] of [[0, -1], [MIRROR, 1]]) {
+    const upper = vertsOf(UPPERARM, off), shoulderV = vertsOf(SHOULDER, off);
+    const elbow = vertsOf(ELBOW, off), forearm = vertsOf(FOREARM, off), hand = vertsOf(HAND, off);
+    const shoulderRing = new Set(intersect(upper, shoulderV));
+    const upperElbowRing = new Set(intersect(upper, elbow));
+    const lowerElbowRing = new Set(intersect(forearm, elbow));
+    const wristRing = new Set(intersect(forearm, hand));
+
+    const shC = centerOf(shoulderRing);
+    const elC = mul(add(centerOf(upperElbowRing), centerOf(lowerElbowRing)), 0.5);
+    const wrC = centerOf(wristRing);
+
+    const curUpperDir = sub(elC, shC);
+    const targetUpperDir = [-sideSign * 0.08, -0.85, 0.52];
+    const armKeys = new Set([...upper, ...elbow, ...forearm, ...hand]);
+
+    for (const rk of armKeys) {
+      if (shoulderRing.has(rk)) continue;
+      runVerts.set(rk, rotateFromTo(runVerts.get(rk), shC, curUpperDir, targetUpperDir, 1));
+    }
+
+    const newElC = mul(add(centerOf(upperElbowRing), centerOf(lowerElbowRing)), 0.5);
+    const newWrC = centerOf(wristRing);
+    const curForearmDir = sub(newWrC, newElC);
+    const targetForearmDir = [sideSign * -0.22, 0.22, 0.95];
+
+    for (const rk of new Set([...elbow, ...forearm, ...hand])) {
+      if (upperElbowRing.has(rk)) continue;
+      const w = forearm.has(rk) || hand.has(rk) ? 1 : 0.5;
+      runVerts.set(rk, rotateFromTo(runVerts.get(rk), newElC, curForearmDir, targetForearmDir, w));
+    }
+  }
+  return { verts: runVerts, faceVertKeys: runFaceKeys };
+}
+
 const CLIPS = {
   acenar: [0, 1, 2, 3].map(f => {
     const s = Math.sin((f / 4) * Math.PI * 2);
@@ -346,22 +425,6 @@ const CLIPS = {
       kneeR: [bounce * 0.35 + Math.max(0, -s) * 0.25, 0, 0],
     };
   }),
-  carregar: [0, 1, 2, 3].map(f => {
-    const t = (f / 4) * Math.PI * 2;
-    const s = Math.sin(t);
-    return {
-      spineRot: [0.08, s * 0.04, 0],
-      headRot: [-0.04, 0, 0],
-      armL: [-0.65, 0.22, -0.05],
-      elbowL: [-1.15, 0, 0],
-      armR: [-0.65, -0.22, 0.05],
-      elbowR: [-1.15, 0, 0],
-      legL: [-s * 0.42, 0, 0],
-      legR: [s * 0.42, 0, 0],
-      kneeL: [Math.max(0, -s) * 0.5, 0, 0],
-      kneeR: [Math.max(0, s) * 0.5, 0, 0],
-    };
-  }),
   caminhar: [0, 1, 2, 3, 4].map(f => {
     const t = (f / 5) * Math.PI * 2;
     const s = Math.sin(t), c = Math.cos(t);
@@ -390,4 +453,9 @@ for (const [clip, frames] of Object.entries(CLIPS)) {
     count++;
   }
 }
-console.log(`Generated ${count} human animation OBJ frames across ${Object.keys(CLIPS).length} clips.`);
+for (let i = 0; i < 5; i++) {
+  const { verts, faceVertKeys } = buildCarryFromRun(i);
+  writeOBJ(path.join('data', 'model', 'carregar', `${i}.obj`), `carregar_${i}`, { verts, faceVertKeys }, verts);
+  count++;
+}
+console.log(`Generated ${count} human animation OBJ frames across ${Object.keys(CLIPS).length + 1} clips.`);

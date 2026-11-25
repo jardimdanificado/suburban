@@ -1844,7 +1844,7 @@ export class CitySimulation {
           c.mobilityNeed=Math.min(100,(c.mobilityNeed||0)+travelled*cost*.22*(c.mobilityPriority||1));
           if(c.swimming)this.sanitation?.washCitizenDirt?.(c,travelled*.3);
           if(!elevated&&!boatWaypoint&&!swimTile){wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
-          if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);this.sanitation?.soilCitizen?.(c,'barro',travelled*1.2,null,'feet');c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}}
+          if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);this.sanitation?.soilCitizen?.(c,'barro',travelled*.15,null,'feet');c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}}
         }
         let actionState=movementActionCache.get(c);if(!actionState){actionState={action:null};movementActionCache.set(c,actionState);}
         const actionDelivery=c.deliveryId??null,actionBoat=c.boatClass??null,actionSky=c.skybridgeZ>0,actionSwim=!!c.swimming,actionForestry=c.forestryJob?.stage??null,actionVisit=c.socialVisitId??null;

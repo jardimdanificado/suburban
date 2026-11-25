@@ -55,19 +55,21 @@ export function sampleCitizenMotion(world,sample,now,smoothMovement=true){
       sample.clearWorld=world;sample.clearTerrain=world.revision;sample.clearObstacles=city?.obstacleRevision;sample.clearSize=city?.occupied?.size;
       sample.motionRevision=(sample.motionRevision||0)+1;
     }
-    sample.segmentClear??=((a,b)=>renderSegmentWalkable(sample.clearWorld,a.x,a.y,b.x,b.y,false,sample.collisionTiles||sample.city?.occupied));
+    const allowWaterAt=(ax,ay,bx,by)=>!!sample.citizen?.boatClass||!!sample.citizen?.swimming||sample.clearWorld.getTile(Math.floor(ax),Math.floor(ay))===TILE_WATER||sample.clearWorld.getTile(Math.floor(bx),Math.floor(by))===TILE_WATER;
+    sample.segmentClear??=((a,b)=>renderSegmentWalkable(sample.clearWorld,a.x,a.y,b.x,b.y,allowWaterAt(a.x,a.y,b.x,b.y),sample.collisionTiles||sample.city?.occupied));
     sample.cornerClear??=((a,b,c)=>{
       const world=sample.clearWorld,occupied=sample.collisionTiles||sample.city?.occupied,margin=.28;
+      const allowW=allowWaterAt(a.x,a.y,c.x,c.y)||world.getTile(Math.floor(b.x),Math.floor(b.y))===TILE_WATER;
       const x0=Math.floor(Math.min(a.x,b.x,c.x)-margin),x1=Math.floor(Math.max(a.x,b.x,c.x)+margin);
       const y0=Math.floor(Math.min(a.y,b.y,c.y)-margin),y1=Math.floor(Math.max(a.y,b.y,c.y)+margin);
-      for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)if(occupied?.has(`${x},${y}`)||!terrainWalkable(world,x,y)||!canStep(world,Math.floor(b.x),Math.floor(b.y),x,y))return false;
+      for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const isW=world.getTile(x,y)===TILE_WATER;if(occupied?.has(`${x},${y}`)||(!terrainWalkable(world,x,y)&&!(allowW&&isW))||(!allowW&&!canStep(world,Math.floor(b.x),Math.floor(b.y),x,y)))return false;}
       return true;
     });
     const done=sampleRoundedMotion(sample,now);
     if(!sample.motionBlocked){sample.blockedSince=null;return done;}
     sample.blockedSince??=now;
     const tx=Math.floor(sample.to.x),ty=Math.floor(sample.to.y);
-    if(now-sample.blockedSince>=600&&terrainWalkable(world,tx,ty)&&!occupied?.has(`${tx},${ty}`)){
+    if(now-sample.blockedSince>=600&&(terrainWalkable(world,tx,ty)||world.getTile(tx,ty)===TILE_WATER)&&!occupied?.has(`${tx},${ty}`)){
       sample.entity.x=sample.to.x;sample.entity.y=sample.to.y;sample.points.length=0;sample.blockedSince=null;return true;
     }
     return false;
@@ -79,11 +81,12 @@ export function sampleCitizenMotion(world,sample,now,smoothMovement=true){
   if(Math.floor(x)===Math.floor(tx)&&Math.floor(y)===Math.floor(ty)&&!obstacles?.has(`${Math.floor(tx)},${Math.floor(ty)}`)){
     sample.entity.x=tx;sample.entity.y=ty;sample.blockedSince=null;sample.points.length=0;return true;
   }
-  if(renderSegmentWalkable(world,x,y,tx,ty,!!sample.citizen?.boatClass,obstacles)){
+  const segAllowWater=!!sample.citizen?.boatClass||!!sample.citizen?.swimming||world.getTile(Math.floor(x),Math.floor(y))===TILE_WATER||world.getTile(Math.floor(tx),Math.floor(ty))===TILE_WATER;
+  if(renderSegmentWalkable(world,x,y,tx,ty,segAllowWater,obstacles)){
     sample.entity.x=tx;sample.entity.y=ty;sample.blockedSince=null;sample.points.length=0;return true;
   }
   sample.blockedSince??=now;
-  if(now-sample.blockedSince>=600&&terrainWalkable(world,Math.floor(tx),Math.floor(ty))&&!obstacles?.has(`${Math.floor(tx)},${Math.floor(ty)}`)){sample.entity.x=tx;sample.entity.y=ty;sample.points.length=0;sample.blockedSince=null;return true;}
+  if(now-sample.blockedSince>=600&&(terrainWalkable(world,Math.floor(tx),Math.floor(ty))||world.getTile(Math.floor(tx),Math.floor(ty))===TILE_WATER)&&!obstacles?.has(`${Math.floor(tx)},${Math.floor(ty)}`)){sample.entity.x=tx;sample.entity.y=ty;sample.points.length=0;sample.blockedSince=null;return true;}
   return false;
 }
 function renderIndoorPosition(c,position){

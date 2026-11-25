@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { setup } from './helpers/city.mjs';
 import { TILE_WATER } from '../js/world_gen.js';
 import { citizenAnimation } from '../js/city_citizen_models.js';
+import { sampleCitizenMotion } from '../js/city_sim_bridge.js';
 
 function createRiverWorld() {
   const city = setup({ starter: true, population: 4 });
@@ -110,4 +111,37 @@ test('new human animation clips map to the corresponding citizen states', () => 
   assert.equal(citizenAnimation({ waving: true }, false), 'acenar');
   assert.equal(citizenAnimation({ task: 'clean', workCell: { x: 1, y: 1 } }, false), 'varrer');
   assert.equal(citizenAnimation({ task: 'construction', workProjectId: 1 }, false), 'cavar');
+});
+
+test('bridge motion interpolates smoothly from shore into water without blocking or teleporting', () => {
+  const city = createRiverWorld();
+  const c = addCitizen(city, 79.5, 64.5);
+  const sample = {
+    city,
+    citizen: c,
+    entity: c.entity,
+    from: { x: 79.5, y: 64.5 },
+    to: { x: 80.5, y: 64.5 },
+    points: [
+      { x: 79.5, y: 64.5, at: 0 },
+      { x: 80.5, y: 64.5, at: 200 },
+      { x: 81.5, y: 64.5, at: 400 },
+    ],
+    startedAt: 0,
+    duration: 200,
+  };
+  sampleCitizenMotion(city.world, sample, 250, true);
+  assert.equal(sample.motionBlocked, false, 'motion into water must not be blocked at the shore');
+  assert(c.entity.x > 79.6 && c.entity.x < 81.5, `citizen should interpolate smoothly into water, got x=${c.entity.x}`);
+});
+
+test('recoverBlockedPosition does not eject swimming citizens out of water', () => {
+  const city = createRiverWorld();
+  const c = addCitizen(city, 80.5, 64.5);
+  c.swimming = true;
+  c.task = 'swim-leisure';
+  c.path = [];
+  const recovered = city.life.recoverBlockedPosition(c);
+  assert.equal(recovered, false, 'swimming citizen must not be teleported back to shore');
+  assert.equal(c.entity.x, 80.5);
 });

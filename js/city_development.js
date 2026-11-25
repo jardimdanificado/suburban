@@ -18,8 +18,9 @@ const contractorHandles=(type,service)=>type==='builder'||type===contractorForSe
 const FOUNDING_ESSENTIAL_WORKS = Object.freeze([
   ['iml', 110], ['police_station', 105], ['crematorium', 100], ['courthouse', 95], ['jail', 90],
 ]);
-export function civicMonumentFloors(type,compact=false){
-  if(['courthouse','police_station','jail','council_chamber','clinic'].includes(type))return compact?2:3;
+export function civicMonumentFloors(type,tinyMap=false){
+  if(type==='courthouse')return tinyMap?2:4;
+  if(['police_station','jail','council_chamber','clinic'].includes(type))return tinyMap?2:3;
   if(['iml','crematorium','council_oversight_office','library'].includes(type))return 2;
   return 1;
 }
@@ -453,7 +454,8 @@ export class CityDevelopment {
       if(!site||!this.acquirePublicSite(site))continue;
       const builder=this.selectBuilder('treasury',site.door);
       if(!builder)continue;
-      const floors=civicMonumentFloors(type,this.compactPlanning);
+      const tinyMap=Math.max(this.city.world.width,this.city.world.height)<128;
+      const floors=civicMonumentFloors(type,tinyMap);
       const project=this.beginProject('treasury',site.lot.id,type,{width:site.width,depth:site.depth,floors,builderId:builder.id,priority,rotation:site.rotation});
       if(!project)continue;
       project.foundingEssential=true;
