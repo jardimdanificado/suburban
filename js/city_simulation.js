@@ -1207,6 +1207,11 @@ export class CitySimulation {
     else if (job && c.role!=='councilor' && this.hour >= 8 && this.hour < 17 && withinFichaRadius(job.door)) { task = 'work'; type = 'job'; }
     else if (this.substances?.routeBar(c))return;
     else if (n.social < 60) { task = 'social'; type = 'leisure'; }
+    if(ficha&&!urgent&&ficha.ahead>=1&&ficha.ticket.status!=='called'&&(task===ficha.ticket.kind||(task==='food'&&['food','workmeal','supplies'].includes(ficha.ticket.kind)))){
+      if(company&&this.hour>=8&&this.hour<17&&withinFichaRadius(company.door)){task='manage';type='company';}
+      else if(job&&c.role!=='councilor'&&this.hour>=8&&this.hour<17&&withinFichaRadius(job.door)){task='work';type='job';}
+      else{task='leisure';type='leisure';}
+    }
     if(task==='leisure'&&!urgent&&this.nature.consider(c))return;
     if(task==='energy'&&!home){this.routeHomelessToSleep(c);return;}
     if (this.society.age(c) < 6 && !urgent) { task = 'care'; type = 'home'; }
@@ -1290,7 +1295,7 @@ export class CitySimulation {
       let shopScore=Infinity;for(const b of this.buildings)if(b.type!=='townhall'){const s=this.economy.mealScore(c,b);if(s<shopScore)shopScore=s;}
       if(vendorRows.length&&vendorRows[0].score<shopScore){const {site,vendor}=vendorRows[0].row,path=this.findPath(c.entity,vendor.position);if(path!==null){c.path=path;c.targetId=vendor.businessId;c.streetMarketTarget={marketId:site.id,businessId:vendor.businessId};c.task='street-market-food';return;}}
     }
-    const candidates = (type === 'company' ? [company] : task === 'food' ? this.buildings.filter(b=>b.type!=='townhall') : type === 'child' ? (childHome ? [childHome] : home ? [home] : []) : type === 'home' ? (home ? [home] : []) : type === 'job' ? [job] : this.buildings.filter(b => !b.entity.destroyed && (b.type === type||['clinic','leisure'].includes(type)&&civicSpec(b)?.need===(type==='clinic'?'health':'leisure')))).filter(b=>b?.door&&Number.isFinite(b.door.x)&&Number.isFinite(b.door.y));
+    const candidates = (type === 'company' ? [company] : task === 'food' ? this.buildings.filter(b=>b.type!=='townhall') : type === 'child' ? (childHome ? [childHome] : home ? [home] : []) : type === 'home' ? (home ? [home] : []) : type === 'job' ? [job] : this.buildings.filter(b => !b.entity.destroyed && (b.type === type||['clinic','leisure'].includes(type)&&civicSpec(b)?.need===(type==='clinic'?'health':'leisure')))).filter(b=>b?.door&&Number.isFinite(b.door.x)&&Number.isFinite(b.door.y)&&(!ficha||ficha.ticket.status==='called'||b.id!==ficha.building.id||task!==ficha.ticket.kind));
     if (hall && ((type === 'home' && !home) || ['utility', 'clinic', 'leisure'].includes(type))) { const serviceCost = this.currency.price({ utility: 35, clinic: 240, leisure: 25 }[type] || 0); const cash = this.accounts.get(this.payerFor(c))?.balance || 0; if (!candidates.includes(hall)) candidates.push(hall); if(cash<serviceCost&&!candidates.some(b=>civicSpec(b)&&!b.ownerId&&civicStatus(this,b,c)?.ready))candidates.splice(0,candidates.length,hall); }
     const foodScores=task==='food'?(measure?measure('taskMealScoring',()=>new Map(candidates.map(b=>[b,this.economy.mealScore(c,b)]))):new Map(candidates.map(b=>[b,this.economy.mealScore(c,b)]))):null;
     candidates.sort((a, b) => foodScores ? foodScores.get(a)-foodScores.get(b) : Math.hypot(a.door.x-c.entity.x,a.door.y-c.entity.y)-Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y));

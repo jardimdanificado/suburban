@@ -176,7 +176,7 @@ export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=nul
  }
  // Virtual ficha: count how many active tickets are ahead of this citizen.
  const budget=ticketRoamBudget(city,c),ahead=budget?.ahead??0;
- if(ahead>=1){
+ if(ahead>=1&&kind!=='work'&&kind!=='manage'){
   // Far enough in line: free the citizen to work or do proportional nearby activities!
   c.task=null;c.targetId=null;c.toiletTargetId=null;c.serviceQueue=null;c.facingTarget=null;
   c.action=`Com ficha na mão (${ahead} na frente)`;
