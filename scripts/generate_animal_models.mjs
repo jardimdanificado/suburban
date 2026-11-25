@@ -307,9 +307,12 @@ function buildBird(spec, p, clip) {
     { x: 0, y: bodyY + 0.03, z: c.bl * 0.46, rx: c.rx * 0.65, ry: c.ry * 0.7 },
   ], 8);
 
+  const flapping = clip === 'walk' && spec.canFly;
   const lx = c.rx * 0.48, hipY = bodyY - c.ry * 0.65;
-  m.addLimb(-lx, hipY, 0, c.lh * 0.5, c.lh * 0.5, 0.028, 0.022, 0.02, p.fl, p.kfl);
-  m.addLimb(lx, hipY, 0, c.lh * 0.5, c.lh * 0.5, 0.028, 0.022, 0.02, p.fr, p.kfr);
+  const legPitchL = flapping ? 0.85 : p.fl, legPitchR = flapping ? 0.85 : p.fr;
+  const kneePitchL = flapping ? -0.45 : p.kfl, kneePitchR = flapping ? -0.45 : p.kfr;
+  m.addLimb(-lx, hipY, 0, c.lh * 0.5, c.lh * 0.5, 0.028, 0.022, 0.02, legPitchL, kneePitchL);
+  m.addLimb(lx, hipY, 0, c.lh * 0.5, c.lh * 0.5, 0.028, 0.022, 0.02, legPitchR, kneePitchR);
 
   const pitch = p.headPitch * 0.85, yaw = p.headYaw;
   const ny = bodyY + c.ry * 0.55, nz = c.bl * 0.36;
@@ -331,7 +334,6 @@ function buildBird(spec, p, clip) {
   ], 6);
 
   // Sculpted wings: wide and flapping in walk/flight for flying birds, folded otherwise
-  const flapping = clip === 'walk' && spec.canFly;
   const span = flapping ? c.rx * 3.8 : c.rx * 0.55;
   const flap = flapping ? (p.wingFlap || 0) : -0.35;
   for (const s of [-1, 1]) {

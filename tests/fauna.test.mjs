@@ -362,4 +362,15 @@ test('circular grazing clears only a circle, arboreal animals climb trees, and 2
   // Garça cannot walk on water, only fly over it
   assert.equal(city.fauna.canOccupy(0, 0, 'garca', null, 0), false);
   assert.equal(city.fauna.canOccupy(0, 0, 'garca', null, 2.5), true);
+
+  // Bird ascends progressively and never picks water as landing spot
+  const hawk = city.fauna.spawn(12, 12, 'gaviao');
+  hawk.stateTimer = 0;
+  city.fauna.decideBehavior(hawk, false);
+  if (hawk.action === 'Voando') {
+    assert.notEqual(world.getTile(Math.floor(hawk.targetX), Math.floor(hawk.targetY)), TILE_WATER);
+    const startAlt = hawk.altitude;
+    city.fauna.update(0.1);
+    assert.ok(hawk.altitude > startAlt && hawk.altitude < hawk.targetAltitude, 'bird should ascend progressively');
+  }
 });

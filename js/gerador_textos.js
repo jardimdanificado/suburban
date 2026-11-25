@@ -5,6 +5,10 @@
 import { conjugarVerbo } from './vocabulario.js';
 import { SUBSTANTIVOS, VERBOS_TRANSITIVOS } from './lexico_sinonimos.js';
 import { CENAS_EXTRA } from './cenas_extra.js';
+import { CENAS_AMPLAS_A } from './cenas_amplas_a.js';
+import { CENAS_AMPLAS_B } from './cenas_amplas_b.js';
+import { CENAS_AMPLAS_C } from './cenas_amplas_c.js';
+import { CENAS_AMPLAS_D } from './cenas_amplas_d.js';
 
 const TEMAS = [
   'politica', 'cidade', 'trabalho', 'economia', 'moradia', 'familia',
@@ -366,6 +370,22 @@ export const CENAS = {
 // ampliam o repertório sem tocar nas cenas base.
 for (const [tema, extras] of Object.entries(CENAS_EXTRA)) {
   if (CENAS[tema]) CENAS[tema].push(...extras);
+}
+
+// Cenas amplas entram sem repetir uma cena que já exista no tema. A checagem
+// por JSON compara sujeito, verbo, objeto e complemento ao mesmo tempo.
+const CENAS_AMPLAS = {
+  ...CENAS_AMPLAS_A, ...CENAS_AMPLAS_B, ...CENAS_AMPLAS_C, ...CENAS_AMPLAS_D,
+};
+for (const [tema, cenas] of Object.entries(CENAS_AMPLAS)) {
+  if (!CENAS[tema]) continue;
+  const existentes = new Set(CENAS[tema].map(cena => JSON.stringify(cena)));
+  for (const cena of cenas) {
+    const chave = JSON.stringify(cena);
+    if (existentes.has(chave)) continue;
+    existentes.add(chave);
+    CENAS[tema].push(cena);
+  }
 }
 
 const ADVERBIOS = [

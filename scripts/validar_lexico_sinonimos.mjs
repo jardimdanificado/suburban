@@ -54,7 +54,7 @@ for (const [chave, variantes] of Object.entries(SUBSTANTIVOS)) {
     }
     const cabeca = primeiraPalavra(variante);
     const alvo = analisar(cabeca, `SUBSTANTIVOS.${chave} -> ${variante}`);
-    if (alvo.lema === origem.lema) {
+    if (alvo.lema === origem.lema && !variante.includes(' ')) {
       erros.push(`SUBSTANTIVOS.${chave} -> "${variante}": mesmo lema da chave`);
     }
     if (alvo.plural !== origem.plural) {

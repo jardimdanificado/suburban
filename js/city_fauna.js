@@ -205,6 +205,7 @@ export class CityFauna {
       x: entity.x,
       y: entity.y,
       altitude: 0,
+      targetAltitude: 0,
       inTreePlantId: null,
       nestId: null,
       angle: Math.random() * Math.PI * 2,
@@ -470,20 +471,23 @@ export class CityFauna {
         animal.action = 'Voando para o ninho';
         animal.targetX = nest.x;
         animal.targetY = nest.y;
-        animal.altitude = Math.max(2.2, nest.z);
+        animal.targetAltitude = Math.max(2.2, nest.z);
         animal.stateTimer = 4.0;
         return;
       }
       if (!isNight && Math.random() < 0.6) {
-        const fx = Math.max(1, Math.min(this.city.world.width - 2, Math.floor(animal.x) + Math.floor(Math.random() * 25) - 12 + 0.5));
-        const fy = Math.max(1, Math.min(this.city.world.height - 2, Math.floor(animal.y) + Math.floor(Math.random() * 25) - 12 + 0.5));
-        animal.state = 'walk';
-        animal.action = 'Voando';
-        animal.targetX = fx;
-        animal.targetY = fy;
-        animal.altitude = 2.2 + Math.random() * 1.4;
-        animal.stateTimer = 4.5;
-        return;
+        for (let attempt = 0; attempt < 10; attempt++) {
+          const fx = Math.max(1, Math.min(this.city.world.width - 2, Math.floor(animal.x) + Math.floor(Math.random() * 25) - 12 + 0.5));
+          const fy = Math.max(1, Math.min(this.city.world.height - 2, Math.floor(animal.y) + Math.floor(Math.random() * 25) - 12 + 0.5));
+          if (!this.canOccupy(fx, fy, animal.species, animal.buildingId, 0)) continue;
+          animal.state = 'walk';
+          animal.action = 'Voando';
+          animal.targetX = fx;
+          animal.targetY = fy;
+          animal.targetAltitude = 2.2 + Math.random() * 1.4;
+          animal.stateTimer = 4.5;
+          return;
+        }
       }
     }
 
@@ -596,9 +600,20 @@ export class CityFauna {
         animal.hunger = Math.min(100, animal.hunger + 8 * stepDt);
       }
 
+      // Smoothly ascend or descend toward targetAltitude
+      const targetAlt = animal.targetAltitude ?? animal.altitude ?? 0;
+      if (Math.abs((animal.altitude || 0) - targetAlt) > 0.01) {
+        const diff = targetAlt - (animal.altitude || 0);
+        const step = Math.min(Math.abs(diff), 2.2 * stepDt);
+        animal.altitude = (animal.altitude || 0) + Math.sign(diff) * step;
+      }
+
       if (animal.targetX != null && (animal.state === 'walk' || animal.state === 'flee')) {
         const spec = ANIMAL_SPECIES[animal.species];
-        if (spec?.canFly) animal.altitude = Math.max(animal.altitude || 0, 2.0);
+        if (spec?.canFly) {
+          const distLeft = Math.hypot(animal.targetX - animal.x, animal.targetY - animal.y);
+          animal.targetAltitude = distLeft < 1.8 && animal.action !== 'Voando para o ninho' ? 0.25 : Math.max(animal.targetAltitude || 0, 2.2);
+        }
         const arrived = this.moveTowards(animal, animal.targetX, animal.targetY, animal.state === 'flee' ? 1.75 : 1.0, stepDt);
         if (arrived) {
           animal.targetX = null;
@@ -606,31 +621,38 @@ export class CityFauna {
           if (animal.action === 'Indo para árvore' && spec?.arboreal) {
             const tree = animal.targetTreeId != null ? this.city.nature?.plants?.get?.(animal.targetTreeId) : this.findTreeSpot(animal.x, animal.y, 2);
             animal.inTreePlantId = tree?.id ?? null;
-            animal.altitude = tree ? this.treeCanopyAltitude(tree) : 0;
+            animal.targetAltitude = tree ? this.treeCanopyAltitude(tree) : 0;
+            animal.altitude = animal.targetAltitude;
             animal.state = tree ? 'eat' : 'idle';
             animal.action = tree ? 'Alimentando-se na copa' : 'Observando';
             animal.stateTimer = 3.5 + Math.random() * 2.5;
             animal.thinkTimer = 0.5;
           } else if (animal.action === 'Voando para o ninho' && animal.nestId && this.nests.has(animal.nestId)) {
             const nest = this.nests.get(animal.nestId);
-            animal.altitude = nest.z;
+            animal.targetAltitude = nest.z;
             animal.state = 'sleep';
             animal.action = 'No ninho';
             animal.stateTimer = 6.0;
             animal.thinkTimer = 0.5;
           } else if (animal.action === 'Procurando pasto') {
             this.grazeCell(Math.floor(animal.x), Math.floor(animal.y), 90, animal.x, animal.y);
-            animal.altitude = 0;
+            animal.targetAltitude = 0;
             animal.state = 'eat';
             animal.action = 'Pastando grama';
             animal.stateTimer = 3.0 + Math.random() * 2.0;
             animal.thinkTimer = 0.5;
           } else {
-            animal.altitude = 0;
-            animal.state = 'idle';
-            animal.action = 'Observando';
-            animal.stateTimer = 0.8 + Math.random() * 1.2;
-            animal.thinkTimer = 0.3;
+            const overWater = tileAt(this.city.world, Math.floor(animal.x), Math.floor(animal.y)) === TILE_WATER;
+            if (spec?.canFly && overWater) {
+              animal.targetAltitude = 2.4;
+              animal.thinkTimer = 0.1;
+            } else {
+              animal.targetAltitude = 0;
+              animal.state = 'idle';
+              animal.action = 'Observando';
+              animal.stateTimer = 0.8 + Math.random() * 1.2;
+              animal.thinkTimer = 0.3;
+            }
           }
         }
       }

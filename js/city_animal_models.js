@@ -60,6 +60,9 @@ export class CityAnimalModels {
     this.speciesMaterials = new Map();
     this.batches = new Map();
     this.activeBatches = new Set();
+    this.shadowCount = 0;
+    this.shadowCapacity = 0;
+    this.shadowMesh = null;
     this.motion = new WeakMap();
     this.clock = 0;
     this.frameDelta = 0.016;
@@ -127,6 +130,8 @@ export class CityAnimalModels {
   begin(dt = 0, speed = 1) {
     this.frameDelta = Math.max(0, Math.min(0.1, dt));
     this.clock += this.frameDelta * Math.max(0, Math.min(2, speed));
+    this.shadowCount = 0;
+    if (this.shadowMesh) this.shadowMesh.count = 0;
     for (const batch of this.activeBatches) {
       batch.count = 0;
       if (batch.mesh) batch.mesh.count = 0;
@@ -209,6 +214,37 @@ export class CityAnimalModels {
     this.color.setHex(options.selected ? 0xfff3b0 : (this.THREE.DataTexture ? 0xffffff : (entity.properties.render?.color ?? spec.color ?? 0xd9d2c5)));
     batch.mesh.setColorAt(batch.count, this.color);
     batch.count++;
+
+    if ((animal.altitude || 0) > 0.25 && this.THREE.CircleGeometry && this.THREE.MeshBasicMaterial) {
+      if (this.shadowCount === this.shadowCapacity) {
+        const cap = Math.max(32, this.shadowCapacity * 2);
+        const geo = new this.THREE.CircleGeometry(0.35, 10);
+        geo.rotateX(-Math.PI / 2);
+        const mat = new this.THREE.MeshBasicMaterial({ color: 0x0b1014, transparent: true, opacity: 0.35, depthWrite: false });
+        const mesh = new this.THREE.InstancedMesh(geo, mat, cap);
+        mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);
+        mesh.frustumCulled = false;
+        if (this.shadowMesh) {
+          for (let i = 0; i < this.shadowCount; i++) {
+            this.shadowMesh.getMatrixAt(i, this.matrix);
+            mesh.setMatrixAt(i, this.matrix);
+          }
+          this.group.remove(this.shadowMesh);
+          this.shadowMesh.geometry.dispose();
+          this.shadowMesh.material.dispose();
+        }
+        this.group.add(mesh);
+        this.shadowMesh = mesh;
+        this.shadowCapacity = cap;
+      }
+      const groundH = surfaceH - (animal.altitude || 0) + 0.03;
+      const sScale = Math.max(0.25, size * (1 - Math.min(0.6, (animal.altitude || 0) * 0.12)));
+      this.position.set(motion.x, groundH, motion.y);
+      this.quaternion.setFromAxisAngle(this.axis, 0);
+      this.scale.set(sScale, 1, sScale);
+      this.matrix.compose(this.position, this.quaternion, this.scale);
+      this.shadowMesh.setMatrixAt(this.shadowCount++, this.matrix);
+    }
     return true;
   }
 
@@ -221,6 +257,10 @@ export class CityAnimalModels {
         if (batch.mesh.instanceColor) batch.mesh.instanceColor.needsUpdate = true;
       }
     }
+    if (this.shadowMesh) {
+      this.shadowMesh.count = this.shadowCount;
+      if (this.shadowCount > 0) this.shadowMesh.instanceMatrix.needsUpdate = true;
+    }
   }
 
   clear() {
@@ -229,6 +269,14 @@ export class CityAnimalModels {
         this.group.remove(batch.mesh);
         batch.mesh.dispose();
       }
+    }
+    if (this.shadowMesh) {
+      this.group.remove(this.shadowMesh);
+      this.shadowMesh.geometry.dispose();
+      this.shadowMesh.material.dispose();
+      this.shadowMesh = null;
+      this.shadowCapacity = 0;
+      this.shadowCount = 0;
     }
     this.batches.clear();
     this.activeBatches.clear();
