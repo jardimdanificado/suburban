@@ -368,13 +368,21 @@ export class TerrainTracks {
     this.sandCarry ||= new SandCarry();this.dirtCarry ||= new SandCarry();this.paintCarry ||= new PaintCarry();this.grassWear ||= new GrassWear();
     this.ensureWorld(renderer,world);this.time+=Math.max(0,dt);this.uniforms.terrainTrackTime.value=this.time;
     if(dt<=0)return;
-    const groundArt=[];
-    if(city?.justice?.art?.length){
-      for(const piece of city.justice.art){
-        if(piece.entity?.destroyed||piece.support?.kind!=='street-graffiti'||piece.support.surface!=='ground'||(piece.wearProgress||0)>=1)continue;
-        const face=piece.layers?.at(-1)||piece;
-        groundArt.push({piece,x:piece.support.position?.x??piece.entity.x,y:piece.support.position?.y??piece.entity.y,width:piece.support.width||.86,height:piece.support.height||.86,inkColor:piece.renderedInkColor??face.color??piece.color??0xffffff});
+    let groundArt=[];
+    const artList=city?.justice?.art;
+    if(artList?.length){
+      const artRev=`${city.justice.artRevision||0}:${artList.length}`;
+      if(!this._groundArtCache||this._groundArtCache.rev!==artRev){
+        const items=[];
+        for(let i=0;i<artList.length;i++){
+          const piece=artList[i];
+          if(piece.entity?.destroyed||piece.support?.kind!=='street-graffiti'||piece.support.surface!=='ground'||(piece.wearProgress||0)>=1)continue;
+          const face=piece.layers?.at(-1)||piece;
+          items.push({piece,x:piece.support.position?.x??piece.entity.x,y:piece.support.position?.y??piece.entity.y,width:piece.support.width||.86,height:piece.support.height||.86,inkColor:piece.renderedInkColor??face.color??piece.color??0xffffff});
+        }
+        this._groundArtCache={rev:artRev,items};
       }
+      groundArt=this._groundArtCache.items;
     }
     const stamps=[],paintStamps=[];
     const onStepGraffiti=(item,u,v,stamp)=>{
@@ -382,7 +390,8 @@ export class TerrainTracks {
       p.groundSmudges.push({u,v,dx:Math.sin(stamp.angle),dz:Math.cos(stamp.angle),kind:stamp.kind});
       if(p.groundSmudges.length>48)p.groundSmudges.shift();
       p.wearProgress=Math.min(1,(p.wearProgress||0)+(Math.abs(stamp.kind)===1?.025:.045));
-      p.smudgeRevision=(p.smudgeRevision||0)+1;
+      p._smudgeSteps=(p._smudgeSteps||0)+1;
+      if(p._smudgeSteps===1||p._smudgeSteps%4===0||p.wearProgress>=1){p.smudgeRevision=(p.smudgeRevision||0)+1;if(p.wearProgress>=1)this._groundArtCache=null;}
     };
     for(const entity of entities){
       const citizen=entity.properties?.citizen,vehicle=entity.properties?.cityVehicle,animal=entity.properties?.cityAnimal;

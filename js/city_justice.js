@@ -24,6 +24,7 @@ import {favoriteColors,pickGraffitiColor} from './city_colors.js';
 export const GRAFFITI_STYLES=['pixo','tag','stencil','bubble','spray','irregular','stacked','bomb','rasurada'];
 function pickGraffitiStyle(c,random=Math.random){return GRAFFITI_STYLES[Math.floor(random()*GRAFFITI_STYLES.length)]||'pixo';}
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const graffitiSupportRevisions=new WeakMap();
 const buildingContainsPoint=(building,x,y)=>{const px=x-building.entity.x,py=y-building.entity.y;let localX,localY;switch((building.rotation||0)%4){case 1:localX=building.depth-py;localY=px;break;case 2:localX=building.width-px;localY=building.depth-py;break;case 3:localX=py;localY=building.width-px;break;default:localX=px;localY=py;}return localX>=0&&localX<building.width&&localY>=0&&localY<building.depth;};
 const cityUnitForInvestigation=(city,room)=>city.units?.get(room?.unitId??room?.targetUnitId)??null;
 export const CRIME_TYPES=Object.freeze({unlicensedTreeFelling:'Corte de árvore silvestre sem licença',substanceUse:'Uso proibido de substância',substancePossession:'Porte irregular de substância',substanceCultivation:'Cultivo sem licença',substanceProduction:'Produção clandestina de substância',substanceTrafficking:'Tráfico de substâncias',graffiti:'Pichação',artForgery:'Falsificação de obra de arte',artPiracy:'Pirataria de obra de arte',bicycleTheft:'Furto de bicicleta',vehicleReceiving:'Receptação de veículo',propertyReceiving:'Receptação de bens',theft:'Furto de objetos',robbery:'Roubo',trespass:'Invasão de propriedade',vandalism:'Depredação',assault:'Agressão',attemptedMurder:'Tentativa de homicídio',illegalArrest:'Prisão ilegal',investigationFraud:'Fraude de investigação',falseTestimony:'Falso testemunho',policeBribery:'Suborno policial',witnessBribery:'Suborno de testemunha',judgeBribery:'Suborno judicial',forensicBribery:'Suborno de perito',murder:'Homicídio',corruption:'Corrupção',defamation:'Difamação',...PREJUDICE_CRIME_TYPES});
@@ -340,6 +341,9 @@ export class CityJustice {
     if(profile)this.lastMinuteProfile={...profile,...(this.lastMinuteProfile?.siteSearch?{siteSearch:this.lastMinuteProfile.siteSearch}:{})};
   }
   updateStreetGraffitiSupports(){
+    if(!this.art.length)return;
+    const city=this.city,rev=`${city.world?.revision||0}:${city.structureRevision||0}:${city.buildings?.length||0}:${city.occupied?.size||0}:${this.artRevision||0}`;
+    if(graffitiSupportRevisions.get(this)===rev)return;
     for(const piece of this.art){
       if(piece.entity.destroyed||piece.support?.kind!=='street-graffiti')continue;
       if(fitGraffitiToWall(this.city,piece.support))this.artRevision++;
@@ -347,6 +351,7 @@ export class CityJustice {
         piece.entity.destroyed=true;piece.destroyedAt=this.city.minute;piece.supportLostAt=this.city.minute;this.artRevision++;
       }
     }
+    graffitiSupportRevisions.set(this,`${city.world?.revision||0}:${city.structureRevision||0}:${city.buildings?.length||0}:${city.occupied?.size||0}:${this.artRevision||0}`);
   }
   updateSkybridgeArtSupport(){
     const pieces=this.art.filter(piece=>!piece.entity.destroyed&&piece.support?.kind==='skybridge');if(!pieces.length)return;const links=new Set((this.city.skybridgeLinksForRevision?.()||[]).map(link=>link.id));

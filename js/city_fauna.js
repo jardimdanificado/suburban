@@ -35,6 +35,39 @@ function hasAdjacentTile(world, x, y, targetTile) {
 }
 
 /** Bounded wild & domesticated animal simulation sharing habitats with NATURAL_PLANTS. */
+const faunaTreeCache=new WeakMap();
+const faunaCitizenCache=new WeakMap();
+function getFaunaCitizenGrid(city){
+  const citizens=city.citizens||[];
+  let cached=faunaCitizenCache.get(city);
+  if(cached&&cached.minute===city.minute&&cached.count===citizens.length)return cached.buckets;
+  const buckets=new Map();
+  for(let i=0;i<citizens.length;i++){
+    const c=citizens[i];if(c.dead||!c.entity||c.entity.destroyed)continue;
+    const bx=Math.floor(c.entity.x/12),by=Math.floor(c.entity.y/12),key=((bx&0xFFFF)<<16)|(by&0xFFFF);
+    let list=buckets.get(key);if(!list){list=[];buckets.set(key,list);}
+    list.push(c);
+  }
+  faunaCitizenCache.set(city,{minute:city.minute,count:citizens.length,buckets});
+  return buckets;
+}
+function getFaunaTreeGrid(city){
+  const plants=city.nature?.plants;if(!plants)return null;
+  const rev=`${plants.size}:${city.world?.revision||0}:${city.nature?.revision||0}`;
+  let cached=faunaTreeCache.get(city);
+  if(cached&&cached.rev===rev)return cached.buckets;
+  const buckets=new Map();
+  for(const plant of plants.values()){
+    if(plant.entity?.destroyed||plant.stage!=='mature')continue;
+    const spec=NATURAL_PLANTS[plant.species];if(!spec||!(spec.wood>0))continue;
+    const bx=Math.floor(plant.x/12),by=Math.floor(plant.y/12),key=((bx&0xFFFF)<<16)|(by&0xFFFF);
+    let list=buckets.get(key);if(!list){list=[];buckets.set(key,list);}
+    list.push(plant);
+  }
+  faunaTreeCache.set(city,{rev,buckets});
+  return buckets;
+}
+
 export class CityFauna {
   constructor(city) {
     this.city = city;
@@ -87,13 +120,16 @@ export class CityFauna {
   }
 
   findTreeSpot(x, y, maxDist = 10) {
-    let best = null, bestDist = maxDist;
-    for (const plant of this.city.nature?.plants?.values?.() || []) {
-      if (plant.entity?.destroyed || plant.stage !== 'mature') continue;
-      const spec = NATURAL_PLANTS[plant.species];
-      if (!spec || !(spec.wood > 0)) continue;
-      const d = Math.hypot(plant.x + 0.5 - x, plant.y + 0.5 - y);
-      if (d < bestDist) { bestDist = d; best = plant; }
+    const buckets=getFaunaTreeGrid(this.city);if(!buckets)return null;
+    const r=Math.ceil(maxDist/12),cx=Math.floor(x/12),cy=Math.floor(y/12);
+    let best = null, bestDist2 = maxDist*maxDist;
+    for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){
+      const list=buckets.get((((cx+dx)&0xFFFF)<<16)|((cy+dy)&0xFFFF));if(!list)continue;
+      for(let i=0;i<list.length;i++){
+        const plant=list[i];if(plant.entity?.destroyed||plant.stage!=='mature')continue;
+        const px=plant.x+0.5-x,py=plant.y+0.5-y,d2=px*px+py*py;
+        if(d2<bestDist2){bestDist2=d2;best=plant;}
+      }
     }
     return best;
   }
@@ -103,13 +139,18 @@ export class CityFauna {
     for (const b of this.city.buildings || []) {
       if (b.entity?.destroyed) continue;
       const cx = b.entity.x + (b.width || 3) * 0.5, cy = b.entity.y + (b.depth || 3) * 0.5;
+      if (Math.abs(cx - x) >= 12 || Math.abs(cy - y) >= 12) continue;
       const d = Math.hypot(cx - x, cy - y);
       if (d < 12) penalty += (12 - d);
     }
-    for (const c of this.city.citizens || []) {
-      if (c.dead || !c.entity || c.entity.destroyed) continue;
-      const d = Math.hypot(c.entity.x - x, c.entity.y - y);
-      if (d < 8) penalty += (8 - d) * 1.5;
+    const buckets=getFaunaCitizenGrid(this.city),bx=Math.floor(x/12),by=Math.floor(y/12);
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+      const list=buckets.get((((bx+dx)&0xFFFF)<<16)|((by+dy)&0xFFFF));if(!list)continue;
+      for(let i=0;i<list.length;i++){
+        const c=list[i];if(c.dead||!c.entity||c.entity.destroyed)continue;
+        const cx=c.entity.x-x,cy=c.entity.y-y;if(Math.abs(cx)>=8||Math.abs(cy)>=8)continue;
+        const d=Math.hypot(cx,cy);if(d<8)penalty+=(8-d)*1.5;
+      }
     }
     return penalty;
   }
@@ -302,13 +343,14 @@ export class CityFauna {
   nearbyThreat(animal) {
     const spec = ANIMAL_SPECIES[animal.species];
     const radius = spec.temperament === 'predator' ? FAUNA_RULES.predatorSightRadius : FAUNA_RULES.fleeRadius;
-    let closest = null, bestDist = radius;
-    for (const c of this.city.citizens || []) {
-      if (c.dead || !c.entity || c.entity.destroyed) continue;
-      const d = Math.hypot(c.entity.x - animal.x, c.entity.y - animal.y);
-      if (d < bestDist) {
-        bestDist = d;
-        closest = { x: c.entity.x, y: c.entity.y, kind: 'citizen', citizen: c, dist: d };
+    const buckets=getFaunaCitizenGrid(this.city),r=Math.ceil(radius/12),bx=Math.floor(animal.x/12),by=Math.floor(animal.y/12);
+    let closest = null, bestDist2 = radius * radius;
+    for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){
+      const list=buckets.get((((bx+dx)&0xFFFF)<<16)|((by+dy)&0xFFFF));if(!list)continue;
+      for(let i=0;i<list.length;i++){
+        const c=list[i];if(c.dead||!c.entity||c.entity.destroyed)continue;
+        const cx=c.entity.x-animal.x,cy=c.entity.y-animal.y,d2=cx*cx+cy*cy;
+        if(d2<bestDist2){bestDist2=d2;closest={x:c.entity.x,y:c.entity.y,kind:'citizen',citizen:c,dist:Math.sqrt(d2)};}
       }
     }
     return closest;

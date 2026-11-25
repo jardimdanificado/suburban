@@ -480,6 +480,7 @@ export class CityVehicles {
     const port=this.city.worldPort;if(port&&(port.edgeRouteRevision??-1)!==(this.city.world.revision||0))this.ensureHarborEdgeRoute(port);
     if(!this.harborFleetInitialized)this.initializeHarborFleet(this.city.worldPort);
     if(!this.activeCount&&!this.boatCount)return;const city=this.city;CARPOOL_CANDIDATE_INDEX.set(this,null);
+    const transportPolicy=city.politics?.policy?.transportPolicy,transportSkill=transportPolicy==='cycling'||transportPolicy==='safety'?(city.politics?.secretaries?.find(row=>row.officeId==='transport')?.skill||0):0,cyclingBonus=transportPolicy==='cycling'?Math.min(.15,.05+transportSkill*.001):0,safetyBonus=transportPolicy==='safety'?Math.min(.4,.1+transportSkill*.003):0;
     for(const v of this.units.values()){
       if(v.fishingCitizenId!=null){const fisher=city.society.citizen(v.fishingCitizenId);if(fisher?.fishingJob&&!fisher.entity.destroyed)continue;v.fishingCitizenId=null;v.driverId=null;v.transportCitizenId=null;}
       if(v.localTripCitizenId!=null){const person=city.society.citizen(v.localTripCitizenId)||city.citizens.find(c=>c.id===v.localTripCitizenId);if(!person?.localBoatTrip||person.entity.destroyed){if(person)releaseLocalBoatTrip(city,person,true);else{v.localTripCitizenId=null;v.driverId=null;v.transportCitizenId=null;v.towedByVehicleId=null;v.towedBoatId=null;}}else continue;}
@@ -506,7 +507,7 @@ export class CityVehicles {
         const p=c.path[0],tx=Math.floor(p.x),ty=Math.floor(p.y),sx=Math.floor(c.entity.x),sy=Math.floor(c.entity.y);
         const tile=tileAt(city.world,tx,ty),water=city.world.getTile(tx,ty)===TILE_WATER,fromWater=city.world.getTile(sx,sy)===TILE_WATER,boatLeg=water&&!!p.boatClass;
         if(water&&!boatLeg||!water&&!city.walkable(tx,ty)||!water&&!fromWater&&!canStep(city.world,sx,sy,tx,ty)){c.path=[];c.task=null;blocked=true;break;}
-        const road=ROAD_TILES.has(tile),transportSkill=city.politics?.secretaries?.find(row=>row.officeId==='transport')?.skill||0,cyclingBonus=city.politics?.policy?.transportPolicy==='cycling'?Math.min(.15,.05+transportSkill*.001):0,safetyBonus=city.politics?.policy?.transportPolicy==='safety'?Math.min(.4,.1+transportSkill*.003):0,speed=boatLeg?BOAT_CLASSES[p.boatClass].speed:(road?VEHICLE_SPECS[v.good].speed:4)*(PERSONAL_MOBILITY.has(v.good)?1+cyclingBonus:1)*injuryMovementFactor(c)*injuryWorkFactor(c)/roadTravelCost(tile),dx=p.x-c.entity.x,dy=p.y-c.entity.y,len=Math.hypot(dx,dy),travel=Math.min(len,elapsed*speed);
+        const road=ROAD_TILES.has(tile),speed=boatLeg?BOAT_CLASSES[p.boatClass].speed:(road?VEHICLE_SPECS[v.good].speed:4)*(PERSONAL_MOBILITY.has(v.good)?1+cyclingBonus:1)*injuryMovementFactor(c)*injuryWorkFactor(c)/roadTravelCost(tile),dx=p.x-c.entity.x,dy=p.y-c.entity.y,len=Math.hypot(dx,dy),travel=Math.min(len,elapsed*speed);
         if(len>0){c.entity.x+=dx/len*travel;c.entity.y+=dy/len*travel;v.angle=Math.atan2(dx,dy);}
         elapsed-=travel/speed;v.distance+=travel;this.stats.distance+=travel;if(boatLeg)c.boatClass=p.boatClass;else if(!water)c.boatClass=null;v.ferrying=boatLeg;v.ferryBoatClass=boatLeg?p.boatClass:null;v.condition=Math.max(0,v.condition-travel*(road?.012:.004)*(1-safetyBonus));
         if(!boatLeg)wearRoad(city.world,tx,ty,travel*ROAD_RULES.wearPerCell);
