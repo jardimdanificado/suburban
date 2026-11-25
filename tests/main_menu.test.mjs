@@ -334,6 +334,7 @@ test('CityDesktop.openNewGame opens a dedicated Novo Jogo window without opening
   assert(pageEntries.some(([type, text]) => type === 'heading' && text === 'GERAÇÃO DE TERRENO'));
   assert(pageEntries.some(([type, text]) => type === 'heading' && text === 'PRÓXIMA CIDADE'));
   assert(pageEntries.some(([type, text]) => type === 'button' && text.startsWith('PAISAGEM:')));
+  assert(pageEntries.some(([type, text]) => type === 'button' && text.startsWith('CIDADE INICIAL:')));
   assert(pageEntries.some(([type, text]) => type === 'button' && text.startsWith('PROFILER NO PRÓXIMO MUNDO:')));
   assert(pageEntries.some(([type, text]) => type === 'button' && text === 'GERAR COM ESTA SEMENTE'));
   assert(pageEntries.some(([type, text]) => type === 'button' && text === 'GERAR TERRENO ALEATÓRIO'));
@@ -342,11 +343,13 @@ test('CityDesktop.openNewGame opens a dedicated Novo Jogo window without opening
   state.seed.value = '777888';
   state.populationInput.value = '350';
   state.mapSizeInput.value = '256';
+  state.settlementPreset = 'minimal';
   const genBtn = pageEntries.find(([type, text]) => type === 'button' && text === 'GERAR COM ESTA SEMENTE');
   genBtn[2](); // invoke click
 
   assert.deepEqual(startCityParams, {
     preset: 'archipelago',
+    settlementPreset: 'minimal',
     seed: 777888,
     size: 256,
     population: 350

@@ -8,7 +8,7 @@ import { resolveWorldSettings, randomWorldPreset, randomSettlementPreset, WORLD_
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=game-approach-camera-9";
 import { CityDesktop } from "./js/city_desktop.js?v=game-approach-camera-9";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=plant-hitbox-2";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=stairs-height-1";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";

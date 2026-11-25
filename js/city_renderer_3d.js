@@ -473,31 +473,53 @@ function truncateWords(text,maxChars){
   return out||clean.slice(0,maxChars);
 }
 
-function condenseGraffitiWallText(rawText,maxChars=42){
+function shortenTargetName(whoRaw,seed=0){
+  const clean=String(whoRaw||'').replace(/\([^)]*\)/g,'').replace(/\s+/g,' ').trim();
+  const words=clean.split(' ').filter(w=>w&&!/^(prefeit[oa]|vereador[a]?|dr\.?|dra\.?)$/i.test(w));
+  if(words.length<=1)return words[0]||clean;
+  return seed%3===0?words[words.length-1]:words[0];
+}
+
+function condenseTargetInsult(targetSeg,maxChars,seed=0){
+  const colonIdx=targetSeg.indexOf(':');
+  if(colonIdx<0)return null;
+  const whoRaw=targetSeg.slice(0,colonIdx).trim(),insult=targetSeg.slice(colonIdx+1).trim();
+  if(!insult)return truncateWords(whoRaw,maxChars);
+  const full=`${whoRaw}: ${insult}`;
+  if(full.length<=maxChars)return full;
+  const shortWho=shortenTargetName(whoRaw,seed);
+  const compact=`${shortWho} ${insult}`;
+  if(compact.length<=maxChars)return compact;
+  return truncateWords(`${shortWho} ${truncateWords(insult,Math.max(8,maxChars-shortWho.length-1))}`,maxChars);
+}
+
+function condenseGraffitiWallText(rawText,maxChars=42,seed=0){
   const text=String(rawText||'').trim();
   if(!text)return '';
   const segments=text.split(/\s+·\s+/).map(s=>s.trim()).filter(Boolean);
   if(segments.length>=2){
     const targetSeg=segments[1];
-    if(targetSeg.includes(':')){
-      // Accusation/insult: keep both who is being called out and the insult (never drop to party number).
-      const [whoRaw,insultRaw]=targetSeg.split(':');
-      const insult=insultRaw.trim();
-      const whoWords=whoRaw.trim().split(/\s+/);
-      const shortWho=whoWords.length>1&&whoRaw.trim().length+insult.length+2>maxChars?whoWords[whoWords.length-1]:whoRaw.trim();
-      const combined=`${shortWho}: ${insult}`;
-      return combined.length<=maxChars?combined:truncateWords(`${whoWords[whoWords.length-1]} ${insult}`,maxChars);
-    }
+    const condensed=condenseTargetInsult(targetSeg,maxChars,seed);
+    if(condensed)return condensed;
     if(segments.length===2&&/^\d+$/.test(segments[1]))return truncateWords(`${segments[0]} ${segments[1]}`,maxChars);
     if(segments.length>=3&&/^\d+$/.test(segments[2]))return truncateWords(`${segments[1]} ${segments[2]}`,maxChars);
     return truncateWords(segments[0].length<=maxChars?segments[0]:`${targetSeg}: ${segments[0]}`,maxChars);
   }
   const main=segments[0];
+  const condensed=condenseTargetInsult(main,maxChars,seed);
+  if(condensed)return condensed;
   if(main.length<=maxChars)return main;
-  // Prefer a complete short clause over chopping into a meaningless noun fragment like "O RESTAURANTE".
-  const clauses=main.split(/[,;!?]+/).map(s=>s.trim()).filter(Boolean);
+  const noParens=main.replace(/\([^)]*\)/g,'').replace(/\s+/g,' ').trim();
+  if(noParens.length<=maxChars)return noParens;
+  const words=noParens.split(' ').filter(Boolean);
+  if(words.length>=4){
+    // Keep opening word(s) and ending insult rather than truncating off the insult.
+    const head=words[0],tail=words.slice(-2).join(' ');
+    if(head.length+tail.length+1<=maxChars)return `${head} ${tail}`;
+  }
+  const clauses=noParens.split(/[,;!?]+/).map(s=>s.trim()).filter(Boolean);
   if(clauses[0]&&clauses[0].length<=maxChars)return clauses[0];
-  return truncateWords(main,maxChars);
+  return truncateWords(noParens,maxChars);
 }
 
 function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
@@ -510,7 +532,7 @@ function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
   const physAspect=Math.max(.55,Math.min(3.2,sw/sh));
   const wideLow=sh<1&&physAspect>1.5;
   const maxChars=wideLow?26:sw>2.1?58:sw>1.2?46:34;
-  const wallText=condenseGraffitiWallText(face.message||'',maxChars);
+  const wallText=condenseGraffitiWallText(face.message||'',maxChars,seed);
   const tokens=wallText.split(/\s+/).filter(Boolean);
   const fontSpec=(size,idx=0)=>{
     if(style==='pixo')return `900 ${size}px "Sedgwick Ave Display", "VT323", "JetBrains Mono", cursive`;
@@ -1050,16 +1072,15 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
       group.userData.supports.instanceMatrix.needsUpdate = true;
       const entrance = renderer.getSurfaceElevation(map, b.door.x, b.door.y);
       const stairRise=Math.max(.08,base-entrance)/4;
-      const entry=buildingEntranceDoor(b),entryUnit=entry&&b.units.find(unit=>unit.id===entry.unitId),worldEntrySide=entry&&({1:'back',2:'front',4:'left',8:'right'})[entry.bit],localEntrySide=worldEntrySide&&facadeLocalSide(worldEntrySide,b.rotation),localEntryCell=entryUnit&&facadeLocalCell(b,entryUnit);
+      const entry=buildingEntranceDoor(b),entryUnit=entry&&b.units.find(unit=>unit.id===entry.unitId);
+      const bit=entry?.bit??2,nx=bit===8?1:bit===4?-1:0,nz=bit===2?1:bit===1?-1:0;
+      const wallX=entryUnit?entryUnit.x+.5+nx*.5:b.door.x-entity.x-nx*.5;
+      const wallZ=entryUnit?entryUnit.y+.5+nz*.5:b.door.y-entity.y-nz*.5;
+      const sideTurn=(bit===4||bit===8)?1:0;
       for (let i = 0; i < 4; i++) {
-        const distance=.11+i*.22,along=localEntryCell?(localEntrySide==='front'||localEntrySide==='back'?localEntryCell.x+.5:localEntryCell.y+.5):b.width/2;
-        const localPoint=localEntrySide==='back'?{x:along,y:-distance}:localEntrySide==='left'?{x:-distance,y:along}:localEntrySide==='right'?{x:b.width+distance,y:along}:{x:along,y:b.depth+distance};
-        const point=buildingPoint(b,localPoint.x,localPoint.y);
-        // Separate shallow risers descend from the threshold. A single tall
-        // block here overlapped the lower half of the entrance on raised lots.
+        const distance=.11+i*.22;
         const top=base-stairRise*i;
-        const sideTurn=localEntrySide==='left'||localEntrySide==='right'?1:0;
-        matrix.makeRotationY(((b.rotation||0)+sideTurn)*Math.PI/2);matrix.scale(new THREE.Vector3(1,stairRise,.22/.23));matrix.setPosition(point.x,top-stairRise/2-base,point.y);
+        matrix.makeRotationY(sideTurn*Math.PI/2);matrix.scale(new THREE.Vector3(1.12,stairRise,.24/.22));matrix.setPosition(wallX+nx*distance,top-stairRise/2-base,wallZ+nz*distance);
         group.userData.stairs.setMatrixAt(i, matrix);
       }
       group.userData.stairs.instanceMatrix.needsUpdate = true;

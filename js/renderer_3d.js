@@ -40,8 +40,8 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 
 import * as THREE from "https://esm.sh/three@0.160.0";
 import {NightLighting,hasOutdoorTorch} from "./night_lighting.js?v=building-occlusion-2";
-import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds,citizenBuildingSurfaceHeight } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=street-graffiti-visible-1";
+import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds,citizenBuildingSurfaceHeight,citizenStairSurfaceHeight } from "./city_building_geometry.js";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=stairs-height-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=head-flag-crown-1';
@@ -8282,6 +8282,17 @@ export class RCT3DRenderer {
           const cache=this._entitySurfaceCache??=new WeakMap(),cached=cache.get(e);
           if(cached&&cached.x===e.x&&cached.y===e.y&&cached.revision===world.revision)surfaceH=cached.height;
           else{surfaceH=this.getSurfaceElevation(map,e.x,e.y);cache.set(e,{x:e.x,y:e.y,revision:world.revision,height:surfaceH});}
+          const buildings=this.cityDevelopment?.city?.buildings;
+          if(buildings?.length){
+            for(let bi=0;bi<buildings.length;bi++){
+              const b=buildings[bi];
+              if(!b.door||b.entity?.destroyed||b.constructionKind==='open-air'||b.type==='quarry')continue;
+              if(Math.abs(b.door.x-renderX)>1.1||Math.abs(b.door.y-renderY)>1.1)continue;
+              const shell=this.cityMeshes?.get(b.officeTenantOf??b.entity.id);
+              const stairH=citizenStairSurfaceHeight(b,{x:renderX,y:renderY},surfaceH,shell?.position.y??b.terrain?.base);
+              if(stairH>surfaceH)surfaceH=stairH;
+            }
+          }
         }else surfaceH = this.getSurfaceElevation(map, isPlantOrItem ? e.x + 0.5 : e.x, isPlantOrItem ? e.y + 0.5 : e.y);
       }
       const renderSurfaceH=surfaceH+((renderAtInterior||renderElevated)?(interiorPosition?.z??cityCitizen?.skybridgeZ??0):0);

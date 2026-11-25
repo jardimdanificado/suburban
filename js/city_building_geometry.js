@@ -48,9 +48,33 @@ export function buildingInteriorEntrance(b){
   return {x:x+dx/distance*.35,y:y+dy/distance*.35,z:0};
 }
 
+/** Stair surface height between the raised doorway threshold and the street. */
+export function citizenStairSurfaceHeight(building,position,ground,visualBase=building?.terrain?.base){
+  if(!building?.door||!building.entity||!Number.isFinite(visualBase)||visualBase<=ground+.04)return ground;
+  const entry=buildingEntranceDoor(building),unit=entry&&building.units?.find(u=>u.id===entry.unitId);
+  let wallX,wallZ,nx=0,nz=1;
+  if(unit){
+    const bit=entry.bit;
+    nx=bit===8?1:bit===4?-1:0;nz=bit===2?1:bit===1?-1:0;
+    wallX=building.entity.x+unit.x+.5+nx*.5;
+    wallZ=building.entity.y+unit.y+.5+nz*.5;
+  }else{
+    wallX=building.door.x;wallZ=building.door.y;
+    const cx=building.entity.x+building.width*.5,cz=building.entity.y+building.depth*.5;
+    const dx=wallX-cx,dz=wallZ-cz;
+    if(Math.abs(dx)>Math.abs(dz))nx=Math.sign(dx)||1,nz=0;else nx=0,nz=Math.sign(dz)||1;
+    wallX-=nx*.5;wallZ-=nz*.5;
+  }
+  const dx=position.x-wallX,dz=position.y-wallZ,outward=dx*nx+dz*nz,lateral=Math.abs(-dz*nx+dx*nz);
+  if(lateral>.65||outward<-.15||outward>.95)return ground;
+  const t=Math.max(0,Math.min(1,1-outward/.88));
+  return ground+(visualBase-ground)*t;
+}
+
 /** Use the visible shell base for occupants, including balconies beyond its footprint. */
 export function citizenBuildingSurfaceHeight(building,location,position,ground,visualBase=building.terrain?.base){
   const inside=position.x>=building.entity.x&&position.x<building.entity.x+building.width&&position.y>=building.entity.y&&position.y<building.entity.y+building.depth;
   const usingRoom=location.unitId!=null&&!location.exiting&&!location.path?.length;
-  return inside||usingRoom?visualBase??ground:ground;
+  if(inside||usingRoom)return visualBase??ground;
+  return citizenStairSurfaceHeight(building,position,ground,visualBase);
 }

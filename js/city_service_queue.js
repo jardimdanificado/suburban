@@ -40,10 +40,47 @@ function pruneQueue(city,entrance){
 function removeTicket(entrance,ticket){const queue=entrance.serviceQueue,index=queue.indexOf(ticket);if(index>=0){queue.splice(index,1);queueChanged(entrance);}untrackTicket(ticket);}
 function slots(city,b){
  const key=`${city.world.revision||0}:${city.obstacleRevision||0}:${b.door.x}:${b.door.y}`,cached=slotCaches.get(b);if(cached?.key===key)return cached.points;
- const x=Math.floor(b.door.x),y=Math.floor(b.door.y),points=[];
- for(let r=1;r<=18;r++)for(let dx=-r;dx<=r;dx++){const dy=r-Math.abs(dx);for(const sign of dy?[-1,1]:[1]){const px=x+dx,py=y+dy*sign;if(!city.walkable(px,py))continue;points.push({x:px+.5,y:py+.5});}}
- const dx=b.door.x-(b.entity.x+b.width/2),dy=b.door.y-(b.entity.y+b.depth/2),axisX=Math.abs(dx)>Math.abs(dy),sign=Math.sign(axisX?dx:dy)||1;
- const rank=p=>{const px=Math.floor(p.x)-x,py=Math.floor(p.y)-y,forward=(axisX?px:py)*sign,side=Math.abs(axisX?py:px);return (forward<1?10000:0)+side*100+Math.abs(forward);};points.sort((a,z)=>rank(a)-rank(z));
+ const startX=Math.floor(b.door.x),startY=Math.floor(b.door.y);
+ const dx=b.door.x-(b.entity.x+b.width/2),dy=b.door.y-(b.entity.y+b.depth/2),axisX=Math.abs(dx)>Math.abs(dy);
+ const outX=axisX?(Math.sign(dx)||1):0,outY=axisX?0:(Math.sign(dy)||1);
+ const insideFootprint=(px,py)=>px>=b.entity.x&&px<b.entity.x+b.width&&py>=b.entity.y&&py<b.entity.y+b.depth;
+ const tiles=[],visited=new Set();
+ const addTile=(px,py)=>{visited.add(`${px},${py}`);tiles.push({x:px,y:py});};
+ if(city.walkable(startX,startY))addTile(startX,startY);
+ else{
+  for(const [ox,oy]of [[outX,outY],[outY,outX],[-outY,-outX],[-outX,-outY]]){
+   if(city.walkable(startX+ox,startY+oy)&&!insideFootprint(startX+ox,startY+oy)){addTile(startX+ox,startY+oy);break;}
+  }
+ }
+ let stepX=outX,stepY=outY;
+ while(tiles.length>0&&tiles.length<20){
+  const cur=tiles[tiles.length-1];
+  const dirs=[[outX,outY],[stepX,stepY],[outY,outX],[-outY,-outX],[-outX,-outY]];
+  let next=null;
+  for(const [ox,oy]of dirs){
+   const nx=cur.x+ox,ny=cur.y+oy,k=`${nx},${ny}`;
+   if(visited.has(k)||insideFootprint(nx,ny)||!city.walkable(nx,ny))continue;
+   next={x:nx,y:ny,ox,oy};break;
+  }
+  if(!next)break;
+  stepX=next.ox;stepY=next.oy;addTile(next.x,next.y);
+ }
+ const points=[];
+ if(tiles.length){
+  points.push({x:tiles[0].x+.5,y:tiles[0].y+.5});
+  for(let i=1;i<tiles.length;i++){
+   const prev=tiles[i-1],curr=tiles[i];
+   points.push({x:(prev.x+curr.x)*.5+.5,y:(prev.y+curr.y)*.5+.5});
+   points.push({x:curr.x+.5,y:curr.y+.5});
+  }
+ }
+ if(points.length<24){
+  const extra=[];
+  for(let r=1;r<=8;r++)for(let ox=-r;ox<=r;ox++){const oy=r-Math.abs(ox);for(const sign of oy?[-1,1]:[1]){const px=startX+ox,py=startY+oy*sign,k=`${px},${py}`;if(visited.has(k)||insideFootprint(px,py)||!city.walkable(px,py))continue;visited.add(k);extra.push({x:px+.5,y:py+.5});}}
+  const rank=p=>{const px=Math.floor(p.x)-startX,py=Math.floor(p.y)-startY,forward=(axisX?px:py)*(axisX?outX:outY),side=Math.abs(axisX?py:px);return (forward<1?10000:0)+side*100+Math.abs(forward);};
+  extra.sort((a,z)=>rank(a)-rank(z));
+  points.push(...extra);
+ }
  slotCaches.set(b,{key,points});return points;
 }
 export function reserveService(city,c,b,kind,resource){
@@ -100,13 +137,20 @@ export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=nul
   }
   return false;
  }
- const occupied=new Set();
- for(const other of city.citizens)if(other.id!==c.id&&!other.entity.destroyed&&!other.indoorLocation){occupied.add(`${Math.floor(other.entity.x)},${Math.floor(other.entity.y)}`);const goal=other.path?.at(-1);if(goal)occupied.add(`${Math.floor(goal.x)},${Math.floor(goal.y)}`);}
  if(city.furniture?.queueSeat(c,b)){ticket.slot=`bench:${c.seatId}`;return false;}
- const reserved=new Set(entrance.serviceQueue.filter(q=>q!==ticket&&Number.isInteger(q.slot)).map(q=>q.slot));
- const positions=slots(city,entrance);let target=null;
- for(let i=0;i<positions.length;i++){const p=positions[i];if(reserved.has(i)||occupied.has(`${Math.floor(p.x)},${Math.floor(p.y)}`))continue;const path=city.findPath(c.entity,p);if(path!==null){target={p,path,index:i};break;}}
- ticket.slot=target?.index??null;
- if(target&&Math.hypot(c.entity.x-target.p.x,c.entity.y-target.p.y)>.5)c.path=target.path;
+ const positions=slots(city,entrance),waiting=waitingTickets(entrance,b.id),ordinal=Math.max(0,waiting.indexes.get(ticket)??0);
+ const target=positions[ordinal]||positions.at(-1)||null;
+ if(target){
+  const ahead=ordinal>0?positions[ordinal-1]:b.door;
+  if(ahead)c.facingTarget={x:ahead.x,y:ahead.y};
+  ticket.slot=ordinal;
+  const dist=Math.hypot(c.entity.x-target.x,c.entity.y-target.y);
+  const failedRecently=ticket.lastSlotTry?.ordinal===ordinal&&city.minute-ticket.lastSlotTry.minute<10;
+  if(dist>.2&&!failedRecently){
+   const path=city.findPath(c.entity,target);
+   if(path!==null){if(!path.length||Math.hypot(path.at(-1).x-target.x,path.at(-1).y-target.y)>.05)path.push({x:target.x,y:target.y});c.path=path;}
+   else ticket.lastSlotTry={ordinal,minute:city.minute};
+  }
+ }else ticket.slot=null;
  return false;
 }

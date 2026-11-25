@@ -333,6 +333,22 @@ test('long street graffiti messages condense to large uppercase text legible at 
     assert.ok(new Set(drawnFonts).size >= 6, 'expected distinct fonts/sizes across styles');
     assert.ok(drawnTexts.some(t => t.toUpperCase().includes('FULANO') || t.toUpperCase().includes('CORRUPTO')), 'political accusation must keep target/insult instead of just party number');
     assert.ok(!drawnTexts.some(t => t === 'PTB 14'), 'must not replace accusation with bare party number');
+
+    drawnTexts.length = 0;
+    const insultPiece = {
+      id: 201,
+      kind: 'graffiti',
+      graffitiStyle: 'pixo',
+      message: 'JOANILSON ENOFTALMIA FEFETAR (CC): INCAPAZ DA PORRA',
+      color: 0xffffff,
+      entity: { x: 4.5, y: 3.9, destroyed: false },
+      support: { kind: 'street-graffiti', surface: 'wall', buildingId: 3, side: 0, position: { x: 4.5, y: 3.975, z: 0.9 }, width: 1.72, height: 1.64, rotation: 0 },
+      layers: []
+    };
+    syncUrbanArt(renderer, THREE, { ...city, justice: { art: [insultPiece] } }, world);
+    const rendered = drawnTexts.join('').toUpperCase();
+    assert.ok(rendered.includes('INCAPAZDAPORRA') || rendered.includes('INCAPAZ'), `expected insult preserved, got "${rendered}"`);
+    assert.ok(rendered.includes('JOANILSON') || rendered.includes('FEFETAR'), `expected short name preserved, got "${rendered}"`);
   } finally {
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;

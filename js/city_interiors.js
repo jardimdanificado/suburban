@@ -261,11 +261,11 @@ export function syncCitizenInterior(city,c){
   if(!choices.length){const fallback=kind==='service'||kind==='treatment'?groups.get('service-fallback'):kind==='bedroom'&&!c.homeUnitId?groups.get('workspace'):kind==='workspace'?groups.get(b.type==='popular_refectory'?'dining':'office'):null;
    if(fallback)room=findActivityRoom(city,c,b,fallback,kind,u=>activityCellAvailable(city,u,c,kind));}}
 
- if(b.constructionKind!=='open-air'&&(task==='toilet'||task==='food'||task==='workmeal'||task==='supplies')&&!(previous?.buildingId===b.id&&previous.targetUnitId===room?.id&&previous.targetRoomType===kind)){
+ if((task==='toilet'||task==='food'||task==='workmeal'||task==='supplies')&&!(previous?.buildingId===b.id&&previous.targetUnitId===room?.id&&previous.targetRoomType===kind)){
   const facility=task==='toilet'?city.sanitation.facilities.get(c.toiletTargetId):null,ready=!!room&&activityCellAvailable(city,room,c,kind)&&(!facility||!facility.occupantId||facility.occupantId===c.id||city.minute>=facility.busyUntil);
   if(!queueService(city,c,b,task,task==='toilet'?c.toiletTargetId:'dining',ready,room,kind))return false;
  }
- if(b.constructionKind!=='open-air'&&['work','manage','health','water','hygiene','shopping','job-interview','campaign-media','justice-report','vote','council-session'].includes(task)&&(!room||c.serviceQueue?.buildingId===b.id&&c.serviceQueue.kind===task)){
+ if((b.constructionKind!=='open-air'||['hygiene','job-interview'].includes(task))&&['work','manage','health','water','hygiene','shopping','job-interview','campaign-media','justice-report','vote','council-session'].includes(task)&&(!room||c.serviceQueue?.buildingId===b.id&&c.serviceQueue.kind===task)){
   if(!queueService(city,c,b,task,`room:${kind}`,!!room&&activityCellAvailable(city,room,c,kind),room,kind))return false;
  }
  if(!room){
