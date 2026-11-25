@@ -246,7 +246,7 @@ export const CENAS_AMPLAS_B = {
     C('A enfermeira', 'aplicar', 'a injeção', 'f', 'no braço'),
     C('O médico', 'receitar', 'os remédios', 'm', 'ao paciente'),
     C('O paciente', 'buscar', 'o resultado', 'm', 'no laboratório'),
-    C('O laboratório', 'analisar', 'as amostras', 'f', 'de sangue'),
+    C('O laboratório', 'analisar', 'as amostras', 'f', 'de análises clínicas'),
     C('O hospital', 'divulgar', 'os horários', 'm', 'de visita'),
     C('A secretaria', 'agendar', 'as consultas', 'f', 'pelo telefone'),
     C('A recepcionista', 'confirmar', 'as consultas', 'f', 'do dia'),

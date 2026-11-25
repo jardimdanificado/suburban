@@ -460,6 +460,47 @@ function applyFootSmudges(ctx,w,h,smudges,seed){
   ctx.putImageData(img,0,0);
 }
 
+function drawOutlinedPixelText(ctx,text,x,y,maxWidth,inkHex,outlineHex,{shadow=false}={}){
+  const value=String(text),fontSize=Number.parseFloat(/([\d.]+)px/.exec(ctx.font)?.[1]||'16');
+  const radius=fontSize>=44?2:1,pad=radius+(shadow?3:0)+2;
+  const width=Math.max(1,Math.ceil(Math.min((maxWidth??ctx.measureText(value).width)+pad*2,ctx.canvas.width)));
+  const height=Math.max(1,Math.ceil(fontSize*1.8+pad*2));
+  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+  const mask=canvas.getContext('2d');mask.font=ctx.font;mask.textAlign='center';mask.textBaseline='middle';mask.direction=ctx.direction;mask.fillStyle='#fff';
+  mask.fillText(value,width/2-(shadow?1:0),height/2-(shadow?1:0),maxWidth);
+  const pixels=mask.getImageData(0,0,width,height),data=pixels.data;
+  const ink=parseHexInt(inkHex,0xffffff),out=parseHexInt(outlineHex,0x141418);
+  const ir=ink>>16&255,ig=ink>>8&255,ib=ink&255;
+  const or=out>>16&255,og=out>>8&255,ob=out&255;
+  const solid=new Uint8Array(width*height);
+  for(let i=0;i<solid.length;i++)if(data[i*4+3]>=144)solid[i]=1;
+  const outBuf=new Uint8ClampedArray(data.length);
+  if(shadow){
+    const sOff=radius+1;
+    for(let py=0;py<height-sOff;py++)for(let px=0;px<width-sOff;px++)if(solid[py*width+px]){
+      const idx=((py+sOff)*width+(px+sOff))*4;
+      outBuf[idx]=or;outBuf[idx+1]=og;outBuf[idx+2]=ob;outBuf[idx+3]=255;
+    }
+  }
+  const r2=radius*radius;
+  for(let py=0;py<height;py++)for(let px=0;px<width;px++){
+    const p=py*width+px,idx=p*4;
+    if(solid[p]){outBuf[idx]=ir;outBuf[idx+1]=ig;outBuf[idx+2]=ib;outBuf[idx+3]=255;continue;}
+    let near=false;
+    for(let dy=-radius;dy<=radius&&!near;dy++){
+      const ny=py+dy;if(ny<0||ny>=height)continue;
+      for(let dx=-radius;dx<=radius;dx++){
+        if(dx*dx+dy*dy>r2)continue;
+        const nx=px+dx;if(nx>=0&&nx<width&&solid[ny*width+nx]){near=true;break;}
+      }
+    }
+    if(near){outBuf[idx]=or;outBuf[idx+1]=og;outBuf[idx+2]=ob;outBuf[idx+3]=255;}
+  }
+  pixels.data.set(outBuf);
+  mask.putImageData(pixels,0,0);
+  ctx.save();ctx.imageSmoothingEnabled=false;ctx.drawImage(canvas,x-width/2,y-height/2);ctx.restore();
+}
+
 function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
   const style=resolveGraffitiStyle(piece,face);
   const seed=((piece?.id||1)*2654435761+(face?.id||0)*977)>>>0;
@@ -513,13 +554,9 @@ function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
     ctx.save();ctx.translate(gx,gy);if(rot)ctx.rotate(rot);if(scaleX!==1||scaleY!==1)ctx.scale?.(scaleX,scaleY);
     ctx.font=fontSpec(size,idx);ctx.textAlign='center';ctx.textBaseline='middle';
     if(style==='bomb'){
-      ctx.fillStyle=outlineHex;
-      drawPixelText(ctx,tok,4,4,240);drawPixelText(ctx,tok,-2,0,240);drawPixelText(ctx,tok,2,0,240);drawPixelText(ctx,tok,0,-2,240);drawPixelText(ctx,tok,0,2,240);
-      ctx.fillStyle=inkHex;drawPixelText(ctx,tok,0,0,240);
+      drawOutlinedPixelText(ctx,tok,0,0,240,inkHex,outlineHex,{shadow:true});
     }else if(style==='bubble'){
-      ctx.fillStyle=outlineHex;
-      drawPixelText(ctx,tok,-2,0,240);drawPixelText(ctx,tok,2,0,240);drawPixelText(ctx,tok,0,-2,240);drawPixelText(ctx,tok,0,2,240);
-      ctx.fillStyle=inkHex;drawPixelText(ctx,tok,0,0,240);
+      drawOutlinedPixelText(ctx,tok,0,0,240,inkHex,outlineHex,{shadow:false});
     }else{
       ctx.fillStyle=inkHex;drawPixelText(ctx,tok,0,0,240);
     }

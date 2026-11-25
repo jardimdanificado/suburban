@@ -3,6 +3,16 @@ import { randomWorldSeed, WORLD_PRESETS } from './world_settings.js';
 
 const T = MANAGEMENT_THEME;
 
+// Title-screen cinematic: the camera zooms in on one subject per shot, cycling
+// through people, animals and nests while the game has not been played yet.
+const CINEMATIC_SEQUENCE = ['citizen', 'animal', 'nest'];
+const CINEMATIC_SHOT_SECONDS = 6;
+const CINEMATIC_TRANSITION_SECONDS = 1.8;
+const CINEMATIC_ZOOM = { citizen: 4.2, animal: 5.2, nest: 4.8 };
+// World units the camera target sits north of the subject, so the subject is
+// framed in the lower part of the screen instead of behind the floating window.
+const CINEMATIC_FOCUS_OFFSET = 15.5;
+
 export const SUBURBAN_PRESETS = [
   {
     id: 'archipelago',
@@ -64,7 +74,8 @@ export class MainMenu {
     onEndGame,
     onStartNewCity,
     onOpenNewGame,
-    onOpenOptions
+    onOpenOptions,
+    getCinematicSubjects
   }) {
     this.world = world;
     this.worldSettings = worldSettings;
@@ -78,6 +89,7 @@ export class MainMenu {
     this.onStartNewCity = onStartNewCity;
     this.onOpenNewGame = onOpenNewGame;
     this.onOpenOptions = onOpenOptions;
+    this.getCinematicSubjects = typeof getCinematicSubjects === 'function' ? getCinematicSubjects : null;
 
     this.active = true;
     this.hasActiveGame = false;
@@ -100,6 +112,10 @@ export class MainMenu {
     this.driftTime = 0;
     this.camBaseX = world.spawnCenter?.x || 128;
     this.camBaseY = world.spawnCenter?.y || 128;
+    this.cinematic = null;
+    this.cinematicPose = null;
+    this.cinematicIndex = 0;
+    this.cinematicLastEntity = null;
 
     this.regions = [];
     this.pointer = { x: -1, y: -1 };
@@ -115,6 +131,10 @@ export class MainMenu {
     this.screen = 'TITLE';
     this.gameMode ??= 'simulation';
     this.gameModeOpen = false;
+    this.cinematic = null;
+    this.cinematicPose = null;
+    this.cinematicIndex = 0;
+    this.cinematicLastEntity = null;
   }
 
   close() {
@@ -143,6 +163,106 @@ export class MainMenu {
     const x = (baseX || this.camBaseX) + Math.sin(t) * radius;
     const y = (baseY || this.camBaseY) + Math.cos(t * 0.70) * (radius * 0.65);
     return { x, y, zoom: 1.30 };
+  }
+
+  currentRendererPose(fallback) {
+    const renderer = this.renderer;
+    const x = renderer?.getCameraX?.(), y = renderer?.getCameraY?.(), zoom = renderer?.getCameraZoom?.();
+    return {
+      x: Number.isFinite(x) ? x : fallback.x,
+      y: Number.isFinite(y) ? y : fallback.y,
+      zoom: Number.isFinite(zoom) && zoom > 0 ? zoom : fallback.zoom
+    };
+  }
+
+  cinematicSubjects(kind) {
+    const list = this.getCinematicSubjects?.(kind);
+    if (!Array.isArray(list)) return [];
+    return list.filter(s => s && Number.isFinite(s.x) && Number.isFinite(s.y));
+  }
+
+  /**
+   * Picks the next subject in the citizen → animal → nest rotation. Empty
+   * kinds are skipped, and the camera stays close to its current position.
+   */
+  nextCinematicShot(origin) {
+    for (let attempt = 0; attempt < CINEMATIC_SEQUENCE.length; attempt++) {
+      const kind = CINEMATIC_SEQUENCE[this.cinematicIndex % CINEMATIC_SEQUENCE.length];
+      this.cinematicIndex++;
+      const candidates = this.cinematicSubjects(kind);
+      if (!candidates.length) continue;
+      const distance = s => Math.hypot(s.x - origin.x, s.y - origin.y);
+      candidates.sort((a, b) => distance(a) - distance(b));
+      const pool = candidates.slice(0, 6);
+      let subject = pool[Math.floor(Math.random() * pool.length)];
+      if (pool.length > 1 && subject.entity === this.cinematicLastEntity) {
+        subject = pool.find(s => s.entity !== this.cinematicLastEntity) || subject;
+      }
+      this.cinematicLastEntity = subject.entity || null;
+      const zoom = CINEMATIC_ZOOM[kind] ?? 4.6;
+      return {
+        kind,
+        entity: subject.entity || null,
+        citizen: subject.citizen || null,
+        animal: subject.animal || null,
+        x: subject.x,
+        y: subject.y,
+        zoom,
+        elapsed: 0,
+        duration: CINEMATIC_SHOT_SECONDS,
+        from: { x: origin.x, y: origin.y, zoom: origin.zoom }
+      };
+    }
+    return null;
+  }
+
+  cinematicTarget(shot) {
+    const entity = shot.entity;
+    if (!entity) return { x: shot.x, y: shot.y };
+    if (entity.destroyed) return null;
+    if (shot.citizen && (shot.citizen.dead || shot.citizen.indoorLocation)) return null;
+    if (shot.animal && (shot.animal.dead || shot.animal.entity?.destroyed)) return null;
+    return { x: entity.x, y: entity.y };
+  }
+
+  /**
+   * Camera pose for the title screen. With subjects available this follows the
+   * cinematic rotation; otherwise it falls back to the slow spawn drift.
+   */
+  getCameraPose(dt, baseX, baseY) {
+    const fallback = this.getCameraDrift(baseX, baseY);
+    if (!this.getCinematicSubjects || !this.active || this.hasActiveGame) return fallback;
+    const step = Number.isFinite(dt) && dt > 0 ? dt : 0;
+    if (this.cinematic) this.cinematic.elapsed += step;
+    for (let attempt = 0; attempt < CINEMATIC_SEQUENCE.length + 1; attempt++) {
+      if (!this.cinematic) {
+        const origin = this.cinematicPose || this.currentRendererPose(fallback);
+        const shot = this.nextCinematicShot(origin);
+        if (!shot) {
+          this.cinematicPose = fallback;
+          return fallback;
+        }
+        this.cinematic = shot;
+      }
+      const shot = this.cinematic;
+      const target = this.cinematicTarget(shot);
+      if (!target || shot.elapsed >= shot.duration) {
+        this.cinematic = null;
+        continue;
+      }
+      const progress = Math.min(1, shot.elapsed / CINEMATIC_TRANSITION_SECONDS);
+      const eased = progress * progress * (3 - 2 * progress);
+      const offset = CINEMATIC_FOCUS_OFFSET / shot.zoom;
+      const pose = {
+        x: shot.from.x + (target.x - shot.from.x) * eased,
+        y: shot.from.y + (target.y - offset - shot.from.y) * eased,
+        zoom: shot.from.zoom + (shot.zoom - shot.from.zoom) * eased
+      };
+      this.cinematicPose = pose;
+      return pose;
+    }
+    this.cinematicPose = fallback;
+    return fallback;
   }
 
   registerRegion(x, y, w, h, onClick, label = '') {

@@ -4,13 +4,16 @@ export function addBuildingRoof(THREE,facade,b,material,kind,baseY){
     const pitched=new THREE.Mesh(new THREE.ExtrudeGeometry(triangle,{depth:b.depth+.2,bevelEnabled:false}),material);pitched.position.set(b.width/2,baseY,-.1);pitched.castShadow=true;facade.add(pitched);return;
   }
   if(kind==='hip'){
-    const pitched=new THREE.Mesh(new THREE.ConeGeometry(1,.75,4),material);pitched.rotation.y=Math.PI/4;
+    const geometry=new THREE.ConeGeometry(1,.75,4);geometry.rotateY(Math.PI/4);
+    const pitched=new THREE.Mesh(geometry,material);
     pitched.scale.set((b.width+.2)/Math.SQRT2,1,(b.depth+.2)/Math.SQRT2);pitched.position.set(b.width/2,baseY+.375,b.depth/2);pitched.castShadow=true;facade.add(pitched);return;
   }
   if(kind==='mansard'){
-    const lower=new THREE.Mesh(new THREE.CylinderGeometry(.62,1,.42,4),material);lower.rotation.y=Math.PI/4;
+    const lowerGeo=new THREE.CylinderGeometry(.62,1,.42,4);lowerGeo.rotateY(Math.PI/4);
+    const lower=new THREE.Mesh(lowerGeo,material);
     lower.scale.set((b.width+.2)/Math.SQRT2,1,(b.depth+.2)/Math.SQRT2);lower.position.set(b.width/2,baseY+.21,b.depth/2);lower.castShadow=true;facade.add(lower);
-    const upper=new THREE.Mesh(new THREE.ConeGeometry(.62,.42,4),material);upper.rotation.y=Math.PI/4;
+    const upperGeo=new THREE.ConeGeometry(.62,.42,4);upperGeo.rotateY(Math.PI/4);
+    const upper=new THREE.Mesh(upperGeo,material);
     upper.scale.set((b.width+.2)/Math.SQRT2,1,(b.depth+.2)/Math.SQRT2);upper.position.set(b.width/2,baseY+.63,b.depth/2);upper.castShadow=true;facade.add(upper);return;
   }
   if(kind==='shed'){

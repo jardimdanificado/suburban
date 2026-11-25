@@ -143,6 +143,49 @@ test('wall graffiti fills solid walls and clears only actual ground-floor window
  assert(fitGraffitiToWall(city,support));assert.equal(support.height,1.64);
 });
 
+test('wide wall graffiti spans two tiles only when both wall bands match',()=>{
+ const {city,citizen,justice}=fixture(),building=city.buildings[0];
+ building.terrain={base:1.16};building.door=null;building.type='townhall';
+ building.units=[{id:1,x:0,y:0,z:0,hasWindow:false},{id:2,x:1,y:0,z:0,hasWindow:false},{id:3,x:0,y:1,z:0,hasWindow:false},{id:4,x:1,y:1,z:0,hasWindow:false}];
+ justice.art=[];
+ const wide=nearbyGraffitiSurfaces(city,{entity:{x:5,y:5}},8).filter(s=>s.surface==='wall'&&s.width>1);
+ assert.equal(wide.length,4,'each 2-tile facade exposes one merged wall');
+ for(const support of wide){
+  assert.equal(support.width,1.72);assert.equal(support.unitIds.length,2);assert.equal(support.height,1.64);
+  assert.equal(graffitiSurfaceExists(city,support),true);
+  const vertices=graffitiSurfaceVertices(city.world,support);
+  assert.ok(Math.abs(Math.hypot(vertices[3]-vertices[0],vertices[5]-vertices[2])-support.width)<1e-6,'wide paint covers the requested width');
+ }
+ building.units[0].hasWindow=true;
+ const updated=nearbyGraffitiSurfaces(city,{entity:{x:5,y:5}},8).filter(s=>s.surface==='wall'&&s.width>1);
+ assert(!updated.some(s=>s.unitIds?.includes(1)&&s.unitIds?.includes(2)),'a windowed tile cannot merge with a solid neighbour');
+ for(const support of updated){
+  const bands=support.unitIds.map(id=>graffitiWallHasWindow(building,{unitIds:[id],side:support.side,floor:support.floor??0}));
+  assert.ok(bands.every(Boolean)||bands.every(value=>!value),'only wall bands with the same height merge');
+ }
+});
+
+test('citizens prefer a wide wall when both tiles share the same height',()=>{
+ const {city,citizen,justice}=fixture(),building=city.buildings[0];
+ building.terrain={base:1.16};building.door=null;building.type='townhall';
+ building.units=[{id:1,x:0,y:0,z:0,hasWindow:false},{id:2,x:1,y:0,z:0,hasWindow:false},{id:3,x:0,y:1,z:0,hasWindow:false},{id:4,x:1,y:1,z:0,hasWindow:false}];
+ justice.art=[];citizen.entity={x:4.5,y:3.5};citizen.path=[];
+ assert.equal(justice.considerAutonomousGraffiti(citizen),true);
+ const support=citizen.graffitiMission.surface;
+ assert.equal(support.surface,'wall');assert(support.width>1,'the wide wall wins over its single tiles');assert.equal(support.unitIds.length,2);
+});
+
+test('a wide wall blocks overlapping single-tile targets for other painters',()=>{
+ const {city,citizen,justice}=fixture(),building=city.buildings[0];
+ building.terrain={base:1.16};building.door=null;building.type='townhall';
+ building.units=[{id:1,x:0,y:0,z:0,hasWindow:false},{id:2,x:1,y:0,z:0,hasWindow:false},{id:3,x:0,y:1,z:0,hasWindow:false},{id:4,x:1,y:1,z:0,hasWindow:false}];
+ justice.art=[];citizen.entity={x:5,y:5};
+ const wide=nearbyGraffitiSurfaces(city,citizen,8).find(s=>s.surface==='wall'&&s.width>1);
+ city.citizens.push({graffitiMission:{surface:wide}});
+ const surfaces=nearbyGraffitiSurfaces(city,citizen,8).filter(s=>s.surface==='wall'&&s.side===wide.side);
+ assert(!surfaces.some(s=>Math.hypot(s.position.x-wide.position.x,s.position.y-wide.position.y)<(s.width+wide.width)/2-.01),'no painter takes a slice of the wide wall');
+});
+
 test('moderate-risk citizens can paint by day and repeat after a day, but not while busy',()=>{
  const {city,justice,citizen}=fixture();citizen.traits={honesty:.3,riskTolerance:.55};citizen.skills.artistic=5;
  city.hour=12;city.random=()=>.1;citizen.lastGraffitiAt=city.minute-1439;

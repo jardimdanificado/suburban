@@ -125,6 +125,49 @@ test('MainMenu camera drift produces smooth animated positions', () => {
   assert.notEqual(cam0.x, cam1.x);
 });
 
+test('MainMenu cinematic cycles through citizens, animals and nests', () => {
+  const world = { spawnCenter: { x: 100, y: 100 } };
+  const worldSettings = { preset: 'archipelago', size: 256, population: 512, seed: 100 };
+  const subjects = {
+    citizen: [{ x: 100, y: 100, entity: { id: 1, x: 100, y: 100, destroyed: false }, citizen: {} }],
+    animal: [{ x: 104, y: 100, entity: { id: 2, x: 104, y: 100, destroyed: false }, animal: {} }],
+    nest: [{ x: 108, y: 100, entity: { id: 3, x: 108, y: 100, destroyed: false } }]
+  };
+  const menu = new MainMenu({ world, worldSettings, getCinematicSubjects: kind => subjects[kind] });
+
+  const first = menu.getCameraPose(1 / 60, 100, 100);
+  assert.equal(menu.cinematic.kind, 'citizen');
+  assert.equal(typeof first.x, 'number');
+
+  const zoomed = menu.getCameraPose(1.9, 100, 100);
+  assert.ok(zoomed.zoom > 3, 'camera zooms in on the first subject');
+
+  menu.getCameraPose(6, 100, 100);
+  assert.equal(menu.cinematic.kind, 'animal');
+
+  menu.getCameraPose(6, 100, 100);
+  assert.equal(menu.cinematic.kind, 'nest');
+
+  menu.getCameraPose(6, 100, 100);
+  assert.equal(menu.cinematic.kind, 'citizen');
+
+  // A subject that disappears mid-shot is replaced on the next frame.
+  subjects.citizen[0].entity.destroyed = true;
+  menu.getCameraPose(1 / 60, 100, 100);
+  assert.notEqual(menu.cinematic.kind, 'citizen');
+});
+
+test('MainMenu falls back to camera drift when no cinematic subjects exist', () => {
+  const world = { spawnCenter: { x: 200, y: 300 } };
+  const worldSettings = { preset: 'archipelago', size: 256, population: 512, seed: 100 };
+  const menu = new MainMenu({ world, worldSettings, getCinematicSubjects: () => [] });
+  const pose = menu.getCameraPose(1 / 60, 200, 300);
+  assert.equal(typeof pose.x, 'number');
+  assert.equal(typeof pose.y, 'number');
+  assert.equal(pose.zoom, 1.30);
+  assert.equal(menu.cinematic, null);
+});
+
 test('MainMenu pointer hitTest and click registration', () => {
   const world = { spawnCenter: { x: 0, y: 0 } };
   const worldSettings = { preset: 'archipelago', size: 256, population: 512, seed: 1 };

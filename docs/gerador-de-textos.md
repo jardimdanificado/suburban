@@ -10,13 +10,20 @@ concordância.
   (relações, coesão, tempo verbal, voz, negação, advérbio, adjunto).
 - `js/cenas_extra.js`: cenas adicionais, agrupadas por ator para permitir
   elipse de sujeito.
-- `js/lexico_sinonimos.js`: variantes curadas de substantivos e verbos.
+- `js/cenas_amplas_a.js` a `js/cenas_amplas_d.js`: banco amplo de cenas
+  curadas, separado por tema para revisão.
+- `js/lexico_sinonimos.js`: variantes curadas de substantivos e verbos. Importa
+  as listas amplas e funde todas sem repetir variante.
+- `js/lexico_amplo_substantivos.js`, `js/lexico_amplo_substantivos_b.js`,
+  `js/lexico_amplo_verbos.js`, `js/lexico_amplo_verbos_b.js`: variantes amplas,
+  quase todas de uma só palavra.
 - `js/vocabulario.js`: catálogo de palavras, conjugação e reexportação da API
   pública (`gerarFrase`, `gerarFraseTematica`, `gerarTituloTematico`,
   `gerarSloganPartidario`, `gerarDialogoTematico`, `aquecerCatalogos`).
 - `scripts/validar_lexico_sinonimos.mjs`: confere o léxico de variantes.
-- `tests/vocabulario_qualidade.test.mjs`: regressão de gramática, construções e
-  variedade.
+- `scripts/contar_vocabulario.mjs`: conta lemas e formas que o gerador alcança.
+- `tests/vocabulario_qualidade.test.mjs`: regressão de gramática, construções,
+  escala do banco e variedade.
 
 ## Cena
 
@@ -94,7 +101,19 @@ número, com chance independente por campo:
   verbos de transitividade direta.
 
 No sujeito a busca não avança para o modificador preposicional. Sem essa
-restrição, `O cinema de rua` viraria `O cinema de via`.
+restrição, `O cinema de rua` viraria `O cinema de via`. A busca também para na
+primeira preposição, para não trocar o núcleo de um sintagma preposicionado.
+
+## Escala atual
+
+O banco tem 1.300 cenas: 657 sujeitos, 894 objetos e 413 verbos de cena
+distintos. O léxico curado tem 470 chaves de substantivo com 1.431 variantes e
+323 chaves de verbo com 1.424 variantes. Somando cenas e léxico, o gerador
+alcança 1.758 lemas de substantivo e 909 lemas de verbo, que viram cerca de
+2.600 e 13.600 formas flexionadas.
+
+Os números contam lemas, não flexões: `praça` e `praças` são um lema. Para ver
+os totais atuais, rode `node scripts/contar_vocabulario.mjs`.
 
 ## Por que o léxico é curado
 
@@ -111,19 +130,27 @@ sinonímia é curada; o catálogo participa da validação:
 
 Para vocabulário:
 
-1. Acrescente a variante em `js/lexico_sinonimos.js`, mantendo gênero e número
-   da chave.
-2. Rode `node scripts/validar_lexico_sinonimos.mjs`.
-3. Rode `node --test tests/vocabulario_qualidade.test.mjs`.
+1. Acrescente a variante em `js/lexico_amplo_substantivos.js`,
+   `js/lexico_amplo_substantivos_b.js`, `js/lexico_amplo_verbos.js` ou
+   `js/lexico_amplo_verbos_b.js`, mantendo gênero e número da chave.
+2. Prefira uma só palavra. Sintagma curto só entra quando cabe no contexto sem
+   deixar palavra sobrando. Não repita a chave.
+3. Rode `node scripts/validar_lexico_sinonimos.mjs`.
+4. Rode `node --test tests/vocabulario_qualidade.test.mjs`.
+5. Confira `node scripts/contar_vocabulario.mjs` e ajuste os limites do teste
+   de escala só quando o ganho for real.
 
 Para cenas:
 
 1. Prefira criar um par com ator já existente no tema, em `js/cenas_extra.js`.
 2. Mantenha verbo no infinitivo e objeto direto com artigo e gênero.
-3. Rode a suíte de qualidade e confira amostras com sementes baixas.
+3. Use `js/cenas_amplas_a.js` a `js/cenas_amplas_d.js` para cenas novas.
+4. Rode a suíte de qualidade e confira amostras com sementes baixas.
 
 Verbos exigem cuidado extra. Só entram na lista de variantes os que aceitam
 qualquer objeto já usado nas cenas, sem preposição fixa e sem forma pronominal.
+Uma variante que só funciona com parte dos objetos deve ser cortada, não
+tratada como exceção.
 
 ## Determinismo
 

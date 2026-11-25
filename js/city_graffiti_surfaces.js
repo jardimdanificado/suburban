@@ -5,21 +5,35 @@ import {roadRetainingFaces} from './road_terrain_geometry.js?v=stone-road-edge-s
 
 export const graffitiCameraFocus=support=>support?.kind==='street-graffiti'?{zoom:8,...(support.surface!=='ground'?{yaw:support.rotation||0}:{})}:undefined;
 export const graffitiSurfaceLabel=support=>({wall:'Muro / parede externa',ground:'Chão',retaining:'Arrimo'})[support?.surface]||'Superfície urbana';
+// A wide piece covers two adjacent wall tiles. It only exists when both tiles
+// expose the same wall band (both solid or both below a window).
+const WIDE_GRAFFITI_TILES=2;
+const WALL_TILE_WIDTH=.86;
+const WIDE_WALL_WIDTH=WALL_TILE_WIDTH*WIDE_GRAFFITI_TILES;
+const WIDE_WALL_PREFERENCE=.75;
 const edges=[{dx:0,dy:-1,rotation:Math.PI},{dx:1,dy:0,rotation:Math.PI/2},{dx:0,dy:1,rotation:0},{dx:-1,dy:0,rotation:-Math.PI/2}];
 const inside=(b,x,y)=>!b.entity.destroyed&&x>=b.entity.x&&x<b.entity.x+b.width&&y>=b.entity.y&&y<b.entity.y+b.depth;
 const publicGround=(city,x,y)=>terrainWalkable(city.world,x,y)&&!city.buildings.some(b=>inside(b,x+.5,y+.5));
 
 export function graffitiWallHasWindow(building,support){
-  const units=building.units||[],edge=edges[support.side],p=support.position;
-  const x=Math.floor(p.x-building.entity.x-edge.dx*.05),y=Math.floor(p.y-building.entity.y-edge.dy*.05);
-  const unit=units.find(u=>u.z===(support.floor??0)&&u.x===x&&u.y===y);if(!unit?.hasWindow)return false;
-  const entrance=buildingEntranceDoor(building);if((support.floor??0)===0&&entrance?.unitId===unit.id)return false;
-  const occupied=new Set([...units,...(building.circulation||[])].map(u=>`${u.x},${u.y},${u.z}`));
+  const ids=Array.isArray(support?.unitIds)?support.unitIds:[],
+    units=ids.length?ids.map(id=>(building.units||[]).find(u=>u.id===id)).filter(Boolean):null;
+  if(units?.length)return units.some(unit=>wallUnitHasWindow(building,unit,support.side,support.floor??0));
+  const edge=edges[support.side],p=support.position,
+    x=Math.floor(p.x-building.entity.x-edge.dx*.05),y=Math.floor(p.y-building.entity.y-edge.dy*.05),
+    unit=(building.units||[]).find(u=>u.z===(support.floor??0)&&u.x===x&&u.y===y);
+  return wallUnitHasWindow(building,unit,support.side,support.floor??0);
+}
+
+function wallUnitHasWindow(building,unit,side,floor=0){
+  if(!unit?.hasWindow)return false;
+  const entrance=buildingEntranceDoor(building);if(floor===0&&entrance?.unitId===unit.id)return false;
+  const occupied=new Set([...(building.units||[]),...(building.circulation||[])].map(u=>`${u.x},${u.y},${u.z}`));
   let safe=0;
-  for(const [dx,dy,bit] of [[0,-1,1],[0,1,2],[-1,0,4],[1,0,8]])if(!occupied.has(`${x+dx},${y+dy},${support.floor??0}`))safe|=bit;
+  for(const [dx,dy,bit] of [[0,-1,1],[0,1,2],[-1,0,4],[1,0,8]])if(!occupied.has(`${unit.x+dx},${unit.y+dy},${unit.z}`))safe|=bit;
   for(const space of buildingLeisureSpaces(building))if(space.kind==='balcony'&&space.unitId===unit.id)safe&=~space.doorBit;
   const opening=safe&3?(safe&2?2:1):safe&4?4:safe&8?8:0;
-  return opening===[1,8,2,4][support.side];
+  return opening===[1,8,2,4][side];
 }
 
 // Use the full wall unless its actual opening needs clearance.
@@ -37,11 +51,16 @@ export function nearbyGraffitiSurfaces(city,c,radius=4){
   const candidates=[],cx=Math.floor(c.entity.x),cy=Math.floor(c.entity.y),world=city.world;
   if(!world?.getTile||!Number.isFinite(world.width)||!Number.isFinite(world.height))return candidates;
   const add=(surface,key,position,approach,extra={})=>{
-    if(Math.hypot(approach.x-c.entity.x,approach.y-c.entity.y)>radius||!city.walkable(Math.floor(approach.x),Math.floor(approach.y)))return;
-    if(city.justice.art.some(piece=>!piece.entity.destroyed&&(piece.support?.key===key||Math.hypot(piece.entity.x-position.x,piece.entity.y-position.y)<1.1)))return;
-    if(city.citizens?.some(person=>person.graffitiMission?.surface?.key===key))return;
+    if(Math.hypot(approach.x-c.entity.x,approach.y-c.entity.y)>radius||!city.walkable(Math.floor(approach.x),Math.floor(approach.y)))return false;
+    if(city.justice.art.some(piece=>!piece.entity.destroyed&&(piece.support?.key===key||Math.hypot(piece.entity.x-position.x,piece.entity.y-position.y)<1.1)))return false;
+    const width=extra.width||.86;
+    const overlaps=(other)=>
+      other?.surface===surface&&(other.key===key||
+        (width>WALL_TILE_WIDTH+.001||(other.width||.86)>WALL_TILE_WIDTH+.001)&&
+        Math.hypot(other.position.x-position.x,other.position.y-position.y)<(width+(other.width||.86))/2-.01);
+    if(city.citizens?.some(person=>overlaps(person.graffitiMission?.surface)))return false;
     const support={kind:'street-graffiti',surface,key,position,approach,...extra};
-    fitGraffitiToWall(city,support);candidates.push(support);
+    fitGraffitiToWall(city,support);candidates.push(support);return true;
   };
   for(let y=Math.max(0,cy-radius);y<=Math.min(world.height-1,cy+radius);y++)for(let x=Math.max(0,cx-radius);x<=Math.min(world.width-1,cx+radius);x++){
     if(publicGround(city,x,y)&&PAVED_ROAD_TILES.has(tileAt(world,x,y))){
@@ -63,25 +82,47 @@ export function nearbyGraffitiSurfaces(city,c,radius=4){
     if(b.entity.destroyed||b.constructionKind==='open-air'||b.active===false||!b.width||!b.depth)continue;
     if(b.entity.x>cx+radius+1||b.entity.y>cy+radius+1||b.entity.x+b.width<cx-radius||b.entity.y+b.depth<cy-radius)continue;
     for(let side=0;side<4;side++){
-      const edge=edges[side],horizontal=side%2===0,length=horizontal?b.width:b.depth;
+      const edge=edges[side],horizontal=side%2===0,length=horizontal?b.width:b.depth,segments=[];
       for(let offset=.5;offset<length;offset++){
         const x=b.entity.x+(horizontal?offset:side===1?b.width:0),y=b.entity.y+(horizontal?side===2?b.depth:0:offset),approach={x:x+edge.dx*.5,y:y+edge.dy*.5};
         if(b.door&&Math.hypot(approach.x-b.door.x,approach.y-b.door.y)<.9)continue;
         if(!publicGround(city,Math.floor(approach.x),Math.floor(approach.y)))continue;
         const base=b.terrain?.base??surfaceElevation(world,x,y),standing=surfaceElevation(world,approach.x,approach.y),z=base+.25;
         if(z-standing<.05||z-standing>1.4)continue;
-        add('wall',`wall:${b.id}:${side}:${offset}`,{x:x+edge.dx*.025,y:y+edge.dy*.025,z},approach,{buildingId:b.id,side,rotation:edge.rotation,width:.86,height:.42});
+        const position={x:x+edge.dx*.025,y:y+edge.dy*.025,z},key=`wall:${b.id}:${side}:${offset}`,
+          probe={kind:'street-graffiti',surface:'wall',key,buildingId:b.id,side,rotation:edge.rotation,position,approach,width:WALL_TILE_WIDTH,height:.42};
+        fitGraffitiToWall(city,probe);
+        const unit=(b.units||[]).find(u=>u.z===0&&u.x===Math.floor(position.x-b.entity.x-edge.dx*.05)&&u.y===Math.floor(position.y-b.entity.y-edge.dy*.05));
+        const segment={offset,position:probe.position,approach,key,height:probe.height,unitId:unit?.id??null};
+        segments.push(segment);
+        const added=add('wall',key,segment.position,approach,{buildingId:b.id,side,rotation:edge.rotation,width:WALL_TILE_WIDTH,height:segment.height,...(Number.isInteger(segment.unitId)?{unitIds:[segment.unitId]}:{})});
+        segment.added=added;
+      }
+      // Only merge neighbours whose wall band is identical, so the wide piece
+      // never crosses a window line or a terrain step on one of the tiles.
+      for(let i=1;i<segments.length;i++){
+        const left=segments[i-1],right=segments[i];
+        if(!left.added||!right.added)continue;
+        if(Math.abs(right.offset-left.offset-1)>1e-6)continue;
+        if(Math.abs(right.position.z-left.position.z)>.001||Math.abs(right.height-left.height)>.001)continue;
+        const unitIds=[left.unitId,right.unitId].filter((id,index,list)=>Number.isInteger(id)&&list.indexOf(id)===index);
+        add('wall',`wall:${b.id}:${side}:${left.offset}+${right.offset}`,
+          {x:(left.position.x+right.position.x)/2,y:(left.position.y+right.position.y)/2,z:left.position.z},
+          {x:(left.approach.x+right.approach.x)/2,y:(left.approach.y+right.approach.y)/2},
+          {buildingId:b.id,side,rotation:edge.rotation,width:WIDE_WALL_WIDTH,height:left.height,...(unitIds.length?{unitIds}:{})});
       }
     }
   }
   // Prefer walls and retaining faces; ground remains a valid independent target.
-  return candidates.sort((a,b)=>Number(a.surface==='ground')-Number(b.surface==='ground')||Math.hypot(a.approach.x-c.entity.x,a.approach.y-c.entity.y)-Math.hypot(b.approach.x-c.entity.x,b.approach.y-c.entity.y));
+  // Matching wide walls outrank single tiles at a comparable walking distance.
+  const rank=s=>Math.hypot(s.approach.x-c.entity.x,s.approach.y-c.entity.y)+(s.surface==='wall'&&(s.width||0)<=WALL_TILE_WIDTH+.001?WIDE_WALL_PREFERENCE:0);
+  return candidates.sort((a,b)=>Number(a.surface==='ground')-Number(b.surface==='ground')||rank(a)-rank(b));
 }
 
 export function graffitiSurfaceExists(city,support){
   if(support?.kind!=='street-graffiti')return false;
   if(support.surface==='wall'){
-    const b=city.building(support.buildingId);if(!b||b.entity.destroyed||(support.floor??0)>=(b.floors||1)||support.unitId!=null&&!b.units?.some(u=>u.id===support.unitId))return false;
+    const b=city.building(support.buildingId);if(!b||b.entity.destroyed||(support.floor??0)>=(b.floors||1)||support.unitId!=null&&!b.units?.some(u=>u.id===support.unitId)||support.unitIds?.some(id=>!b.units?.some(u=>u.id===id)))return false;
     const edge=edges[support.side],boundary=support.side===0?b.entity.y:support.side===1?b.entity.x+b.width:support.side===2?b.entity.y+b.depth:b.entity.x;
     return Math.abs((support.side%2?support.position.x-edge.dx*.025:support.position.y-edge.dy*.025)-boundary)<.01;
   }

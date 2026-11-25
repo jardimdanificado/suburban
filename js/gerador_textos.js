@@ -492,7 +492,9 @@ const INVERSIVEIS = new Set([
   'parar', 'protestar', 'lutar',
 ]);
 
-const ADJUNTO_FRONTAVEL = /^(?:em|no|na|nos|nas|ao|aos|à|às|do|da|dos|das|pelo|pela|pelos|pelas|com|sem|sob|entre|durante|desde|após|antes|até)\b/iu;
+// Complemento iniciado por "de" quase sempre completa o objeto ("a meta do
+// mês"), por isso não abre a oração. Só o adjunto locativo e temporal entra.
+const ADJUNTO_FRONTAVEL = /^(?:em|no|na|nos|nas|ao|aos|à|às|pelo|pela|pelos|pelas|com|sem|sob|entre|durante|desde|após|antes|até)\b/iu;
 const ADJUNTO_INVERSIVEL = /^(?:em|no|na|nos|nas)\b/iu;
 
 
@@ -648,16 +650,11 @@ function escolherTempo(level, random) {
 }
 
 function conjugar(verbo, tempo, plural) {
-  let forma = conjugarVerbo(verbo, {
+  const forma = conjugarVerbo(verbo, {
     tempo,
     pessoa: 3,
     numero: plural ? 'plural' : 'singular',
   });
-  if (forma && tempo === 'subjuntivo-presente') {
-    if (/car$/u.test(verbo)) forma = forma.replace(/c(?=[ae]m?$)/u, 'qu');
-    else if (/gar$/u.test(verbo)) forma = forma.replace(/g(?=[ae]m?$)/u, 'gu');
-    else if (/cer$/u.test(verbo)) forma = forma.replace(/c(?=[ae]m?$)/u, 'ç');
-  }
   return forma || verbo;
 }
 
@@ -665,7 +662,8 @@ function conjugarFuturoSubjuntivo(verbo, plural) {
   const perfeito = conjugarVerbo(verbo, { tempo: 'pretérito-perfeito', pessoa: 6 });
   if (!perfeito || !perfeito.endsWith('am')) return conjugar(verbo, 'subjuntivo-presente', plural);
   const base = perfeito.slice(0, -2);
-  return plural ? `${base}em` : base;
+  if (plural) return `${base}em`;
+  return /(?:air|uir)$/u.test(verbo) ? base.replace(/í/u, 'i') : base;
 }
 
 function porFrase(frase) {

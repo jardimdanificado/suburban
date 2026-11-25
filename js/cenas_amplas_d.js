@@ -79,7 +79,7 @@ export const CENAS_AMPLAS_D = {
     C('A loja', 'lançar', 'a coleção de verão', 'f', 'na próxima semana'),
     C('O brechó', 'vender', 'as roupas usadas', 'f', 'a preços baixos'),
     C('Os artesãos', 'criar', 'as bolsas de couro', 'f', 'na oficina'),
-    C('A escola de moda', 'formar', 'os novos estilistas', 'm', 'na cidade'),
+    C('A faculdade de moda', 'formar', 'os novos estilistas', 'm', 'na cidade'),
     C('O desfile', 'apresentar', 'os trabalhos dos alunos', 'm', 'no salão'),
     C('A boutique', 'exibir', 'as peças', 'f', 'na vitrine'),
     C('A indústria têxtil', 'produzir', 'os tecidos', 'm', 'para o mercado'),

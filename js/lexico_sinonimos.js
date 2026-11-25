@@ -11,7 +11,12 @@
 //   de verbos transitivos diretos;
 // - scripts/validar_lexico_sinonimos.mjs confere número, conjugação e, quando
 //   Python e spaCy estão disponíveis, a ortografia das palavras.
-export const SUBSTANTIVOS = Object.freeze({
+import { SUBSTANTIVOS_EXTRA } from './lexico_amplo_substantivos.js';
+import { SUBSTANTIVOS_EXTRA_B } from './lexico_amplo_substantivos_b.js';
+import { VERBOS_EXTRA } from './lexico_amplo_verbos.js';
+import { VERBOS_EXTRA_B } from './lexico_amplo_verbos_b.js';
+
+const SUBSTANTIVOS_BASE = {
   // Poder público e vida política
   prefeitura: [
     'administração municipal', 'gestão municipal', 'municipalidade',
@@ -254,7 +259,7 @@ export const SUBSTANTIVOS = Object.freeze({
     'treinamentos', 'cursos técnicos',
   ],
   exposição: [
-    'mostra', 'exibição', 'exposição cultural', 'acervo',
+    'mostra', 'exibição', 'exposição cultural',
     'mostra cultural',
   ],
 
@@ -295,17 +300,17 @@ export const SUBSTANTIVOS = Object.freeze({
   ],
   campeonato: ['torneio', 'campeonato local'],
   torneio: ['campeonato', 'disputa esportiva', 'torneio local',],
-});
+};
 
 // Só entram aqui verbos que aceitam objeto direto e cujo sentido se mantém
 // com qualquer objeto já usado nas cenas. Verbos pronominais, de ligação e os
 // que exigem preposição fixa ficam de fora.
-export const VERBOS_TRANSITIVOS = Object.freeze({
+const VERBOS_BASE = {
   cobrar: ['exigir', 'reivindicar', 'requerer', 'reclamar', 'demandar', 'pleitear', 'solicitar', 'pedir'],
   ampliar: ['expandir', 'aumentar', 'estender', 'alargar', 'dilatar', 'prolongar', 'desenvolver', 'intensificar', 'reforçar', 'acrescer', 'elevar', 'majorar'],
   oferecer: ['disponibilizar', 'ofertar', 'fornecer', 'proporcionar', 'entregar', 'apresentar', 'dar', 'conceder', 'ministrar', 'propiciar'],
-  organizar: ['promover', 'estruturar', 'coordenar', 'ordenar', 'arrumar', 'compor', 'preparar', 'articular', 'planejar', 'constituir'],
-  vender: ['comercializar', 'negociar', 'ofertar', 'colocar', 'revender', 'transacionar', 'alienar'],
+  organizar: ['promover', 'estruturar', 'coordenar', 'ordenar', 'arrumar', 'compor', 'preparar', 'articular', 'planejar'],
+  vender: ['comercializar', 'negociar', 'ofertar', 'colocar', 'revender', 'transacionar'],
   reformar: ['recuperar', 'renovar', 'restaurar', 'reconstruir', 'refazer', 'remodelar', 'reparar', 'consertar', 'modernizar', 'revitalizar', 'requalificar'],
   buscar: ['procurar', 'pesquisar', 'requerer', 'solicitar', 'pleitear'],
   preocupar: ['inquietar', 'afligir', 'angustiar', 'incomodar', 'alarmar', 'perturbar', 'atormentar'],
@@ -313,38 +318,38 @@ export const VERBOS_TRANSITIVOS = Object.freeze({
   debater: ['discutir', 'examinar', 'analisar', 'deliberar', 'argumentar', 'ponderar', 'considerar', 'tratar', 'questionar', 'avaliar'],
   apresentar: ['mostrar', 'exibir', 'revelar', 'expor', 'demonstrar', 'divulgar', 'propor', 'entregar', 'introduzir', 'trazer'],
   reduzir: ['diminuir', 'cortar', 'baixar', 'limitar', 'restringir', 'atenuar', 'minimizar', 'encurtar', 'abreviar'],
-  recuperar: ['restaurar', 'reconquistar', 'retomar', 'reaver', 'recobrar', 'resgatar', 'consertar', 'reparar', 'reabilitar'],
+  recuperar: ['restaurar', 'reconquistar', 'retomar', 'recobrar', 'resgatar', 'consertar', 'reparar', 'reabilitar'],
   enfrentar: ['encarar', 'afrontar', 'combater', 'superar', 'suportar', 'desafiar', 'confrontar'],
   movimentar: ['animar', 'agitar', 'impulsionar', 'dinamizar', 'ativar', 'estimular', 'mover'],
-  entregar: ['distribuir', 'fornecer', 'conceder', 'repassar', 'destinar', 'encaminhar', 'ceder', 'transferir'],
+  entregar: ['distribuir', 'fornecer', 'conceder', 'repassar', 'encaminhar', 'ceder'],
   pedir: ['solicitar', 'requerer', 'rogar', 'suplicar', 'demandar', 'reivindicar', 'requisitar', 'pleitear', 'implorar', 'clamar'],
   fiscalizar: ['inspecionar', 'vistoriar', 'verificar', 'controlar', 'monitorar', 'supervisionar', 'examinar', 'auditar', 'acompanhar', 'checar'],
   julgar: ['avaliar', 'examinar', 'decidir', 'apreciar', 'considerar', 'ponderar'],
   negociar: ['discutir', 'pactuar', 'acordar', 'ajustar', 'transigir', 'barganhar', 'deliberar'],
-  dividir: ['repartir', 'separar', 'compartilhar', 'distribuir', 'partir', 'fracionar', 'segmentar', 'desmembrar', 'ratear', 'alocar'],
-  criar: ['instituir', 'estabelecer', 'fundar', 'constituir', 'formar', 'produzir', 'gerar', 'elaborar', 'desenvolver', 'conceber', 'montar'],
+  dividir: ['repartir', 'separar', 'compartilhar', 'distribuir', 'partir', 'fracionar', 'segmentar', 'ratear'],
+  criar: ['instituir', 'estabelecer', 'fundar', 'formar', 'produzir', 'gerar', 'elaborar', 'desenvolver', 'conceber', 'montar'],
   anunciar: ['divulgar', 'comunicar', 'informar', 'noticiar', 'publicar', 'revelar', 'proclamar', 'declarar', 'propagar', 'avisar'],
-  construir: ['erguer', 'edificar', 'levantar', 'erigir', 'montar', 'produzir', 'formar', 'instalar'],
-  distribuir: ['entregar', 'repartir', 'dividir', 'alocar', 'destinar', 'encaminhar', 'fornecer', 'compartilhar', 'espalhar', 'ratear'],
+  construir: ['erguer', 'edificar', 'levantar', 'erigir', 'montar'],
+  distribuir: ['entregar', 'repartir', 'dividir', 'encaminhar', 'fornecer', 'compartilhar', 'espalhar', 'ratear'],
   aprender: ['estudar', 'assimilar', 'compreender', 'apreender', 'dominar', 'absorver', 'fixar', 'conhecer', 'entender', 'captar'],
   promover: ['realizar', 'organizar', 'fomentar', 'incentivar', 'impulsionar', 'viabilizar', 'patrocinar', 'estimular', 'desenvolver', 'efetuar'],
   conquistar: ['ganhar', 'obter', 'alcançar', 'conseguir', 'adquirir', 'assegurar', 'garantir', 'dominar', 'vencer'],
-  formar: ['capacitar', 'instruir', 'educar', 'preparar', 'treinar', 'constituir', 'compor', 'criar', 'organizar', 'montar'],
+  formar: ['capacitar', 'instruir', 'educar', 'preparar', 'treinar'],
   apreender: ['confiscar', 'recolher', 'retirar', 'capturar', 'tomar', 'arrecadar', 'sequestrar', 'embargar', 'reter'],
   questionar: ['contestar', 'indagar', 'criticar', 'desafiar', 'impugnar', 'refutar', 'inquirir'],
   analisar: ['examinar', 'avaliar', 'estudar', 'apreciar', 'verificar', 'inspecionar', 'averiguar', 'investigar', 'considerar', 'ponderar', 'escrutinar', 'sopesar'],
   assinar: ['firmar', 'subscrever', 'rubricar', 'referendar', 'endossar', 'homologar', 'autenticar', 'validar', 'apostilar'],
   votar: ['deliberar', 'decidir', 'escolher', 'referendar', 'homologar', 'submeter', 'eleger'],
   explicar: ['detalhar', 'esclarecer', 'explicitar', 'descrever', 'apresentar', 'justificar', 'comentar', 'narrar', 'demonstrar', 'revelar'],
-  ganhar: ['conquistar', 'obter', 'receber', 'arrecadar', 'lucrar', 'faturar', 'angariar', 'alcançar', 'conseguir', 'auferir'],
+  ganhar: ['conquistar', 'obter', 'receber', 'arrecadar', 'faturar', 'angariar', 'alcançar', 'conseguir'],
   sugerir: ['propor', 'indicar', 'recomendar', 'aconselhar', 'insinuar', 'apontar', 'apresentar', 'defender'],
   contratar: ['empregar', 'admitir', 'assalariar', 'recrutar', 'selecionar', 'engajar', 'nomear', 'convocar'],
   procurar: ['buscar', 'pesquisar', 'requerer', 'solicitar', 'localizar'],
   garantir: ['assegurar', 'afiançar', 'certificar', 'confirmar', 'proteger', 'resguardar', 'salvaguardar', 'firmar', 'prometer', 'sustentar'],
   exigir: ['cobrar', 'requerer', 'demandar', 'reivindicar', 'requisitar', 'ordenar', 'impor', 'determinar', 'pressionar', 'reclamar'],
   sentir: ['perceber', 'notar', 'observar', 'experimentar', 'vivenciar', 'pressentir', 'intuir', 'detectar', 'constatar', 'verificar'],
-  arrecadar: ['recolher', 'angariar', 'captar', 'obter', 'coletar', 'receber', 'auferir', 'lucrar', 'cobrar'],
-  afetar: ['atingir', 'impactar', 'influenciar', 'prejudicar', 'comprometer', 'alterar', 'modificar', 'abalar', 'assolar', 'marcar'],
+  arrecadar: ['recolher', 'angariar', 'captar', 'obter', 'coletar', 'receber', 'cobrar'],
+  afetar: ['atingir', 'impactar', 'influenciar', 'prejudicar', 'comprometer', 'alterar', 'modificar', 'abalar'],
   iniciar: ['começar', 'principiar', 'abrir', 'instaurar', 'inaugurar', 'deflagrar', 'empreender', 'encetar', 'lançar', 'promover'],
   vistoriar: ['inspecionar', 'fiscalizar', 'examinar', 'verificar', 'controlar', 'revisar', 'checar', 'percorrer', 'avaliar', 'supervisionar'],
   compartilhar: ['dividir', 'repartir', 'partilhar', 'distribuir', 'socializar', 'trocar', 'transmitir', 'difundir', 'comunicar', 'ceder'],
@@ -364,9 +369,8 @@ export const VERBOS_TRANSITIVOS = Object.freeze({
   condenar: ['sentenciar', 'julgar', 'reprovar', 'censurar', 'incriminar', 'penalizar', 'punir', 'acusar', 'desaprovar', 'culpabilizar'],
   investigar: ['apurar', 'averiguar', 'examinar', 'pesquisar', 'sondar', 'escrutinar', 'analisar', 'rastrear', 'verificar', 'inquirir'],
   determinar: ['ordenar', 'decidir', 'estabelecer', 'definir', 'fixar', 'decretar', 'estipular', 'prescrever', 'impor'],
-  separar: ['selecionar', 'dividir', 'apartar', 'isolar', 'distinguir', 'classificar', 'escolher', 'retirar', 'desmembrar'],
+  separar: ['selecionar', 'dividir', 'isolar', 'classificar', 'escolher'],
   plantar: ['cultivar', 'semear', 'produzir', 'criar', 'propagar', 'introduzir'],
-  atingir: ['afetar', 'alcançar', 'prejudicar', 'comprometer', 'abater', 'assolar', 'impactar'],
   gerar: ['produzir', 'criar', 'originar', 'provocar', 'causar', 'formar', 'suscitar', 'ocasionar', 'propiciar'],
   ameaçar: ['comprometer'],
   limpar: ['higienizar', 'lavar', 'purificar', 'desinfetar', 'varrer', 'remover', 'sanear', 'assear', 'expurgar', 'desobstruir'],
@@ -375,16 +379,29 @@ export const VERBOS_TRANSITIVOS = Object.freeze({
   causar: ['provocar', 'originar', 'gerar', 'ocasionar', 'produzir', 'suscitar', 'motivar', 'desencadear', 'acarretar', 'implicar'],
   proibir: ['vetar', 'banir', 'interditar', 'impedir', 'bloquear', 'coibir', 'reprimir', 'barrar', 'restringir'],
   discutir: ['debater', 'tratar', 'examinar', 'analisar', 'deliberar', 'argumentar', 'questionar', 'considerar', 'comentar'],
-  adotar: ['seguir', 'assumir', 'acolher', 'aprovar', 'escolher', 'implementar', 'aplicar', 'utilizar', 'abraçar', 'incorporar'],
+  adotar: ['seguir', 'assumir', 'acolher', 'aprovar', 'escolher', 'implementar', 'utilizar', 'abraçar', 'incorporar'],
   lançar: ['apresentar', 'divulgar', 'publicar', 'iniciar', 'promover', 'exibir', 'estrear'],
   escolher: ['selecionar', 'eleger', 'optar', 'preferir', 'designar', 'nomear', 'indicar', 'separar', 'distinguir'],
-  empregar: ['contratar', 'admitir', 'usar', 'aplicar', 'utilizar', 'destinar', 'alocar', 'ocupar', 'exercer', 'investir'],
   consertar: ['reparar', 'arrumar', 'corrigir', 'restaurar', 'reformar', 'recuperar', 'ajustar', 'revisar', 'renovar'],
   atrair: ['chamar', 'cativar', 'seduzir', 'captar', 'conquistar', 'interessar', 'encantar', 'envolver'],
   vencer: ['ganhar', 'conquistar', 'superar', 'derrotar', 'triunfar', 'sobrepujar', 'dominar', 'ultrapassar'],
-  jogar: ['disputar', 'arremessar', 'lançar', 'atirar', 'praticar', 'competir', 'enfrentar'],
+  jogar: ['disputar', 'arremessar', 'lançar', 'atirar', 'praticar', 'enfrentar'],
   reunir: ['congregar', 'juntar', 'agrupar', 'convocar', 'concentrar', 'unir', 'agregar', 'acolher', 'somar'],
   percorrer: ['cruzar', 'atravessar', 'explorar', 'visitar', 'trilhar', 'seguir', 'cobrir', 'passar'],
   praticar: ['fazer', 'exercer', 'executar', 'realizar', 'efetuar', 'desempenhar', 'treinar', 'adotar', 'seguir'],
   alagar: ['inundar', 'cobrir', 'submergir', 'transbordar', 'molhar', 'encher', 'tomar', 'invadir', 'atingir'],
-});
+};
+
+// As listas amplas são independentes para facilitar a revisão. A fusão remove
+// repetição e preserva a ordem: primeiro a variante curada base, depois as
+// amplas. Nenhum gerador vê a diferença.
+function fundirLexico(base, ...extras) {
+  const chaves = new Set([base, ...extras].flatMap(lista => Object.keys(lista)));
+  return Object.freeze(Object.fromEntries([...chaves].map(chave => [
+    chave,
+    Object.freeze([...new Set([base, ...extras].flatMap(lista => lista[chave] ?? []))]),
+  ])));
+}
+
+export const SUBSTANTIVOS = fundirLexico(SUBSTANTIVOS_BASE, SUBSTANTIVOS_EXTRA, SUBSTANTIVOS_EXTRA_B);
+export const VERBOS_TRANSITIVOS = fundirLexico(VERBOS_BASE, VERBOS_EXTRA, VERBOS_EXTRA_B);

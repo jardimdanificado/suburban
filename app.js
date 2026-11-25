@@ -83,12 +83,33 @@ for (const type of ["pointerdown", "keydown"]) {
   window.addEventListener(type, () => music.start(), { capture: true });
 }
 export const editor = new MapEditor({ world, entities, destroyEntity });
+// Title-screen cinematic subjects: outdoor people, live animals and nests.
+function cinematicSubjects(kind) {
+  if (!city) return [];
+  if (kind === 'citizen') {
+    return city.citizens
+      .filter(c => c && !c.dead && c.entity && !c.entity.destroyed && !c.indoorLocation)
+      .map(c => ({ entity: c.entity, citizen: c, x: c.entity.x, y: c.entity.y }));
+  }
+  if (kind === 'animal') {
+    return [...(city.fauna?.animals?.values() || [])]
+      .filter(a => a && !a.dead && a.entity && !a.entity.destroyed)
+      .map(a => ({ entity: a.entity, animal: a, x: a.entity.x, y: a.entity.y }));
+  }
+  if (kind === 'nest') {
+    return [...(city.fauna?.nests?.values() || [])]
+      .filter(n => n && n.entity && !n.entity.destroyed)
+      .map(n => ({ entity: n.entity, x: n.x, y: n.y }));
+  }
+  return [];
+}
 export const mainMenu = new MainMenu({
   world,
   worldSettings,
   options,
   renderer: renderer3D,
   time,
+  getCinematicSubjects: cinematicSubjects,
   onStartGame: () => startOrResumeGame(),
   onPlayGame: () => gameUI.choose(),
   onMayorGame: () => {startOrResumeGame();cityUI.openModule('mayor');},
@@ -688,7 +709,7 @@ function frame(now) {
   if (mainMenu.isActive()) {
     mainMenu.update(dt);
     if (!mainMenu.hasActiveGame) {
-      const cam = mainMenu.getCameraDrift(world.spawnCenter.x, world.spawnCenter.y);
+      const cam = mainMenu.getCameraPose(dt, world.spawnCenter.x, world.spawnCenter.y);
       renderer3D.setCamera(cam.x, cam.y, cam.zoom);
     }
     const paused = time.paused;

@@ -1,17 +1,18 @@
 // Variantes amplas de substantivos. Cada chave aparece isolada em alguma cena.
 export const SUBSTANTIVOS_EXTRA = Object.freeze({
   família: [
-    'família extensa', 'família grande', 'unidade familiar', 'casa familiar',
+    'família extensa', 'família grande', 'unidade familiar',
+    'família nuclear',
   ],
   jovens: [
     'rapazes', 'garotos', 'adolescentes', 'moços',
   ],
   famílias: [
     'famílias extensas', 'famílias grandes', 'unidades familiares',
-    'casas familiares',
+    'famílias nucleares',
   ],
   crianças: [
-    'crianças pequenas', 'crianças do bairro', 'crianças carentes',
+    'crianças pequenas', 'crianças vulneráveis', 'crianças carentes',
   ],
   pais: [
     'genitores', 'pais de família', 'responsáveis', 'familiares',
@@ -30,9 +31,6 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
   ],
   amigos: [
     'companheiros', 'colegas', 'amigos próximos', 'conhecidos',
-  ],
-  casal: [
-    'casal de namorados', 'casal jovem', 'casal recém-casado',
   ],
   avó: [
     'vovó', 'avó materna', 'avó paterna', 'matriarca',
@@ -102,8 +100,11 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
   lojas: [
     'lojas físicas', 'casas comerciais', 'lojas do centro',
   ],
+  creche: [
+    'escola infantil', 'creche municipal', 'creche comunitária',
+  ],
   equipe: [
-    'turma', 'comissão', 'força-tarefa',
+    'comissão',
   ],
   sindicato: [
     'sindicato laboral', 'sindicato de classe', 'órgão sindical',
@@ -114,17 +115,14 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
   pedreiro: [
     'operário da construção', 'profissional da construção', 'mestre de obras',
   ],
-  eletricista: [
-    'profissional de elétrica', 'técnico de elétrica', 'instalador elétrico',
+  posto: [
+    'estabelecimento',
   ],
   costureira: [
     'modista', 'costureira profissional', 'profissional de costura',
   ],
   cozinheira: [
     'chefe de cozinha', 'profissional da cozinha', 'cozinheira profissional',
-  ],
-  cozinheiro: [
-    'chefe de cozinha', 'profissional da cozinha', 'cozinheiro profissional',
   ],
   padeiro: [
     'padeiro artesanal', 'profissional da padaria', 'mestre padeiro',
@@ -144,9 +142,6 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
   ],
   entregador: [
     'motoboy', 'mensageiro', 'funcionário de entrega',
-  ],
-  carteiro: [
-    'mensageiro', 'entregador de cartas', 'funcionário postal',
   ],
   produtores: [
     'agricultores', 'fornecedores', 'produtores rurais',
@@ -170,7 +165,7 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
     'artesão de calçados',
   ],
   costureiras: [
-    'modistas', 'profissionais de costura', 'costureiras locais',
+    'modistas', 'costureiras locais',
   ],
   médicos: [
     'clínicos', 'doutores', 'profissionais de saúde',
@@ -208,7 +203,7 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
     'pacientes', 'assistidos', 'usuários',
   ],
   agentes: [
-    'servidores', 'funcionários', 'fiscais',
+    'servidores', 'funcionários',
   ],
   fiscais: [
     'inspetores', 'agentes de fiscalização', 'fiscalizadores', 'auditores',
@@ -259,7 +254,7 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
     'verduras', 'folhas verdes', 'hortaliças frescas',
   ],
   sopa: [
-    'sopa caseira', 'caldo', 'sopa de legumes',
+    'sopa caseira', 'sopa de legumes',
   ],
   pão: [
     'pãozinho', 'pão francês', 'pão caseiro',
@@ -279,11 +274,8 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
   colheita: [
     'safra', 'produção agrícola', 'colheita agrícola',
   ],
-  ônibus: [
-    'coletivo', 'veículo', 'transporte público',
-  ],
   caminhão: [
-    'veículo de carga', 'caminhão de carga', 'caminhão de entrega',
+    'veículo de carga', 'caminhão de carga', 'caminhão de transporte',
   ],
   ciclovia: [
     'faixa exclusiva', 'pista de bicicleta', 'via para bicicletas',
@@ -293,9 +285,6 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
   ],
   trânsito: [
     'fluxo de veículos', 'movimento de veículos', 'tráfego',
-  ],
-  frota: [
-    'frota de veículos', 'frota de ônibus', 'frota nova',
   ],
   semáforos: [
     'sinais de trânsito', 'sinaleiros', 'controladores de tráfego',
@@ -320,19 +309,19 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
     'lotes', 'imóveis', 'terrenos baldios',
   ],
   apartamento: [
-    'imóvel', 'unidade', 'flat',
+    'imóvel', 'flat',
   ],
   aluguel: [
     'arrendamento', 'aluguel mensal', 'aluguel residencial',
   ],
   praça: [
-    'praça pública', 'área pública', 'praça do bairro',
+    'praça pública', 'área pública', 'praça arborizada',
   ],
   ruas: [
     'vias', 'vias públicas', 'ruas do bairro',
   ],
   calçada: [
-    'via de pedestres', 'área de pedestres', 'calçada pública',
+    'via de pedestres', 'área de pedestres', 'faixa de pedestres',
   ],
   avenida: [
     'via', 'avenida principal', 'via urbana',
@@ -347,13 +336,13 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
     'inundação', 'cheia', 'enxurrada',
   ],
   rio: [
-    'córrego', 'curso d'água', 'riacho',
+    'córrego', 'curso de água', 'riacho',
   ],
   universidade: [
     'faculdade', 'instituição de ensino', 'universidade pública',
   ],
   biblioteca: [
-    'biblioteca pública', 'sala de leitura', 'biblioteca do bairro',
+    'biblioteca pública', 'sala de leitura', 'biblioteca comunitária',
   ],
   museu: [
     'centro cultural', 'espaço cultural', 'instituto cultural',
@@ -377,13 +366,13 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
     'enfermo', 'doente', 'assistido',
   ],
   vítimas: [
-    'pessoas feridas', 'pessoas atingidas', 'vítimas da ocorrência',
+    'pessoas feridas', 'pessoas atingidas', 'pessoas machucadas',
   ],
   incêndio: [
     'fogo', 'sinistro', 'foco de incêndio',
   ],
   feridos: [
-    'machucados', 'acidentados', 'pacientes',
+    'machucados', 'acidentados',
   ],
   consultas: [
     'avaliações', 'visitas médicas', 'consultas médicas',
@@ -403,30 +392,24 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
   laboratório: [
     'laboratório clínico', 'centro de análises', 'laboratório de análises',
   ],
-  amostras: [
-    'porções', 'frações', 'amostras clínicas',
-  ],
   atendimento: [
     'serviço', 'acolhimento', 'suporte',
   ],
   melhorias: [
     'providências', 'medidas', 'benfeitorias',
   ],
-  natação: [
-    'modalidade aquática', 'atividade aquática', 'prática aquática',
-  ],
   ouvidoria: [
     'central de atendimento', 'unidade de atendimento',
     'plataforma de atendimento',
   ],
   investimentos: [
-    'aportes', 'gastos', 'recursos',
+    'aportes', 'recursos',
   ],
   oposição: [
     'bancada de oposição', 'força opositora', 'oposição política',
   ],
   denúncias: [
-    'queixas', 'acusações', 'reclamações', 'relatos',
+    'queixas', 'acusações', 'reclamações',
   ],
   reclamações: [
     'queixas', 'denúncias', 'solicitações',
@@ -435,10 +418,10 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
     'eleição', 'apuração', 'consulta eleitoral',
   ],
   candidato: [
-    'postulante', 'concorrente', 'pré-candidato',
+    'postulante', 'concorrente', 'aspirante',
   ],
   candidata: [
-    'postulante', 'concorrente', 'pré-candidata',
+    'postulante', 'concorrente', 'aspirante',
   ],
   dúvidas: [
     'perguntas', 'incertezas', 'questões',
@@ -464,23 +447,17 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
   associação: [
     'entidade', 'organização', 'associação comunitária',
   ],
-  maria: [
-    'entidade', 'organização', 'associação comunitária',
-  ],
   documentos: [
     'papéis', 'registros', 'arquivos',
   ],
   salário: [
-    'vencimento', 'salário-base', 'pagamento mensal',
+    'vencimento', 'piso salarial', 'rendimento',
   ],
   despesas: [
     'contas', 'despesas administrativas', 'despesas fixas',
   ],
   fornecedor: [
     'prestador de serviços', 'vendedor', 'parceiro comercial',
-  ],
-  depósito: [
-    'armazém', 'galpão', 'silo',
   ],
   inflação: [
     'alta de preços', 'inflação acumulada', 'pressão inflacionária',
@@ -501,16 +478,13 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
     'assembleia', 'sessão', 'reunião ordinária',
   ],
   caso: [
-    'processo', 'litígio', 'ocorrência',
+    'processo', 'litígio',
   ],
   materiais: [
     'insumos', 'itens', 'componentes',
   ],
   plantas: [
     'espécies', 'ervas', 'mudas',
-  ],
-  contrato: [
-    'acordo', 'documento', 'termo',
   ],
   reforma: [
     'obra', 'renovação', 'modernização',
@@ -523,12 +497,6 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
   ],
   estudantes: [
     'alunos', 'universitários', 'jovens',
-  ],
-  sociedade: [
-    'comunidade', 'coletividade', 'população',
-  ],
-  projeto: [
-    'texto', 'anteprojeto', 'texto legislativo',
   ],
   crime: [
     'delito', 'ilícito', 'ato criminoso',
@@ -569,14 +537,11 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
   desmatamento: [
     'desmate', 'desflorestamento', 'corte de vegetação',
   ],
-  queimadas: [
-    'queimadas florestais', 'queimas ilegais', 'queimadas criminosas',
-  ],
   bombeiros: [
     'socorristas', 'brigadistas', 'salvadores',
   ],
   tribunal: [
-    'tribunal de justiça', 'órgão colegiado', 'colegiado',
+    'colegiado', 'órgão colegiado', 'órgão julgador',
   ],
   patrulhamento: [
     'policiamento', 'patrulhamento ostensivo', 'policiamento preventivo',
@@ -593,32 +558,11 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
   livros: [
     'volumes', 'exemplares', 'títulos',
   ],
-  biblioteca_municipal: [
-    'biblioteca pública', 'sala de leitura', 'biblioteca do bairro',
-  ],
-  acervo: [
-    'arquivo', 'catálogo', 'patrimônio bibliográfico',
-  ],
-  instituto: [
-    'centro de pesquisa', 'órgão de pesquisa', 'núcleo de pesquisa',
-  ],
-  apresentação: [
-    'exibição', 'performance', 'apresentação cultural',
-  ],
-  evento: [
-    'acontecimento', 'encontro', 'evento social',
-  ],
-  grupo: [
-    'coletivo', 'núcleo', 'time',
-  ],
   desfile: [
     'cortejo', 'desfile cívico', 'desfile escolar',
   ],
   canções: [
     'músicas', 'cantigas', 'composições',
-  ],
-  aniversário: [
-    'aniversário natalício', 'dia do aniversário', 'evento de aniversário',
   ],
   bolo: [
     'doce', 'bolo caseiro', 'bolo de festa',
@@ -627,52 +571,16 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
     'paróquia', 'capela', 'comunidade religiosa',
   ],
   oficina: [
-    'sala de costura', 'sala de trabalho', 'oficina de costura',
-  ],
-  ginásio: [
-    'pavilhão', 'centro esportivo', 'espaço esportivo',
+    'sala de trabalho',
   ],
   quadra: [
     'arena', 'área esportiva', 'quadra esportiva',
   ],
-  partida: [
-    'disputa', 'competição', 'partida amistosa',
-  ],
   jogo: [
     'confronto', 'duelo', 'encontro esportivo',
   ],
-  jogadores: [
-    'atletas', 'esportistas', 'competidores',
-  ],
-  atletas: [
-    'esportistas', 'corredores', 'competidores',
-  ],
-  torcida: [
-    'plateia', 'torcida organizada', 'galera',
-  ],
-  time: [
-    'clube', 'esquadrão', 'grupo esportivo',
-  ],
-  corrida: [
-    'prova', 'competição', 'corrida de rua',
-  ],
-  clube: [
-    'centro', 'centro social', 'espaço recreativo',
-  ],
   boutique: [
     'loja de roupas', 'butique', 'loja de moda',
-  ],
-  brechó: [
-    'bazar', 'mercado de usados', 'comércio de usados',
-  ],
-  alfaiataria: [
-    'oficina de costura', 'casa de costura', 'loja de alfaiate',
-  ],
-  acessórios: [
-    'adornos', 'artigos', 'itens',
-  ],
-  peças: [
-    'unidades', 'partes', 'mercadorias',
   ],
   produtos: [
     'itens', 'artigos', 'gêneros',
@@ -689,40 +597,13 @@ export const SUBSTANTIVOS_EXTRA = Object.freeze({
   aplicativo: [
     'software', 'programa', 'aplicativo móvel',
   ],
-  inscrições: [
-    'matrículas', 'candidaturas', 'adesões',
-  ],
-  pedidos: [
-    'solicitações', 'requerimentos', 'encomendas',
-  ],
-  estoque: [
-    'estoque de mercadorias', 'estoque disponível', 'estoque da loja',
-  ],
-  máquina: [
-    'máquina industrial', 'máquina pesada', 'máquina nova',
-  ],
-  técnico: [
-    'especialista', 'profissional', 'técnico de manutenção',
-  ],
-  banco: [
-    'banco comercial', 'banco varejista', 'banco de investimento',
-  ],
-  flores: [
-    'plantas', 'mudas', 'flores do jardim',
-  ],
   mudas: [
-    'plantas jovens', 'mudas nativas', 'mudas de árvore',
+    'plantas jovens', 'mudas nativas', 'mudas florestais',
   ],
   barraca: [
     'tenda', 'banca', 'barraca de feira',
   ],
-  feirante: [
-    'barraqueiro', 'comerciante da feira', 'vendedor da feira',
-  ],
   muro: [
     'paredão', 'muro externo', 'muro de alvenaria',
-  ],
-  chave: [
-    'chaveiro', 'chave de fenda', 'chave inglesa',
   ],
 });

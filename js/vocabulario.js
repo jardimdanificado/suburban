@@ -385005,6 +385005,13 @@ function verboRegular(lemma,tempo,index){
   }
   if(tempo==='pretérito-perfeito'){
     if(hiato)return stem+['í','íste','iu','ímos','ístes','íram'][index];
+    if(end==='ar'&&index===0){
+      let base=stem;
+      if(/ç$/.test(base))base=base.slice(0,-1)+'c';
+      else if(/c$/.test(base))base=base.slice(0,-1)+'qu';
+      else if(/g$/.test(base))base=base.slice(0,-1)+'gu';
+      return base+'ei';
+    }
     return stem+(end==='ar'?['ei','aste','ou','amos','astes','aram'][index]:end==='er'?['i','este','eu','emos','estes','eram'][index]:['i','iste','iu','imos','istes','iram'][index]);
   }
   if(tempo==='pretérito-imperfeito'){
@@ -385015,7 +385022,19 @@ function verboRegular(lemma,tempo,index){
   if(tempo==='condicional')return lemma+['ia','ias','ia','íamos','íeis','iam'][index];
   if(tempo==='subjuntivo-presente'){
     if(hiato&&/air$/.test(lemma))return stem+['ia','ias','ia','iamos','iais','iam'][index];
-    return stem+(end==='ar'?['e','es','e','emos','eis','em'][index]:['a','as','a','amos','ais','am'][index]);
+    if(end==='ar'){
+      let base=stem;
+      if(/ç$/.test(base))base=base.slice(0,-1)+'c';
+      else if(/c$/.test(base))base=base.slice(0,-1)+'qu';
+      else if(/g$/.test(base))base=base.slice(0,-1)+'gu';
+      if(/ear$/.test(lemma)&&[0,1,2,5].includes(index))base+='i';
+      return base+['e','es','e','emos','eis','em'][index];
+    }
+    let base=stem;
+    if(/guir$/.test(lemma))base=stem.slice(0,-1).replace(/eg$/,'ig');
+    else if(/c$/.test(base))base=base.slice(0,-1)+'ç';
+    else if(/g$/.test(base))base=base.slice(0,-1)+'j';
+    return base+['a','as','a','amos','ais','am'][index];
   }
   if(tempo==='gerundio')return stem+(end==='ar'?'ando':end==='ir'?'indo':'endo');
   if(tempo==='participio'){
@@ -385029,10 +385048,10 @@ const irregulares={
   ter:{presente:['tenho','tens','tem','temos','tendes','têm'],'pretérito-perfeito':['tive','tiveste','teve','tivemos','tivestes','tiveram'],'pretérito-imperfeito':['tinha','tinhas','tinha','tínhamos','tínheis','tinham'],'subjuntivo-presente':['tenha','tenhas','tenha','tenhamos','tenhais','tenham'],gerundio:['tendo','tendo','tendo','tendo','tendo','tendo'],participio:['tido','tido','tido','tido','tido','tido']},
   haver:{presente:['hei','hás','há','havemos','haveis','hão'],'pretérito-perfeito':['houve','houveste','houve','houvemos','houvestes','houveram'],'pretérito-imperfeito':['havia','havias','havia','havíamos','havíeis','haviam'],'subjuntivo-presente':['haja','hajas','haja','hajamos','hajais','hajam']},
   ir:{presente:['vou','vais','vai','vamos','ides','vão'],'pretérito-perfeito':['fui','foste','foi','fomos','fostes','foram'],'pretérito-imperfeito':['ia','ias','ia','íamos','íeis','iam'],'subjuntivo-presente':['vá','vás','vá','vamos','vades','vão'],'gerundio':['indo']},
-  vir:{presente:['venho','vens','vem','vimos','vindes','vêm'],'pretérito-perfeito':['vim','vieste','veio','viemos','viestes','vieram'],'pretérito-imperfeito':['vinha','vinhas','vinha','vínhamos','vínheis','vinham'],'subjuntivo-presente':['venha','venhas','venha','venhamos','venhais','venham']},
+  vir:{presente:['venho','vens','vem','vimos','vindes','vêm'],'pretérito-perfeito':['vim','vieste','veio','viemos','viestes','vieram'],'pretérito-imperfeito':['vinha','vinhas','vinha','vínhamos','vínheis','vinham'],'subjuntivo-presente':['venha','venhas','venha','venhamos','venhais','venham'],participio:['vindo','vindo','vindo','vindo','vindo','vindo']},
   fazer:{presente:['faço','fazes','faz','fazemos','fazeis','fazem'],'pretérito-perfeito':['fiz','fizeste','fez','fizemos','fizestes','fizeram'],'pretérito-imperfeito':['fazia','fazias','fazia','fazíamos','fazíeis','faziam'],'subjuntivo-presente':['faça','faças','faça','façamos','façais','façam'],participio:['feito','feito','feito','feito','feito','feito'],futuroStem:'far',condicionalStem:'far'},
   dizer:{presente:['digo','dizes','diz','dizemos','dizeis','dizem'],'pretérito-perfeito':['disse','disseste','disse','dissemos','dissestes','disseram'],'pretérito-imperfeito':['dizia','dizias','dizia','dizíamos','dizíeis','diziam'],'subjuntivo-presente':['diga','digas','diga','digamos','digais','digam'],participio:['dito','dito','dito','dito','dito','dito'],futuroStem:'dir',condicionalStem:'dir'},
-  trazer:{presente:['trago','trazes','traz','trazemos','trazeis','trazem'],'pretérito-perfeito':['trouxe','trouxeste','trouxe','trouxemos','trouxestes','trouxeram'],'pretérito-imperfeito':['trazia','trazias','trazia','trazíamos','trazíeis','traziam'],futuroStem:'trar',condicionalStem:'trar'},
+  trazer:{presente:['trago','trazes','traz','trazemos','trazeis','trazem'],'pretérito-perfeito':['trouxe','trouxeste','trouxe','trouxemos','trouxestes','trouxeram'],'pretérito-imperfeito':['trazia','trazias','trazia','trazíamos','trazíeis','traziam'],'subjuntivo-presente':['traga','tragas','traga','tragamos','traguais','tragam'],'gerundio':['trazendo','trazendo','trazendo','trazendo','trazendo','trazendo'],'participio':['trazido','trazido','trazido','trazido','trazido','trazido'],futuroStem:'trar',condicionalStem:'trar'},
   poder:{presente:['posso','podes','pode','podemos','podeis','podem'],'pretérito-perfeito':['pude','pudeste','pôde','pudemos','pudestes','puderam'],'pretérito-imperfeito':['podia','podias','podia','podíamos','podíeis','podiam'],'subjuntivo-presente':['possa','possas','possa','possamos','possais','possam']},
   pôr:{presente:['ponho','pões','põe','pomos','pondes','põem'],'pretérito-perfeito':['pus','puseste','pôs','pusemos','pusestes','puseram'],'pretérito-imperfeito':['punha','punhas','punha','púnhamos','púnheis','punham'],'subjuntivo-presente':['ponha','ponhas','ponha','ponhamos','ponhais','ponham'],gerundio:['pondo','pondo','pondo','pondo','pondo','pondo'],participio:['posto','posto','posto','posto','posto','posto'],futuroStem:'por',condicionalStem:'por'},
   querer:{presente:['quero','queres','quer','queremos','quereis','querem'],'pretérito-perfeito':['quis','quiseste','quis','quisemos','quisestes','quiseram'],'pretérito-imperfeito':['queria','querias','queria','queríamos','queríeis','queriam'],'subjuntivo-presente':['queira','queiras','queira','queiramos','queirais','queiram']},
@@ -385048,6 +385067,19 @@ const irregulares={
   ouvir:{presente:['ouço','ouves','ouve','ouvimos','ouvis','ouvem'],'pretérito-perfeito':['ouvi','ouviste','ouviu','ouvimos','ouvistes','ouviram'],'pretérito-imperfeito':['ouvia','ouvias','ouvia','ouvíamos','ouvíeis','ouviam'],'subjuntivo-presente':['ouça','ouças','ouça','ouçamos','ouçais','ouçam']},
   construir:{presente:['construo','constróis','constrói','construímos','construís','constroem'],'pretérito-perfeito':['construí','construíste','construiu','construímos','construístes','construíram'],'pretérito-imperfeito':['construía','construías','construía','construíamos','construíeis','construíam'],'subjuntivo-presente':['construa','construas','construa','construamos','construais','construam'],'gerundio':['construindo','construindo','construindo','construindo','construindo','construindo'],'participio':['construído','construído','construído','construído','construído','construído']},
   destruir:{presente:['destruo','destróis','destrói','destruímos','destruís','destroem'],'pretérito-perfeito':['destruí','destruíste','destruiu','destruímos','destruístes','destruíram'],'pretérito-imperfeito':['destruía','destruías','destruía','destruíamos','destruíeis','destruíam'],'subjuntivo-presente':['destrua','destruas','destrua','destruamos','destruais','destruam'],'gerundio':['destruindo','destruindo','destruindo','destruindo','destruindo','destruindo'],'participio':['destruído','destruído','destruído','destruído','destruído','destruído']},
+  reunir:{presente:['reúno','reúnes','reúne','reunimos','reunis','reúnem'],'pretérito-perfeito':['reuni','reuniste','reuniu','reunimos','reunistes','reuniram'],'pretérito-imperfeito':['reunia','reunias','reunia','reuníamos','reuníeis','reuniam'],'subjuntivo-presente':['reúna','reúnas','reúna','reunamos','reunais','reúnam'],'gerundio':['reunindo','reunindo','reunindo','reunindo','reunindo','reunindo'],'participio':['reunido','reunido','reunido','reunido','reunido','reunido']},
+  servir:{presente:['sirvo','serves','serve','servimos','servis','servem'],'pretérito-perfeito':['servi','serviste','serviu','servimos','servistes','serviram'],'pretérito-imperfeito':['servia','servias','servia','servíamos','servíeis','serviam'],'subjuntivo-presente':['sirva','sirvas','sirva','sirvamos','sirvais','sirvam'],'gerundio':['servindo','servindo','servindo','servindo','servindo','servindo'],'participio':['servido','servido','servido','servido','servido','servido']},
+  preferir:{presente:['prefiro','preferes','prefere','preferimos','preferis','preferem'],'pretérito-perfeito':['preferi','preferiste','preferiu','preferimos','preferistes','preferiram'],'pretérito-imperfeito':['preferia','preferias','preferia','preferíamos','preferíeis','preferiam'],'subjuntivo-presente':['prefira','prefiras','prefira','prefiramos','prefirais','prefiram'],'gerundio':['preferindo','preferindo','preferindo','preferindo','preferindo','preferindo'],'participio':['preferido','preferido','preferido','preferido','preferido','preferido']},
+  medir:{presente:['meço','medes','mede','medimos','medis','medem'],'pretérito-perfeito':['medi','mediste','mediu','medimos','medistes','mediram'],'pretérito-imperfeito':['media','medias','media','medíamos','medíeis','mediam'],'subjuntivo-presente':['meça','meças','meça','meçamos','meçais','meçam'],'gerundio':['medindo','medindo','medindo','medindo','medindo','medindo'],'participio':['medido','medido','medido','medido','medido','medido']},
+  impedir:{presente:['impeço','impedes','impede','impedimos','impedis','impedem'],'pretérito-perfeito':['impedi','impediste','impediu','impedimos','impedistes','impediram'],'pretérito-imperfeito':['impedia','impedias','impedia','impedíamos','impedíeis','impediam'],'subjuntivo-presente':['impeça','impeças','impeça','impeçamos','impeçais','impeçam'],'gerundio':['impedindo','impedindo','impedindo','impedindo','impedindo','impedindo'],'participio':['impedido','impedido','impedido','impedido','impedido','impedido']},
+  vestir:{presente:['visto','vestes','veste','vestimos','vestis','vestem'],'pretérito-perfeito':['vesti','vestiste','vestiu','vestimos','vestistes','vestiram'],'pretérito-imperfeito':['vestia','vestias','vestia','vestíamos','vestíeis','vestiam'],'subjuntivo-presente':['vista','vistas','vista','vistamos','vistais','vistam'],'gerundio':['vestindo','vestindo','vestindo','vestindo','vestindo','vestindo'],'participio':['vestido','vestido','vestido','vestido','vestido','vestido']},
+  aderir:{presente:['adiro','aderes','adere','aderimos','aderis','aderem'],'pretérito-perfeito':['aderi','aderiste','aderiu','aderimos','aderistes','aderiram'],'pretérito-imperfeito':['aderia','aderias','aderia','aderíamos','aderíeis','aderiam'],'subjuntivo-presente':['adira','adiras','adira','adiramos','adirais','adiram'],'gerundio':['aderindo','aderindo','aderindo','aderindo','aderindo','aderindo'],'participio':['aderido','aderido','aderido','aderido','aderido','aderido']},
+  prevenir:{presente:['previno','prevines','previne','prevenimos','prevenis','previnem'],'pretérito-perfeito':['preveni','preveniste','preveniu','prevenimos','prevenistes','preveniram'],'pretérito-imperfeito':['prevenia','prevenias','prevenia','preveníamos','preveníeis','preveniam'],'subjuntivo-presente':['previna','previnas','previna','previnamos','previnais','previnam'],'gerundio':['prevenindo','prevenindo','prevenindo','prevenindo','prevenindo','prevenindo'],'participio':['prevenido','prevenido','prevenido','prevenido','prevenido','prevenido']},
+  perder:{presente:['perco','perdes','perde','perdemos','perdeis','perdem'],'pretérito-perfeito':['perdi','perdeste','perdeu','perdemos','perdestes','perderam'],'pretérito-imperfeito':['perdia','perdias','perdia','perdíamos','perdíeis','perdiam'],'subjuntivo-presente':['perca','percas','perca','percamos','percais','percam'],'gerundio':['perdendo','perdendo','perdendo','perdendo','perdendo','perdendo'],'participio':['perdido','perdido','perdido','perdido','perdido','perdido']},
+  proibir:{presente:['proíbo','proíbes','proíbe','proibimos','proibis','proíbem'],'pretérito-perfeito':['proibi','proibiste','proibiu','proibimos','proibistes','proibiram'],'pretérito-imperfeito':['proibia','proibias','proibia','proibíamos','proibíeis','proibiam'],'subjuntivo-presente':['proíba','proíbas','proíba','proibamos','proibais','proíbam'],'gerundio':['proibindo','proibindo','proibindo','proibindo','proibindo','proibindo'],'participio':['proibido','proibido','proibido','proibido','proibido','proibido']},
+  coibir:{presente:['coíbo','coíbes','coíbe','coibimos','coibis','coíbem'],'pretérito-perfeito':['coibi','coibiste','coibiu','coibimos','coibistes','coibiram'],'pretérito-imperfeito':['coibia','coibias','coibia','coibíamos','coibíeis','coibiam'],'subjuntivo-presente':['coíba','coíbas','coíba','coibamos','coibais','coíbam'],'gerundio':['coibindo','coibindo','coibindo','coibindo','coibindo','coibindo'],'participio':['coibido','coibido','coibido','coibido','coibido','coibido']},
+  moer:{presente:['moo','móis','mói','moemos','moeis','moem'],'pretérito-perfeito':['moí','moeste','moeu','moemos','moestes','moeram'],'pretérito-imperfeito':['moía','moías','moía','moíamos','moíeis','moíam'],'subjuntivo-presente':['moa','moas','moa','moamos','moais','moam'],'gerundio':['moendo','moendo','moendo','moendo','moendo','moendo'],'participio':['moído','moído','moído','moído','moído','moído']},
+  requerer:{presente:['requeiro','requeres','requer','requeremos','requereis','requerem'],'pretérito-perfeito':['requeri','requereste','requereu','requeremos','requerestes','requereram'],'pretérito-imperfeito':['requeria','requerias','requeria','requeríamos','requeríeis','requeriam'],'subjuntivo-presente':['requeira','requeiras','requeira','requeiramos','requeirais','requeiram'],'gerundio':['requerendo','requerendo','requerendo','requerendo','requerendo','requerendo'],'participio':['requerido','requerido','requerido','requerido','requerido','requerido']},
 };
 function formasVerbo(lemma,tempo){const key=normalizaLexema(lemma),irregular=irregulares[key];if(irregular?.[tempo])return irregular[tempo];if(tempo==='futuro'||tempo==='condicional'){const endings=tempo==='futuro'?['ei','ás','á','emos','eis','ão']:['ia','ias','ia','íamos','íeis','iam'],base=irregular?.[tempo==='futuro'?'futuroStem':'condicionalStem']||key;return endings.map(end=>base+end);}return Array.from({length:6},(_,i)=>verboRegular(key,tempo,i));}
 function indicePessoa(pessoa=3,numero='singular'){
@@ -385056,10 +385088,20 @@ function indicePessoa(pessoa=3,numero='singular'){
   if(Number.isInteger(pessoa)&&pessoa>=1&&pessoa<=3)return pessoa-1+(numero==='plural'?3:0);
   if(Number.isInteger(pessoa)&&pessoa>=4&&pessoa<=6)return pessoa-1;return 2;
 }
+const COMPOSTOS_IRREGULARES = new Map([
+  ['conter', 'ter'], ['manter', 'ter'], ['deter', 'ter'], ['reter', 'ter'],
+  ['obter', 'ter'], ['entreter', 'ter'],
+  ['prever', 'ver'], ['rever', 'ver'], ['antever', 'ver'], ['entrever', 'ver'],
+  ['convir', 'vir'], ['intervir', 'vir'], ['sobrevir', 'vir'], ['advir', 'vir'],
+  ['desfazer', 'fazer'], ['refazer', 'fazer'],
+  ['contradizer', 'dizer'], ['desdizer', 'dizer'],
+  ['reler', 'ler'], ['tresler', 'ler'],
+  ['recair', 'cair'], ['descair', 'cair'], ['sobressair', 'sair'],
+]);
 export function conjugarVerbo(lemma,{tempo='presente',pessoa=3,numero='singular',modo='indicativo'}={}){
   const aliases={'presente do indicativo':'presente','pretérito perfeito':'pretérito-perfeito','pretérito perfeito do indicativo':'pretérito-perfeito','pretérito imperfeito':'pretérito-imperfeito','futuro do presente':'futuro','futuro do pretérito':'condicional','condicional':'condicional','gerúndio':'gerundio','particípio':'participio'};
   tempo=aliases[normalizaLexema(tempo)]||tempo;if(modo!=='indicativo'&&modo!=='subjuntivo')return null;if(tempo==='subjuntivo'||modo==='subjuntivo'&&tempo==='presente')tempo='subjuntivo-presente';
-  let key=normalizaLexema(lemma),prefix='';if(key!=='pôr'&&key.endsWith('por')){prefix=key.slice(0,-3);key='pôr';}if(!/(ar|er|ir)$/.test(key)&&key!=='pôr')return null;const form=formasVerbo(key,tempo)?.[indicePessoa(pessoa,numero)];return form?prefix+form:null;
+  let key=normalizaLexema(lemma),prefix='';const composto=COMPOSTOS_IRREGULARES.get(key);if(composto){prefix=key.slice(0,key.length-composto.length);key=composto;}else if(key!=='pôr'&&key.endsWith('por')){prefix=key.slice(0,-3);key='pôr';}if(!/(ar|er|ir)$/.test(key)&&key!=='pôr')return null;const form=formasVerbo(key,tempo)?.[indicePessoa(pessoa,numero)];if(!form)return null;const indice=indicePessoa(pessoa,numero);const completo=prefix+form;if(composto&&(composto==='ter'||composto==='vir')&&tempo==='presente'&&indice===2)return completo.replace(/em$/u,'ém');if(normalizaLexema(lemma)==='prover'&&tempo==='participio')return 'provido';return completo;
 }
 function catalogoVerbal(){
   if(indiceVerbos)return indiceVerbos;const set=catalogoSet(),found=new Map();
