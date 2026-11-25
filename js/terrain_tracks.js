@@ -2,9 +2,32 @@ import {isDirtRoad,dirtRoadGround,permanentRoadContacts} from './dirt_road_visua
 import {BOAT_HULL_DIMENSIONS,BOAT_CLASSES} from './boat_types.js?v=local-sea-travel-2';
 import {TILE_SAND,TILE_WATER,TILE_VOID,TILE_ROAD_GRASS,TILE_ROAD_HILL,TILE_FLOOR,TILE_HILL} from './world_gen.js';
 import {MOBILITY_GROUND_CONTACTS} from './city_mobility_models.js?v=ground-contacts-1';
+import {ANIMAL_SPECIES} from './animal_catalog.js?v=fauna-scale-2';
 export const VEHICLE_CONTACTS = MOBILITY_GROUND_CONTACTS;
 const turn = (a,b) => Math.atan2(Math.sin(b-a),Math.cos(b-a));
 const contact = (x,z,angle,offset) => ({x:x+Math.cos(angle)*offset[0]+Math.sin(angle)*offset[1],z:z-Math.sin(angle)*offset[0]+Math.cos(angle)*offset[1]});
+
+export function animalTrackProfile(species) {
+  const spec = ANIMAL_SPECIES[species] || {};
+  const size = spec.size || 0.5;
+  if (species === 'boi') return { quad: true, lateral: 0.16, frontZ: 0.31, rearZ: -0.30, width: 0.14, length: 0.16, stride: 0.36, grass: true };
+  if (species === 'vaca') return { quad: true, lateral: 0.15, frontZ: 0.30, rearZ: -0.29, width: 0.13, length: 0.15, stride: 0.34, grass: true };
+  if (species === 'cavalo') return { quad: true, lateral: 0.145, frontZ: 0.34, rearZ: -0.33, width: 0.13, length: 0.15, stride: 0.42, grass: true };
+  if (species === 'anta') return { quad: true, lateral: 0.13, frontZ: 0.24, rearZ: -0.23, width: 0.12, length: 0.14, stride: 0.30, grass: true };
+  if (species === 'porco' || species === 'javali') return { quad: true, lateral: 0.115, frontZ: 0.20, rearZ: -0.19, width: 0.085, length: 0.10, stride: 0.24, grass: true };
+  if (species === 'ovelha' || species === 'cabra') return { quad: true, lateral: 0.11, frontZ: 0.18, rearZ: -0.17, width: 0.075, length: 0.09, stride: 0.24, grass: true };
+  if (species === 'onca' || species === 'lobo_guara' || species === 'veado') return { quad: true, lateral: 0.09, frontZ: 0.19, rearZ: -0.18, width: 0.085, length: 0.105, stride: 0.28, grass: true };
+  if (species === 'capivara' || species === 'tamandua') return { quad: true, lateral: 0.10, frontZ: 0.17, rearZ: -0.16, width: 0.08, length: 0.10, stride: 0.22, grass: true };
+  if (species === 'jacare') return { quad: true, lateral: 0.17, frontZ: 0.19, rearZ: -0.19, width: 0.095, length: 0.12, stride: 0.24, grass: true };
+  if (species === 'ema') return { quad: false, lateral: 0.075, width: 0.09, length: 0.14, stride: 0.34, grass: true };
+  if (species === 'garca' || species === 'colhereiro' || species === 'guara') return { quad: false, lateral: 0.045, width: 0.055, length: 0.085, stride: 0.24, grass: false };
+  if (species === 'galinha' || species === 'pato') return { quad: false, lateral: 0.038, width: 0.045, length: 0.065, stride: 0.16, grass: false };
+  if (spec.canFly) return { quad: false, lateral: Math.max(0.018, size * 0.07), width: Math.max(0.025, size * 0.09), length: Math.max(0.04, size * 0.14), stride: 0.14, grass: false };
+  if (species === 'iguana' || species === 'tatu' || species === 'coelho' || species === 'quati' || species === 'macaco' || species === 'mico_leao' || species === 'sagui' || species === 'preguica') {
+    return { quad: true, lateral: Math.max(0.035, size * 0.16), frontZ: Math.max(0.05, size * 0.22), rearZ: -Math.max(0.05, size * 0.21), width: Math.max(0.035, size * 0.12), length: Math.max(0.045, size * 0.15), stride: Math.max(0.14, size * 0.38), grass: size >= 0.4 };
+  }
+  return { quad: false, lateral: Math.max(0.03, size * 0.1), width: Math.max(0.04, size * 0.12), length: Math.max(0.06, size * 0.2), stride: Math.max(0.16, size * 0.4), grass: size >= 0.45 };
+}
 export const GRASS_TRACK_HOLD = 36, GRASS_TRACK_LIFE = 72, SAND_TRACK_HOLD = 30, SAND_TRACK_LIFE = 55;
 export const DEPOSIT_HOLD = 24, DEPOSIT_LIFE = 84;
 export function trackStrength(age, hold, life) {
@@ -37,6 +60,7 @@ export class GrassWear {
   record(stamps,world,time){
     if(!world.width||!world.height)return;
     for(const stamp of stamps){
+      if(stamp.noGrassWear)continue;
       const c=Math.cos(stamp.angle),s=Math.sin(stamp.angle),rx=(Math.abs(c)*stamp.width+Math.abs(s)*stamp.length)/2,rz=(Math.abs(s)*stamp.width+Math.abs(c)*stamp.length)/2;
       const minX=Math.max(0,Math.floor((stamp.x-rx)*16)),maxX=Math.min(world.width*16-1,Math.floor((stamp.x+rx)*16));
       const minZ=Math.max(0,Math.floor((stamp.z-rz)*16)),maxZ=Math.min(world.height*16-1,Math.floor((stamp.z+rz)*16));
@@ -70,7 +94,7 @@ export class GrassWear {
 export class TerrainTrackMotion {
   constructor(){this.history=new WeakMap();}
   reset(entity){this.history.delete(entity);}
-  move(entity,{x,z,angle=0,vehicle=null,scale=1,hull=null},time){
+  move(entity,{x,z,angle=0,vehicle=null,scale=1,hull=null,animalProfile=null},time){
     const previous=this.history.get(entity),state={x,z,angle,vehicle,time,remainder:previous?.remainder||0,foot:previous?.foot||0};
     this.history.set(entity,state);
     if(!previous||previous.vehicle!==vehicle||time-previous.time>1)return [];
@@ -93,6 +117,22 @@ export class TerrainTrackMotion {
           stamps.push({x:(from.x+to.x)/2,z:(from.z+to.z)/2,angle:Math.atan2(to.x-from.x,to.z-from.z),width:wheel[2],length:length+wheel[2],kind:0,carryContact:wheelIndex,carryDistance:length});
         }
       }
+    }else if(animalProfile&&distance>.00001){
+      const stride=animalProfile.stride;
+      for(let along=stride-state.remainder;along<=distance+1e-8;along+=stride){
+        const ratio=along/distance,heading=previous.angle+rotation*ratio,side=state.foot++%2?1:-1;
+        const bx=previous.x+dx*ratio,bz=previous.z+dz*ratio;
+        if(animalProfile.quad){
+          const front=contact(bx,bz,heading,[side*animalProfile.lateral,animalProfile.frontZ]);
+          const rear=contact(bx,bz,heading,[-side*animalProfile.lateral,animalProfile.rearZ]);
+          stamps.push({x:front.x,z:front.z,angle:heading,width:animalProfile.width,length:animalProfile.length,kind:side,noGrassWear:!animalProfile.grass});
+          stamps.push({x:rear.x,z:rear.z,angle:heading,width:animalProfile.width,length:animalProfile.length,kind:-side,noGrassWear:!animalProfile.grass});
+        }else{
+          const foot=contact(bx,bz,heading,[side*animalProfile.lateral,0]);
+          stamps.push({x:foot.x,z:foot.z,angle:heading,width:animalProfile.width,length:animalProfile.length,kind:side,noGrassWear:!animalProfile.grass});
+        }
+      }
+      state.remainder=(state.remainder+distance)%stride;
     }else if(distance>.00001){
       const stride=.25*scale;
       for(let along=stride-state.remainder;along<=distance+1e-8;along+=stride){
@@ -397,7 +437,7 @@ export class TerrainTracks {
       const citizen=entity.properties?.citizen,vehicle=entity.properties?.cityVehicle,animal=entity.properties?.cityAnimal;
       if(!citizen&&!vehicle&&!animal)continue;
       const elevated=citizen&&(citizen.skybridgeZ>0||citizen._renderIndoorPosition?.z>0||citizen.furnitureUse?.seated||citizen.furnitureUse?.pose==='lying');
-      const animalElevated=animal&&((animal.altitude||0)>0.35||animal.dead);
+      const animalElevated=animal&&((animal.altitude||0)>0.12||animal.dead);
       if(entity.destroyed||animalElevated||citizen&&(citizen.ridingVehicleId||citizen.indoorLocation||elevated)||vehicle&&(vehicle.boatClass&&!vehicle.towedByVehicleId||vehicle.ferrying||vehicle.scrapped)) {this.motion.reset(entity);this.sandCarry.reset(entity);this.dirtCarry.reset(entity);this.paintCarry.reset(entity);continue;}
       const motion=citizen&&models?.motion?.get(entity),visible=motion&&Number.isFinite(motion.bodyX)&&Number.isFinite(motion.bodyZ)&&motion.bodyFrame===models.frameToken;
       const offset=offsets?.get(entity.id),x=visible?motion.bodyX:entity.x+(offset?.x||0),z=visible?motion.bodyZ:entity.y+(offset?.y||0);
@@ -406,8 +446,9 @@ export class TerrainTracks {
       const previous=this.motion.history.get(entity);
       if(!previous||previous.vehicle!==(vehicle?.good||null)||this.time-previous.time>1||Math.hypot(x-previous.x,z-previous.z)>3){this.sandCarry.reset(entity);this.dirtCarry.reset(entity);this.paintCarry.reset(entity);}
       const dimensions=vehicle?.towedByVehicleId&&BOAT_HULL_DIMENSIONS[vehicle.boatClass],hull=dimensions?{width:dimensions.width*(vehicle.boatClass==='canoe'?1:BOAT_CLASSES[vehicle.boatClass].scale),length:dimensions.length*(vehicle.boatClass==='canoe'?1:BOAT_CLASSES[vehicle.boatClass].scale)}:null;
-      const scale=animal?Math.max(.35,(entity.properties.render?.size||.8)*.7):(motion?.bodySize||1);
-      const contacts=this.motion.move(entity,{x,z,angle,vehicle:vehicle?.good||null,scale,hull},this.time);
+      const animalProfile=animal?animalTrackProfile(animal.species):null;
+      const scale=animal?(ANIMAL_SPECIES[animal.species]?.size||.5):(motion?.bodySize||1);
+      const contacts=this.motion.move(entity,{x,z,angle,vehicle:vehicle?.good||null,scale,hull,animalProfile},this.time);
       stamps.push(...contacts);
       stamps.push(...this.sandCarry.contacts(entity,contacts,world));
       stamps.push(...this.dirtCarry.contacts(entity,contacts,world,[TILE_ROAD_GRASS,TILE_ROAD_HILL,TILE_FLOOR,TILE_HILL],'dirt',

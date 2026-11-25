@@ -19,7 +19,7 @@ import {floweringShrubSurfaceTextures,floweringShrubLeavesGeometry,floweringShru
 import {createGrassDetailsMesh,grassDetailInstanceSteps} from './grass_details.js?v=incremental-details-3';
 import {addShoreFoamShader,cachedShoreFoamTileSurface} from './water_foam.js?v=zoom-coast-12';
 import {farmSurfaceTile} from './city_farm_ground.js?v=whole-farm-soil-1';
-import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,addSandDepositsToMaterial,TerrainTracks} from './terrain_tracks.js?v=grass-soil-carry-1';
+import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,addSandDepositsToMaterial,TerrainTracks} from './terrain_tracks.js?v=animal-tracks-1';
 import {cachedConstructionFootprint,grassExclusionCells,grassExclusionSignature,grassChunkSignatures} from './city_site_footprints.js?v=local-chunk-mask-3';
 import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=typed-roots-2';
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
