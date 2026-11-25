@@ -6,7 +6,7 @@ import {fitGraffitiToWall,graffitiSurfaceExists} from '../js/city_graffiti_surfa
 import {syncCitizenInterior,advanceCitizenInterior} from '../js/city_interiors.js?v=citizen-access-1';
 
 function fixture(){
- const unit={id:10,buildingId:9,x:0,y:0,z:1,roomType:'circulation',hasWindow:true};
+ const unit={id:10,buildingId:9,x:0,y:0,z:1,roomType:'circulation',hasWindow:false};
  const building={id:9,ownerId:99,accountId:99,width:3,depth:3,floors:3,door:{x:5.5,y:7.5},entity:{x:4,y:4,properties:{name:'Prédio'}},units:[unit],circulation:[],terrain:{base:0}};
  for(let z=0;z<3;z++)for(let y=0;y<3;y++)for(let x=0;x<3;x++)if(!(x===0&&y===0&&z===1))building.circulation.push({x,y,z});
  const c={id:1,accountId:1,task:'leisure',entity:{x:5.5,y:7.5,properties:{name:'Artista'}},traits:{honesty:.1,riskTolerance:.8},skills:{artistic:20},path:[],needs:{}};
@@ -25,12 +25,15 @@ test('upper wall search preserves candidate order and stops before unused buildi
  candidates.return();
 });
 
-test('upper walls retain floor height and window clearance, and disappear when their floor is removed',()=>{
+test('upper walls retain floor height, exclude windows/balconies, and disappear when their floor is removed',()=>{
  const {city,c,building}=fixture(),surfaces=upperGraffitiSurfaces(city,c);
  assert(surfaces.length);const support=surfaces.find(s=>s.side===0);
- assert.equal(support.floor,1);assert.equal(support.height,.42);assert.equal(support.position.z,2.05);
- assert.equal(graffitiSurfaceExists(city,support),true);fitGraffitiToWall(city,support);assert.equal(support.position.z,2.05);
- building.units[0].hasWindow=false;fitGraffitiToWall(city,support);assert.equal(support.height,1.64);assert.equal(support.position.z,2.7);
+ assert.equal(support.floor,1);assert.equal(support.height,1.64);assert.equal(support.position.z,2.7);
+ assert.equal(graffitiSurfaceExists(city,support),true);fitGraffitiToWall(city,support);assert.equal(support.position.z,2.7);
+ building.units[0].hasWindow=true;
+ assert.equal(upperGraffitiSurfaces(city,c).some(s=>s.side===0),false,'windowed upper wall must be excluded');
+ assert.equal(graffitiSurfaceExists(city,support),false);
+ building.units[0].hasWindow=false;
  building.floors=1;assert.equal(graffitiSurfaceExists(city,support),false);
 });
 

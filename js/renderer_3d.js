@@ -534,16 +534,23 @@ function getEntityBounds(e) {
   // collider made it possible to select a tree from several tiles away.
   // Keep selection close to the trunk while retaining enough vertical span
   // for the visible model.
-  if (isTree) return { radius: 0.45, h: 3.0, yBottom: 0.0 };
-  if (isBroadLeafPlant) return { radius: 0.42, h: 1.25, yBottom: 0.0 };
-  if (isTropicalFlowering) return { radius: 0.38, h: 1.75, yBottom: 0.0 };
-  if (isTropicalFoliage) return { radius: 0.35, h: 0.75, yBottom: 0.0 };
+  if (e.properties?.species === 'licuala_palm') return { radius: 0.38, h: 0.55, yBottom: 0.0 };
+  if (isTree) {
+    const sp = e.properties?.species === 'tree' ? 'oak' : e.properties?.species;
+    const model = BOTANICAL_TREE_MODELS[sp];
+    const h = model ? Math.max(0.55, model.height * 0.9) : 2.8;
+    return { radius: 0.45, h, yBottom: 0.0 };
+  }
+  if (isBroadLeafPlant) return { radius: 0.40, h: 1.05, yBottom: 0.0 };
+  if (isTropicalFlowering) return { radius: 0.36, h: e.properties?.species === 'heliconia_psittacorum' ? 1.35 : 1.65, yBottom: 0.0 };
+  if (isTropicalFoliage) return { radius: 0.32, h: 0.65, yBottom: 0.0 };
   if (isCrop) {
     const sp = e.properties?.cityPlant?.species || e.properties?.species;
-    const smallCrop = ['cebola', 'alface', 'coentro', 'peyote', 'cubensis', 'amanita'].includes(sp);
-    return smallCrop ? { radius: 0.28, h: 0.6, yBottom: 0.0 } : { radius: 0.35, h: 1.0, yBottom: 0.0 };
+    const lowCrop = ['cebola', 'alface', 'coentro', 'peyote', 'cubensis', 'amanita', 'uva', 'agave', 'tomate', 'feijao', 'mandioca', 'flor_cannabis'].includes(sp);
+    const tallCrop = ['milho', 'cana'].includes(sp);
+    return lowCrop ? { radius: 0.28, h: 0.58, yBottom: 0.0 } : tallCrop ? { radius: 0.35, h: 1.15, yBottom: 0.0 } : { radius: 0.32, h: 0.85, yBottom: 0.0 };
   }
-  if (isRoseBush || isBerryBush || isShrub) return { radius: 0.45, h: 0.75, yBottom: 0.0 };
+  if (isRoseBush || isBerryBush || isShrub) return { radius: 0.42, h: 0.62, yBottom: 0.0 };
   if (isWaterLily || isSeaweed) return { radius: 0.45, h: 0.35, yBottom: 0.0 };
   if (isHouse) {
     const floors = e.properties?.house?.maxFloors || e.properties?.house?.floors?.length || 2;

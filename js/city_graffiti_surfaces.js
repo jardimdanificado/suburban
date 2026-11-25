@@ -36,6 +36,38 @@ function wallUnitHasWindow(building,unit,side,floor=0){
   return !!(opening&[1,8,2,4][side]);
 }
 
+export function graffitiWallHasBalcony(building,support){
+  const floor=support?.floor??0,sideBit=[1,8,2,4][support?.side];
+  const ids=Array.isArray(support?.unitIds)?support.unitIds:support?.unitId!=null?[support.unitId]:[];
+  const spaces=buildingLeisureSpaces(building).filter(s=>s.kind==='balcony'&&(s.floor??0)===floor);
+  if(!spaces.length)return false;
+  if(ids.some(id=>spaces.some(s=>s.unitId===id&&(s.doorBit==null||s.doorBit===sideBit))))return true;
+  const edge=edges[support?.side],p=support?.position;
+  if(!edge||!p)return false;
+  const x=Math.floor(p.x-building.entity.x-edge.dx*.05),y=Math.floor(p.y-building.entity.y-edge.dy*.05);
+  const unit=(building.units||[]).find(u=>u.z===floor&&u.x===x&&u.y===y);
+  return !!unit&&spaces.some(s=>s.unitId===unit.id&&(s.doorBit==null||s.doorBit===sideBit));
+}
+
+export function graffitiWallHasDoor(building,support){
+  if((support?.floor??0)!==0)return false;
+  const p=support?.position,a=support?.approach;
+  if(building.door){
+    if(a&&Math.hypot(a.x-building.door.x,a.y-building.door.y)<1.05)return true;
+    if(p&&Math.hypot(p.x-building.door.x,p.y-building.door.y)<1.05)return true;
+  }
+  const entrance=buildingEntranceDoor(building);
+  if(!entrance)return false;
+  const sideBit=[1,8,2,4][support?.side];
+  const ids=Array.isArray(support?.unitIds)?support.unitIds:support?.unitId!=null?[support.unitId]:[];
+  if(ids.includes(entrance.unitId)&&entrance.bit===sideBit)return true;
+  const edge=edges[support?.side];
+  if(!edge||!p)return false;
+  const x=Math.floor(p.x-building.entity.x-edge.dx*.05),y=Math.floor(p.y-building.entity.y-edge.dy*.05);
+  const unit=(building.units||[]).find(u=>u.z===0&&u.x===x&&u.y===y);
+  return unit?.id===entrance.unitId&&entrance.bit===sideBit;
+}
+
 // Use the full wall unless its actual opening needs clearance.
 export function fitGraffitiToWall(city,support){
   if(support?.kind!=='street-graffiti'||support.surface!=='wall')return false;
@@ -85,14 +117,15 @@ export function nearbyGraffitiSurfaces(city,c,radius=4){
       const edge=edges[side],horizontal=side%2===0,length=horizontal?b.width:b.depth,segments=[];
       for(let offset=.5;offset<length;offset++){
         const x=b.entity.x+(horizontal?offset:side===1?b.width:0),y=b.entity.y+(horizontal?side===2?b.depth:0:offset),approach={x:x+edge.dx*.5,y:y+edge.dy*.5};
-        if(b.door&&Math.hypot(approach.x-b.door.x,approach.y-b.door.y)<.9)continue;
+        if(b.door&&Math.hypot(approach.x-b.door.x,approach.y-b.door.y)<1.05)continue;
         if(!publicGround(city,Math.floor(approach.x),Math.floor(approach.y)))continue;
         const base=b.terrain?.base??surfaceElevation(world,x,y),standing=surfaceElevation(world,approach.x,approach.y),z=base+.25;
         if(z-standing<.05||z-standing>1.4)continue;
         const position={x:x+edge.dx*.025,y:y+edge.dy*.025,z},key=`wall:${b.id}:${side}:${offset}`,
-          probe={kind:'street-graffiti',surface:'wall',key,buildingId:b.id,side,rotation:edge.rotation,position,approach,width:WALL_TILE_WIDTH,height:.42};
+          unit=(b.units||[]).find(u=>u.z===0&&u.x===Math.floor(position.x-b.entity.x-edge.dx*.05)&&u.y===Math.floor(position.y-b.entity.y-edge.dy*.05)),
+          probe={kind:'street-graffiti',surface:'wall',key,buildingId:b.id,side,rotation:edge.rotation,position,approach,width:WALL_TILE_WIDTH,height:.42,...(unit?{unitIds:[unit.id]}:{})};
+        if(graffitiWallHasWindow(b,probe)||graffitiWallHasBalcony(b,probe)||graffitiWallHasDoor(b,probe))continue;
         fitGraffitiToWall(city,probe);
-        const unit=(b.units||[]).find(u=>u.z===0&&u.x===Math.floor(position.x-b.entity.x-edge.dx*.05)&&u.y===Math.floor(position.y-b.entity.y-edge.dy*.05));
         const segment={offset,position:probe.position,approach,key,height:probe.height,unitId:unit?.id??null};
         segments.push(segment);
         const added=add('wall',key,segment.position,approach,{buildingId:b.id,side,rotation:edge.rotation,width:WALL_TILE_WIDTH,height:segment.height,...(Number.isInteger(segment.unitId)?{unitIds:[segment.unitId]}:{})});
@@ -132,6 +165,7 @@ export function graffitiSurfaceExists(city,support){
   if(support?.kind!=='street-graffiti')return false;
   if(support.surface==='wall'){
     const b=city.building(support.buildingId);if(!b||b.entity.destroyed||(support.floor??0)>=(b.floors||1)||support.unitId!=null&&!b.units?.some(u=>u.id===support.unitId)||support.unitIds?.some(id=>!b.units?.some(u=>u.id===id)))return false;
+    if(graffitiWallHasWindow(b,support)||graffitiWallHasBalcony(b,support)||graffitiWallHasDoor(b,support))return false;
     const edge=edges[support.side],boundary=support.side===0?b.entity.y:support.side===1?b.entity.x+b.width:support.side===2?b.entity.y+b.depth:b.entity.x;
     return Math.abs((support.side%2?support.position.x-edge.dx*.025:support.position.y-edge.dy*.025)-boundary)<.01;
   }

@@ -123,24 +123,17 @@ test('fecal protest missions also generate their text through the vocabulary gra
   assert.equal(citizen.graffitiMission.message,`${expected} · Prefeitura`);
 });
 
-test('wall graffiti fills solid walls and clears only actual ground-floor windows',()=>{
- const {city,citizen,justice}=fixture();const building=city.buildings[0];building.terrain={base:1.16};building.door=null;building.type='townhall';
- building.units=[{id:1,x:0,y:0,z:0,hasWindow:true},{id:2,x:1,y:0,z:0,hasWindow:true},{id:3,x:0,y:1,z:0,hasWindow:false},{id:4,x:1,y:1,z:0,hasWindow:false}];
+test('wall graffiti fills solid walls and excludes windows, balconies and doors',()=>{
+ const {city}=fixture();const building=city.buildings[0];building.terrain={base:1.16};building.door={x:4.5,y:3.5};building.type='townhall';
+ building.units=[{id:1,x:0,y:0,z:0,hasWindow:true},{id:2,x:1,y:0,z:0,hasWindow:false},{id:3,x:0,y:1,z:0,hasWindow:false},{id:4,x:1,y:1,z:0,hasWindow:false}];
  const wall=nearbyGraffitiSurfaces(city,{entity:{x:5,y:5}},8).filter(s=>s.surface==='wall');
- assert.deepEqual(new Set(wall.map(s=>s.side)),new Set([0,1,2,3]));
+ assert.ok(wall.length>0);
  for(const support of wall){
   assert(support.position.z-support.height/2>building.terrain.base);
-  if(graffitiWallHasWindow(building,support))assert(support.position.z+support.height/2<building.terrain.base+.49,'paint must stay below the window frame');
-  else assert.equal(support.height,1.64,'solid walls use the whole ground-floor height');
+  assert.equal(graffitiWallHasWindow(building,support),false,'windowed walls must be excluded');
+  assert.equal(support.height,1.64,'solid walls use the whole ground-floor height');
+  assert.ok(Math.hypot(support.approach.x-building.door.x,support.approach.y-building.door.y)>=1.05,'doorway walls must be excluded');
  }
- assert(wall.some(s=>graffitiWallHasWindow(building,s)));assert(wall.some(s=>!graffitiWallHasWindow(building,s)));
- const support=wall.find(s=>graffitiWallHasWindow(building,s));support.position.z=building.terrain.base+.65;support.height=.65;
- const piece={entity:{destroyed:false},support};justice.art=[piece];const revision=justice.artRevision;
- justice.updateStreetGraffitiSupports();assert.equal(piece.entity.destroyed,false);
- assert(support.position.z+support.height/2<building.terrain.base+.49);
- assert.equal(justice.artRevision,revision+1);assert.equal(fitGraffitiToWall(city,support),false);
- for(const unit of building.units)unit.hasWindow=false;
- assert(fitGraffitiToWall(city,support));assert.equal(support.height,1.64);
 });
 
 test('wide wall graffiti spans two tiles only when both wall bands match',()=>{
