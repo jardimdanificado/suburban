@@ -25,7 +25,9 @@ concordância.
 - `tests/vocabulario_qualidade.test.mjs`: regressão de gramática, construções,
   escala do banco e variedade.
 - `js/xingamentos.js`: repertório curado de xingamentos, palavrões,
-  intensificadores e modelos de pichação. Não gera discurso de ódio.
+  intensificadores e modelos de pichação. Não traz discurso de ódio pronto.
+- `js/xingamentos_preconceito.js`: listas vazias por categoria de preconceito,
+  preenchidas manualmente; cadastro, remoção e validação das entradas.
 - `tests/xingamentos.test.mjs`: regressão de concordância, modelos,
   determinismo e integração com pichação.
 
@@ -190,19 +192,41 @@ gerarXingamento({
 O banco atual tem 162 entradas, 16 intensificadores, 24 predicados e 13
 modelos. Cada entrada traz forma masculina, forma feminina e categorias.
 
-Discurso de ódio não é gerado. O módulo não tem slurs raciais, homofóbicos,
-transfóbicos, capacitistas, gordofóbicos ou de gênero. Uma pichação de ódio
-recebe o texto de quem chama e apenas a categoria:
+O projeto não traz slurs prontos. `js/xingamentos_preconceito.js` define uma
+lista vazia para cada categoria de `PREJUDICE_TYPES`. O conteúdo entra por
+revisão manual, uma entrada por termo:
 
 ```js
-graffitiContent(city, citizen, {message, prejudiceType: 'racismo'});
+OFENSAS_POR_PRECONCEITO.racismo.push({id: 'termo-1', m: '...', f: '...'});
+```
+
+Também há `registrarOfensaPreconceito(tipo, entrada)` e
+`removerOfensaPreconceito(tipo, id)` para cadastro em tempo de execução. `m` é
+obrigatório; sem `f`, a forma masculina vale para os dois gêneros. Uma categoria
+vazia falha com `sem ofensas cadastradas` em vez de inventar texto.
+
+Com a categoria preenchida, `gerarOfensaPreconceito` e
+`gerarOfensaPreconceitoDetalhado` usam os mesmos modelos e intensificadores do
+xingamento comum, sem o modelo `predicado`. `graffitiDeOdio` aceita `message`
+pronta ou gera o texto pela categoria:
+
+```js
+graffitiContent(city, citizen, {prejudiceType: 'racismo', alvo, genero});
 ```
 
 `graffitiDeOdio` valida `prejudiceType` contra `PREJUDICE_CRIME_TYPES` e devolve
 o rótulo do crime. `CityJustice.recordHateGraffiti` registra o caso com
-`discriminatoryAct: true`; `defaceArtwork` e as missões de pichação aceitam
-`mission.prejudiceType` e guardam `hateCaseId` na obra. O crime de pichação
-continua separado do crime de discriminação.
+`discriminatoryAct: true`, liga o caso de pichação ao caso de discriminação e
+guarda `hateCaseId` na obra. Quando existe uma vítima cidadã, a pichação passa
+por `recordPrejudiceAct`, com testemunhas, cooldown ignorado, incidente e
+reputação. Sem vítima individual, o caso de discriminação é registrado com
+vítima nula. As duas ocorrências recebem evidência `hate-graffiti` com
+`artId` e `graffitiCaseId`, e o caso de pichação guarda `details.hateCaseId` e
+`details.prejudiceType`.
+
+`defaceArtwork` e as missões de pichação aceitam `mission.prejudiceType`. O
+crime de pichação continua separado do crime de discriminação, mas os dois
+ficam ligados para investigação, julgamento e pena.
 
 ## Determinismo
 

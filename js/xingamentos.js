@@ -6,6 +6,7 @@
 // por categoria (prejudiceType) e o sistema de justiça aplica o crime
 // correspondente a partir de PREJUDICE_CRIME_TYPES.
 import {PREJUDICE_CRIME_TYPES} from './city_prejudice.js?v=discrimination-laws-1';
+import {ofensasDaCategoria} from './xingamentos_preconceito.js';
 
 const entrada = (id, m, f, tipos, generoFixo = null) => Object.freeze({
   id,
@@ -259,6 +260,8 @@ export const MODELOS = Object.freeze([
   'sigla',
 ]);
 
+export const MODELOS_PRECONCEITO = Object.freeze(MODELOS.filter(modelo => modelo !== 'predicado'));
+
 export const CATEGORIAS_DE_ODIO = Object.freeze(Object.keys(PREJUDICE_CRIME_TYPES));
 
 const escolhe = (lista, random) => lista[Math.min(lista.length - 1, Math.floor(random() * lista.length))];
@@ -275,39 +278,15 @@ export function limitarXingamento(texto, limite = 180) {
   return limitarTexto(texto, limite);
 }
 
-// Versão detalhada: devolve o texto e as escolhas feitas. O gerador é
-// determinístico quando recebe `random`; não lê relógio, rede ou estado global.
-export function gerarXingamentoDetalhado({
-  alvo = 'fulano',
-  genero = 'm',
-  tipo = null,
-  intensidade = 0.35,
-  random = Math.random,
-  pixacao = false,
-  modelo = null,
-  limite = 180,
-} = {}) {
-  const sorteio = normalizarRandom(random);
-  const feminino = normalizarGenero(genero);
-  const nome = String(alvo ?? '').trim().replace(/\s+/gu, ' ').slice(0, 56) || 'fulano';
-
-  const entradas = tipo
-    ? XINGAMENTOS.filter(item => item.tipos.includes(tipo))
-    : XINGAMENTOS;
-  if (!entradas.length) throw new RangeError(`tipo de xingamento desconhecido: ${tipo}`);
-
-  const modeloPedido = modelo == null ? null : String(modelo);
-  if (modeloPedido && !MODELOS.includes(modeloPedido)) {
-    throw new RangeError(`modelo de xingamento desconhecido: ${modelo}`);
-  }
-  let escolhido = modeloPedido || escolhe(MODELOS, sorteio);
+// Monta o texto a partir de uma lista já filtrada. Mantém o mesmo sorteio
+// para xingamento comum e para ofensa de categoria preconceituosa.
+function montarXingamento({nome, feminino, entradas, escolhido, chance, sorteio, limite, pixacao, categoriaTipo = null}) {
   const entradaEscolhida = escolhe(entradas, sorteio);
   const insulto = feminino ? entradaEscolhida.f : entradaEscolhida.m;
   const generoArtigo = entradaEscolhida.generoFixo || (feminino ? 'f' : 'm');
   const artigo = generoArtigo === 'f' ? 'uma' : 'um';
   const possessivo = generoArtigo === 'f' ? 'sua' : 'seu';
 
-  const chance = Number.isFinite(intensidade) ? Math.max(0, Math.min(1, intensidade)) : 0.35;
   const podeIntensificar = escolhido !== 'predicado' && sorteio() < chance;
   const intensificador = podeIntensificar ? escolhe(INTENSIFICADORES, sorteio) : '';
   const sufixo = intensificador ? ` ${intensificador}` : '';
@@ -376,18 +355,107 @@ export function gerarXingamentoDetalhado({
     alvo: nome,
     genero: feminino ? 'f' : 'm',
     modelo: escolhido,
-    tipo: entradaEscolhida.tipos[0] ?? null,
+    tipo: entradaEscolhida.tipos?.[0] ?? categoriaTipo,
+    categoria: categoriaTipo,
     insulto,
     intensificador: intensificador || null,
   };
+}
+
+// Versão detalhada: devolve o texto e as escolhas feitas. O gerador é
+// determinístico quando recebe `random`; não lê relógio, rede ou estado global.
+export function gerarXingamentoDetalhado({
+  alvo = 'fulano',
+  genero = 'm',
+  tipo = null,
+  intensidade = 0.35,
+  random = Math.random,
+  pixacao = false,
+  modelo = null,
+  limite = 180,
+} = {}) {
+  const entradas = tipo
+    ? XINGAMENTOS.filter(item => item.tipos.includes(tipo))
+    : XINGAMENTOS;
+  if (!entradas.length) throw new RangeError(`tipo de xingamento desconhecido: ${tipo}`);
+
+  const modeloPedido = modelo == null ? null : String(modelo);
+  if (modeloPedido && !MODELOS.includes(modeloPedido)) {
+    throw new RangeError(`modelo de xingamento desconhecido: ${modelo}`);
+  }
+
+  const sorteio = normalizarRandom(random);
+  const feminino = normalizarGenero(genero);
+  const nome = String(alvo ?? '').trim().replace(/\s+/gu, ' ').slice(0, 56) || 'fulano';
+  const chance = Number.isFinite(intensidade) ? Math.max(0, Math.min(1, intensidade)) : 0.35;
+  return montarXingamento({
+    nome,
+    feminino,
+    entradas,
+    escolhido: modeloPedido || escolhe(MODELOS, sorteio),
+    chance,
+    sorteio,
+    limite,
+    pixacao,
+  });
 }
 
 export function gerarXingamento(opcoes = {}) {
   return gerarXingamentoDetalhado(opcoes).texto;
 }
 
-// O texto de ódio não é criado aqui. A função só valida a categoria e permite
-// que um texto fornecido por outro sistema seja marcado para o crime correto.
+// Ofensas preconceituosas vêm do cadastro manual em xingamentos_preconceito.js.
+// Sem entrada cadastrada, a categoria falha em vez de inventar conteúdo.
+export function gerarOfensaPreconceitoDetalhado({
+  tipo = null,
+  alvo = 'fulano',
+  genero = 'm',
+  intensidade = 0.35,
+  random = Math.random,
+  pixacao = false,
+  modelo = null,
+  limite = 180,
+} = {}) {
+  if (!Object.prototype.hasOwnProperty.call(PREJUDICE_CRIME_TYPES, tipo)) {
+    throw new RangeError(`categoria de preconceito desconhecida: ${tipo}`);
+  }
+  const entradas = ofensasDaCategoria(tipo).map(item => ({
+    id: item.id,
+    m: item.m,
+    f: item.f,
+    tipos: Object.freeze([]),
+    generoFixo: null,
+  }));
+  if (!entradas.length) throw new Error(`sem ofensas cadastradas para ${tipo}`);
+
+  const modeloPedido = modelo == null ? null : String(modelo);
+  if (modeloPedido && !MODELOS_PRECONCEITO.includes(modeloPedido)) {
+    throw new RangeError(`modelo de xingamento desconhecido: ${modelo}`);
+  }
+
+  const sorteio = normalizarRandom(random);
+  const feminino = normalizarGenero(genero);
+  const nome = String(alvo ?? '').trim().replace(/\s+/gu, ' ').slice(0, 56) || 'fulano';
+  const chance = Number.isFinite(intensidade) ? Math.max(0, Math.min(1, intensidade)) : 0.35;
+  return montarXingamento({
+    nome,
+    feminino,
+    entradas,
+    escolhido: modeloPedido || escolhe(MODELOS_PRECONCEITO, sorteio),
+    chance,
+    sorteio,
+    limite,
+    pixacao,
+    categoriaTipo: tipo,
+  });
+}
+
+export function gerarOfensaPreconceito(opcoes = {}) {
+  return gerarOfensaPreconceitoDetalhado(opcoes).texto;
+}
+
+// Valida a categoria e devolve o rótulo do crime correspondente. O conteúdo
+// ofensivo vem do cadastro manual em xingamentos_preconceito.js.
 export function crimeDeOdio(categoria) {
   return Object.prototype.hasOwnProperty.call(PREJUDICE_CRIME_TYPES, categoria)
     ? PREJUDICE_CRIME_TYPES[categoria]

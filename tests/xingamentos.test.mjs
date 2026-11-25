@@ -4,12 +4,20 @@ import {
   XINGAMENTOS,
   INTENSIFICADORES,
   MODELOS,
+  MODELOS_PRECONCEITO,
   CATEGORIAS_DE_ODIO,
   gerarXingamento,
   gerarXingamentoDetalhado,
+  gerarOfensaPreconceito,
+  gerarOfensaPreconceitoDetalhado,
   limitarXingamento,
   crimeDeOdio,
 } from '../js/xingamentos.js';
+import {
+  OFENSAS_POR_PRECONCEITO,
+  registrarOfensaPreconceito,
+  removerOfensaPreconceito,
+} from '../js/xingamentos_preconceito.js';
 import {graffitiContent, graffitiMessage, graffitiDeOdio} from '../js/city_graffiti_text.js';
 
 const zero = () => 0;
@@ -18,6 +26,12 @@ const sorteioDaEntrada = (id, tipo) => {
   const indice = entradas.findIndex(item => item.id === id);
   assert(indice >= 0, id);
   return (indice + 0.5) / entradas.length;
+};
+// Os testes não dependem de o usuário já ter cadastrado termos: a categoria é
+// esvaziada só no processo de teste e restaurada no finally.
+const comCategoriaVazia = (tipo, fn) => {
+  const lista = OFENSAS_POR_PRECONCEITO[tipo], salvas = lista.splice(0, lista.length);
+  try { return fn(lista); } finally { lista.push(...salvas); }
 };
 
 test('xingamento is deterministic and respects the requested model', () => {
@@ -85,6 +99,62 @@ test('triple and interrogative models keep agreement and punctuation', () => {
   assert.equal(gerarXingamento({alvo: 'Fulano', tipo: 'conduta', modelo: 'triplo', intensidade: 0, random: zero}), 'Fulano, ladrão, corrupto e bandido');
   assert.equal(gerarXingamento({alvo: 'Fulano', tipo: 'conduta', modelo: 'interrogacao', intensidade: 0, random: zero}), 'Fulano, ladrão?');
   assert.equal(gerarXingamento({alvo: 'Fulano', tipo: 'conduta', modelo: 'sigla', intensidade: 0, random: zero}), 'Fulano = ladrão');
+});
+
+test('prejudice registry has a list for every category', () => {
+  assert.deepEqual(Object.keys(OFENSAS_POR_PRECONCEITO).sort(), [...CATEGORIAS_DE_ODIO].sort());
+  for (const tipo of CATEGORIAS_DE_ODIO) assert(Array.isArray(OFENSAS_POR_PRECONCEITO[tipo]), tipo);
+  assert(!MODELOS_PRECONCEITO.includes('predicado'));
+});
+
+test('category without entries fails instead of inventing text', () => {
+  comCategoriaVazia('racismo', () => {
+    assert.throws(() => gerarOfensaPreconceito({tipo: 'racismo'}), /sem ofensas cadastradas/);
+  });
+});
+
+test('entries added directly to the list are normalized', () => {
+  comCategoriaVazia('racismo', lista => {
+    lista.push({m: 'direto'});
+    try {
+      assert.equal(gerarOfensaPreconceito({tipo: 'racismo', alvo: 'Fulano', modelo: 'seco', intensidade: 0, random: zero}), 'Fulano direto');
+      assert.equal(gerarOfensaPreconceito({tipo: 'racismo', alvo: 'Fulana', genero: 'f', modelo: 'seco', intensidade: 0, random: zero}), 'Fulana direto');
+    } finally {
+      lista.pop();
+    }
+  });
+});
+
+test('manual prejudice entries generate deterministic text and can be removed', () => {
+  comCategoriaVazia('racismo', () => {
+    const entrada = registrarOfensaPreconceito('racismo', {id: 'teste-preconceito', m: 'enganador', f: 'enganadora'});
+    try {
+      assert.equal(gerarOfensaPreconceito({tipo: 'racismo', alvo: 'Fulano', modelo: 'e', intensidade: 0, random: zero}), 'Fulano é um enganador');
+      assert.equal(gerarOfensaPreconceito({tipo: 'racismo', alvo: 'Fulana', genero: 'f', modelo: 'e', intensidade: 0, random: zero}), 'Fulana é uma enganadora');
+      assert.equal(gerarOfensaPreconceito({tipo: 'racismo', alvo: 'Fulano', modelo: 'seco', intensidade: 1, random: zero}), 'Fulano enganador do caralho');
+      assert.equal(gerarOfensaPreconceitoDetalhado({tipo: 'racismo', alvo: 'Fulano', modelo: 'seco', intensidade: 0, random: zero}).categoria, 'racismo');
+      assert.throws(() => gerarOfensaPreconceito({tipo: 'racismo', modelo: 'predicado'}), RangeError);
+      assert.equal(graffitiDeOdio({prejudiceType: 'racismo', alvo: 'Fulano', modelo: 'seco', intensidade: 0, random: zero}).message, 'Fulano enganador');
+    } finally {
+      assert(removerOfensaPreconceito('racismo', entrada.id));
+    }
+    assert.equal(OFENSAS_POR_PRECONCEITO.racismo.length, 0);
+    assert.throws(() => gerarOfensaPreconceito({tipo: 'racismo'}), /sem ofensas cadastradas/);
+  });
+});
+
+test('manual registry rejects unknown categories, empty forms and duplicates', () => {
+  assert.throws(() => registrarOfensaPreconceito('inventado', {m: 'x'}), RangeError);
+  comCategoriaVazia('racismo', () => {
+    assert.throws(() => registrarOfensaPreconceito('racismo', {id: 'vazio'}), TypeError);
+    const entrada = registrarOfensaPreconceito('racismo', {id: 'curta', m: 'curta'});
+    try {
+      assert.throws(() => registrarOfensaPreconceito('racismo', {id: 'curta', m: 'outra'}), RangeError);
+    } finally {
+      removerOfensaPreconceito('racismo', 'curta');
+    }
+    assert.equal(entrada.f, 'curta');
+  });
 });
 
 test('hate crime mapping only accepts known prejudice categories', () => {

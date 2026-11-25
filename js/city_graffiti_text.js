@@ -1,5 +1,5 @@
 import {gerarFraseTematica} from './gerador_frases.js';
-import {gerarXingamento, crimeDeOdio} from './xingamentos.js';
+import {gerarXingamento, gerarOfensaPreconceito, crimeDeOdio} from './xingamentos.js';
 
 function politicalGraffiti(city,c){
   const politics=city.politics;if(!politics)return null;
@@ -26,10 +26,18 @@ function politicalGraffiti(city,c){
   return null;
 }
 
-export function graffitiDeOdio({message, prejudiceType}) {
+export function graffitiDeOdio({message = null, prejudiceType, alvo = 'fulano', genero = 'm', intensidade = 0.35, random = null, pixacao = false, modelo = null}) {
   const crimeLabel = crimeDeOdio(prejudiceType);
   if (!crimeLabel) throw new RangeError(`categoria de ódio desconhecida: ${prejudiceType}`);
-  const texto = String(message ?? '').replace(/\s+/gu, ' ').trim().slice(0, 180);
+  let texto = String(message ?? '').replace(/\s+/gu, ' ').trim().slice(0, 180);
+  if (!texto) {
+    const sorteio = typeof random === 'function' ? random : Math.random;
+    try {
+      texto = gerarOfensaPreconceito({tipo: prejudiceType, alvo, genero, intensidade, random: sorteio, pixacao, modelo});
+    } catch (error) {
+      throw new Error(`pichação de ódio (${prejudiceType}) sem texto: ${error.message}`);
+    }
+  }
   if (!texto) throw new Error('a pichação de ódio precisa de um texto');
   return {message: texto, prejudiceType, crimeLabel};
 }
@@ -40,7 +48,7 @@ export function xingamentoGraffiti(city, c, {targetName = null, genero = 'm', ti
 }
 
 export function graffitiContent(city,c,{protest=false,targetName=null,xingamento=false,genero='m',tipo=null,intensidade=.35,pixacao=false,modelo=null,message=null,prejudiceType=null}={}){
-  if (prejudiceType) return graffitiDeOdio({message, prejudiceType});
+  if (prejudiceType) return graffitiDeOdio({message, prejudiceType, alvo: targetName || c?.entity?.properties?.name, genero, intensidade, pixacao, modelo, random: () => city.random()});
   if (message) {
     const texto=String(message).replace(/\s+/gu,' ').trim().slice(0,180);
     if (!texto) throw new Error('mensagem de pichação vazia');

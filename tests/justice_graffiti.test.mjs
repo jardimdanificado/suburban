@@ -205,11 +205,26 @@ test('political graffiti carries its named target, party and known scandal throu
 
 test('hateful graffiti records the prejudice crime alongside the graffiti case',()=>{
   const {city,justice}=fixture(),calls=[];
-  justice.crimeRecord=(type,offenderId,victimId,details)=>{calls.push({type,offenderId,victimId,details});return {id:100+calls.length};};
+  justice.crimeRecord=(type,offenderId,victimId,details)=>{const record={id:101+calls.length,evidence:[],details:{}};justice.cases.push(record);calls.push({type,offenderId,victimId,details});return record;};
   const layer=justice.defaceArtwork(1,1,'texto',{prejudiceType:'racismo'});
   assert.equal(layer.caseId,101);assert.equal(layer.hateCaseId,102);
   assert.equal(justice.art[0].prejudiceType,'racismo');assert.equal(justice.art[0].hateCaseId,102);
-  assert(calls.some(call=>call.type==='racismo'&&call.details.discriminatoryAct===true&&call.details.prejudiceType==='racismo'));
+  assert.equal(justice.caseRecord(101).details.hateCaseId,102);assert.equal(justice.caseRecord(101).details.prejudiceType,'racismo');
+  assert(justice.caseRecord(101).evidence.some(item=>item.kind==='hate-graffiti'&&item.artId===1&&item.graffitiCaseId===101));
+  assert(justice.caseRecord(102).evidence.some(item=>item.kind==='hate-graffiti'&&item.artId===1&&item.graffitiCaseId===101));
+  assert(calls.some(call=>call.type==='racismo'&&call.details.discriminatoryAct===true&&call.details.prejudiceType==='racismo'&&call.details.graffitiCaseId===101));
+});
+
+test('targeted hate graffiti enters the prejudice incident flow',()=>{
+  const {city,justice,citizen,piece}=fixture(),calls=[];
+  piece.subjectId=citizen.id;
+  justice.recordPrejudiceAct=(actor,target,type,strength,witnessIds,options)=>{calls.push({actor,target,type,strength,witnessIds,options});return {id:5,crimeCaseId:77};};
+  justice.cases.push({id:77,evidence:[],details:{}});
+  const record=justice.recordHateGraffiti(piece,citizen,{prejudiceType:'racismo',message:'texto'});
+  assert.equal(record.id,77);assert.equal(piece.hateCaseId,77);assert.equal(piece.hateIncidentId,5);
+  assert.equal(calls.length,1);assert.equal(calls[0].target,citizen);assert.equal(calls[0].type,'racismo');
+  assert.equal(calls[0].options.ignoreCooldown,true);assert.equal(calls[0].options.evidence.kind,'hate-graffiti');
+  assert(record.evidence.some(item=>item.kind==='hate-graffiti'&&item.artId===1));
 });
 
 test('a blocked approach does not destroy paint while its physical wall remains',()=>{
