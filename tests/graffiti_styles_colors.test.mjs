@@ -285,3 +285,56 @@ test('walking across ground graffiti smudges the paint and leaves colored footpr
   assert.ok(paintFootprints.length >= 1, 'shoes carry graffiti paint onto adjacent ground');
   assert.ok(paintFootprints.every(s => s.paintColor === 0x33ddff && s.paintLoad > 0));
 });
+
+test('long street graffiti messages condense to large uppercase text legible at 50% scale', () => {
+  const originalDocument = globalThis.document;
+  const drawnTexts = [];
+  const drawnFonts = [];
+  globalThis.document = {
+    createElement: () => {
+      const canvas = makeFakeCanvas(drawnFonts);
+      const ctx = canvas.getContext('2d');
+      const origFillText = ctx.fillText.bind(ctx);
+      ctx.fillText = (text, ...rest) => {
+        drawnTexts.push(String(text));
+        origFillText(text, ...rest);
+      };
+      return canvas;
+    }
+  };
+  try {
+    const building = { id: 3, width: 2, depth: 2, architecture: 'hacienda', entity: { x: 4, y: 4, destroyed: false }, terrain: { base: 0 }, floors: 1 };
+    const world = { width: 16, height: 16, revision: 0, getTile: () => 0 };
+    const pieces = GRAFFITI_STYLES.map((style, index) => ({
+      id: 100 + index,
+      kind: 'graffiti',
+      graffitiStyle: style,
+      message: 'A cidade precisa de mais moradia digna e saúde · Prefeito Fulano: corrupto · PTB 14',
+      color: 0xffffff,
+      entity: { x: 4.5, y: 3.9, destroyed: false },
+      support: {
+        kind: 'street-graffiti',
+        surface: 'wall',
+        buildingId: 3,
+        side: 0,
+        position: { x: 4.5, y: 3.975, z: 0.25 },
+        width: 1.72,
+        height: 0.42,
+        rotation: 0
+      },
+      layers: []
+    }));
+    const city = { world, buildings: [building], justice: { art: pieces }, building: () => building };
+    const renderer = { scene: { add() {}, remove() {} }, renderedMinTx: 0, renderedMaxTx: 16, renderedMinTy: 0, renderedMaxTy: 16 };
+    syncUrbanArt(renderer, THREE, city, world);
+    assert.ok(drawnTexts.length >= GRAFFITI_STYLES.length);
+    for (const text of drawnTexts) {
+      assert.equal(text, text.toUpperCase(), `expected uppercase wall text, got "${text}"`);
+    }
+    const sizes = drawnFonts.map(f => Number.parseFloat(/([\d.]+)px/.exec(f)?.[1] || '0'));
+    assert.ok(sizes.every(s => s >= 38), `expected large font sizes >= 38px, got min ${Math.min(...sizes)}`);
+  } finally {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+});

@@ -711,8 +711,8 @@ export class CitySimulation {
     if (!spec) return this.fail('Tipo de prédio inválido.');
     if (!['open-air', 'building'].includes(kind) || (kind === 'open-air' && !['farm', 'quarry','iron_mine','bauxite_mine', 'park', 'bike_rack', 'leisure', 'greengrocer','cattle_ranch','dairy_farm','sheep_farm','pig_farm','poultry','hay_farm'].includes(type))) return this.fail('Tipo de ocupação incompatível com esta construção.');
     if(type==='farm'&&kind==='building'&&!canFarmVertically(crop))return this.fail('Fazendas verticais não aceitam árvores ou palmeiras. Escolha uma cultura de pequeno porte.');
-    width ??= type === 'farm' && kind==='open-air' ? 10 : ['cattle_ranch','dairy_farm','sheep_farm','pig_farm','poultry','hay_farm'].includes(type) ? 7 : 3 + Math.floor(this.random() * 3);
-    depth ??= type === 'farm' && kind==='open-air' ? 10 : ['cattle_ranch','dairy_farm','sheep_farm','pig_farm','poultry','hay_farm'].includes(type) ? 7 : 3 + Math.floor(this.random() * 2);
+    width ??= type === 'farm' && kind==='open-air' ? 10 : ['cattle_ranch','dairy_farm','sheep_farm','hay_farm'].includes(type) ? 10 : ['pig_farm','poultry'].includes(type) ? 8 : 3 + Math.floor(this.random() * 3);
+    depth ??= type === 'farm' && kind==='open-air' ? 10 : ['cattle_ranch','dairy_farm','sheep_farm','hay_farm'].includes(type) ? 10 : ['pig_farm','poultry'].includes(type) ? 8 : 3 + Math.floor(this.random() * 2);
     floors ??= 2 + Math.floor(this.random() * 4);
     if (![x, y, width, depth, floors].every(Number.isInteger) || width < 1 || depth < 1 || width*depth<MIN_PLOT_CELLS || floors < 1 || width > 20 || depth > 20 || (kind === 'building' && width*depth > 64) || floors > 12) return this.fail('Área mínima de 4 células (2×2, 4×1 ou 1×4). Limites: lados de até 20 células, 64 células por andar em edifícios, 20×20 ao ar livre e 12 andares.');
     if (kind === 'open-air') floors = 1;

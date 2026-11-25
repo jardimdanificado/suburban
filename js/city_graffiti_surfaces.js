@@ -113,9 +113,8 @@ export function nearbyGraffitiSurfaces(city,c,radius=4){
       }
     }
   }
-  // Prefer walls and retaining faces; ground remains a valid independent target.
-  // Matching wide walls outrank single tiles at a comparable walking distance.
-  const rank=s=>Math.hypot(s.approach.x-c.entity.x,s.approach.y-c.entity.y)+(s.surface==='wall'&&(s.width||0)<=WALL_TILE_WIDTH+.001?WIDE_WALL_PREFERENCE:0);
+  // Prefer full-height wide walls; deprioritize low below-window strips and single tiles.
+  const rank=s=>Math.hypot(s.approach.x-c.entity.x,s.approach.y-c.entity.y)+(s.surface==='wall'&&(s.width||0)<=WALL_TILE_WIDTH+.001?WIDE_WALL_PREFERENCE:0)+(s.surface==='wall'&&(s.height||1)<1?2.5:0);
   return candidates.sort((a,b)=>Number(a.surface==='ground')-Number(b.surface==='ground')||rank(a)-rank(b));
 }
 

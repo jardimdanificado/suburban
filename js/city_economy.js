@@ -429,7 +429,8 @@ export class CityEconomy {
   }
   locateBuilding(type) {
     const city = this.city, center = city.world.spawnCenter;
-    const width = type === 'farm' ? 10 : 3, depth = type === 'farm' ? 10 : 3, floors = type === 'farm' ? 1 : 2;
+    const isLargePasture = ['cattle_ranch','dairy_farm','sheep_farm','hay_farm'].includes(type), isSmallPasture = ['pig_farm','poultry'].includes(type);
+    const width = type === 'farm' || isLargePasture ? 10 : isSmallPasture ? 8 : 3, depth = type === 'farm' || isLargePasture ? 10 : isSmallPasture ? 8 : 3, floors = (type === 'farm' || isLargePasture || isSmallPasture) ? 1 : 2;
     const candidates = [];
     for (let radius = 8; radius <= 48; radius += 3) {
       for (let i = 0; i < 24; i++) {
@@ -438,10 +439,10 @@ export class CityEconomy {
         if (inspectBuildingSite(city, x, y, width, depth, { type }).error) continue;
         if (['quarry','iron_mine','bauxite_mine'].includes(type) && city.world.map && !quarryDeposits(city.world, x, y, width, depth).length) continue;
         if (city.citizens.some(c => c.entity.x >= x && c.entity.x < x + width && c.entity.y >= y && c.entity.y < y + depth)) continue;
-        if (type === 'farm') {
+        if (type === 'farm' || isLargePasture || isSmallPasture) {
           let fertile = 0;
           for (let yy = y; yy < y + depth; yy++) for (let xx = x; xx < x + width; xx++) if ([0, 9].includes(tileAt(city.world, xx, yy))) fertile++;
-          if (fertile < width * depth * .75) continue;
+          if (fertile < width * depth * (type === 'farm' ? .75 : .65)) continue;
         }
         if(type==='fishery'&&!fishingSiteNearby(city,{x:x+width/2,y:y+depth/2}))continue;
         candidates.push({ x, y, width, depth, floors });

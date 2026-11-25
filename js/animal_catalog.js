@@ -225,6 +225,18 @@ export const ANIMAL_SPECIES = Object.freeze({
 });
 
 const MOUNT_SPECIES = { cavalo: 2.25, boi: 1.55, vaca: 1.45, anta: 1.6, ema: 1.9 };
+const ANIMAL_SCALES = {
+  cavalo: 1.45, boi: 1.42, vaca: 1.32, anta: 1.22, ema: 1.15,
+  onca: 1.12, veado: 1.12, jacare: 1.15, lobo_guara: 1.05, tamandua: 0.98,
+  ovelha: 0.92, cabra: 0.92, javali: 0.92, porco: 0.88, capivara: 0.88,
+  garca: 0.95, colhereiro: 0.88, guara: 0.82, urubu: 0.8, gaviao: 0.72,
+  iguana: 0.72, quati: 0.68, macaco: 0.68, preguica: 0.68, coruja: 0.65,
+  arara: 0.65, tucano: 0.62, papagaio: 0.62, galinha: 0.6, pato: 0.6,
+  tatu: 0.58, mico_leao: 0.56, coelho: 0.54, pica_pau: 0.55, martim_pescador: 0.54,
+  pombo: 0.54, periquito: 0.52, sagui: 0.5, bem_te_vi: 0.5, sabia: 0.5,
+  cardeal: 0.48, sanhaco: 0.48, tie_sangue: 0.48, joao_de_barro: 0.48,
+  canario: 0.46, rolinha: 0.46, andorinha: 0.44, beija_flor: 0.42,
+};
 const ANIMAL_PRICES = {
   cavalo: 18000, boi: 14000, vaca: 12000, anta: 11000, ema: 8500,
   onca: 16000, lobo_guara: 12500, arara: 9500, tucano: 7500, jacare: 9000,
@@ -237,6 +249,7 @@ for (const [id, spec] of Object.entries(ANIMAL_SPECIES)) {
   spec.role = MOUNT_SPECIES[id] ? 'mount' : 'companion';
   spec.mountSpeed = MOUNT_SPECIES[id] || 0;
   spec.marketPrice = ANIMAL_PRICES[id] || 4000;
+  if (ANIMAL_SCALES[id]) spec.size = ANIMAL_SCALES[id];
 }
 
 export const ANIMAL_CLIPS = Object.freeze({

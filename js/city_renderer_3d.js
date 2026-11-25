@@ -460,170 +460,143 @@ function applyFootSmudges(ctx,w,h,smudges,seed){
   ctx.putImageData(img,0,0);
 }
 
-function drawOutlinedPixelText(ctx,text,x,y,maxWidth,inkHex,outlineHex,{shadow=false}={}){
-  const value=String(text),fontSize=Number.parseFloat(/([\d.]+)px/.exec(ctx.font)?.[1]||'16');
-  const radius=fontSize>=44?2:1,pad=radius+(shadow?3:0)+2;
-  const width=Math.max(1,Math.ceil(Math.min((maxWidth??ctx.measureText(value).width)+pad*2,ctx.canvas.width)));
-  const height=Math.max(1,Math.ceil(fontSize*1.8+pad*2));
-  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
-  const mask=canvas.getContext('2d');mask.font=ctx.font;mask.textAlign='center';mask.textBaseline='middle';mask.direction=ctx.direction;mask.fillStyle='#fff';
-  mask.fillText(value,width/2-(shadow?1:0),height/2-(shadow?1:0),maxWidth);
-  const pixels=mask.getImageData(0,0,width,height),data=pixels.data;
-  const ink=parseHexInt(inkHex,0xffffff),out=parseHexInt(outlineHex,0x141418);
-  const ir=ink>>16&255,ig=ink>>8&255,ib=ink&255;
-  const or=out>>16&255,og=out>>8&255,ob=out&255;
-  const solid=new Uint8Array(width*height);
-  for(let i=0;i<solid.length;i++)if(data[i*4+3]>=144)solid[i]=1;
-  const outBuf=new Uint8ClampedArray(data.length);
-  if(shadow){
-    const sOff=radius+1;
-    for(let py=0;py<height-sOff;py++)for(let px=0;px<width-sOff;px++)if(solid[py*width+px]){
-      const idx=((py+sOff)*width+(px+sOff))*4;
-      outBuf[idx]=or;outBuf[idx+1]=og;outBuf[idx+2]=ob;outBuf[idx+3]=255;
-    }
+const GRAFFITI_STOPWORDS=new Set(['a','o','as','os','um','uma','uns','umas','de','da','do','das','dos','em','na','no','nas','nos','para','pra','por','com','sem','que','e','é','se','ao','aos','à','às','mais','menos','muito','muita']);
+
+function condenseGraffitiWallText(rawText,maxChars=12){
+  const text=String(rawText||'').trim();
+  if(!text)return '';
+  const segments=text.split(/\s+·\s+/).map(s=>s.trim()).filter(Boolean);
+  let source=segments[0];
+  if(segments.length>=2){
+    const afterColon=segments[1].includes(':')?segments[1].split(':').pop().trim():segments[1];
+    source=afterColon.length<=maxChars?afterColon:segments[2]&&segments[2].length<=maxChars?segments[2]:afterColon;
   }
-  const r2=radius*radius;
-  for(let py=0;py<height;py++)for(let px=0;px<width;px++){
-    const p=py*width+px,idx=p*4;
-    if(solid[p]){outBuf[idx]=ir;outBuf[idx+1]=ig;outBuf[idx+2]=ib;outBuf[idx+3]=255;continue;}
-    let near=false;
-    for(let dy=-radius;dy<=radius&&!near;dy++){
-      const ny=py+dy;if(ny<0||ny>=height)continue;
-      for(let dx=-radius;dx<=radius;dx++){
-        if(dx*dx+dy*dy>r2)continue;
-        const nx=px+dx;if(nx>=0&&nx<width&&solid[ny*width+nx]){near=true;break;}
-      }
-    }
-    if(near){outBuf[idx]=or;outBuf[idx+1]=og;outBuf[idx+2]=ob;outBuf[idx+3]=255;}
+  if(source.length<=maxChars)return source;
+  const rawWords=source.replace(/[.,;:]+/g,' ').split(/\s+/).filter(Boolean);
+  const meaningful=rawWords.filter(w=>!GRAFFITI_STOPWORDS.has(w.toLowerCase()));
+  const pool=meaningful.length?meaningful:rawWords;
+  let out='';
+  for(const w of pool){
+    const next=out?`${out} ${w}`:w;
+    if(next.length>maxChars)break;
+    out=next;
   }
-  pixels.data.set(outBuf);
-  mask.putImageData(pixels,0,0);
-  ctx.save();ctx.imageSmoothingEnabled=false;ctx.drawImage(canvas,x-width/2,y-height/2);ctx.restore();
+  return out||pool[0].slice(0,maxChars);
 }
 
 function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
   const style=resolveGraffitiStyle(piece,face);
   const seed=((piece?.id||1)*2654435761+(face?.id||0)*977)>>>0;
   const inkHex=`#${inkColor.toString(16).padStart(6,'0')}`;
-  const inkLum=srgbLuminance(inkColor);
-  const outlineHex=inkLum>.35?'#141418':'#ffffff';
-  const rawText=String(face.message||'');
-  const tokens=injectGraffitiSymbols(rawText,piece,seed);
+  const support=piece?.support;
+  const sw=support?.width||1,sh=support?.height||1;
+  const physAspect=Math.max(.55,Math.min(3.2,sw/sh));
+  const wideLow=physAspect>1.5;
+  const maxChars=wideLow?8:sw>1.2?14:10;
+  const wallText=condenseGraffitiWallText(face.message||'',maxChars);
+  const tokens=wallText.split(/\s+/).filter(Boolean);
   const fontSpec=(size,idx=0)=>{
-    if(style==='pixo')return `900 ${size}px "VT323", "JetBrains Mono", monospace`;
-    if(style==='tag')return `italic 900 ${size}px Georgia, "Times New Roman", serif`;
+    if(style==='pixo')return `900 ${size}px Impact, "Arial Black", sans-serif`;
+    if(style==='tag')return `italic 900 ${size}px "Arial Black", Impact, sans-serif`;
     if(style==='stencil')return `900 ${size}px Impact, "Arial Black", sans-serif`;
     if(style==='bomb')return `900 ${size}px "Arial Black", Impact, sans-serif`;
-    if(style==='bubble')return `900 ${size}px "Press Start 2P", "Arial Black", sans-serif`;
-    if(style==='spray')return `700 ${size}px "JetBrains Mono", monospace`;
-    if(style==='rasurada')return `${idx%2?'italic ':''}900 ${size}px Georgia, sans-serif`;
+    if(style==='bubble')return `900 ${size}px "Arial Black", "Press Start 2P", sans-serif`;
+    if(style==='spray')return `900 ${size}px "Arial Black", "JetBrains Mono", sans-serif`;
+    if(style==='rasurada')return `${idx%2?'italic ':''}900 ${size}px "Arial Black", sans-serif`;
     if(style==='irregular')return `${idx%2?'italic ':''}900 ${size}px ${GRAFFITI_MIXED_FONTS[idx%GRAFFITI_MIXED_FONTS.length]}`;
-    return `900 ${size}px sans-serif`;
+    return `900 ${size}px "Arial Black", sans-serif`;
   };
-  let lines=[],baseSize=44;
-  const maxW=style==='pixo'?185:style==='bomb'||style==='irregular'?205:226;
-  for(let size=84;size>=16;size-=4){
+  const styleScaleX=wideLow?1:(style==='pixo'?.92:style==='bomb'?1.06:1);
+  const styleScaleY=wideLow?Math.min(1.85,Math.sqrt(physAspect)):(style==='pixo'?1.18:1);
+  const maxLines=wideLow?1:2;
+  let lines=[],baseSize=72;
+  const maxW=242,maxH=234;
+  for(let size=132;size>=44;size-=4){
     ctx.font=fontSpec(size,0);lines=[];let cur=[];let curW=0;
     for(const tok of tokens){
-      const isSym=tok.startsWith('[')&&tok.endsWith(']');
-      const label=(style==='pixo'||style==='stencil'||style==='bomb')&&!isSym?tok.toUpperCase():tok;
-      const w=isSym?size*1.1:ctx.measureText(label).width*(style==='pixo'?.72:style==='bomb'?1.12:1);
-      const gap=cur.length?size*.28:0;
-      if(cur.length&&curW+gap+w>maxW){lines.push(cur);cur=[label];curW=w;}
+      const label=tok.toUpperCase();
+      const w=ctx.measureText(label).width*styleScaleX;
+      const gap=cur.length?size*.18*styleScaleX:0;
+      if(cur.length&&curW+gap+w>maxW&&lines.length+1<maxLines){lines.push(cur);cur=[label];curW=w;}
       else{cur.push(label);curW+=gap+w;}
     }
     if(cur.length)lines.push(cur);
     baseSize=size;
-    if(lines.length*size<=212)break;
+    if(lines.length*size*styleScaleY<=maxH&&lines.length<=maxLines)break;
   }
-  const lineHeight=Math.min(220/Math.max(1,lines.length),90);
+  const lineHeight=Math.min(228/Math.max(1,lines.length),Math.max(54,baseSize*styleScaleY*1.02));
   ctx.save();
   if(style==='tag'||style==='pixo'||style==='bomb'){
-    const tilt=(graffitiHash(seed,3)-.5)*(style==='tag'?.22:style==='bomb'?.14:.12);
+    const tilt=(graffitiHash(seed,3)-.5)*(style==='tag'?.14:style==='bomb'?.1:.08);
     ctx.translate(128,128);ctx.rotate(tilt);ctx.translate(-128,-128);
   }
   if(style==='spray'){
     ctx.fillStyle=inkHex;
-    for(let i=0;i<36;i++){
-      const sx=18+graffitiHash(seed,100+i)*220,sy=20+graffitiHash(seed,200+i)*216,sz=1+Math.floor(graffitiHash(seed,300+i)*3);
+    for(let i=0;i<18;i++){
+      const sx=18+graffitiHash(seed,100+i)*220,sy=20+graffitiHash(seed,200+i)*216,sz=3+Math.floor(graffitiHash(seed,300+i)*3);
       ctx.fillRect(Math.round(sx),Math.round(sy),sz,sz);
     }
   }
   const drawWordOrChar=(tok,gx,gy,size,idx,scaleX=1,scaleY=1,rot=0)=>{
-    if(tok.startsWith('[')&&tok.endsWith(']')){drawInlineGraffitiSymbol(ctx,tok,gx,gy,size,inkHex,outlineHex,piece,seed);return;}
     ctx.save();ctx.translate(gx,gy);if(rot)ctx.rotate(rot);if(scaleX!==1||scaleY!==1)ctx.scale?.(scaleX,scaleY);
     ctx.font=fontSpec(size,idx);ctx.textAlign='center';ctx.textBaseline='middle';
-    if(style==='bomb'){
-      drawOutlinedPixelText(ctx,tok,0,0,240,inkHex,outlineHex,{shadow:true});
-    }else if(style==='bubble'){
-      drawOutlinedPixelText(ctx,tok,0,0,240,inkHex,outlineHex,{shadow:false});
-    }else{
-      ctx.fillStyle=inkHex;drawPixelText(ctx,tok,0,0,240);
-    }
+    ctx.fillStyle=inkHex;drawPixelText(ctx,tok,0,0,246);
     ctx.restore();
   };
   lines.forEach((lineTokens,lineIdx)=>{
     const cy=128+(lineIdx-(lines.length-1)/2)*lineHeight;
-    const lineSize=style==='stacked'?Math.max(14,Math.min(88,Math.round(baseSize*(lineIdx%2===0?1.2:.76)))):baseSize;
+    const lineSize=style==='stacked'?Math.max(44,Math.min(124,Math.round(baseSize*(lineIdx%2===0?1.12:.88)))):baseSize;
     if(style==='irregular'||style==='pixo'||style==='rasurada'){
       const items=[];let totalW=0;
       for(let t=0;t<lineTokens.length;t++){
         const tok=lineTokens[t];
-        if(tok.startsWith('[')&&tok.endsWith(']')){const w=lineSize*1.05;items.push({tok,w,size:lineSize,isSym:true});totalW+=w+(t?lineSize*.2:0);continue;}
-        if(t>0){const sp=lineSize*.24;items.push({tok:' ',w:sp,size:lineSize,space:true});totalW+=sp;}
+        if(t>0){const sp=lineSize*.18;items.push({tok:' ',w:sp,size:lineSize,space:true});totalW+=sp;}
         for(let c=0;c<tok.length;c++){
-          const scale=style==='irregular'?(.62+graffitiHash(seed,lineIdx*97+t*19+c)*.76):(.84+graffitiHash(seed,lineIdx*97+t*19+c)*.32);
-          const cs=Math.max(12,Math.min(94,Math.round(lineSize*scale)));
+          const scale=style==='irregular'?(.86+graffitiHash(seed,lineIdx*97+t*19+c)*.28):(.92+graffitiHash(seed,lineIdx*97+t*19+c)*.16);
+          const cs=Math.max(42,Math.min(132,Math.round(lineSize*scale)));
           ctx.font=fontSpec(cs,c+lineIdx);
-          const cw=Math.max(cs*.36,ctx.measureText(tok[c]).width*(style==='pixo'?.72:1));
+          const cw=Math.max(cs*.5*styleScaleX,ctx.measureText(tok[c]).width*styleScaleX);
           items.push({tok:tok[c],w:cw,size:cs,idx:c+lineIdx+t});totalW+=cw;
         }
       }
-      const fit=totalW>232?232/totalW:1;let cx=128-(totalW*fit)/2;
+      const fit=totalW>240?240/totalW:1;let cx=128-(totalW*fit)/2;
       for(let i=0;i<items.length;i++){
         const item=items[i],w=item.w*fit;
         if(!item.space){
-          const cs=Math.max(10,Math.round(item.size*fit));
-          const yJit=(graffitiHash(seed,500+lineIdx*64+i)-.5)*lineSize*(style==='irregular'?.34:.16);
-          const rot=(graffitiHash(seed,900+lineIdx*64+i)-.5)*(style==='irregular'?.36:.14);
-          const ch=style==='irregular'&&!item.isSym&&graffitiHash(seed,1300+i)>.5?item.tok.toUpperCase():item.tok;
-          drawWordOrChar(ch,cx+w/2,cy+yJit,cs,item.idx||0,style==='pixo'?.72:1,style==='pixo'?1.38:1,rot);
+          const cs=Math.max(38,Math.round(item.size*fit));
+          const yJit=(graffitiHash(seed,500+lineIdx*64+i)-.5)*lineSize*(style==='irregular'?.14:.08);
+          const rot=(graffitiHash(seed,900+lineIdx*64+i)-.5)*(style==='irregular'?.18:.08);
+          drawWordOrChar(item.tok,cx+w/2,cy+yJit,cs,item.idx||0,styleScaleX,styleScaleY,rot);
         }
         cx+=w;
       }
     }else{
       const widths=[];let totalW=0;
       for(let t=0;t<lineTokens.length;t++){
-        const tok=lineTokens[t],isSym=tok.startsWith('[')&&tok.endsWith(']');
+        const tok=lineTokens[t];
         ctx.font=fontSpec(lineSize,t+lineIdx);
-        const w=isSym?lineSize*1.05:ctx.measureText(tok).width*(style==='bomb'?1.12:1);
-        widths.push(w);totalW+=w+(t?lineSize*.24:0);
+        const w=ctx.measureText(tok).width*styleScaleX;
+        widths.push(w);totalW+=w+(t?lineSize*.18:0);
       }
-      const fit=totalW>232?232/totalW:1;let cx=128-(totalW*fit)/2;
+      const fit=totalW>240?240/totalW:1;let cx=128-(totalW*fit)/2;
       for(let t=0;t<lineTokens.length;t++){
         const w=widths[t]*fit;
-        drawWordOrChar(lineTokens[t],cx+w/2,cy,Math.max(12,Math.round(lineSize*fit)),t+lineIdx,style==='bomb'?1.1:1,1,0);
-        cx+=w+lineSize*.24*fit;
+        drawWordOrChar(lineTokens[t],cx+w/2,cy,Math.max(38,Math.round(lineSize*fit)),t+lineIdx,styleScaleX,styleScaleY,0);
+        cx+=w+lineSize*.18*fit;
       }
     }
   });
   if(style==='rasurada'){
-    ctx.strokeStyle=inkHex;ctx.lineWidth=4;
-    for(let s=0;s<3;s++){
-      const y1=60+s*55+(graffitiHash(seed,700+s)-.5)*20,y2=y1+(graffitiHash(seed,710+s)-.5)*28;
-      ctx.beginPath();ctx.moveTo(22,y1);ctx.lineTo(234,y2);ctx.stroke();
-    }
+    ctx.strokeStyle=inkHex;ctx.lineWidth=6;
+    const y1=128+(graffitiHash(seed,700)-.5)*20,y2=y1+(graffitiHash(seed,710)-.5)*24;
+    ctx.beginPath();ctx.moveTo(16,y1);ctx.lineTo(240,y2);ctx.stroke();
   }
   if(style==='stencil'){
-    ctx.clearRect(0,124,256,3);ctx.clearRect(126,20,3,216);
+    ctx.clearRect(0,126,256,3);
   }
-  if(style==='tag'||style==='spray'){
-    ctx.fillStyle=inkHex;
-    for(let d=0;d<4;d++){const dx=56+graffitiHash(seed,800+d)*144,dy=150+graffitiHash(seed,810+d)*28,dh=12+graffitiHash(seed,820+d)*28;ctx.fillRect(Math.round(dx),Math.round(dy),2,Math.round(dh));}
-    if(style==='tag'&&lines.length){
-      const y=Math.min(242,128+((lines.length-1)/2)*lineHeight+baseSize*.52);
-      ctx.strokeStyle=inkHex;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(32,y);ctx.quadraticCurveTo(128,y+12,224,y-4);ctx.stroke();
-    }
+  if(style==='tag'&&lines.length){
+    const y=Math.min(242,128+((lines.length-1)/2)*lineHeight+baseSize*styleScaleY*.48);
+    ctx.strokeStyle=inkHex;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(28,y);ctx.quadraticCurveTo(128,y+12,228,y-4);ctx.stroke();
   }
   ctx.restore();
   if(piece?.groundSmudges?.length)applyFootSmudges(ctx,256,256,piece.groundSmudges,seed);
@@ -1127,7 +1100,7 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
     if(['farm','park'].includes(b.type)||pasture)addFarmFence(THREE,group,b,world,HOUSE_STYLES[architectureFor(b.type,b.id,world.seed??0)]||HOUSE_STYLES.modern);
     if(pasture){
       const woodMat=new THREE.MeshLambertMaterial({color:0x6d4c32}),hayMat=new THREE.MeshLambertMaterial({color:0xd9b85b}),stoneMat=new THREE.MeshLambertMaterial({color:0x7e837e}),waterMat=new THREE.MeshLambertMaterial({color:0x3d8fb8});
-      const fx=Math.max(1.2,b.width*.28),fz=Math.max(1.2,b.depth*.32),fh=surfaceElevation(world,entity.x+fx,entity.y+fz);
+      const fx=Math.min(b.width*.28,1.8),fz=Math.min(b.depth*.28,1.8),fh=surfaceElevation(world,entity.x+fx,entity.y+fz);
       // Comedouro (feed trough with hay/feed)
       const feeder=new THREE.Group();
       for(const dx of [-.55,.55]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.1,.42,.56),woodMat);leg.position.set(dx,.21,0);feeder.add(leg);}
@@ -1135,7 +1108,7 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
       const hay=new THREE.Mesh(new THREE.BoxGeometry(1.2,.16,.42),hayMat);hay.position.set(0,.53,0);feeder.add(hay);
       feeder.position.set(fx,fh,fz);feeder.traverse(o=>{o.castShadow=true;o.receiveShadow=true;});group.add(feeder);
       // Bebedouro / cocho (water trough)
-      const wx=Math.max(1.2,b.width*.72),wz=Math.max(1.2,b.depth*.68),wh=surfaceElevation(world,entity.x+wx,entity.y+wz);
+      const wx=Math.max(fx+2.0,b.width-1.8),wz=Math.min(b.depth*.28,1.8),wh=surfaceElevation(world,entity.x+wx,entity.y+wz);
       const drinker=new THREE.Group();
       const basin=new THREE.Mesh(new THREE.BoxGeometry(1.25,.38,.62),stoneMat);basin.position.set(0,.19,0);drinker.add(basin);
       const water=new THREE.Mesh(new THREE.BoxGeometry(1.06,.08,.44),waterMat);water.position.set(0,.36,0);drinker.add(water);
