@@ -4095,7 +4095,7 @@ export class RCT3DRenderer {
       ...terrainSurfaceMaterials(normalMapsEnabled,'PavedRoad','pavedRoad',normBrickA,.65,.92,.015),
       ...terrainSurfaceMaterials(normalMapsEnabled,'Sidewalk','sidewalk',normBrickA,.25,.95,0),
       ...terrainSurfaceMaterials(normalMapsEnabled,'SidewalkTree','sidewalkTree',normBrickA,.3,.94,0),
-      ...terrainSurfaceMaterials(normalMapsEnabled,'RetainingWall','retainingWall',normStoneB,1.1,.72,.06),
+      ...terrainSurfaceMaterials(normalMapsEnabled,'RetainingWall','retainingWall',null,0,.78,.04),
       roadRailing:makeMat(normalMapsEnabled,{color:0xffffff,vertexColors:true,dithering:true,side:THREE.DoubleSide},null,0,.82,.02),
       farmSoil:makeMat(normalMapsEnabled,{map:farmGround.map,color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},farmGround.normalMap,.38,.91,.005),
       [TILE_FLOOR]: makeMat(normalMapsEnabled, { map: caribbeanGrass, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.3, 0.95, 0),
@@ -9479,7 +9479,7 @@ export class RCT3DRenderer {
     this.cityAnimalModels.end();
     syncBirdNests(THREE,this,this.cityDevelopment?.city?.fauna,map);
     syncSubstanceSmoke(THREE,this,this.cityDevelopment?.city,time);
-    syncConstructionDust(THREE,this,this.cityDevelopment,time,this.graphicOptions.dust!==false);
+    syncConstructionDust(THREE,this,this.cityDevelopment,time,false);
     // Clean inactive dynamic billboards
     for (const [id, spr] of this.entitySprites.entries()) {
       if (!activeIds.has(id)) {

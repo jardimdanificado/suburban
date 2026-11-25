@@ -7,6 +7,7 @@ import {
   applyPatternToGarment,
   clothingOffer,
   craftClothingPattern,
+  createClothingLine,
   garmentScore,
   initializeClothes,
   manufactureClothes
@@ -71,6 +72,32 @@ test('makeClothingPattern uses symbols and colors with no words',()=>{
     assert(pattern.colors.length>=2,'pattern should have background and foreground/accent colors');
     for(const emblem of pattern.emblems)assert(CITY_SYMBOLS.includes(emblem.skin));
   }
+});
+
+test('citizens start with standardized municipal kit and tailors produce fixed print runs per clothing line',()=>{
+  const city=makeCity(321);
+  city.municipalIdentity={flag:{background:'#8a3b2c',foreground:'#f5e9bf',colors:['#8a3b2c','#2b5c4f','#1f2428']}};
+  const c1=makeCitizen(1),c2=makeCitizen(2);
+  initializeClothes(city,c1);
+  initializeClothes(city,c2);
+  assert.equal(c1.wardrobe.length,3);
+  assert.equal(c2.wardrobe.length,3);
+  assert(c1.wardrobe.every(g=>g.municipalKit&&g.brandName==='Prefeitura · Kit municipal'));
+  assert.equal(c1.wardrobe[0].color,'#8a3b2c');
+  assert.equal(c1.wardrobe[1].color,'#2b5c4f');
+  assert.equal(c1.wardrobe[2].color,'#1f2428');
+  assert.equal(c2.wardrobe[0].color,'#8a3b2c');
+
+  const tailor=makeStore(10,'tailor');
+  const firstLine=createClothingLine(city,tailor,{piece:'camisa estampada',editionSize:3});
+  manufactureClothes(city,tailor,5);
+  assert.equal(firstLine.produced,3,'first line should stop at its fixed edition size');
+  assert.equal(tailor.clothingLines.length,2,'a second clothing line should start after the fixed run completes');
+  assert.equal(tailor.garments[0].lineId,firstLine.lineId);
+  assert.equal(tailor.garments[0].editionNumber,1);
+  assert.equal(tailor.garments[2].editionNumber,3);
+  assert.equal(tailor.garments[3].lineId,tailor.clothingLines[1].lineId);
+  assert.equal(tailor.garments[3].editionNumber,1);
 });
 
 test('clothing stores and tailors craft new patterns and apply them to garments',()=>{

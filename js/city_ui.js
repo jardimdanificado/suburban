@@ -22,7 +22,7 @@ import {renderEmployment,renderCompanyRecruitment} from './city_employment_ui.js
 import {renderResume,requirements,occupiedPositions,ownerSelfHire} from './city_employment.js?v=fast-speeds-1';
 import {renderFiscalReport} from './city_fiscal_ui.js';
 import {renderMobility,renderVehicle,renderWorldVessel,renderAssembly,renderParking} from './city_vehicles_ui.js?v=shared-crossings-1';
-import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,wornHandwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference,craftClothingPattern} from './city_clothing.js?v=party-apparel-1';
+import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,wornHandwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference,craftClothingPattern,createClothingLine} from './city_clothing.js?v=party-apparel-1';
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
 import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=custom-history-filters-1';
@@ -619,16 +619,21 @@ export class CityUI {
     } else if (this.detailTab === 'stock') {
       p.heading('INVENTÁRIO REAL'); p.kv('Capacidade', `${inventoryUsed(b)}/${b.inventoryCapacity} itens`); p.kv('Reservado para recebimento', incomingItems(b)); p.kv('Espaço livre', inventoryFree(b)); p.meter('Ocupação do armazém', inventoryUsed(b) / b.inventoryCapacity * 100, inventoryFree(b) < 12 ? C.red : C.cyan); for (const [id, spec] of Object.entries(GOODS)) p.kv(spec.label, b.inventory?.[id] || 0);
       if(['clothing_store','tailor'].includes(b.type)){
-        p.heading('PADRÕES DE ESTAMPA');
-        p.buttons([{label:'CONFECCIONAR NOVO PADRÃO',click:()=>{const created=craftClothingPattern(city,b,{applyToStock:true});this.notice=created?`Novo padrão ${created.patternId} confeccionado (${created.symbols.length} símbolos).`:'Não foi possível confeccionar padrão.';}}]);
+        p.heading('LINHAS DE ROUPA E TIRAGEM');
+        p.buttons([
+          {label:'CONFECCIONAR NOVO PADRÃO',click:()=>{const created=craftClothingPattern(city,b,{applyToStock:true});this.notice=created?`Novo padrão ${created.patternId} confeccionado (${created.symbols.length} símbolos).`:'Não foi possível confeccionar padrão.';}},
+          {label:'CRIAR NOVA LINHA',click:()=>{const line=createClothingLine(city,b);this.notice=line?`${line.name} criada (tiragem fixa de ${line.editionSize} peças).`:'Não foi possível criar linha.';}}
+        ]);
+        const lines=(b.clothingLines||[]).slice(-8).reverse();
+        if(!lines.length)p.note('Nenhuma linha de roupa criada ainda.');
+        else for(const line of lines)p.record(line.name,`${colorName(line.color)}${line.pattern?` · ${line.pattern.symbols.length} símbolos`:''} · tiragem ${line.produced}/${line.editionSize}`,()=>{});
         const patterns=(b.clothingPatterns||[]).slice(-6).reverse();
-        if(!patterns.length)p.note('Nenhum padrão confeccionado ainda.');
-        else if(p.visible(44)){
+        if(patterns.length&&p.visible(44)){
           patterns.forEach((pat,idx)=>{drawPartyFlag(p.ui.ctx,pat.flag,p.x+idx*46,p.y,40,40,null,{border:false});});
           p.space(46);
         }
       }
-      if(b.garments?.length){p.heading('PEÇAS INDIVIDUAIS E PROCEDÊNCIA');for(const g of b.garments.slice(-24).reverse()){const owners=(g.ownerHistory||[]).map(h=>`${h.ownerName} · ${stamp(h.minute)}`).join(' → ')||g.brandName;p.record(`${g.piece} · ${g.style} · ${g.dirt<8?'limpa':'aguarda lavagem'}`,`${g.brandName} · ${colorName(g.color)}${g.patternFlag?` · ${g.patternFlag.emblems?.length||0} símbolos`:''} · condição ${g.condition.toFixed(0)}% · sujeira ${(g.dirt||0).toFixed(0)}% · donos: ${owners} · lavagens: ${washes}`,g.brandId?()=>this.openBuilding(g.brandId):()=>{});}}
+      if(b.garments?.length){p.heading('PEÇAS INDIVIDUAIS E PROCEDÊNCIA');for(const g of b.garments.slice(-24).reverse()){const owners=(g.ownerHistory||[]).map(h=>`${h.ownerName} · ${stamp(h.minute)}`).join(' → ')||g.brandName;p.record(`${g.piece} · ${g.style} · ${g.dirt<8?'limpa':'aguarda lavagem'}`,`${g.brandName}${g.editionSize?` · tiragem ${g.editionNumber}/${g.editionSize}`:''} · ${colorName(g.color)}${g.patternFlag?` · ${g.patternFlag.emblems?.length||0} símbolos`:''} · condição ${g.condition.toFixed(0)}% · sujeira ${(g.dirt||0).toFixed(0)}% · donos: ${owners} · lavagens: ${washes}`,g.brandId?()=>this.openBuilding(g.brandId):()=>{});}}
       if (b.type === 'quarry') p.kv('Reserva mineral restante', b.stoneReserve || 0);
       if(b.type==='farm'){const farm=city.economy.farmCapacity(b);p.heading('ÁREA E CAPACIDADE AGRÍCOLA');p.kv('Solo ocupado / área de cultivo',`${b.width*b.depth} / ${farm.area} células`);if(isVerticalFarm(b))p.kv('Cultivo vertical',`${b.floors} andares · corredores e escadas fora dos canteiros`);p.kv('Talhões',farm.fields);p.kv('Funcionários / postos totais',`${occupiedPositions(city,b)} / ${farm.jobs}`);p.kv('Colheita com todos os talhões',`${farm.harvest} unidades`);p.kv('Potencial estimado/dia',`${farm.daily} unidades`);p.note('Estimativa para 480 minutos de trabalho. Sementes, crescimento, equipe, refeições, transporte e capacidade do armazém limitam a produção real.');}
       if(b.type==='forestry'){const license=city.nature.fellingLicense(b),pending=city.nature.fellingLicenses?.find(r=>r.holderId===b.id&&r.status==='pending');p.heading('LICENÇA DE CORTE SILVESTRE');p.kv('Situação',license?`${license.remaining} cortes · vence ${stamp(license.expiresAt)}`:pending?'Em análise municipal':'Sem licença vigente');p.note('Oito cortes por sete dias. Taxa municipal de 80. Árvores de manejo próprio e limpeza autorizada para obras são isentas.');p.buttons([{label:'REQUERER LICENÇA',click:()=>city.nature.requestFellingLicense(b)}]);}

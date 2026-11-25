@@ -74,7 +74,7 @@ import { CityGigs } from './city_gigs.js?v=artwork-solid-wall-support-1';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=regional-supply-5';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=ff2-speed-1';
-import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=entrance-retaining-clearance-1';
+import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=minimal-settlement-1';
 import {findBoatPath,BOAT_CLASSES} from './city_water_transport.js?v=regional-supply-4';
 import {createSeaEdgeNavigation} from './sea_edge_navigation.js?v=sea-edge-routes-1';
 const DYNAMIC_RECIPE_EXCLUDED_TYPES=new Set(['artisan','composting','flagmaker','newsroom','publisher','tobacco_workshop','toolmaker','fishery','fishmonger']);
