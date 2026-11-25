@@ -5,14 +5,72 @@ import {INDUSTRIES} from './city_industries.js';
 
 import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-3';
 
+const archTextureCache=new WeakMap();
+function architectureSurfaceTextures(THREE,kind){
+ if(!THREE?.DataTexture)return null;
+ let byKind=archTextureCache.get(THREE);
+ if(!byKind){byKind=new Map();archTextureCache.set(THREE,byKind);}
+ if(byKind.has(kind))return byKind.get(kind);
+ const size=32,shade=new Float32Array(size*size),height=new Float32Array(size*size);
+ for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+  const n=((Math.imul(x*73856093^y*19349663^(kind.length*83492791),2654435761)>>>0)%100)/100;
+  let h=.5,s=.88;
+  if(kind==='wood'){
+   const grain=Math.sin((x*.9+Math.sin(y*.35)*1.4))*.12,plank=(x%8===0)?-.18:0;
+   h=.5+grain+plank+n*.06;s=.84+grain*.4+(x%8===0?-.1:0)+n*.08;
+  }else if(kind==='stone'){
+   const row=Math.floor(y/8),bx=(x+(row%2)*8)%16,mortar=(y%8===0||bx===0);
+   h=mortar?.22:.62+n*.18;s=mortar?.72:.86+n*.14;
+  }else if(kind==='roof'){
+   const tile=Math.abs(Math.sin((x/size)*Math.PI*4))*.18,course=(y%8===0)?-.14:0;
+   h=.45+tile+course+n*.06;s=.82+tile*.5+course+n*.08;
+  }else if(kind==='metal'){
+   const seam=(x%16===0||y%16===0)?-.12:0;
+   h=.52+seam+n*.04;s=.88+seam+n*.06;
+  }else if(kind==='foliage'){
+   h=.45+Math.sin(x*.7+y*.5)*.16+n*.18;s=.8+n*.2;
+  }else{
+   h=.5+(n-.5)*.16;s=.90+(n-.5)*.1;
+  }
+  height[y*size+x]=h;shade[y*size+x]=Math.max(.55,Math.min(1,s));
+ }
+ const color=new Uint8Array(size*size*4),normal=new Uint8Array(size*size*4);
+ for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+  const i=y*size+x,j=i*4,s=Math.round(shade[i]*255);
+  color[j]=s;color[j+1]=s;color[j+2]=s;color[j+3]=255;
+  const dx=(height[y*size+(x+1)%size]-height[y*size+(x+size-1)%size])*.7;
+  const dy=(height[((y+1)%size)*size+x]-height[((y+size-1)%size)*size+x])*.7;
+  const len=Math.hypot(dx,dy,1);
+  normal[j]=Math.round((-dx/len*.5+.5)*255);normal[j+1]=Math.round((-dy/len*.5+.5)*255);normal[j+2]=Math.round((1/len*.5+.5)*255);normal[j+3]=255;
+ }
+ const makeTex=(data,isColor)=>{const t=new THREE.DataTexture(data,size,size,THREE.RGBAFormat);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.magFilter=THREE.NearestFilter;t.minFilter=THREE.LinearMipmapLinearFilter;t.generateMipmaps=true;if(isColor&&THREE.SRGBColorSpace)t.colorSpace=THREE.SRGBColorSpace;t.needsUpdate=true;return t;};
+ const pair={map:makeTex(color,true),normalMap:makeTex(normal,false)};
+ byKind.set(kind,pair);
+ return pair;
+}
+
 // These additions are architectural meshes, not extra simulated rooms. They
 // sit on the roof or above head height and never reserve street tiles.
 export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails=[],entryDoorDetails=null){
  const residential=['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'].includes(b.type),civic=['townhall','council_chamber'].includes(b.type),industrial=['builder','mill','sawmill','foundry','steel_mill','brickworks','glassworks','paper_mill','weaving','cycle_assembler','rubberworks'].includes(b.type)||INDUSTRIES[b.type]?.category==='industry';
  const seed=(Math.imul(b.id+37,2654435761)>>>0),variant=seed%15,mats=new Map(),root=new THREE.Group(),windowControls=new THREE.Group(),windowShutters=[];parent.add(root,windowControls);
- const mat=color=>{if(!mats.has(color))mats.set(color,new THREE.MeshLambertMaterial({color}));return mats.get(color);};
- const addBox=(w,h,d,x,y,z,color)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(color));m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;root.add(m);return m;};
- const box=(w,h,d,x,y,z,color)=>{
+ const inferKind=color=>{
+  if(color===0x543b2e||color===0x76533b||color===0x80583d)return 'wood';
+  if(color===0x303b43||color===0x343a3a)return 'metal';
+  if(color===0x59834e||color===0x709b55||color===0x718b43||color===0x547846||color===0x77974e||color===0x4e7542||color===0x6f934c||color===0x4e7948)return 'foliage';
+  if(color===0xb77856||color===0xb8ad98||color===0xc7bca7||color===0x879a91)return 'stone';
+  return 'plaster';
+ };
+ const mat=(color,kind=inferKind(color))=>{
+  const key=`${color}:${kind}`;
+  if(!mats.has(key)){
+   const tex=architectureSurfaceTextures(THREE,kind);
+   mats.set(key,new THREE.MeshLambertMaterial(tex?{color,map:tex.map,normalMap:tex.normalMap}:{color}));
+  }
+  return mats.get(key);
+ };
+ const addBox=(w,h,d,x,y,z,color,kind)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(color,kind));m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;root.add(m);return m;};
+ const box=(w,h,d,x,y,z,color,kind)=>{
   if(w<=0||h<=0||d<=0)return;
   const opening=entryDoorDetails?.unit,side=entryDoorDetails?.side,bandBottom=y-h/2,bandTop=y+h/2;
   if(opening&&h<=.24&&bandBottom<1.45&&bandTop>0){
@@ -28,10 +86,10 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
     }
    }
   }
-  return addBox(w,h,d,x,y,z,color);
+  return addBox(w,h,d,x,y,z,color,kind);
  };
- const cylinder=(r,h,x,y,z,color)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,8),mat(color));m.position.set(x,y,z);m.castShadow=true;root.add(m);return m;};
- const leaf=(r,x,y,z,color)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(r,6,5),mat(color));m.position.set(x,y,z);m.castShadow=true;root.add(m);return m;};
+ const cylinder=(r,h,x,y,z,color,kind)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,8),mat(color,kind));m.position.set(x,y,z);m.castShadow=true;root.add(m);return m;};
+ const leaf=(r,x,y,z,color)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(r,6,5),mat(color,'foliage'));m.position.set(x,y,z);m.castShadow=true;root.add(m);return m;};
  const style=HOUSE_STYLES[b.architecture]||HOUSE_STYLES.modern,roofColor=style.roof,wood=0x543b2e,metal=0x303b43,cream=style.trim??0xfff3df,green=0x59834e,clay=0xb77856,roof=b.floors*CITY_FLOOR_HEIGHT,front=b.depth,roofX=b.roofX??0,roofY=b.roofY??0,roofWidth=b.roofWidth??b.width,roofDepth=b.roofDepth??b.depth;
  const balcony=space=>{
   const {floor,side,width,depth,planters}=space,along=space.doorAlong??space.along,y=floor*CITY_FLOOR_HEIGHT,axisX=side==='front'||side==='back',normal=side==='front'?1:side==='back'?-1:side==='left'?-1:1,colonial=style.motif==='portuguese_colonial',railStyle=space.balconyStyle||'iron',deckColor=colonial?(colonialForm==='rural'?0x76533b:colonialForm==='quinta'?0xd1c09e:0xc9b99d):railStyle==='wood'?0x76533b:roofColor,railColor=railStyle==='stone'?style.trim:railStyle==='wood'?0x76533b:colonial&&colonialForm==='rural'?0x76533b:metal;
@@ -113,10 +171,12 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    frontRail(.15,b.width-.15,.07,.07,.72,front+porch*.94,accent);
    for(let x=.4;x<b.width-.2;x+=1.05)for(const side of [-1,1])box(.085,.42,.09,x+side*.34,.98,front+.15,accent);
   }else if(motif==='stilt'){
-   for(const x of [.24,b.width-.24])for(const z of [.22,b.depth-.22]){box(.12,1.12,.12,x,.55,z,wood);box(.2,.11,.2,x,1.12,z,trim);}
-   for(const x of [.32,b.width-.32]){box(.09,1.25,.09,x,.62,front+.1,accent);box(.09,1.25,.09,x,.62,.1,accent);}
-   const porch=.68;box(b.width+.12,.1,porch,b.width/2,1.45,front+porch*.42,roofColor);
-   for(let i=0;i<=Math.max(2,Math.floor(b.width/.5));i++){const x=.15+i*(b.width-.3)/Math.max(2,Math.floor(b.width/.5));if(!frontDoorGap(x))box(.04,.56,.045,x,1.15,front+porch*.88,trim);}
+   for(const x of [.24,b.width-.24])for(const z of [.22,b.depth-.22]){box(.12,1.12,.12,x,.56,z,wood,'wood');box(.2,.11,.2,x,1.12,z,trim,'stone');}
+   for(const x of [.32,b.width-.32]){box(.09,1.25,.09,x,.625,front+.1,accent);box(.09,1.25,.09,x,.625,.1,accent);}
+   const porch=.68;box(b.width+.12,.1,porch,b.width/2,1.45,front+porch*.42,roofColor,'roof');
+   for(const x of [.2,b.width-.2])if(!frontDoorGap(x,.16)){box(.09,1.42,.09,x,.71,front+porch*.82,wood,'wood');box(.16,.08,.16,x,1.4,front+porch*.82,trim,'wood');}
+   frontRail(.15,b.width-.15,.06,.06,.86,front+porch*.88,trim,'wood');
+   for(let i=0;i<=Math.max(2,Math.floor(b.width/.5));i++){const x=.15+i*(b.width-.3)/Math.max(2,Math.floor(b.width/.5));if(!frontDoorGap(x))box(.04,.56,.045,x,1.15,front+porch*.88,trim,'wood');}
   }else if(motif==='coral'){
    for(const x of [.12,b.width-.12])for(let floor=0;floor<b.floors;floor++)for(let row=0;row<4;row++)box(.16,.22,.1,x,floor*CITY_FLOOR_HEIGHT+.32+row*.36,front+.08,row%2?accent:trim);
    for(let x=.3;x<b.width-.15;x+=.9){box(.48,.08,.11,x,1.52,front+.1,accent);box(.34,.055,.13,x,1.62,front+.1,trim);}
@@ -127,7 +187,8 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
     for(let i=0;i<columns;i++){const x=.15+i*(b.width-.3)/Math.max(1,columns-1);if(i%2===0){box(.16,.18,.1,x,y,front+.14,accent);box(.16,.18,.1,x,y+.27,front+.14,trim);}}
    }
    for(const x of [.16,b.width-.16])box(.12,b.floors*CITY_FLOOR_HEIGHT,.12,x,b.floors*CITY_FLOOR_HEIGHT/2,front+.05,trim);
-   box(b.width+.12,.12,.52,b.width/2,1.68,front+.22,roofColor);
+   box(b.width+.12,.12,.52,b.width/2,1.68,front+.22,roofColor,'roof');
+   for(const x of [.22,b.width-.22])box(.07,.24,.28,x,1.52,front+.16,trim,'stone');
   }else if(motif==='colonial'){
    const porch=Math.min(.74,Math.max(.5,b.depth*.24));box(b.width+.16,.12,porch,b.width/2,1.7,front+porch*.4,roofColor);
    const count=Math.max(2,Math.floor(b.width/1.2));for(let i=0;i<=count;i++){const x=.22+i*(b.width-.44)/count;cylinder(.075,1.62,x,.82,front+porch*.78,trim);box(.18,.1,.18,x,1.65,front+porch*.78,accent);}
@@ -138,15 +199,16 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    const width=Math.min(1.25,b.width-.3);for(let tier=0;tier<4;tier++)box(Math.max(.25,width-tier*.18,.1),.1,.14,b.width/2,1.32+tier*.15,front+.13, tier%2?trim:accent);
    for(let x=.32;x<b.width-.1;x+=1.15)for(let floor=0;floor<b.floors;floor++){box(.09,.68,.1,x,floor*CITY_FLOOR_HEIGHT+.92,front+.14,accent);box(.22,.08,.13,x,floor*CITY_FLOOR_HEIGHT+1.28,front+.16,trim);}
   }else if(motif==='courtyard'){
-   const pergolaY=roof+.35;
-   for(const x of [.25,b.width-.25]){box(.11,1.2,.11,x,roof+.6,b.depth*.6,wood);box(.2,.12,.2,x,roof+1.16,b.depth*.6,accent);}
-   for(let i=0;i<Math.max(3,Math.floor(b.width/.45));i++){const x=.2+i*(b.width-.4)/Math.max(2,Math.floor(b.width/.45)-1);box(.055,.07,b.depth*.35,x,pergolaY,b.depth*.6,trim);}
-   box(b.width+.1,.1,.36,b.width/2,1.7,front+.18,roofColor);
-   for(let x=.4;x<b.width-.2;x+=1.1){box(.38,.18,.24,x,.42,front+.14,accent);box(.3,.22,.2,x,.62,front+.14,green);}
+   const pergolaY=roof+1.22;
+   for(const x of [.25,b.width-.25]){box(.11,1.2,.11,x,roof+.6,b.depth*.6,wood,'wood');box(.2,.12,.2,x,roof+1.16,b.depth*.6,accent,'wood');}
+   for(let i=0;i<Math.max(3,Math.floor(b.width/.45));i++){const x=.2+i*(b.width-.4)/Math.max(2,Math.floor(b.width/.45)-1);box(.055,.07,b.depth*.35,x,pergolaY,b.depth*.6,trim,'wood');}
+   box(b.width+.1,.1,.36,b.width/2,1.7,front+.18,roofColor,'roof');
+   for(const x of [.24,b.width-.24])box(.07,.22,.22,x,1.55,front+.12,trim,'stone');
+   for(let x=.4;x<b.width-.2;x+=1.1){box(.38,.18,.24,x,.42,front+.14,accent,'stone');box(.3,.22,.2,x,.62,front+.14,green,'foliage');}
   }else if(motif==='tin'){
-   for(let i=0;i<=Math.max(3,Math.floor(b.width/.28));i++){const x=.12+i*(b.width-.24)/Math.max(3,Math.floor(b.width/.28));box(.035,.08,.52,x,b.floors*CITY_FLOOR_HEIGHT+.04,b.depth/2,metal);}
-   box(b.width+.16,.1,.2,b.width/2,1.62,front+.08,accent);
-   for(const x of [.2,b.width-.2]){box(.12,.18,.18,x,1.49,front+.1,trim);box(.08,.65,.08,x,.33,front+.12,wood);}
+   for(let i=0;i<=Math.max(3,Math.floor(b.width/.28));i++){const x=.12+i*(b.width-.24)/Math.max(3,Math.floor(b.width/.28));box(.035,.08,.52,x,b.floors*CITY_FLOOR_HEIGHT+.04,b.depth/2,metal,'metal');}
+   box(b.width+.16,.1,.2,b.width/2,1.62,front+.08,accent,'metal');
+   for(const x of [.2,b.width-.2]){box(.12,.18,.18,x,1.49,front+.1,trim,'metal');box(.08,1.42,.08,x,.71,front+.12,wood,'wood');}
    for(let floor=0;floor<b.floors;floor++)for(let x=.42;x<b.width-.1;x+=1.15){box(.1,.38,.08,x-.32,floor*CITY_FLOOR_HEIGHT+.92,front+.14,accent);box(.1,.38,.08,x+.32,floor*CITY_FLOOR_HEIGHT+.92,front+.14,accent);}
   }
   // Distinct horizontal floor bands leave the window openings unobstructed.
@@ -247,8 +309,7 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    }else if(b.type==='courthouse'){
     // The neoclassical portico above replaces the old generic columns.
    }else{
-    for(let i=0;i<4;i++)cylinder(.075,1.65,.38+i*(b.width-.76)/3,.82,b.depth+.17,light);
-    const pediment=new THREE.Mesh(new THREE.ConeGeometry(Math.max(.7,b.width*.48),.48,3),mat(accent));pediment.rotation.y=Math.PI/2;pediment.position.set(b.width/2,1.86,b.depth+.16);root.add(pediment);
+    const pediment=new THREE.Mesh(new THREE.ConeGeometry(Math.max(.7,b.width*.48),.42,3),mat(accent,'stone'));pediment.rotation.y=Math.PI/2;pediment.position.set(b.width/2,1.95,frontZ);root.add(pediment);
    }
    const signColors=[0xd88d63,0x5d8c83,0xe1bd70,0x72879a];box(Math.min(1.1,b.width*.52),.16,.06,b.width/2,2.15,b.depth+.17,b.type==='courthouse'?accent:signColors[variant%signColors.length]);
    for(const space of spaces.filter(s=>s.kind==='balcony'))furnishedBalcony(space);
@@ -399,12 +460,13 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
     box(b.width*.86,.12,.14,b.width/2,baseY,gableZ,style.trim);
     for(const x of [.2,b.width-.2])box(.11,.2,.15,x,baseY+.12,gableZ,style.accent);
    }else if(style.dutchForm==='gallery'||style.dutchForm==='shed_gallery'){
-    const porch=Math.min(.58,b.depth*.18),porchZ=front+porch*.58;
-    box(b.width+.08,.1,porch,b.width/2,1.68,front+porch*.42,style.roof);
-    for(const x of [.24,b.width-.24]){box(.1,1.58,.1,x,.8,porchZ,style.trim);box(.17,.09,.17,x,1.62,porchZ,style.accent);}
-    if(style.dutchForm==='shed_gallery'){
-     const awning=box(b.width+.12,.09,porch+.14,b.width/2,1.78,front+porch*.4,style.roof);if(awning)awning.rotation.x=-.12;
-     for(let x=.35;x<b.width-.2;x+=.7)box(.045,.12,.045,x,1.68,front+porch*.72,style.accent);
+    const porch=Math.min(.58,b.depth*.18),porchZ=front+porch*.58,shed=style.dutchForm==='shed_gallery';
+    if(shed){
+     const awning=box(b.width+.12,.09,porch+.14,b.width/2,1.72,front+porch*.4,style.roof,'roof');if(awning)awning.rotation.x=-.12;
+     for(const x of [.24,b.width-.24]){box(.1,1.66,.1,x,.83,porchZ,style.trim,'wood');box(.17,.09,.17,x,1.66,porchZ,style.accent,'wood');}
+    }else{
+     box(b.width+.08,.1,porch,b.width/2,1.68,front+porch*.42,style.roof,'roof');
+     for(const x of [.24,b.width-.24]){box(.1,1.62,.1,x,.81,porchZ,style.trim,'wood');box(.17,.09,.17,x,1.62,porchZ,style.accent,'wood');}
     }
    }else if(style.dutchForm==='dormer'){
     const count=Math.max(1,Math.floor(b.width/2));
@@ -422,8 +484,8 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
   }else if(colonialForm==='acores'){
    for(const x of [.12,b.width-.12])for(let row=0;row<Math.ceil(roof/.42);row++)box(.19,.2,.16,x,.24+row*.42,front+.08,row%2?style.trim:style.accent);
   }else if(colonialForm==='mercantil'){
-   box(b.width*.82,.16,.09,b.width/2,1.72,front+.12,style.accent);
-   for(const x of [.18,b.width-.18])box(.09,.62,.12,x,1.29,front+.13,style.trim);
+   box(b.width*.82,.16,.09,b.width/2,1.72,front+.12,style.accent,'stone');
+   for(const x of [.18,b.width-.18])box(.09,1.64,.12,x,.82,front+.13,style.trim,'stone');
   }else if(colonialForm==='terrea'){
    box(b.width+.06,.08,.18,b.width/2,1.72,front+.08,style.accent);
   }
