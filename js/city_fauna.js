@@ -113,6 +113,38 @@ export class CityFauna {
     return nest;
   }
 
+  removeNest(nest) {
+    if (!nest) return;
+    this.nests.delete(nest.id);
+    if (nest.entity) nest.entity.destroyed = true;
+    if (nest.ownerId != null) {
+      const owner = this.animals.get(nest.ownerId);
+      if (owner && owner.nestId === nest.id) owner.nestId = null;
+    }
+  }
+
+  pruneOrphanedNests() {
+    for (const nest of this.nests.values()) {
+      if (nest.entity?.destroyed) {
+        this.removeNest(nest);
+        continue;
+      }
+      if (nest.plantId != null) {
+        const plant = this.city.nature?.plants?.get?.(nest.plantId);
+        if (!plant || plant.entity?.destroyed) {
+          this.removeNest(nest);
+          continue;
+        }
+      }
+      if (nest.buildingId != null && this.city.building) {
+        const b = this.city.building(nest.buildingId);
+        if (!b || b.entity?.destroyed) {
+          this.removeNest(nest);
+        }
+      }
+    }
+  }
+
   treeCanopyAltitude(plant) {
     if (!plant || plant.entity?.destroyed) return 0;
     const scale = (plant.entity.properties?.render?.size || 1) * (plant.visualScale || 1);
@@ -470,6 +502,9 @@ export class CityFauna {
       if (prey) {
         if (prey.dist < 1.2) {
           prey.animal.dead = true;
+          prey.animal.altitude = 0;
+          prey.animal.targetAltitude = 0;
+          prey.animal.inTreePlantId = null;
           prey.animal.state = 'sleep';
           prey.animal.action = 'Abatido';
           animal.state = 'eat';
@@ -497,7 +532,8 @@ export class CityFauna {
         const dist = Math.hypot(tx - animal.x, ty - animal.y);
         if (dist <= 0.9) {
           animal.inTreePlantId = tree.id;
-          animal.altitude = this.treeCanopyAltitude(tree);
+          animal.targetAltitude = this.treeCanopyAltitude(tree);
+          animal.altitude = animal.targetAltitude;
           animal.targetX = null;
           animal.targetY = null;
           if (isNight || animal.hunger >= 75) {
@@ -512,6 +548,7 @@ export class CityFauna {
           return;
         }
         animal.altitude = 0;
+        animal.targetAltitude = 0;
         animal.inTreePlantId = null;
         animal.state = 'walk';
         animal.action = 'Indo para árvore';
@@ -522,6 +559,7 @@ export class CityFauna {
         return;
       }
       animal.altitude = 0;
+      animal.targetAltitude = 0;
       animal.inTreePlantId = null;
     }
 
@@ -645,9 +683,16 @@ export class CityFauna {
     const stepDt = Math.min(0.25, dt);
     const hour = Math.floor((this.city.minute % 1440) / 60);
     const isNight = hour >= 22 || hour < 5;
+    this.pruneOrphanedNests();
 
     for (const animal of this.animals.values()) {
-      if (animal.dead || animal.entity?.destroyed) continue;
+      if (animal.dead || animal.entity?.destroyed) {
+        animal.altitude = 0;
+        animal.targetAltitude = 0;
+        animal.inTreePlantId = null;
+        continue;
+      }
+      const spec = ANIMAL_SPECIES[animal.species];
       if (animal.riderId != null) {
         const rider = this.city.society?.citizen?.(animal.riderId) || this.city.citizens?.find(c => c.id === animal.riderId);
         if (!rider || rider.dead || rider.entity?.destroyed || rider.ridingAnimalId !== animal.id) {
@@ -661,6 +706,9 @@ export class CityFauna {
           animal.y = rider.entity.y;
           animal.entity.x = rider.entity.x;
           animal.entity.y = rider.entity.y;
+          animal.altitude = 0;
+          animal.targetAltitude = 0;
+          animal.inTreePlantId = null;
           animal.state = moved ? 'walk' : 'idle';
           animal.action = 'Servindo de montaria';
           continue;
@@ -668,10 +716,12 @@ export class CityFauna {
       }
       if (animal.inTreePlantId != null) {
         const hostTree = this.city.nature?.plants?.get?.(animal.inTreePlantId);
-        if (!hostTree || hostTree.entity?.destroyed) {
+        const onTree = hostTree && !hostTree.entity?.destroyed && Math.hypot(hostTree.x + 0.5 - animal.x, hostTree.y + 0.5 - animal.y) <= 1.2 && (animal.state === 'eat' || animal.state === 'sleep');
+        if (!onTree) {
           animal.inTreePlantId = null;
           animal.altitude = 0;
-          animal.state = 'idle';
+          animal.targetAltitude = 0;
+          if (!hostTree || hostTree.entity?.destroyed) animal.state = 'idle';
         }
       }
       animal.stateTimer = Math.max(0, (animal.stateTimer ?? 0) - stepDt);
@@ -680,6 +730,11 @@ export class CityFauna {
       if (animal.thinkTimer <= 0) {
         animal.thinkTimer = 0.4 + Math.random() * 0.5;
         this.decideBehavior(animal, isNight);
+      }
+
+      if (!spec?.canFly && animal.inTreePlantId == null) {
+        animal.altitude = 0;
+        animal.targetAltitude = 0;
       }
 
       if (animal.state === 'eat') {

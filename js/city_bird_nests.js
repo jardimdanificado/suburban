@@ -30,10 +30,18 @@ export function syncBirdNests(THREE, renderer, fauna, map) {
   if (!state.group.parent) renderer.entityGroup.add(state.group);
   state.group.visible = true;
 
+  const city = renderer.cityDevelopment?.city;
   let cupCount = 0, eggCount = 0;
   for (const nest of fauna.nests.values()) {
     if (cupCount >= 128) break;
-    const baseH = map ? renderer.getSurfaceElevation(map, nest.x, nest.y) : 0;
+    if (nest.entity?.destroyed) continue;
+    if (nest.plantId != null) {
+      const plant = city?.nature?.plants?.get?.(nest.plantId);
+      if (!plant || plant.entity?.destroyed) continue;
+    }
+    const building = nest.buildingId != null ? city?.building?.(nest.buildingId) : null;
+    if (nest.buildingId != null && city?.building && (!building || building.entity?.destroyed)) continue;
+    const baseH = building?.terrain?.base ?? (map ? renderer.getSurfaceElevation(map, nest.x, nest.y) : 0);
     const y = baseH + (nest.z || 0);
     state.pos.set(nest.x, y + 0.05, nest.y);
     state.matrix.compose(state.pos, state.quat, state.scale);

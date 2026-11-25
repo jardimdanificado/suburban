@@ -385,4 +385,20 @@ test('circular grazing clears only a circle, arboreal animals climb trees, and 2
   const fence = perches.find(p => p.surface === 'fence');
   assert.ok(roof && Math.abs(roof.z - (2 * 1.8 + 0.12)) < 0.01);
   assert.ok(fence && Math.abs(fence.z - 0.8) < 0.01);
+
+  // Destroying host tree/building grounds arboreal animals and prunes orphaned nests
+  const oak = city.nature.plants.get(2);
+  const treeNest = city.fauna.placeNest({ x: oak.x + 0.5, y: oak.y + 0.5, z: 1.6, surface: 'tree', plantId: oak.id, species: 'bem_te_vi' });
+  const roofNest = city.fauna.placeNest({ x: 20.35, y: 20.35, z: 3.72, surface: 'roof', buildingId: 300, species: 'bem_te_vi' });
+  city.building = id => city.buildings.find(b => b.id === id) || null;
+  sloth.stateTimer = 0;
+  city.fauna.decideBehavior(sloth, false);
+  assert.ok(sloth.altitude > 1.0 && sloth.targetAltitude > 1.0);
+  oak.entity.destroyed = true;
+  city.buildings[0].entity.destroyed = true;
+  city.fauna.update(0.1);
+  assert.equal(sloth.altitude, 0, 'arboreal animal must drop to ground when tree is destroyed');
+  assert.equal(sloth.targetAltitude, 0, 'arboreal targetAltitude must reset to 0');
+  assert.equal(city.fauna.nests.has(treeNest.id), false, 'tree nest must be pruned when tree is destroyed');
+  assert.equal(city.fauna.nests.has(roofNest.id), false, 'roof nest must be pruned when building is destroyed');
 });
