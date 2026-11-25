@@ -4,7 +4,7 @@ import {playing,controlledCitizen,movementVector} from './js/character_game.js';
 import { FreeCameraTouchControls } from './js/free_camera_touch_controls.js';
 import {CityFavorites} from './js/city_favorites.js?v=custom-history-limit-1';
 import { CitySimulationBridge } from './js/city_sim_bridge.js?v=fauna-motion-1';
-import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
+import { resolveWorldSettings, randomWorldPreset, randomSettlementPreset, WORLD_PRESETS } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=game-approach-camera-9";
 import { CityDesktop } from "./js/city_desktop.js?v=game-approach-camera-9";
 import { World } from "./js/world.js";
@@ -40,6 +40,11 @@ let gameCameraLocked=true;
 let gameIndoorCamera=null;
 const urlParams = new URLSearchParams(window.location.search);
 const worldSettings = resolveWorldSettings(urlParams);
+if (!urlParams.has('terrain')) {
+  worldSettings.preset = randomWorldPreset();
+  worldSettings.presetId = WORLD_PRESETS[worldSettings.preset].id;
+}
+worldSettings.settlementPreset = urlParams.get('settlement') || randomSettlementPreset();
 startupLoading.stage('Gerando terreno…', 0.1);
 await startupLoading.paint();
 const world = new World(worldSettings.presetId, worldSettings.seed, worldSettings.size);
@@ -817,7 +822,7 @@ await startupLoading.paint();
 aquecerCatalogos();
 startupLoading.stage('Fundando a cidade…', 0.45);
 await startupLoading.paint();
-export let city = new CitySimulation({ world, createEntity, population: worldSettings.population, startFoundingWorks: true });
+export let city = new CitySimulation({ world, createEntity, population: worldSettings.population, settlementPreset: worldSettings.settlementPreset, startFoundingWorks: true });
 let cityGenerationError = null;
 try { city.initialize(); } catch (error) {
   cityGenerationError = error.message;
@@ -938,7 +943,7 @@ booted = true;
   requestAnimationFrame(frame);
 }
 
-export async function startNewCity({ preset = 'archipelago', seed = 482910, size = 256, population = 512 } = {}) {
+export async function startNewCity({ preset = randomWorldPreset(), settlementPreset = randomSettlementPreset(), seed = 482910, size = 256, population = 512 } = {}) {
   startupLoading.open();
   startupLoading.stage('Preparando o mundo…', 0.05);
   await startupLoading.paint();
@@ -958,6 +963,7 @@ export async function startNewCity({ preset = 'archipelago', seed = 482910, size
   const presetId = matchedPreset ? matchedPreset.presetId : (WORLD_PRESETS[preset]?.id ?? 0);
   worldSettings.preset = preset;
   worldSettings.presetId = presetId;
+  worldSettings.settlementPreset = settlementPreset;
   worldSettings.seed = seed;
   worldSettings.size = size;
   worldSettings.population = population;
@@ -981,7 +987,8 @@ export async function startNewCity({ preset = 'archipelago', seed = 482910, size
 
   startupLoading.stage('Fundando a cidade…', 0.55);
   await startupLoading.paint();
-  city = new CitySimulation({ world, createEntity, population, startFoundingWorks: true });
+  city = new CitySimulation({ world, createEntity, population, settlementPreset, startFoundingWorks: true });
+  // Ensure initialCity on world boot also uses the chosen settlementPreset when initialized later.
   favorites.city=city;
   let genError = null;
   try {

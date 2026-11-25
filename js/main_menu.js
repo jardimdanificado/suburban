@@ -1,5 +1,6 @@
 import { MANAGEMENT_THEME, bevel, readableLabel } from './management_ui.js';
-import { randomWorldSeed, WORLD_PRESETS } from './world_settings.js';
+import { randomWorldSeed, randomWorldPreset, randomSettlementPreset, WORLD_PRESETS } from './world_settings.js';
+import { SETTLEMENT_PRESETS } from './city_terrain.js?v=minimal-settlement-2';
 
 const T = MANAGEMENT_THEME;
 
@@ -98,7 +99,8 @@ export class MainMenu {
     this.gameModeOpen = false;
 
     // World generation parameters
-    this.selectedPreset = worldSettings.preset || 'archipelago';
+    this.selectedPreset = worldSettings.preset || randomWorldPreset();
+    this.selectedSettlementPreset = worldSettings.settlementPreset || randomSettlementPreset();
     this.selectedSize = worldSettings.size || 128;
     this.selectedPopulation = worldSettings.population || 512;
     this.selectedSeed = worldSettings.seed || 482910;
@@ -513,7 +515,7 @@ export class MainMenu {
   drawWorldGenerationDialog(ui, width, height, isMobile) {
     const ctx = ui.ctx;
     const mw = Math.min(340, width - 24);
-    const mh = 268;
+    const mh = 298;
 
     // Initialize or constrain window position
     if (this.genWindowPos.x === null || this.genWindowPos.y === null) {
@@ -556,7 +558,14 @@ export class MainMenu {
     // Every new city is an island map so maritime trade can connect it to the world.
     const presetLabel = WORLD_PRESETS[this.selectedPreset]?.label||'Arquipélago';
     ui.button(contentX,curY,contentW,24,`PAISAGEM: ${presetLabel.toUpperCase()} ▸`,()=>{const keys=Object.keys(WORLD_PRESETS);this.selectedPreset=keys[(keys.indexOf(this.selectedPreset)+1)%keys.length];});
-    curY += 32;
+    curY += 28;
+
+    const settlementLabel = SETTLEMENT_PRESETS[this.selectedSettlementPreset]?.label || 'Núcleo mínimo';
+    ui.button(contentX, curY, contentW, 24, `CIDADE INICIAL: ${settlementLabel.toUpperCase()} ▸`, () => {
+      const keys = Object.keys(SETTLEMENT_PRESETS);
+      this.selectedSettlementPreset = keys[(keys.indexOf(this.selectedSettlementPreset) + 1) % keys.length];
+    });
+    curY += 30;
 
     // 2. Semente do próximo mapa (matches Governo > Terreno)
     ui.text('Semente do próximo mapa', contentX, curY, T.ink);
@@ -607,6 +616,8 @@ export class MainMenu {
     const halfW = Math.floor((contentW - 6) / 2);
     ui.button(contentX, curY, halfW, 24, 'GERAR ALEATÓRIO', () => {
       this.selectedSeed = randomWorldSeed();
+      this.selectedPreset = randomWorldPreset();
+      this.selectedSettlementPreset = randomSettlementPreset();
       this.applyAndStartNewCity();
     });
 
@@ -622,6 +633,7 @@ export class MainMenu {
     if (typeof this.onStartNewCity === 'function') {
       this.onStartNewCity({
         preset: this.selectedPreset,
+        settlementPreset: this.selectedSettlementPreset,
         seed: this.selectedSeed,
         size: this.selectedSize,
         population: this.selectedPopulation

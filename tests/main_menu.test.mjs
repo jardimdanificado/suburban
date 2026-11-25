@@ -256,6 +256,7 @@ test('MainMenu applyAndStartNewCity triggers onStartNewCity callback without pag
   });
 
   menu.selectedPreset = 'continent';
+  menu.selectedSettlementPreset = 'minimal';
   menu.selectedSize = 512;
   menu.selectedPopulation = 1024;
   menu.selectedSeed = 998877;
@@ -265,6 +266,7 @@ test('MainMenu applyAndStartNewCity triggers onStartNewCity callback without pag
   assert.equal(menu.isActive(), false);
   assert.deepEqual(startParams, {
     preset: 'continent',
+    settlementPreset: 'minimal',
     seed: 998877,
     size: 512,
     population: 1024

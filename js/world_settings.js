@@ -1,4 +1,12 @@
 export const WORLD_PRESETS = { archipelago: { id: 0, label: 'Arquipélago' }, continent: { id: 1, label: 'Continente' }, highlands: { id: 2, label: 'Terras altas' }, coastal: { id: 3, label: 'Planície costeira' }, islands: { id: 4, label: 'Ilhas oceânicas' }, delta: { id: 5, label: 'Costa recortada' } };
+export function randomWorldPreset() {
+  const keys = Object.keys(WORLD_PRESETS);
+  return keys[Math.floor(Math.random() * keys.length)];
+}
+export function randomSettlementPreset() {
+  const keys = ['minimal', 'frontier', 'developed'];
+  return keys[Math.floor(Math.random() * keys.length)];
+}
 export function randomWorldSeed() {
   const values = new Uint32Array(1);
   if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(values);

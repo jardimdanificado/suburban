@@ -385,15 +385,30 @@ export function pavePath(world, path, blockedTiles = null, treeTiles = null, onP
   for(const key of sidewalks){const comma=key.indexOf(','),x=Number(key.slice(0,comma)),y=Number(key.slice(comma+1)),tree=treeTiles?.has(key)||false,blocked=typeof blockedTiles==='function'?blockedTiles(x,y,key):blockedTiles?.has(key);if(blocked)continue;const tile=tileAt(world,x,y);if(tile===TILE_FLOOR||tile===TILE_HILL||tile===TILE_SAND){world.setSidewalk?.(x,y,{tree});onPaveTile?.(x,y,'sidewalk');}}
 }
 
+export const SETTLEMENT_PRESETS = Object.freeze({
+  minimal: { id: 'minimal', label: 'Núcleo mínimo' },
+  frontier: { id: 'frontier', label: 'Desbravamento (sem casas)' },
+  developed: { id: 'developed', label: 'Cidade estruturada' },
+});
+
 export function generateSettlement(city) {
   const { world } = city;
   const origin = { ...world.spawnCenter };
   let hub = null;
   const hallFloors=Math.min(8,Math.max(2,Math.ceil((city.initialPopulation||0)/80)));
-  // Build civic/essential premises and a final assembler only; component makers
-  // are demand-driven businesses instead of a guaranteed starter supply chain.
-  const officeTypes=['builder','bank','carrier'].filter(type=>OFFICE_BUSINESSES.has(type));
-  const specs = [['townhall', 4, 4, hallFloors], ['office_tower', 3, 3, officeTypes.length + 1], ['quarry', 4, 4, 1], ['super_popular_housing', 4, 4, 2]];
+  const preset = SETTLEMENT_PRESETS[city.settlementPreset] ? city.settlementPreset : 'minimal';
+  let officeTypes, specs;
+  if (preset === 'developed') {
+    officeTypes=['builder','bank','carrier','newsroom','research_institute','research_institute','publisher'].filter(type=>OFFICE_BUSINESSES.has(type));
+    const starterHousing=Array.from({length:Math.max(1,Math.ceil((city.initialPopulation||0)/60))},()=>['super_popular_housing',4,4,4]);
+    specs = [['townhall', 4, 4, hallFloors], ['office_tower', 3, 3, officeTypes.length+5], ['quarry', 4, 4, 1], ['mint', 3, 3, 1], ['bike_rack',4,2,1], ['cycle_assembler',3,3,businessFloors('cycle_assembler','startup')], ['bike_rack',4,2,1], ['public_toilet',4,4,4], ['popular_refectory',4,4,4], ...starterHousing, ['cleaner',3,3,businessFloors('cleaner','startup')]];
+  } else if (preset === 'frontier') {
+    officeTypes=['builder','bank','carrier'].filter(type=>OFFICE_BUSINESSES.has(type));
+    specs = [['townhall', 4, 4, hallFloors], ['office_tower', 3, 3, officeTypes.length + 1], ['quarry', 4, 4, 1]];
+  } else {
+    officeTypes=['builder','bank','carrier'].filter(type=>OFFICE_BUSINESSES.has(type));
+    specs = [['townhall', 4, 4, hallFloors], ['office_tower', 3, 3, officeTypes.length + 1], ['quarry', 4, 4, 1], ['super_popular_housing', 4, 4, 2]];
+  }
   for (const [type, w, d, h] of specs) {
     const angle = city.random() * Math.PI * 2, radius = hub ? (type==='bike_rack'?4+city.random()*3:type==='quarry'?30+city.random()*10:8+city.random()*13) : 0;
     const preferred = { x: (hub?.x ?? origin.x) + Math.cos(angle) * radius, y: (hub?.y ?? origin.y) + Math.sin(angle) * radius };
