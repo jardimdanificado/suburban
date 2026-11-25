@@ -415,3 +415,28 @@ test('circular grazing clears only a circle, arboreal animals climb trees, and 2
   assert.equal(deer.entity.destroyed, true, 'consumed carcass entity must be destroyed');
   assert.equal(city.fauna.animals.has(deer.id), false, 'consumed carcass must be removed from fauna');
 });
+
+test('terrestrial species have distinct silhouettes and species-specific gaits', () => {
+  const load = (species, clip, frame) => parseCitizenOBJ(fs.readFileSync(path.join('data', 'animals', species, clip, `${frame}.obj`), 'utf8'));
+  // Rabbit hops off the ground mid-stride
+  const rabbitGround = load('coelho', 'walk', 0);
+  const rabbitAir = load('coelho', 'walk', 2);
+  assert.ok(rabbitGround.bounds.min[1] < 1e-3);
+  assert.ok(rabbitAir.bounds.min[1] > 0.08, 'rabbit walk frame 2 should hop airborne');
+
+  // Reptile exhibits lateral S-curve / tail sway across opposite walk half-cycles
+  const tailTipX = g => {
+    const p = g.attributes ? g.attributes.position.array : g.positions;
+    let minZ = Infinity, x = 0;
+    for (let i = 0; i < p.length; i += 3) if (p[i + 2] < minZ) { minZ = p[i + 2]; x = p[i]; }
+    return x;
+  };
+  const caiman0 = load('jacare', 'walk', 0);
+  const caiman4 = load('jacare', 'walk', 4);
+  assert.ok(Math.abs(tailTipX(caiman4) - tailTipX(caiman0)) > 0.25, 'caiman tail should sway laterally during walk');
+
+  // Coati holds its tail high upright compared to a low-tailed capybara
+  const coati = load('quati', 'idle', 0);
+  const capy = load('capivara', 'idle', 0);
+  assert.ok(coati.bounds.max[1] > capy.bounds.max[1], 'coati upright tail should raise its idle silhouette');
+});
