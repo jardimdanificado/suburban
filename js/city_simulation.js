@@ -1186,17 +1186,19 @@ export class CitySimulation {
       return;
     }
     const withinFichaRadius=pt=>!ficha||!ficha.door||!pt||Math.hypot(pt.x-ficha.door.x,pt.y-ficha.door.y)<=ficha.maxRadius;
+    const dirtTotal=(c.dirtSources?Object.values(c.dirtSources).reduce((s,v)=>s+(v||0),0):0)+(c.wardrobe?.[c.wearingIndex]?.dirt||0)*.5;
     if (urgent) { task = urgent; type = ({ water: 'utility', food: 'market', health: 'clinic', energy: 'home', hygiene: home ? 'home' : 'utility', toilet: 'toilet' })[urgent]; }
     else if (child && this.society.isAdult(c) && Math.min(n.food, n.water, n.energy, n.hygiene) >= 25 && n.health >= 40 && n.toilet >= 15) { task = 'caregiving'; type = 'child'; c.careChildId = child.id; }
     else if (n.food < 18) { task = 'food'; type = 'market'; }
     else if (n.health < 45) { task = 'health'; type = 'clinic'; }
     else if (n.water < 45) { task = 'water'; type = 'utility'; }
+    else if (n.hygiene < 25 || dirtTotal >= 50) { task = 'hygiene'; type = home ? 'home' : 'utility'; }
     else if (n.food < 72 && !this.welfare.mealAssistanceEligible(c)) { task = 'food'; type = 'market'; }
     else if (n.food < 45) { task = 'food'; type = 'market'; }
     else if (n.toilet < 45) { task = 'toilet'; type = 'toilet'; }
     else if (this.substances?.consider(c))return;
     else if (wantsSleep(this,c)) { task = 'energy'; type = 'home'; }
-    else if (n.hygiene < 45 || (c.dirtSources && Object.values(c.dirtSources).reduce((s,v)=>s+(v||0),0) >= 35)) { task = 'hygiene'; type = home ? 'home' : 'utility'; }
+    else if (n.hygiene < 55 || dirtTotal >= 25) { task = 'hygiene'; type = home ? 'home' : 'utility'; }
     else if(c.secretaryOffice==='labor'&&this.hour>=8&&this.hour<17){task='work';type='job';}
     else if (this.society.age(c) < 6) { task = 'care'; type = 'home'; }
     else if (child && this.society.isAdult(c)) { task = 'caregiving'; type = 'child'; c.careChildId = child.id; }
@@ -1337,11 +1339,15 @@ export class CitySimulation {
     if(c.task==='swim-hygiene'||c.task==='swim-leisure'){
       const cx=Math.floor(c.entity.x),cy=Math.floor(c.entity.y);
       c.swimming=this.world.getTile(cx,cy)===TILE_WATER;
+      const srcDirt=c.dirtSources?Object.values(c.dirtSources).reduce((s,v)=>s+(v||0),0):0;
+      const clothDirt=(c.wardrobe||[]).reduce((s,g)=>s+(g.dirt||0),0);
+      const washLoad=Math.max(0,100-(c.needs.hygiene??100))*.6+srcDirt*1.4+clothDirt*.5;
+      if(c.swimming&&washLoad>1)this.water?.polluteAt?.(c.entity.x,c.entity.y,washLoad);
       this.sanitation?.washCitizenDirt?.(c,1);
       for(const g of c.wardrobe||[])if(g.dirt>0)g.dirt=0;
       const done=c.task==='swim-hygiene'?(c.needs.hygiene>=95||this.minute>=(c.swimUntil||Infinity)):(c.needs.leisure>=92||this.hour>=22||this.minute>=(c.swimUntil||Infinity));
-      if(c.task==='swim-hygiene'){c.needs.hygiene=clamp(c.needs.hygiene+20);c.action='Boiando para se lavar na água';}
-      else{c.needs.leisure=clamp(c.needs.leisure+8);c.needs.hygiene=clamp(c.needs.hygiene+6);c.mood=Math.min(25,(c.mood||0)+.04);c.action='Boiando e relaxando na água';}
+      if(c.task==='swim-hygiene'){c.needs.hygiene=clamp(c.needs.hygiene+50);c.action='Boiando para se lavar na água';}
+      else{c.needs.leisure=clamp(c.needs.leisure+8);c.needs.hygiene=clamp(c.needs.hygiene+20);c.mood=Math.min(25,(c.mood||0)+.04);c.action='Boiando e relaxando na água';}
       if(done){
         if(c.swimSpot?.shore){c.path=this.groundPath(c.entity,c.swimSpot.shore,{allowWater:true})||[c.swimSpot.shore];c.task='swim-exit';}else{c.task=null;c.swimming=false;}
       }else if(!c.path.length&&c.task==='swim-leisure'&&(c.id+this.minute)%4===0){
@@ -1851,7 +1857,13 @@ export class CitySimulation {
           if(c.playerControlled&&this.characterGame?.input?.run)c.needs.energy=Math.max(0,c.needs.energy-travelled*.18);
           c.mobilityTimeLostToday=(c.mobilityTimeLostToday||0)+travelled*cost;
           c.mobilityNeed=Math.min(100,(c.mobilityNeed||0)+travelled*cost*.22*(c.mobilityPriority||1));
-          if(c.swimming)this.sanitation?.washCitizenDirt?.(c,travelled*.3);
+          if(c.swimming){
+            const washFrac=Math.min(1,travelled*.6),srcDirt=c.dirtSources?Object.values(c.dirtSources).reduce((s,v)=>s+(v||0),0):0,hygDirt=Math.max(0,100-(c.needs.hygiene??100));
+            const washLoad=(srcDirt*1.4+hygDirt*.5)*washFrac;
+            if(washLoad>.5)this.water?.polluteAt?.(c.entity.x,c.entity.y,washLoad);
+            this.sanitation?.washCitizenDirt?.(c,washFrac);
+            c.needs.hygiene=clamp(c.needs.hygiene+travelled*35);
+          }
           if(!elevated&&!boatWaypoint&&!swimTile){wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
           if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);this.sanitation?.soilCitizen?.(c,'barro',travelled*.15,null,'feet');c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}}
         }

@@ -5,9 +5,9 @@ export function waterIndex(world){
  let cached=indexes.get(world);if(cached&&cached.map===world.map&&cached.width===world.width&&cached.height===world.height&&cached.revision===(world.waterTopologyRevision||0))return cached;
  const {width,height}=world,size=width*height,labels=new Int32Array(size);labels.fill(-1);const bodies=[],tile=(x,y)=>world.map?world.map[y*width+x]:world.getTile(x,y);
  for(let i=0;i<size;i++){const x=i%width,y=Math.floor(i/width);if(labels[i]!==-1||tile(x,y)!==TILE_WATER)continue;
-  const id=bodies.length,queue=[i],shores=new Set();labels[i]=id;
-  for(let head=0;head<queue.length;head++){const n=queue[head],px=n%width,py=Math.floor(n/width);for(const [dx,dy] of DIRECTIONS){const nx=px+dx,ny=py+dy,k=ny*width+nx;if(nx<0||ny<0||nx>=width||ny>=height)continue;if(tile(nx,ny)===TILE_WATER){if(labels[k]===-1){labels[k]=id;queue.push(k);}}else shores.add(k);}}
-  bodies.push({id:i,area:queue.length,shores:[...shores]});
+  const id=bodies.length,queue=[i],shores=new Set();labels[i]=id;let borderTiles=0;
+  for(let head=0;head<queue.length;head++){const n=queue[head],px=n%width,py=Math.floor(n/width);if(px===0||py===0||px===width-1||py===height-1)borderTiles++;for(const [dx,dy] of DIRECTIONS){const nx=px+dx,ny=py+dy,k=ny*width+nx;if(nx<0||ny<0||nx>=width||ny>=height)continue;if(tile(nx,ny)===TILE_WATER){if(labels[k]===-1){labels[k]=id;queue.push(k);}}else shores.add(k);}}
+  bodies.push({id:i,area:queue.length,borderTiles,shores:[...shores]});
  }
  cached={map:world.map,width,height,revision:world.waterTopologyRevision||0,labels,bodies};indexes.set(world,cached);return cached;
 }
@@ -16,13 +16,26 @@ export function waterTint(pollution){const t=clamp(pollution)/100,clean=[.086,.4
 export class CityWater{
  constructor(city){this.city=city;this.bodies=[];this.drawn=0;}
  reconcile(){const index=waterIndex(this.city.world);if(this.topologyKey===`${index.revision}:${index.width}:${index.height}:${index.bodies.length}`&&this.bodies.length===index.bodies.length){this.city.world.waterBodies=this.bodies;return index;}
-  const old=new Map(this.bodies.map(b=>[b.id,b]));this.bodies=index.bodies.map(b=>old.get(b.id)||{id:b.id,area:b.area,volume:b.area*1000,pollutants:0,pollution:0});this.topologyKey=`${index.revision}:${index.width}:${index.height}:${index.bodies.length}`;this.city.world.waterBodies=this.bodies;return index;
+  const old=new Map(this.bodies.map(b=>[b.id,b]));this.bodies=index.bodies.map(b=>{const prev=old.get(b.id);return prev?Object.assign(prev,{area:b.area,borderTiles:b.borderTiles}):{id:b.id,area:b.area,borderTiles:b.borderTiles,volume:b.area*1000,pollutants:0,pollution:0};});this.topologyKey=`${index.revision}:${index.width}:${index.height}:${index.bodies.length}`;this.city.world.waterBodies=this.bodies;return index;
+ }
+ polluteAt(x,y,amount){
+  if(!amount||amount<=0)return false;
+  const index=this.reconcile(),w=this.city.world.width,h=this.city.world.height;
+  let id=-1;const cx=Math.floor(x),cy=Math.floor(y);
+  if(cx>=0&&cy>=0&&cx<w&&cy<h)id=index.labels[cy*w+cx];
+  if(id<0){for(const [dx,dy]of DIRECTIONS){const nx=cx+dx,ny=cy+dy;if(nx>=0&&ny>=0&&nx<w&&ny<h&&index.labels[ny*w+nx]>=0){id=index.labels[ny*w+nx];break;}}}
+  const b=this.bodies[id];if(!b)return false;
+  const previous=Math.round(b.pollution);
+  b.pollutants=Math.max(0,(b.pollutants||0)+amount);
+  b.pollution=clamp(b.pollutants/Math.max(1,b.volume)*100);
+  if(Math.round(b.pollution)!==previous)this.city.world.waterPollutionRevision=(this.city.world.waterPollutionRevision||0)+1;
+  return true;
  }
  hourly(){const city=this.city,index=this.reconcile(),loads=new Map();
   const runoff=(x,y,amount)=>{const near=new Map();for(let dy=-6;dy<=6;dy++)for(let dx=-6;dx<=6;dx++){const distance=Math.hypot(dx,dy);if(distance>6)continue;const px=x+dx,py=y+dy;if(px<0||py<0||px>=city.world.width||py>=city.world.height)continue;const id=index.labels[py*city.world.width+px];if(id>=0)near.set(id,Math.max(near.get(id)||0,1/(1+distance)));}for(const [id,factor]of near)loads.set(id,(loads.get(id)||0)+amount*factor);};
   for(const [key,pile]of city.sanitation.streetFeces){const [x,y]=key.split(',').map(Number);runoff(x,y,pile.amount*50);}
   for(const b of city.buildings){if(b.entity.destroyed)continue;if(b.litter)runoff(Math.floor(b.door.x),Math.floor(b.door.y),b.litter*8);for(const [key,pile]of b.feces||[]){const [x,y]=key.split(',').map(Number);runoff(Math.floor(b.entity.x+x),Math.floor(b.entity.y+y),pile.amount*12);}}
-  let changed=false;for(const [i,b]of this.bodies.entries()){const previous=Math.round(b.pollution);b.pollutants=Math.max(0,b.pollutants*.985+(loads.get(i)||0));b.pollution=clamp(b.pollutants/Math.max(1,b.volume)*100);if(Math.round(b.pollution)!==previous)changed=true;}
+  let changed=false;for(const [i,b]of this.bodies.entries()){const previous=Math.round(b.pollution);const border=b.borderTiles||0;const borderFactor=border>0?Math.min(1,.15+border/40):0;const decay=border>0?(.975-.155*borderFactor):.997;b.pollutants=Math.max(0,b.pollutants*decay+(loads.get(i)||0));b.pollution=clamp(b.pollutants/Math.max(1,b.volume)*100);if(Math.round(b.pollution)!==previous)changed=true;}
   if(changed)city.world.waterPollutionRevision=(city.world.waterPollutionRevision||0)+1;
  }
  nearestShore(c){const city=this.city,index=this.reconcile();let best=null,score=Infinity;

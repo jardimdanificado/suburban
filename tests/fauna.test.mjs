@@ -6,6 +6,7 @@ import { ANIMAL_SPECIES, ANIMAL_CLIPS, ANIMAL_SPECIES_IDS } from '../js/animal_c
 import { parseCitizenOBJ } from '../js/city_citizen_models.js';
 import { CityFauna, FAUNA_RULES } from '../js/city_fauna.js';
 import { CitySanitation } from '../js/city_sanitation.js';
+import { CityWater } from '../js/city_water.js';
 import { CityAnimalModels, animalAnimation, animalFrame } from '../js/city_animal_models.js';
 import { TILE_WATER } from '../js/world_gen.js';
 
@@ -483,6 +484,35 @@ test('combat blood splatters street/walls/plants, soilCitizen tracks dirt types,
   }
   assert.equal(job.status, 'completed');
   assert.equal(sanitation.stains.has(streetStain.id), false, 'cleaned stain must be removed');
+});
+
+test('washing pollutes water and open sea recovers faster than landlocked lakes', () => {
+  const width = 16, height = 16;
+  const flatMap = new Array(width * height).fill(0);
+  // Sea touching top border (many border tiles)
+  for (let x = 0; x < 16; x++) flatMap[x] = TILE_WATER;
+  for (let x = 4; x < 12; x++) flatMap[1 * width + x] = TILE_WATER;
+  // Landlocked lake in middle
+  for (let y = 7; y <= 9; y++) for (let x = 7; x <= 9; x++) flatMap[y * width + x] = TILE_WATER;
+  const city = {
+    world: { width, height, map: flatMap, waterTopologyRevision: 0 },
+    sanitation: { streetFeces: new Map() },
+    buildings: [],
+  };
+  const water = new CityWater(city);
+  water.reconcile();
+  assert.equal(water.bodies.length, 2);
+  const [sea, lake] = water.bodies;
+  assert.ok(sea.borderTiles > 10 && lake.borderTiles === 0);
+
+  water.polluteAt(5.5, 0.5, 5000);
+  water.polluteAt(8.5, 8.5, 5000);
+  const seaInitial = sea.pollutants, lakeInitial = lake.pollutants;
+  assert.ok(seaInitial > 0 && lakeInitial > 0);
+
+  for (let h = 0; h < 10; h++) water.hourly();
+  assert.ok(sea.pollutants / seaInitial < lake.pollutants / lakeInitial, 'sea with border tiles must recover faster than lake');
+  assert.ok(lake.pollutants / lakeInitial > 0.95, 'landlocked lake must recover very slowly');
 });
 
 test('terrestrial species have distinct silhouettes and species-specific gaits', () => {

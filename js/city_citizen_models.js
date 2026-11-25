@@ -669,10 +669,48 @@ if (vCitizenDirt.a > 0.05) {
         this.flyMesh.setMatrixAt(this.flyCount++,this.matrix);
       }
     }
-    if((clip==='nadar'||clip==='boiar')&&!dimmed&&this.THREE.BoxGeometry&&this.THREE.MeshBasicMaterial){
+    if((clip==='nadar'||clip==='boiar')&&!dimmed&&this.THREE.BoxGeometry&&(this.THREE.MeshLambertMaterial||this.THREE.MeshBasicMaterial)){
       const floating=clip==='boiar',foamCount=floating?4:6;
       if(this.swimFoamCount+foamCount>this.swimFoamCapacity){
-        const cap=Math.max(64,(this.swimFoamCapacity||32)*2),geo=new this.THREE.BoxGeometry(.12,.012,.12),mat=new this.THREE.MeshBasicMaterial({color:0xeefaf8,transparent:true,opacity:.72,depthWrite:false}),mesh=new this.THREE.InstancedMesh(geo,mat,cap);
+        const cap=Math.max(64,(this.swimFoamCapacity||32)*2),geo=new this.THREE.BoxGeometry(.22,.008,.22);
+        const Mat=this.THREE.MeshLambertMaterial||this.THREE.MeshBasicMaterial;
+        const mat=new Mat({color:0xe2f5f2,transparent:false,depthWrite:false,dithering:true});
+        mat.onBeforeCompile=shader=>{
+          shader.vertexShader=shader.vertexShader
+            .replace('#include <common>',`#include <common>
+varying vec2 vFoamLocal;
+varying vec2 vFoamWorld;`)
+            .replace('#include <begin_vertex>',`#include <begin_vertex>
+vFoamLocal = position.xz / 0.11;
+vec4 foamWorldPos = vec4(transformed, 1.0);
+#ifdef USE_INSTANCING
+foamWorldPos = instanceMatrix * foamWorldPos;
+#endif
+foamWorldPos = modelMatrix * foamWorldPos;
+vFoamWorld = foamWorldPos.xz;`);
+          shader.fragmentShader=shader.fragmentShader
+            .replace('#include <common>',`#include <common>
+varying vec2 vFoamLocal;
+varying vec2 vFoamWorld;`)
+            .replace('#include <alphatest_fragment>',`#include <alphatest_fragment>
+float r = length(vFoamLocal);
+vec2 fp = vFoamWorld * 18.0;
+float n = 0.5 + 0.25 * sin(fp.x * 1.7 + sin(fp.y * 1.3)) + 0.25 * cos(fp.y * 2.1 - sin(fp.x * 1.1));
+float density = smoothstep(0.96, 0.16, r + (n - 0.5) * 0.36);
+if (density <= 0.04) discard;
+vec2 dCell = mod(floor(gl_FragCoord.xy), 4.0);
+float dIdx = dCell.x + dCell.y * 4.0;
+float bayer = (
+  dIdx < 1.0 ? 0.5 : dIdx < 2.0 ? 8.5 : dIdx < 3.0 ? 2.5 : dIdx < 4.0 ? 10.5 :
+  dIdx < 5.0 ? 12.5 : dIdx < 6.0 ? 4.5 : dIdx < 7.0 ? 14.5 : dIdx < 8.0 ? 6.5 :
+  dIdx < 9.0 ? 3.5 : dIdx < 10.0 ? 11.5 : dIdx < 11.0 ? 1.5 : dIdx < 12.0 ? 9.5 :
+  dIdx < 13.0 ? 15.5 : dIdx < 14.0 ? 7.5 : dIdx < 15.0 ? 13.5 : 5.5
+) / 16.0;
+if (density < bayer) discard;`);
+        };
+        mat.customProgramCacheKey=()=> 'citizen-swim-foam-dither-2';
+        this.decorateMaterial(mat);
+        const mesh=new this.THREE.InstancedMesh(geo,mat,cap);
         mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.renderOrder=2;
         if(this.swimFoamMesh){for(let i=0;i<this.swimFoamCount;i++){this.swimFoamMesh.getMatrixAt(i,this.matrix);mesh.setMatrixAt(i,this.matrix);}this.group.remove(this.swimFoamMesh);this.swimFoamMesh.geometry.dispose();this.swimFoamMesh.material.dispose();}
         this.group.add(mesh);this.swimFoamMesh=mesh;this.swimFoamCapacity=cap;
