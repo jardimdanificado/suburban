@@ -50,16 +50,20 @@ export function shackSurfacePixels(kind = 'cardboard', variant = 0, size = 64) {
       let tintB = 1;
 
       if (kind === 'cardboard') {
-        // Corrugated kraft cardboard: visible parallel flute ribs, fibrous speckle, fold creases
-        const flute = Math.sin(u * Math.PI * 2 * 10) * 0.5 + 0.5;
-        const fiber = periodicNoise(u, v, 16, seed + 71) * 0.6 + periodicNoise(u, v, 32, seed + 113) * 0.4;
-        const crease = Math.abs(((v + 0.25) % 0.5) - 0.25) < 0.03 ? 1 : 0;
-        const tape = u > 0.36 && u < 0.52 && v > 0.1 && v < 0.85 ? 0.4 : 0;
-        h = clamp(0.4 + flute * 0.34 + (fiber - 0.5) * 0.16 - crease * 0.3 + tape * 0.1 + (fine - 0.5) * 0.06);
-        lum = 198 + flute * 34 + (fiber - 0.5) * 34 - crease * 60 + tape * 26 + (fine - 0.5) * 18;
-        tintR = 1.05;
-        tintG = 0.96;
-        tintB = 0.84;
+        // Real kraft cardboard: matte fibrous paper, box flap seam, fold creases, packing tape, and small torn flute patch
+        const paper = periodicNoise(u, v, 10, seed + 71) * 0.55 + periodicNoise(u, v, 24, seed + 113) * 0.45;
+        const warp = (periodicNoise(u, v, 4, seed + 43) - 0.5) * 0.04;
+        const flapSeam = Math.abs(v - 0.48 + warp) < 0.018 ? 1 : 0;
+        const foldCrease = Math.abs(u - 0.28 - warp) < 0.014 || Math.abs(u - 0.78 + warp) < 0.014 ? 1 : 0;
+        const flapShade = v < 0.48 + warp ? 10 : -8;
+        const tape = u > 0.34 && u < 0.66 && Math.abs(v - 0.48 + warp) < 0.085 ? 1 : 0;
+        const tornSpot = Math.hypot((u - 0.72) * 1.4, (v - 0.22) * 1.8) < 0.14;
+        const innerFlute = tornSpot ? (Math.sin(u * Math.PI * 2 * 18) * 0.5 + 0.5) : 0;
+        h = clamp(0.50 + (paper - 0.5) * 0.09 - flapSeam * 0.28 - foldCrease * 0.18 + tape * 0.06 - (tornSpot ? 0.18 - innerFlute * 0.14 : 0) + (fine - 0.5) * 0.04);
+        lum = 196 + flapShade + (paper - 0.5) * 28 - flapSeam * 52 - foldCrease * 30 + (fine - 0.5) * 16;
+        if (tape) { lum = 224 + (fine - 0.5) * 10; tintR = 1.06; tintG = 1.00; tintB = 0.84; }
+        else if (tornSpot) { lum = 152 + innerFlute * 36 + (fine - 0.5) * 14; tintR = 1.02; tintG = 0.90; tintB = 0.74; }
+        else { tintR = 1.08; tintG = 0.94; tintB = 0.76; }
       } else if (kind === 'plywood') {
         // Rough madeirite plywood: elongated wood grain, knots, board seams
         const grain = periodicNoise(u * 0.5 + periodicNoise(u, v, 4, seed + 31) * 0.18, v * 4, 8, seed + 59);

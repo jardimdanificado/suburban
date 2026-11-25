@@ -18,6 +18,11 @@ const contractorHandles=(type,service)=>type==='builder'||type===contractorForSe
 const FOUNDING_ESSENTIAL_WORKS = Object.freeze([
   ['iml', 110], ['police_station', 105], ['crematorium', 100], ['courthouse', 95], ['jail', 90],
 ]);
+export function civicMonumentFloors(type,compact=false){
+  if(['courthouse','police_station','jail','council_chamber','clinic'].includes(type))return compact?2:3;
+  if(['iml','crematorium','council_oversight_office','library'].includes(type))return 2;
+  return 1;
+}
 export const DEVELOPMENT_RULES = { landPerCell: 4000, stonePerCell: 2, laborPerCell: 3, constructionFeePerCell: 12000, roadStonePerTile: 1, roadLaborPerTile: 2, roadFeePerTile: 8000, municipalMultiplier: 1.5, wearInterval: 30 * 1440, repairThreshold: 60 };
 export class CityDevelopment {
   constructor(city) { this.city = city; this.plots = []; this.projects = []; this.nextPlotId = 1; this.nextProjectId = 1; this.plotOverlapBuckets = null; }
@@ -448,7 +453,8 @@ export class CityDevelopment {
       if(!site||!this.acquirePublicSite(site))continue;
       const builder=this.selectBuilder('treasury',site.door);
       if(!builder)continue;
-      const project=this.beginProject('treasury',site.lot.id,type,{width:site.width,depth:site.depth,floors:1,builderId:builder.id,priority,rotation:site.rotation});
+      const floors=civicMonumentFloors(type,this.compactPlanning);
+      const project=this.beginProject('treasury',site.lot.id,type,{width:site.width,depth:site.depth,floors,builderId:builder.id,priority,rotation:site.rotation});
       if(!project)continue;
       project.foundingEssential=true;
       project.name=`Obra inicial: ${city.buildingTypes[type].label}`;

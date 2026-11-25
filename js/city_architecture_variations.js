@@ -272,46 +272,97 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    else {box(Math.max(.8,b.width*.65),1.1,Math.max(.65,b.depth*.45),b.width*.5,roof+.67,b.depth*.5,variant===3?0xb97559:0x7d9598);box(Math.max(.9,b.width*.72),.15,Math.max(.75,b.depth*.53),b.width*.5,roof+1.3,b.depth*.5,metal);}
    box(Math.max(.8,b.width*.55),.35,Math.max(.65,b.depth*.36),b.width*.5,roof+.29,b.depth*.7,0x89999a);
    for(const space of spaces.filter(s=>s.kind==='balcony'))furnishedBalcony(space);
- }else if(['police_station','jail','crematorium','iml','courthouse','council_oversight_office'].includes(b.type)){
-   const palettes={police_station:[0x526e70,0xe1d5b8],jail:[0x766d61,0xb9a88c],crematorium:[0xa7755d,0xe8d9bd],iml:[0x68838a,0xe5e4d8],courthouse:[0x596a70,0xf0e8d9],council_oversight_office:[0x65827e,0xded4b7]},[accent,light]=palettes[b.type];
-   const porch=Math.min(.78,Math.max(.55,b.depth*.22)),frontZ=b.depth+porch*.55;
+ }else if(['police_station','jail','crematorium','iml','courthouse','council_oversight_office','clinic','library'].includes(b.type)){
+   const palettes={police_station:[0x314a63,0xe1d5b8],jail:[0x5d574f,0xb9a88c],crematorium:[0x8c5f4b,0xe8d9bd],iml:[0x557078,0xe8eae2],courthouse:[0x4f6168,0xf2eadb],council_oversight_office:[0x53736b,0xded4b7],clinic:[0x447d6d,0xf2f4ef],library:[0x7a513b,0xe9dcc2]},[accent,light]=palettes[b.type];
+   const porch=Math.min(.88,Math.max(.58,b.depth*.24)),frontZ=b.depth+porch*.52,brass=0xc8a454,copper=0x4f7d6e;
+   // Full-height corner pilasters and continuous cornice tie all floors together.
+   for(const px of [.1,b.width-.1])for(const pz of [.1,b.depth-.1])box(.18,roof,.18,px,roof/2,pz,light,'stone');
+   for(let f=1;f<=b.floors;f++){
+    const cy=f*CITY_FLOOR_HEIGHT-.04;
+    box(b.width+.18,.1,.14,b.width/2,cy,b.depth+.02,light,'stone');
+    box(b.width+.18,.1,.14,b.width/2,cy,-.02,light,'stone');
+    box(.14,.1,b.depth+.18,-.02,cy,b.depth/2,light,'stone');
+    box(.14,.1,b.depth+.18,b.width+.02,cy,b.depth/2,light,'stone');
+   }
    if(b.type==='courthouse'){
-    const porticoZ=b.depth+porch*.52,columns=Math.max(4,Math.floor(b.width/1.15)-(Math.floor(b.width/1.15)%2)),columnStart=Math.max(.38,(b.width-(columns-1)*Math.min(1.25,(b.width-.76)/(columns-1)))/2),columnGap=(b.width-2*columnStart)/(columns-1);
-    box(b.width+.3,.22,.28,b.width/2,.12,b.depth+.13,0xb8ad98);
-    box(b.width+.14,.13,porch,b.width/2,1.76,b.depth+porch*.5,light);
+    // Monumental multi-story colonnade, classical pediment, and rooftop justice dome.
+    const porticoZ=b.depth+porch*.56,colH=Math.min(roof-.08,Math.max(1.72,Math.min(2,b.floors)*CITY_FLOOR_HEIGHT-.12));
+    const columns=Math.max(4,Math.floor(b.width/1.05)-(Math.floor(b.width/1.05)%2)),columnStart=Math.max(.34,(b.width-(columns-1)*Math.min(1.15,(b.width-.68)/(columns-1)))/2),columnGap=(b.width-2*columnStart)/(columns-1);
+    box(b.width+.32,.22,.34,b.width/2,.11,b.depth+.16,0xb8ad98,'stone');
+    box(b.width+.18,.14,porch,b.width/2,colH+.07,b.depth+porch*.5,light,'stone');
     for(let i=0;i<columns;i++){
      const x=columnStart+i*columnGap;
-     cylinder(.135,1.48,x,.91,porticoZ,light);
-     cylinder(.2,.13,x,.19,porticoZ,0xc7bca7);
-     cylinder(.2,.11,x,1.68,porticoZ,0xc7bca7);
+     cylinder(.13,colH-.22,x,colH/2+.02,porticoZ,light,'stone');
+     cylinder(.2,.14,x,.2,porticoZ,0xc7bca7,'stone');
+     cylinder(.2,.12,x,colH-.04,porticoZ,0xc7bca7,'stone');
     }
-    box(b.width+.25,.24,.22,b.width/2,1.78,porticoZ,light);
-    box(b.width+.32,.09,.25,b.width/2,1.94,porticoZ,accent);
-    const pedimentShape=new THREE.Shape();pedimentShape.moveTo(0,0);pedimentShape.lineTo(b.width/2,.48);pedimentShape.lineTo(b.width,0);pedimentShape.closePath();
-    const pediment=new THREE.Mesh(new THREE.ExtrudeGeometry(pedimentShape,{depth:.12,bevelEnabled:false}),mat(light));pediment.position.set(0,1.98,porticoZ+.06);pediment.castShadow=true;root.add(pediment);
-    const seal=new THREE.Mesh(new THREE.TorusGeometry(.19,.035,6,16),mat(accent));seal.rotation.x=Math.PI/2;seal.position.set(b.width/2,2.18,porticoZ+.195);root.add(seal);
+    box(b.width+.28,.22,.24,b.width/2,colH+.14,porticoZ,light,'stone');
+    box(b.width+.36,.09,.28,b.width/2,colH+.28,porticoZ,accent,'stone');
+    const pedY=colH+.32,pedimentShape=new THREE.Shape();pedimentShape.moveTo(0,0);pedimentShape.lineTo(b.width/2,.58);pedimentShape.lineTo(b.width,0);pedimentShape.closePath();
+    const pediment=new THREE.Mesh(new THREE.ExtrudeGeometry(pedimentShape,{depth:.14,bevelEnabled:false}),mat(light,'stone'));pediment.position.set(0,pedY,porticoZ-.04);pediment.castShadow=true;root.add(pediment);
+    const seal=new THREE.Mesh(new THREE.TorusGeometry(.2,.038,6,16),mat(brass,'metal'));seal.position.set(b.width/2,pedY+.24,porticoZ+.12);root.add(seal);
+    // Rooftop stepped drum + dome + finial spire.
+    const drumR=Math.min(b.width,b.depth)*.26;
+    cylinder(drumR*1.12,.22,b.width/2,roof+.11,b.depth/2,light,'stone');
+    cylinder(drumR,.72,b.width/2,roof+.58,b.depth/2,light,'stone');
+    cylinder(drumR*1.08,.1,b.width/2,roof+.96,b.depth/2,brass,'metal');
+    const dome=new THREE.Mesh(new THREE.SphereGeometry(drumR*.96,12,8,0,Math.PI*2,0,Math.PI/2),mat(variant%2?copper:brass,'metal'));dome.position.set(b.width/2,roof+1.01,b.depth/2);dome.castShadow=true;root.add(dome);
+    cylinder(.04,.45,b.width/2,roof+1.01+drumR*.96+.2,b.depth/2,brass,'metal');
    }else{
-    box(b.width+.12,.13,porch,b.width/2,1.72,frontZ,variant%2?accent:style.roof);
-    for(const x of [.3,b.width-.3]){cylinder(.08,1.65,x,.82,frontZ+porch*.34,light);box(.18,.1,.18,x,1.68,frontZ+porch*.34,accent);}
+    box(b.width+.16,.14,porch,b.width/2,1.74,frontZ,accent,'stone');
+    for(const x of [.28,b.width-.28]){cylinder(.09,1.66,x,.83,frontZ+porch*.34,light,'stone');box(.22,.12,.22,x,.12,frontZ+porch*.34,0xb8ad98,'stone');box(.22,.12,.22,x,1.66,frontZ+porch*.34,accent,'stone');}
    }
    if(b.type==='police_station'){
-    box(b.width*.36,.68,b.depth*.36,b.width*.76,roof+.33,b.depth*.25,light);box(b.width*.42,.15,b.depth*.42,b.width*.76,roof+.76,b.depth*.25,accent);
-    for(const x of [b.width*.3,b.width*.7])box(.44,.13,.18,x,1.94,b.depth+.11,variant%2?light:0x63877d);
+    // Imposing precinct watchtower, radio mast, and shield crest.
+    const tw=Math.min(1.4,b.width*.38),td=Math.min(1.4,b.depth*.38),tx=b.width*(variant%2?.72:.28),tz=b.depth*.32;
+    box(tw,.95,td,tx,roof+.48,tz,light,'stone');
+    box(tw+.16,.14,td+.16,tx,roof+.98,tz,accent,'metal');
+    box(tw*.65,.22,td*.65,tx,roof+1.16,tz,metal,'metal');
+    cylinder(.035,1.35,tx,roof+1.88,tz,metal,'metal');
+    box(.16,.12,.16,tx,roof+2.56,tz,0x3c79c8,'metal');
+    box(.46,.38,.08,b.width/2,1.98,frontZ+porch*.48,accent,'metal');
+    box(.28,.22,.1,b.width/2,1.98,frontZ+porch*.49,brass,'metal');
    }else if(b.type==='jail'){
-    for(let i=0;i<Math.max(4,b.width*2);i++){const x=.24+i*(b.width-.48)/(Math.max(4,b.width*2)-1);box(.045,.68,.06,x,1.05,b.depth+.19,accent);}
-    box(b.width*.28,.58,b.depth*.3,b.width*.76,roof+.3,b.depth*.24,accent);box(b.width*.34,.12,b.depth*.36,b.width*.76,roof+.66,b.depth*.24,light);
+    // Fortified stone bastion: crenellated battlements + twin corner watchtowers + barred bays.
+    for(let i=0;i<Math.max(4,Math.floor(b.width*1.6));i++){const mx=.22+i*(b.width-.44)/Math.max(1,Math.floor(b.width*1.6)-1);box(.22,.28,.16,mx,roof+.14,b.depth+.02,light,'stone');box(.22,.28,.16,mx,roof+.14,-.02,light,'stone');}
+    for(const tx of [.36,b.width-.36]){
+     const tw=Math.min(.82,b.width*.24);
+     box(tw,1.05,tw,tx,roof+.52,b.depth*.28,light,'stone');
+     box(tw+.14,.12,tw+.14,tx,roof+1.08,b.depth*.28,accent,'metal');
+    }
+    for(let f=0;f<b.floors;f++)for(let i=0;i<Math.max(4,b.width*2);i++){const x=.24+i*(b.width-.48)/(Math.max(4,b.width*2)-1);box(.04,.64,.06,x,f*CITY_FLOOR_HEIGHT+1.0,b.depth+.12,metal,'metal');}
    }else if(b.type==='crematorium'){
-    const stackX=b.width*.76,stackZ=b.depth*.25;box(.38,1.25,.38,stackX,roof+.62,stackZ,accent);box(.52,.12,.52,stackX,roof+1.3,stackZ,light);
-    for(const x of [.42,b.width/2,b.width-.42])box(.08,.72,.08,x,1.02,b.depth+.18,light);
+    // Monumental stone chimney tower + memorial clerestory.
+    const stackX=b.width*.74,stackZ=b.depth*.3;
+    box(.54,2.25,.54,stackX,roof+1.12,stackZ,accent,'stone');
+    for(const ry of [.65,1.45,2.2])box(.64,.1,.64,stackX,roof+ry,stackZ,light,'stone');
+    box(.68,.14,.68,stackX,roof+2.3,stackZ,metal,'metal');
+    box(b.width*.42,.52,b.depth*.38,b.width*.34,roof+.26,b.depth*.48,light,'stone');
+    box(b.width*.48,.14,b.depth*.44,b.width*.34,roof+.56,b.depth*.48,copper,'roof');
    }else if(b.type==='iml'){
-    box(b.width*.34,.92,.18,b.width*.72,roof+.5,b.depth*.25,light);box(b.width*.42,.13,.25,b.width*.72,roof+1,b.depth*.25,accent);
-    for(let i=0;i<5;i++)box(.26,.08,.1,.35+i*.34,1.98,b.depth+.15,variant%2?light:0x9fb1a9);
-   }else if(b.type==='courthouse'){
-    // The neoclassical portico above replaces the old generic columns.
+    // Clinical modernist fins + rooftop skylight atrium & ventilation penthouse.
+    for(let i=1;i<Math.max(3,Math.floor(b.width*1.4));i++){const fx=i*b.width/Math.max(3,Math.floor(b.width*1.4));box(.06,roof-.2,.12,fx,roof/2,b.depth+.08,metal,'metal');}
+    box(b.width*.52,.58,b.depth*.44,b.width*.5,roof+.29,b.depth*.48,light,'stone');
+    box(b.width*.46,.16,b.depth*.38,b.width*.5,roof+.64,b.depth*.48,0x85b3bc,'metal');
+   }else if(b.type==='clinic'){
+    // Medical cross crest + covered portico + rooftop clinical skylight.
+    box(.14,.46,.08,b.width/2,2.04,frontZ+porch*.48,0xc93b3b,'metal');
+    box(.46,.14,.08,b.width/2,2.04,frontZ+porch*.48,0xc93b3b,'metal');
+    box(b.width*.48,.52,b.depth*.42,b.width*.5,roof+.26,b.depth*.5,light,'stone');
+    box(b.width*.54,.12,b.depth*.48,b.width*.5,roof+.56,b.depth*.5,accent,'roof');
+   }else if(b.type==='library'){
+    // Classical pilasters + rooftop reading-room rotunda & lantern.
+    for(let x=.5;x<b.width-.2;x+=1)box(.12,roof,.1,x,roof/2,b.depth+.05,light,'stone');
+    cylinder(Math.min(b.width,b.depth)*.24,.62,b.width/2,roof+.31,b.depth/2,light,'stone');
+    const libDome=new THREE.Mesh(new THREE.SphereGeometry(Math.min(b.width,b.depth)*.23,10,6,0,Math.PI*2,0,Math.PI/2),mat(copper,'roof'));libDome.position.set(b.width/2,roof+.62,b.depth/2);libDome.castShadow=true;root.add(libDome);
    }else{
-    const pediment=new THREE.Mesh(new THREE.ConeGeometry(Math.max(.7,b.width*.48),.42,3),mat(accent,'stone'));pediment.rotation.y=Math.PI/2;pediment.position.set(b.width/2,1.95,frontZ);root.add(pediment);
+    // council_oversight_office: classical pediment + rooftop lantern.
+    const ped=new THREE.Mesh(new THREE.ConeGeometry(Math.max(.7,b.width*.45),.48,3),mat(accent,'stone'));ped.rotation.y=Math.PI/2;ped.position.set(b.width/2,2.02,frontZ);root.add(ped);
+    box(b.width*.36,.52,b.depth*.36,b.width*.5,roof+.26,b.depth*.5,light,'stone');
+    box(b.width*.42,.14,b.depth*.42,b.width*.5,roof+.58,b.depth*.5,copper,'roof');
    }
-   const signColors=[0xd88d63,0x5d8c83,0xe1bd70,0x72879a];box(Math.min(1.1,b.width*.52),.16,.06,b.width/2,2.15,b.depth+.17,b.type==='courthouse'?accent:signColors[variant%signColors.length]);
+   const signColors=[0xd88d63,0x5d8c83,0xe1bd70,0x72879a];
+   if(b.type!=='courthouse'&&b.type!=='clinic')box(Math.min(1.1,b.width*.52),.16,.06,b.width/2,2.22,b.depth+.17,signColors[variant%signColors.length],'metal');
    for(const space of spaces.filter(s=>s.kind==='balcony'))furnishedBalcony(space);
   }else{
    // Preserve the roof silhouette on small services; their facade already

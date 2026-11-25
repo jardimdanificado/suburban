@@ -1,9 +1,14 @@
 import {chooseBuildingSite} from './city_terrain.js?v=entrance-retaining-clearance-1';
 const mines=new Set(['quarry','iron_mine','bauxite_mine']);
+const civicMonuments=new Set(['courthouse','police_station','jail','council_chamber','clinic','library']);
 function dimensions(lot,type,vertical=false,compact=false){
   if(type==='farm'&&!vertical||mines.has(type))return [[lot.width,lot.depth]];
   if(vertical&&!compact){
     const raw=[[Math.min(6,lot.width),Math.min(6,lot.depth)],[Math.min(5,lot.width),Math.min(5,lot.depth)],[Math.min(4,lot.width),Math.min(6,lot.depth)],[Math.min(6,lot.width),Math.min(4,lot.depth)],[Math.min(4,lot.width),Math.min(4,lot.depth)],[Math.min(3,lot.width),Math.min(3,lot.depth)],[Math.min(2,lot.width),Math.min(2,lot.depth)]];
+    return raw.filter(([w,d],i)=>w*d>=4&&raw.findIndex(([x,y])=>x===w&&y===d)===i);
+  }
+  if(civicMonuments.has(type)&&!compact){
+    const raw=[[Math.min(5,lot.width),Math.min(4,lot.depth)],[Math.min(4,lot.width),Math.min(5,lot.depth)],[Math.min(4,lot.width),Math.min(4,lot.depth)],[Math.min(3,lot.width),Math.min(3,lot.depth)],[Math.min(2,lot.width),Math.min(2,lot.depth)]];
     return raw.filter(([w,d],i)=>w*d>=4&&raw.findIndex(([x,y])=>x===w&&y===d)===i);
   }
   const size=compact?3:['super_popular_housing','popular_housing','popular_luxury_housing'].includes(type)?3:4,options=[[Math.min(size,lot.width),Math.min(size,lot.depth)],[Math.min(3,lot.width),Math.min(3,lot.depth)],[Math.min(2,lot.width),Math.min(2,lot.depth)]];

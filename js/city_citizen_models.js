@@ -235,12 +235,11 @@ if (vCitizenDirt.a > 0.05) {
   enableWeightMorph(material){
     if(!this.THREE.InstancedBufferAttribute)return material;
     material.onBeforeCompile=shader=>{
-      shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute float instanceFat;\nattribute vec3 weightMorph;\nattribute vec3 weightNormalLinear;\nattribute vec3 weightNormalQuadratic;');
-      shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>','#include <beginnormal_vertex>\nobjectNormal = normalize(objectNormal + instanceFat * weightNormalLinear + instanceFat * instanceFat * weightNormalQuadratic);');
+      shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute float instanceFat;\nattribute vec3 weightMorph;');
       shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed += instanceFat * weightMorph;');
       this.applyPixelDirtShader(shader);
     };
-    material.customProgramCacheKey=()=> 'citizen-weight-morph-17';
+    material.customProgramCacheKey=()=> 'citizen-weight-morph-18';
     return material;
   }
   enableSkirtMorph(material){
@@ -255,15 +254,7 @@ if (vCitizenDirt.a > 0.05) {
     return material;
   }
   enableDressMorph(material){
-    if(!this.THREE.InstancedBufferAttribute)return material;
-    material.onBeforeCompile=shader=>{
-      shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute float instanceFat;\nattribute vec3 weightMorph;\nattribute vec3 weightNormalLinear;\nattribute vec3 weightNormalQuadratic;\nattribute vec3 skirtMorph;\nattribute vec3 skirtNormalLinear;\nattribute vec3 skirtNormalQuadratic;');
-      shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>','#include <beginnormal_vertex>\nobjectNormal = normalize(objectNormal + instanceFat * (weightNormalLinear + skirtNormalLinear) + instanceFat * instanceFat * (weightNormalQuadratic + skirtNormalQuadratic));');
-      shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed += instanceFat * (weightMorph + skirtMorph);');
-      this.applyPixelDirtShader(shader);
-    };
-    material.customProgramCacheKey=()=> 'citizen-dress-blouse-fitted-skirt-3';
-    return material;
+    return this.enableSkirtMorph(material);
   }
   instancedGeometry(source,capacity){
     if(!this.THREE.InstancedBufferAttribute)return source;
@@ -482,6 +473,7 @@ if (vCitizenDirt.a > 0.05) {
       const dressTopMorph=computeWeightMorphAttributes(dressTop.clothes,morphVertex);
       const dressTopSmooth=smoothCitizenNormals(dressTop.clothes,dressTop.clothesNormals,[dressTopMorph.weightNormalLinear,dressTopMorph.weightNormalQuadratic]);
       dressWeightMorph.set(dressTopMorph.weightMorph);dressWeightNormalLinear.set(dressTopSmooth.derivatives[0]);dressWeightNormalQuadratic.set(dressTopSmooth.derivatives[1]);
+      dressMorph.set(dressTopMorph.weightMorph);dressNormalLinear.set(dressTopSmooth.derivatives[0]);dressNormalQuadratic.set(dressTopSmooth.derivatives[1]);
       dressMorph.set(dressSkirt.morphDeltas,dressTop.clothes.length);dressNormalLinear.set(dressSkirt.normalLinear,dressTop.clothes.length);dressNormalQuadratic.set(dressSkirt.normalQuadratic,dressTop.clothes.length);
       const dressAttrs={weightMorph:dressWeightMorph,weightNormalLinear:dressWeightNormalLinear,weightNormalQuadratic:dressWeightNormalQuadratic,skirtMorph:dressMorph,skirtNormalLinear:dressNormalLinear,skirtNormalQuadratic:dressNormalQuadratic};
       for(const piece of RENDERED_GARMENTS){
