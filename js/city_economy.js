@@ -605,11 +605,13 @@ export class CityEconomy {
       nextStage('bootstrapMs');if(bootstrapEnterprise(this))return true;
       nextStage('essentialServicesMs');const essentialStarted=this.serviceInvestment.invest();
       nextStage('refreshDemandMs');this.updateDemand();nextStage('privateFoundingMs');
+      const privateStart=performance.now();
       const investors = this.city.citizens.filter(c => !c.playerManaged && this.city.society.isAdult(c) && !this.city.politics.officeHolder(c) && c.businessIds.length < 10).sort((a, b) => b.balance * (.8 + (b.traits?.riskTolerance ?? .5) * .4) - a.balance * (.8 + (a.traits?.riskTolerance ?? .5) * .4) || a.id - b.id);
       const opportunities = this.demands.filter(d => d.score >= 30).map(d => ({ ...d, priority: d.score * (.9 + this.city.random() * .2) })).sort((a, b) => b.priority - a.priority);
       const businesses = this.businesses;
       const activeProjects = this.city.development.projects.filter(p => p.status !== 'completed' && !p.cancelled);
       for (const opportunity of opportunities) {
+        if(performance.now()-privateStart>12)break;
         if(ESSENTIAL_SERVICES.has(opportunity.type))continue;
         const same = [];
         for (const b of businesses) if (b.type === opportunity.type && (opportunity.type !== 'farm' || b.crop === opportunity.crop)) same.push(b);
@@ -622,8 +624,13 @@ export class CityEconomy {
         const banks=this.city.bank.available();
         const borrower=investors.find(c=>c.balance<threshold && c.balance>threshold*.4);
         if(borrower && banks.length) { this.city.bank.withdraw(banks[0],borrower.accountId,Math.min(threshold-borrower.balance,this.city.bank.deposits.get(`deposit:${banks[0].id}:${borrower.accountId}`)?.balance||0)); if(borrower.balance<threshold) this.city.bank.lend(banks[0],borrower.accountId,threshold-borrower.balance); }
-        const candidates = investors.filter(c => c.balance >= threshold);
-        for (const investor of candidates) if (this.foundBusiness(investor.id, opportunity.type, opportunity.crop)) return true;
+        let tried=0;
+        for (const investor of investors) {
+          if(investor.balance<threshold)continue;
+          if(++tried>6)break;
+          if (this.foundBusiness(investor.id, opportunity.type, opportunity.crop)) return true;
+          if(OFFICE_ONLY_TYPES.has(opportunity.type))break;
+        }
       }
       nextStage('municipalFoundingMs');
       // The municipality can establish essential services when households cannot finance premises.

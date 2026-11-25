@@ -6,6 +6,7 @@ import { ensureImportDepot } from './city_external_trade.js';
 import {reducedCadence} from './city_fast_forward.js';
 
 const INTERRUPTIBLE_GIG_TASKS=new Set(['leisure','walk','social','sit','outdoor_leisure']);
+const freelancePoolCache=new WeakMap();
 /** Cargo is reserved in escrow and follows a citizen over actual walkable paths. */
 // Urgent food and housing start ahead, while waiting freight gains priority over time.
 export function shipmentPriority(s,minute,hour){
@@ -193,12 +194,23 @@ export class CityLogistics {
       s.carrierId = null;
       // A cargo bike can be temporarily occupied. Reconsider carriers later instead
       // of permanently turning a large order into an impossible owner-only haul.
-      const next=!allowFreelance&&(s.requireCarrier||s.fee>0)?this.leastLoaded(economy.businesses.filter(b=>(b.type==='carrier'||s.purpose==='lamp-refill'&&b.type==='lamp_service') && b.active && b.balance>=b.wage && [...b.workers,b.ownerId].some(id=>this.capacity(economy.citizen(id))>=s.quantity))):null;
+      const carriers=[];
+      if(!allowFreelance&&(s.requireCarrier||s.fee>0)){
+        for(const b of this.city.buildings){
+          if(!economy.isBusiness(b)||(b.type!=='carrier'&&!(s.purpose==='lamp-refill'&&b.type==='lamp_service'))||b.balance<b.wage)continue;
+          if(this.capacity(economy.citizen(b.ownerId))>=s.quantity||b.workers.some(id=>this.capacity(economy.citizen(id))>=s.quantity))carriers.push(b);
+        }
+      }
+      const next=carriers.length?this.leastLoaded(carriers):null;
       if(next){s.carrierId=next.id;carrier=next;ids.push(...next.workers,next.ownerId);}
       if(s.requireCarrier)return [...new Set(ids)].map(id=>economy.citizen(id)).filter(c=>c && (!c.playerControlled||this.city.characterGame?.intent?.kind==='work') && this.capacity(c)>=s.quantity && !c.deliveryId && !c.mobilityTrip && !c.ridingVehicleId && !c.cleaningJobId && !c.workMeal && !c.conversation && !this.city.urgentNeed(c) && c.needs.energy>25);
       if(!carrier){
         // Owners and temporary public workers can bootstrap an unserved route.
-        if(s.fee>0)ids.push(...this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c)&&!c.jobId&&!(c.businessIds?.length)&&!this.city.politics.officeHolder(c)&&(!c.task||INTERRUPTIBLE_GIG_TASKS.has(c.task))&&!c.deliveryId&&!c.cleaningJobId&&!c.informalJobId&&!c.workMeal&&!c.conversation&&!c.mobilityTrip&&!c.ridingVehicleId&&!this.city.urgentNeed(c)).sort((a,b)=>Math.hypot(a.entity.x-s.position.x,a.entity.y-s.position.y)-Math.hypot(b.entity.x-s.position.x,b.entity.y-s.position.y)).slice(0,16).map(c=>c.id));
+        if(s.fee>0){
+          let pool=freelancePoolCache.get(this);if(!pool){pool=this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c)&&!c.jobId&&!(c.businessIds?.length)&&!this.city.politics.officeHolder(c)&&(!c.task||INTERRUPTIBLE_GIG_TASKS.has(c.task))&&!c.deliveryId&&!c.cleaningJobId&&!c.informalJobId&&!c.workMeal&&!c.conversation&&!c.mobilityTrip&&!c.ridingVehicleId&&!this.city.urgentNeed(c));freelancePoolCache.set(this,pool);}
+          const sorted=pool.length<=16?pool:[...pool].sort((a,b)=>Math.hypot(a.entity.x-s.position.x,a.entity.y-s.position.y)-Math.hypot(b.entity.x-s.position.x,b.entity.y-s.position.y)).slice(0,16);
+          for(let i=0;i<sorted.length;i++)ids.push(sorted[i].id);
+        }
         ids.push(s.buyer.ownerId, s.seller.ownerId);
         const founder = this.city.development?.ownerCitizen(s.buyer.accountId); if (founder) ids.push(founder.id);
       }
@@ -207,10 +219,18 @@ export class CityLogistics {
   }
   updateMinute() {
     const city = this.city;
-    this.reconcileImportDestination();
-    const oversized=this.shipments.filter(s=>!s.driverId&&s.status!=='delivered'&&s.status!=='cancelled'&&s.quantity>24);
+    freelancePoolCache.delete(this);
+    const depot=ensureImportDepot(city);
+    const oversized=[],pending=[];
+    for(let i=0;i<this.shipments.length;i++){
+      const s=this.shipments[i];
+      if(s.status==='delivered'||s.status==='cancelled')continue;
+      if(depot&&s.imported&&s.buyer?.id!==depot.id){this.cancel(s);continue;}
+      if(!s.driverId&&s.quantity>24)oversized.push(s);
+      pending.push(s);
+    }
     if(oversized.length){let maxCarry=24;for(const c of city.citizens)if(!c.entity.destroyed){maxCarry=Math.max(maxCarry,this.capacity(c));if(maxCarry>=MAX_CARGO_CAPACITY)break;}for(const s of oversized)if(!(s.imported&&s.buyer?.importDepot&&Math.hypot(s.seller.door.x-s.buyer.door.x,s.seller.door.y-s.buyer.door.y)<.01)&&s.quantity>maxCarry)this.splitLoad(s);}
-    const pending = this.shipments.filter(s => !['delivered', 'cancelled'].includes(s.status));
+    if(!pending.length)return;
     // Give fresh food/works priority, but promote old orders so fuel cannot wait forever.
     const priority = s => shipmentPriority(s,city.minute,city.hour);
     pending.sort((a, b) => priority(a) - priority(b) || (a.lastDispatchAttempt || 0) - (b.lastDispatchAttempt || 0) || a.createdAt - b.createdAt || a.id - b.id);

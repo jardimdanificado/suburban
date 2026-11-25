@@ -64,6 +64,9 @@ export class CityAnimalModels {
     this.shadowCount = 0;
     this.shadowCapacity = 0;
     this.shadowMesh = null;
+    this.flyCount = 0;
+    this.flyCapacity = 0;
+    this.flyMesh = null;
     this.motion = new WeakMap();
     this.clock = 0;
     this.frameDelta = 0.016;
@@ -135,6 +138,8 @@ export class CityAnimalModels {
     this.clock += this.frameDelta * Math.max(0, Math.min(2, speed));
     this.shadowCount = 0;
     if (this.shadowMesh) this.shadowMesh.count = 0;
+    this.flyCount = 0;
+    if (this.flyMesh) this.flyMesh.count = 0;
     for (const batch of this.activeBatches) {
       batch.count = 0;
       if (batch.mesh) batch.mesh.count = 0;
@@ -253,6 +258,43 @@ export class CityAnimalModels {
       this.matrix.compose(this.position, this.quaternion, this.scale);
       this.shadowMesh.setMatrixAt(this.shadowCount++, this.matrix);
     }
+
+    if (animal.dead && this.THREE.BoxGeometry && this.THREE.MeshBasicMaterial) {
+      const fliesPerCarcass = 6;
+      if (this.flyCount + fliesPerCarcass > this.flyCapacity) {
+        const cap = Math.max(64, (this.flyCapacity || 32) * 2);
+        const geo = new this.THREE.BoxGeometry(0.025, 0.016, 0.025);
+        const mat = new this.THREE.MeshBasicMaterial({ color: 0x16181c });
+        const mesh = new this.THREE.InstancedMesh(geo, mat, cap);
+        mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);
+        mesh.frustumCulled = false;
+        if (this.flyMesh) {
+          for (let i = 0; i < this.flyCount; i++) {
+            this.flyMesh.getMatrixAt(i, this.matrix);
+            mesh.setMatrixAt(i, this.matrix);
+          }
+          this.group.remove(this.flyMesh);
+          this.flyMesh.geometry.dispose();
+          this.flyMesh.material.dispose();
+        }
+        this.group.add(mesh);
+        this.flyMesh = mesh;
+        this.flyCapacity = cap;
+      }
+      const spread = Math.max(0.14, 0.24 * size);
+      for (let i = 0; i < fliesPerCarcass; i++) {
+        const t = this.clock * 5.2 + (entity.id || 0) * 1.37 + i * 2.09;
+        const r = spread * (0.55 + (i % 3) * 0.28);
+        const fx = motion.x + Math.cos(t + Math.sin(t * 0.7)) * r;
+        const fz = motion.y + Math.sin(t * 1.15 + i) * r;
+        const fy = surfaceH + deadLift + 0.14 + Math.abs(Math.sin(t * 1.8 + i)) * 0.22 + (i % 2) * 0.06;
+        this.position.set(fx, fy, fz);
+        this.quaternion.setFromAxisAngle(this.axis, t * 2);
+        this.scale.set(1, 1, 1);
+        this.matrix.compose(this.position, this.quaternion, this.scale);
+        this.flyMesh.setMatrixAt(this.flyCount++, this.matrix);
+      }
+    }
     return true;
   }
 
@@ -268,6 +310,10 @@ export class CityAnimalModels {
     if (this.shadowMesh) {
       this.shadowMesh.count = this.shadowCount;
       if (this.shadowCount > 0) this.shadowMesh.instanceMatrix.needsUpdate = true;
+    }
+    if (this.flyMesh) {
+      this.flyMesh.count = this.flyCount;
+      if (this.flyCount > 0) this.flyMesh.instanceMatrix.needsUpdate = true;
     }
   }
 
@@ -285,6 +331,14 @@ export class CityAnimalModels {
       this.shadowMesh = null;
       this.shadowCapacity = 0;
       this.shadowCount = 0;
+    }
+    if (this.flyMesh) {
+      this.group.remove(this.flyMesh);
+      this.flyMesh.geometry.dispose();
+      this.flyMesh.material.dispose();
+      this.flyMesh = null;
+      this.flyCapacity = 0;
+      this.flyCount = 0;
     }
     this.batches.clear();
     this.activeBatches.clear();
