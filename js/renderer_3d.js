@@ -10,7 +10,7 @@ import {setWaterGeometryCacheEnabled} from './water_geometry_cache.js?v=terrain-
 import {GrassRootJobs} from './grass_root_jobs.js?v=worker-roots-11';
 import {terrainZoomDetail} from './terrain_zoom_detail.js?v=zoom-density-4';
 import {sandNormalField,sandSurfaceNormalSteps,addSandWetnessShader} from './sand_surface_lighting.js?v=camera-budget-5';
-import {WATER_LEVEL,WATER_WAVE_GLSL} from './water_surface.js?v=shore-runup-2';
+import {WATER_LEVEL,WATER_WAVE_GLSL,waterWaveHeight} from './water_surface.js?v=shore-runup-2';
 import {sandShoreTileSurface,isSlopingBeachTile} from './sand_shore.js?v=zoom-coast-8';
 import {createTravellerPalmGeometry} from './traveller_palm.js?v=ravenala-colors-3';
 import {cursorLightPlacement} from './cursor_light.js?v=above-roofs-1';
@@ -8875,8 +8875,10 @@ export class RCT3DRenderer {
           waterGroundH=beach?beach.sample(e.x,e.y).groundHeight:WATER_LEVEL-0.30;
         }
         const inDeepWater=citizenOnWater&&waterGroundH<WATER_LEVEL-0.04;
-        const citizenSurfaceH=citizenOnWater?(inDeepWater?WATER_LEVEL-0.36:waterGroundH):surfaceH;
-        citizenModelOptions.hidden=isPossessed;citizenModelOptions.dimmed=!inCurZone;citizenModelOptions.vehicleAngle=vehicleAngle;citizenModelOptions.visualOffset=citizenRenderOffsets.get(e.id)||null;citizenModelOptions.inWater=inDeepWater;
+        const waterTime=this.materials?.[TILE_WATER]?.userData?.caribbeanWaterTime?.value??0;
+        const waveY=inDeepWater?waterWaveHeight(e.x,e.y,waterTime):0;
+        const citizenSurfaceH=citizenOnWater?(inDeepWater?WATER_LEVEL+waveY-0.32:waterGroundH):surfaceH;
+        citizenModelOptions.hidden=isPossessed;citizenModelOptions.dimmed=!inCurZone;citizenModelOptions.vehicleAngle=vehicleAngle;citizenModelOptions.visualOffset=citizenRenderOffsets.get(e.id)||null;citizenModelOptions.inWater=inDeepWater;citizenModelOptions.waterSurfaceY=inDeepWater?WATER_LEVEL+waveY:null;
         citizenModelOptions.indoorBounds=interiorBuilding&&interiorBuilding.constructionKind!=='open-air'?{minX:interiorBuilding.entity.x,maxX:interiorBuilding.entity.x+interiorBuilding.width,minY:interiorBuilding.entity.y,maxY:interiorBuilding.entity.y+interiorBuilding.depth}:null;
         const animal=e.properties?.cityAnimal;
         const ax=Math.floor(e.x),ay=Math.floor(e.y),animalTile=animal&&world?(world.getTile?world.getTile(ax,ay):world.map?.[ay]?.[ax]):null;

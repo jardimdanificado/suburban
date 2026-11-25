@@ -392,14 +392,21 @@ export function addBotanicalTreeWind(material){
   material.customProgramCacheKey=()=>key+':botanical-tree-1';
   material.onBeforeCompile=shader=>{
     previous?.call(material,shader);shader.uniforms.uSimTick={value:0};material.userData.foliageShader=shader;
-    shader.vertexShader='attribute float treeFlex;\nattribute float treePart;\nattribute float instanceGrowth;\nuniform float uSimTick;\n'+shader.vertexShader;
+    shader.vertexShader='attribute float treeFlex;\nattribute float treePart;\n#ifdef USE_INSTANCING\nattribute float instanceGrowth;\n#endif\nuniform float uSimTick;\n'+shader.vertexShader;
     shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
-      float treeSeed=fract(sin(dot(instanceMatrix[3].xz,vec2(12.9898,78.233)))*43758.5453);
+      #ifdef USE_INSTANCING
+      vec2 treeWorldXZ=instanceMatrix[3].xz;
+      #else
+      vec2 treeWorldXZ=modelMatrix[3].xz;
+      #endif
+      float treeSeed=fract(sin(dot(treeWorldXZ,vec2(12.9898,78.233)))*43758.5453);
       float treeEpoch=floor((uSimTick+treeSeed*100.0)/(15.0+floor(treeSeed*10.0)));
       float treeGust=sin(treeEpoch*2.17+treeSeed*6.28);
       transformed.x+=treeFlex*treeGust*.028;
       transformed.z+=treeFlex*cos(treeEpoch*1.71+treeSeed*6.28)*.018;
+      #ifdef USE_INSTANCING
       if(treePart>0.5&&instanceGrowth<0.8)transformed=vec3(0.0);
+      #endif
     `);
   };
   return material;

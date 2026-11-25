@@ -80,7 +80,7 @@ test('citizen swims for leisure and hygiene depending on needs', () => {
   c.swimUntil = city.minute + 20;
   while (c.path.length) city.update(0.25);
   assert.equal(c.swimming, true);
-  assert.equal(citizenAnimation(c, false), 'nadar');
+  assert.equal(citizenAnimation(c, false), 'boiar');
 
   // Leisure need -> swim-leisure
   const c2 = city.citizens[1];
@@ -98,11 +98,12 @@ test('citizen swims for leisure and hygiene depending on needs', () => {
   c2.swimUntil = city.minute + 35;
   while (c2.path.length) city.update(0.25);
   assert.equal(c2.swimming, true);
-  assert.equal(citizenAnimation(c2, false), 'nadar');
+  assert.equal(citizenAnimation(c2, false), 'boiar');
 });
 
 test('new human animation clips map to the corresponding citizen states', () => {
   assert.equal(citizenAnimation({ swimming: true }, true), 'nadar');
+  assert.equal(citizenAnimation({ swimming: true }, false), 'boiar');
   assert.equal(citizenAnimation({ deliveryId: 1 }, true), 'carregar');
   assert.equal(citizenAnimation({ task: 'walk' }, true), 'run');
   assert.equal(citizenAnimation({ conversation: {} }, false), 'conversar');

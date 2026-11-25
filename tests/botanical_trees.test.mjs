@@ -45,7 +45,8 @@ test('tree wind preserves prior shader hooks, uses the existing stepped clock an
   const shader={uniforms:{},vertexShader:'#include <begin_vertex>'};material.onBeforeCompile(shader);
   assert.equal(shader.kept,true);assert.equal(material.userData.foliageShader,shader);
   assert.equal(shader.uniforms.uSimTick.value,0);assert.match(shader.vertexShader,/floor\(\(uSimTick/);
-  assert.match(shader.vertexShader,/treePart>0.5&&instanceGrowth<0.8/);
+  assert.match(shader.vertexShader,/#ifdef USE_INSTANCING[\s\S]*instanceMatrix\[3\]\.xz[\s\S]*#else[\s\S]*modelMatrix\[3\]\.xz/);
+  assert.match(shader.vertexShader,/#ifdef USE_INSTANCING[\s\S]*treePart>0.5&&instanceGrowth<0.8/);
   assert.match(material.customProgramCacheKey(),/lighting:botanical-tree/);
 });
 

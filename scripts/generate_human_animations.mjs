@@ -389,22 +389,41 @@ const CLIPS = {
   nadar: [0, 1, 2, 3].map(f => {
     const t = (f / 4) * Math.PI * 2;
     const s = Math.sin(t), c = Math.cos(t);
-    // Horizontal prone crawl stroke
+    // Horizontal prone crawl stroke with legs angled slightly down below water surface
     return {
       pelvisOffset: [0, -0.78, 0],
-      pelvisRot: [1.45, 0, s * 0.16],
-      spineRot: [-0.08, s * 0.14, 0],
-      headRot: [-0.85, s * 0.12, 0],
-      armL: [-1.45 - s * 1.15, 0, -0.35 - Math.max(0, s) * 0.3],
-      elbowL: [-0.35 - Math.max(0, -s) * 0.55, 0, 0],
-      armR: [-1.45 + s * 1.15, 0, 0.35 + Math.max(0, -s) * 0.3],
-      elbowR: [-0.35 - Math.max(0, s) * 0.55, 0, 0],
-      legL: [s * 0.32, 0, -0.05],
-      legR: [-s * 0.32, 0, 0.05],
-      kneeL: [0.18 + Math.max(0, c) * 0.25, 0, 0],
-      kneeR: [0.18 + Math.max(0, -c) * 0.25, 0, 0],
-      ankleL: [0.35, 0, 0],
-      ankleR: [0.35, 0, 0],
+      pelvisRot: [1.34, 0, s * 0.14],
+      spineRot: [-0.06, s * 0.12, 0],
+      headRot: [-0.78, s * 0.1, 0],
+      armL: [-1.4 - s * 0.95, 0, -0.35 - Math.max(0, s) * 0.25],
+      elbowL: [-0.45 - Math.max(0, -s) * 0.45, 0, 0],
+      armR: [-1.4 + s * 0.95, 0, 0.35 + Math.max(0, -s) * 0.25],
+      elbowR: [-0.45 - Math.max(0, s) * 0.45, 0, 0],
+      legL: [-0.14 + s * 0.2, 0, -0.05],
+      legR: [-0.14 - s * 0.2, 0, 0.05],
+      kneeL: [0.1 + Math.max(0, c) * 0.14, 0, 0],
+      kneeR: [0.1 + Math.max(0, -c) * 0.14, 0, 0],
+      ankleL: [0.22, 0, 0],
+      ankleR: [0.22, 0, 0],
+    };
+  }),
+  boiar: [0, 1, 2, 3].map(f => {
+    const t = (f / 4) * Math.PI * 2;
+    const s = Math.sin(t), c = Math.cos(t);
+    // Treading water / floating upright with shoulders & head above water and arms paddling gently
+    return {
+      pelvisOffset: [0, s * 0.04, 0],
+      pelvisRot: [-0.08, 0, s * 0.04],
+      spineRot: [0.04, s * 0.06, 0],
+      headRot: [-0.05, s * 0.08, 0],
+      armL: [-0.45 + c * 0.18, 0.25, -0.78 - s * 0.24],
+      elbowL: [-0.85 + s * 0.2, 0, 0],
+      armR: [-0.45 - c * 0.18, -0.25, 0.78 + s * 0.24],
+      elbowR: [-0.85 - s * 0.2, 0, 0],
+      legL: [-0.15 + s * 0.16, 0, -0.06],
+      legR: [-0.15 - s * 0.16, 0, 0.06],
+      kneeL: [0.22 + Math.max(0, c) * 0.18, 0, 0],
+      kneeR: [0.22 + Math.max(0, -c) * 0.18, 0, 0],
     };
   }),
   dancar: [0, 1, 2, 3].map(f => {
