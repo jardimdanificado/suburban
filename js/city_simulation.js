@@ -53,6 +53,7 @@ import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=citizen-access-1';
 import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=citizen-access-1';
+import { tickServiceTickets,ticketRoamBudget } from './city_service_queue.js?v=ficha-1';
 import {interiorRoute} from './city_interior_layout.js?v=route-cache-512-index-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
 import { CityWelfare } from './city_welfare.js';
@@ -1178,6 +1179,13 @@ export class CitySimulation {
     // A homeless person who is already exhausted should not have to cross the
     // city and compete for a public indoor room before recovering at all.
     if(urgent==='energy'&&!home){this.routeHomelessToSleep(c);return;}
+    const ficha=c.serviceTicket?ticketRoamBudget(this,c):null;
+    if(ficha&&!urgent&&(ficha.ahead===0||ficha.distToDoor>ficha.maxRadius)){
+      if(ficha.distToDoor>2.5&&!c.path.length&&ficha.door){const path=this.findPath(c.entity,ficha.door);if(path!==null)c.path=path;}
+      c.action=ficha.ahead===0?'Aguardando chamada da ficha':'Retornando para ser chamado na ficha';
+      return;
+    }
+    const withinFichaRadius=pt=>!ficha||!ficha.door||!pt||Math.hypot(pt.x-ficha.door.x,pt.y-ficha.door.y)<=ficha.maxRadius;
     if (urgent) { task = urgent; type = ({ water: 'utility', food: 'market', health: 'clinic', energy: 'home', hygiene: home ? 'home' : 'utility', toilet: 'toilet' })[urgent]; }
     else if (child && this.society.isAdult(c) && Math.min(n.food, n.water, n.energy, n.hygiene) >= 25 && n.health >= 40 && n.toilet >= 15) { task = 'caregiving'; type = 'child'; c.careChildId = child.id; }
     else if (n.food < 18) { task = 'food'; type = 'market'; }
@@ -1193,8 +1201,8 @@ export class CitySimulation {
     else if (this.society.age(c) < 6) { task = 'care'; type = 'home'; }
     else if (child && this.society.isAdult(c)) { task = 'caregiving'; type = 'child'; c.careChildId = child.id; }
     else if (c.role!=='councilor' && c.startupProjectId && this.hour >= 8 && this.hour < 17 && this.development.projects.some(p=>p.id===c.startupProjectId && !p.builderId && !p.cancelled && p.status!=='completed' && p.inventory.pedra>=p.stone)) { task='work';type='startup'; }
-    else if (company && this.hour >= 8 && this.hour < 17) { task = 'manage'; type = 'company'; }
-    else if (job && c.role!=='councilor' && this.hour >= 8 && this.hour < 17) { task = 'work'; type = 'job'; }
+    else if (company && this.hour >= 8 && this.hour < 17 && withinFichaRadius(company.door)) { task = 'manage'; type = 'company'; }
+    else if (job && c.role!=='councilor' && this.hour >= 8 && this.hour < 17 && withinFichaRadius(job.door)) { task = 'work'; type = 'job'; }
     else if (this.substances?.routeBar(c))return;
     else if (n.social < 60) { task = 'social'; type = 'leisure'; }
     if(task==='leisure'&&!urgent&&this.nature.consider(c))return;
@@ -1745,6 +1753,7 @@ export class CitySimulation {
       }
     }
     this._citizenLoopProfile=null;citizenMs=performance.now()-profileMark;profileMark=performance.now();
+    tickServiceTickets(this);
     for(const c of this.citizens)if(!c.worldBoatCrew&&!c.skybridgeTransit&&(c._lastNeedsAt===this.minute||c.task||c.path.length||c.indoorLocation))syncCitizenInterior(this,c);
     }finally{endActivitySearch(this);this._citizenLoopProfile=null;}
     for(const c of this.citizens)if(c.seatId||c.seated||c.furnitureUse||c.indoorLocation||c.workWait||c.task==='beach_leisure'||c.beachLeisure)this.furniture.syncCitizen(c);

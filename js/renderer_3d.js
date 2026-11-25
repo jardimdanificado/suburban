@@ -8875,7 +8875,7 @@ export class RCT3DRenderer {
           waterGroundH=beach?beach.sample(e.x,e.y).groundHeight:WATER_LEVEL-0.30;
         }
         const inDeepWater=citizenOnWater&&waterGroundH<WATER_LEVEL-0.04;
-        const citizenSurfaceH=citizenOnWater?(inDeepWater?WATER_LEVEL-0.28:waterGroundH):surfaceH;
+        const citizenSurfaceH=citizenOnWater?(inDeepWater?WATER_LEVEL-0.36:waterGroundH):surfaceH;
         citizenModelOptions.hidden=isPossessed;citizenModelOptions.dimmed=!inCurZone;citizenModelOptions.vehicleAngle=vehicleAngle;citizenModelOptions.visualOffset=citizenRenderOffsets.get(e.id)||null;citizenModelOptions.inWater=inDeepWater;
         citizenModelOptions.indoorBounds=interiorBuilding&&interiorBuilding.constructionKind!=='open-air'?{minX:interiorBuilding.entity.x,maxX:interiorBuilding.entity.x+interiorBuilding.width,minY:interiorBuilding.entity.y,maxY:interiorBuilding.entity.y+interiorBuilding.depth}:null;
         const animal=e.properties?.cityAnimal;
