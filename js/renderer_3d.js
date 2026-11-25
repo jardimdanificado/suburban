@@ -8867,12 +8867,19 @@ export class RCT3DRenderer {
         const isConsciousCreature = !isItem && !isDoor && !!e.properties?.brain;
         const inCurZone = !knownZones || (Math.floor(e.x / zoneSz) === curVisionZx && Math.floor(e.y / zoneSz) === curVisionZy);
         const vehicleAngle=cityCitizen?.ridingVehicleId?this.cityDevelopment?.city?.vehicles?.units.get(cityCitizen.ridingVehicleId)?.angle:null;
-        citizenModelOptions.hidden=isPossessed;citizenModelOptions.dimmed=!inCurZone;citizenModelOptions.vehicleAngle=vehicleAngle;citizenModelOptions.visualOffset=citizenRenderOffsets.get(e.id)||null;
+        let waterGroundH=surfaceH;
+        if(cityCitizen?.swimming&&world){
+          const beach=sandShoreTileSurface(world,Math.floor(e.x),Math.floor(e.y),{profileOnly:true});
+          waterGroundH=beach?beach.sample(e.x,e.y).groundHeight:WATER_LEVEL-0.30;
+        }
+        const shallowShore=!!(cityCitizen?.swimming&&waterGroundH>=WATER_LEVEL-0.12);
+        const citizenSurfaceH=cityCitizen?.swimming?Math.max(waterGroundH,WATER_LEVEL-0.14):surfaceH;
+        citizenModelOptions.hidden=isPossessed;citizenModelOptions.dimmed=!inCurZone;citizenModelOptions.vehicleAngle=vehicleAngle;citizenModelOptions.visualOffset=citizenRenderOffsets.get(e.id)||null;citizenModelOptions.shallowShore=shallowShore;
         citizenModelOptions.indoorBounds=interiorBuilding&&interiorBuilding.constructionKind!=='open-air'?{minX:interiorBuilding.entity.x,maxX:interiorBuilding.entity.x+interiorBuilding.width,minY:interiorBuilding.entity.y,maxY:interiorBuilding.entity.y+interiorBuilding.depth}:null;
         const animal=e.properties?.cityAnimal;
         const ax=Math.floor(e.x),ay=Math.floor(e.y),animalTile=animal&&world?(world.getTile?world.getTile(ax,ay):world.map?.[ay]?.[ax]):null;
         const animalSurfaceH=(animal&&animalTile===TILE_WATER?WATER_LEVEL-(animal.species==='jacare'?.17:animal.species==='capivara'?.14:.06):surfaceH)+(animal?.altitude||0);
-        const modelRendered=(cityCitizen&&this.cityCitizenModels.add(e,surfaceH,citizenModelOptions))||(animal&&this.cityAnimalModels.add(e,animalSurfaceH,{perspective:perspectiveActive,selected:this.selectedEntityId===e.id}));
+        const modelRendered=(cityCitizen&&this.cityCitizenModels.add(e,citizenSurfaceH,citizenModelOptions))||(animal&&this.cityAnimalModels.add(e,animalSurfaceH,{perspective:perspectiveActive,selected:this.selectedEntityId===e.id}));
         if(modelRendered){
           activeIds.add(e.id);const previous=this.entitySprites.get(e.id);if(previous)previous.visible=false;
         }else{

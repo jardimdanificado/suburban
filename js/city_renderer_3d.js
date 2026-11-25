@@ -128,7 +128,8 @@ function createFecesCoilGeometry(THREE){
   return geo;
 }
 function createFecesLumpGeometry(THREE){
-  const base=new THREE.IcosahedronGeometry(.058,1),geo=base.toNonIndexed();base.dispose();
+  const base=new THREE.IcosahedronGeometry(.058,1),geo=base.index?base.toNonIndexed():base;
+  if(geo!==base)base.dispose();
   const pos=geo.attributes.position,colors=[];
   for(let i=0;i<pos.count;i++){
     const vx=pos.getX(i),vy=pos.getY(i),vz=pos.getZ(i),warp=.82+Math.sin(vx*49+vz*37)*.28;

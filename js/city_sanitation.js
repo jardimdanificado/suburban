@@ -524,31 +524,29 @@ export class CitySanitation {
   emitCombatBlood(x, y, amount = 1) {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
     this.addStain({ kind: 'blood', scope: 'street', x, y, color: 0x8c1118, radius: 0.35 + Math.min(0.4, amount * 0.12), amount });
-    for (const b of this.city.buildings || []) {
-      if (b.entity?.destroyed || b.constructionKind === 'open-air') continue;
-      const bx = b.entity.x, by = b.entity.y, bw = b.width || 3, bd = b.depth || 3;
-      const cx = Math.max(bx, Math.min(bx + bw, x)), cy = Math.max(by, Math.min(by + bd, y));
-      if (Math.hypot(x - cx, y - cy) <= 1.35) {
-        const dLeft = Math.abs(cx - bx), dRight = Math.abs(bx + bw - cx), dTop = Math.abs(cy - by), dBot = Math.abs(by + bd - cy);
-        const minD = Math.min(dLeft, dRight, dTop, dBot);
-        const side = minD === dBot ? 0 : minD === dRight ? 1 : minD === dTop ? 2 : 3;
-        this.addStain({ kind: 'blood', scope: 'wall', x: cx, y: cy, z: 0.55 + Math.random() * 0.45, buildingId: b.id, side, color: 0x8c1118, radius: 0.32, amount: amount * 0.7 });
-        break;
-      }
-    }
-    for (const plant of this.city.nature?.plants?.values?.() || []) {
-      if (plant.entity?.destroyed) continue;
-      if (Math.hypot(plant.x + 0.5 - x, plant.y + 0.5 - y) <= 1.45) {
-        this.addStain({ kind: 'blood', scope: 'plant', x: plant.x + 0.5, y: plant.y + 0.5, z: 0.35, plantId: plant.id, color: 0x8c1118, radius: 0.3, amount: amount * 0.6 });
-        break;
-      }
-    }
   }
-  soilCitizen(c, kind = 'terra', amount = 4, color = null) {
+  soilCitizen(c, kind = 'terra', amount = 4, color = null, zone = null) {
     if (!c || c.dead || c.entity?.destroyed) return;
     c.dirtSources ??= { sangue: 0, tinta: 0, barro: 0, bosta: 0, terra: 0 };
     c.dirtSources[kind] = Math.min(100, (c.dirtSources[kind] || 0) + amount);
     if (kind === 'tinta' && color != null) c.dirtTintColor = color;
+    c.dirtZones ??= { feet: 0, legs: 0, arms: 0, head: 0, seat: 0, back: 0, side: 0, torso: 0 };
+    const z = zone === 'cabeça' ? 'head' : (zone === 'braço' || zone === 'mão') ? 'arms' : zone === 'perna' ? 'legs' : zone === 'costas' ? 'back' : zone;
+    if (z === 'feet') {
+      const prev = c.dirtZones.feet || 0;
+      const next = prev + amount * 1.4;
+      c.dirtZones.feet = Math.min(100, next);
+      if (next > 35) {
+        const legNext = (c.dirtZones.legs || 0) + (next - Math.max(35, prev)) * 0.85;
+        c.dirtZones.legs = Math.min(100, legNext);
+        if (legNext > 55) c.dirtZones.torso = Math.min(100, (c.dirtZones.torso || 0) + (legNext - 55) * 0.5);
+      }
+    } else if (z && z in c.dirtZones) {
+      c.dirtZones[z] = Math.min(100, (c.dirtZones[z] || 0) + amount * 1.3);
+    } else {
+      c.dirtZones.torso = Math.min(100, (c.dirtZones.torso || 0) + amount * 0.7);
+      c.dirtZones.legs = Math.min(100, (c.dirtZones.legs || 0) + amount * 0.7);
+    }
     if (c.needs && Number.isFinite(c.needs.hygiene)) {
       c.needs.hygiene = Math.max(0, c.needs.hygiene - amount * 0.45);
     }
@@ -560,6 +558,11 @@ export class CitySanitation {
     const keep = Math.max(0, 1 - fraction);
     for (const key of Object.keys(c.dirtSources)) {
       c.dirtSources[key] = Number((c.dirtSources[key] * keep).toFixed(2));
+    }
+    if (c.dirtZones) {
+      for (const key of Object.keys(c.dirtZones)) {
+        c.dirtZones[key] = Number((c.dirtZones[key] * keep).toFixed(2));
+      }
     }
     if ((c.dirtSources.tinta || 0) <= 1) delete c.dirtTintColor;
   }

@@ -36,7 +36,7 @@ test('citizen can swim across a river when no bridge or boat exists', () => {
   const c = addCitizen(city, 78.5, 64.5);
   const path = city.findPath(c.entity, { x: 83.5, y: 64.5 });
   assert(path && path.length > 0, 'should find a swim path across the river');
-  assert(path.some(p => p.swim), 'path across river should include swim waypoints');
+  assert(path.some(p => city.world.getTile(Math.floor(p.x), Math.floor(p.y)) === TILE_WATER), 'path across river should include water tiles');
 
   c.path = path;
   c.task = 'walk';
@@ -52,6 +52,16 @@ test('citizen can swim across a river when no bridge or boat exists', () => {
   assert.equal(c.path.length, 0, 'citizen should reach the opposite bank');
   assert.equal(c.swimming, false, 'citizen should exit swimming state on land');
   assert(c.entity.x > 82, 'citizen should be on the far side of the river');
+});
+
+test('citizens avoid water for small detours but swim when crossing is much faster', () => {
+  const city = setup({ starter: true, population: 4 });
+  const c = addCitizen(city, 70.5, 64.5);
+  // Single water tile directly ahead: citizen should walk around on land
+  city.world.setTile(71, 64, TILE_WATER);
+  const detour = city.findPath(c.entity, { x: 72.5, y: 64.5 });
+  assert(detour && detour.length > 0);
+  assert.equal(detour.some(p => city.world.getTile(Math.floor(p.x), Math.floor(p.y)) === TILE_WATER), false, 'citizen should walk around a small water obstacle');
 });
 
 test('citizen swims for leisure and hygiene depending on needs', () => {
@@ -93,7 +103,7 @@ test('citizen swims for leisure and hygiene depending on needs', () => {
 test('new human animation clips map to the corresponding citizen states', () => {
   assert.equal(citizenAnimation({ swimming: true }, true), 'nadar');
   assert.equal(citizenAnimation({ deliveryId: 1 }, true), 'carregar');
-  assert.equal(citizenAnimation({ task: 'walk' }, true), 'caminhar');
+  assert.equal(citizenAnimation({ task: 'walk' }, true), 'run');
   assert.equal(citizenAnimation({ conversation: {} }, false), 'conversar');
   assert.equal(citizenAnimation({ celebrating: true }, false), 'comemorar');
   assert.equal(citizenAnimation({ dancing: true }, false), 'dancar');

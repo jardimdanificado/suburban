@@ -303,11 +303,11 @@ export function settlementConnected(city, a, b) {
   return ac===bc?true:cache.sealed[ac]||cache.sealed[bc]?false:null;
 }
 
-export function findTerrainPath(world, start, goal, blocked = new Set(), { limit = 30000, extraBlocked = null,preferRoads=true,roadOnly=false,blockedGrid=null,allowDiagonal=true } = {}) {
+export function findTerrainPath(world, start, goal, blocked = new Set(), { limit = 30000, extraBlocked = null,preferRoads=true,roadOnly=false,blockedGrid=null,allowDiagonal=true,allowWater=false,waterCost=5.5 } = {}) {
   const sx = Math.floor(start.x), sy = Math.floor(start.y), gx = Math.floor(goal.x), gy = Math.floor(goal.y);
   if(sx<0||sy<0||gx<0||gy<0||sx>=world.width||gx>=world.width||sy>=world.height||gy>=world.height)return null;
   const terrain=terrainPathGrid(world),startKey=sy*world.width+sx,goalKey=gy*world.width+gx;
-  if (!terrain.walkable[startKey] || !terrain.walkable[goalKey] || blocked.has(tileKey(gx, gy))) return null;
+  if ((!terrain.walkable[startKey]&&!(allowWater&&terrain.tiles[startKey]===TILE_WATER)) || !terrain.walkable[goalKey] || blocked.has(tileKey(gx, gy))) return null;
   // Search the much smaller street network first. Keep off-road shortcuts when
   // following the streets would cost more than a near-direct walk on flat land.
   if(preferRoads&&!extraBlocked&&terrain.roads[startKey]&&terrain.roads[goalKey]){
@@ -337,15 +337,16 @@ export function findTerrainPath(world, start, goal, blocked = new Set(), { limit
       while (step !== startKey) { path.push({ x: step % width + .5, y: Math.floor(step / width) + .5 }); step = parents[step]; }
       return path.reverse();
     }
-    const currentHeight=terrain.elevations[k],cx=k%width,cy=Math.floor(k/width);
+    const currentHeight=terrain.elevations[k],cx=k%width,cy=Math.floor(k/width),curWater=terrain.tiles[k]===TILE_WATER;
     for (let direction=0;direction<(allowDiagonal?8:4);direction++) {
-      const x=cx+pathDx[direction],y=cy+pathDy[direction];if(x<0||y<0||x>=width||y>=world.height)continue;const nextKey=y*width+x,tile=terrain.tiles[nextKey];
-      if(!terrain.walkable[nextKey])continue;
-      const climb=Math.abs(currentHeight-terrain.elevations[nextKey]);
+      const x=cx+pathDx[direction],y=cy+pathDy[direction];if(x<0||y<0||x>=width||y>=world.height)continue;const nextKey=y*width+x,tile=terrain.tiles[nextKey],isWater=tile===TILE_WATER;
+      if(!terrain.walkable[nextKey]&&!(allowWater&&isWater))continue;
+      const climb=(curWater||isWater)?0:Math.abs(currentHeight-terrain.elevations[nextKey]);
       if (climb>1.25 || (blockedGrid?blockedGrid[nextKey]!==0:blocked.has(tileKey(x, y))) || extraBlocked?.(x, y)) continue;
       if(roadOnly&&!terrain.roads[nextKey])continue;
-      if(direction>=4&&!diagonalClear(terrain,k,nextKey,cy*width+x,y*width+cx,isBlocked,roadOnly))continue;
-      const cost = currentCost + (terrain.roads[nextKey]?ROAD_RULES.pavedCost:tileCosts[tile]) * (direction>=4?Math.SQRT2:1) + climb * .7;
+      if(direction>=4&&((curWater||isWater)||!diagonalClear(terrain,k,nextKey,cy*width+x,y*width+cx,isBlocked,roadOnly)))continue;
+      const stepBase=isWater?waterCost:(terrain.roads[nextKey]?ROAD_RULES.pavedCost:tileCosts[tile]);
+      const cost = currentCost + stepBase * (direction>=4?Math.SQRT2:1) + climb * .7;
       if (marks[nextKey] === generation && cost >= costs[nextKey]) continue;
       marks[nextKey] = generation; costs[nextKey] = cost; parents[nextKey] = k;
       heapPush(workspace,nextKey,cost,cost+(allowDiagonal?octileDistance(Math.abs(gx-x),Math.abs(gy-y))*terrain.minCost:(Math.abs(gx-x)+Math.abs(gy-y))*.55));

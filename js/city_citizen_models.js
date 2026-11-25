@@ -28,7 +28,7 @@ const COMBINABLE_GARMENTS=new Set(['camisa','camiseta','regata','terno','casaco'
 const HEADWEAR_PIECES=new Set(['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','cesta']);
 const LOWER_PIECES=new Set(['sapatos','botas','calça','calça social','shorts','bermuda','sunga','saia','saia longa']);
 const RENDERED_ACCESSORIES=new Set(['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','cesta','sapatos','botas','calça','calça social','shorts','bermuda','sunga','saia','saia longa','luvas']);
-export function citizenAnimation(c,moving=false){
+export function citizenAnimation(c,moving=false,allowSwim=true){
   if(c.dead)return 'morto';
   if(c.unconsciousUntil)return 'derrotado';
   if(c.surrenderedUntil)return 'sentado_no_chao';
@@ -38,10 +38,9 @@ export function citizenAnimation(c,moving=false){
     if(BIKE_KINDS.has(c.ridingVehicleKind))return c.ridingAsPassenger?'sentado_no_banco':'seated';
     return GLIDE_KINDS.has(c.ridingVehicleKind)?'glide':'passenger';
   }
-  if(c.swimming)return 'nadar';
+  if(c.swimming&&allowSwim)return 'nadar';
   if(moving){
     if(c.deliveryId||c.forestryJob?.stage==='return'||c.carryLoad)return 'carregar';
-    if(CASUAL_WALK_TASKS.has(c.task))return 'caminhar';
     return 'run';
   }
   if(c.fishingPose)return c.fishingPose.chair||c.fishingPose.boat?'sentado_no_banco':'sentado_no_chao';
@@ -168,6 +167,22 @@ function partyNumberSurface(THREE,data,number){
   for(let i=0;i<digits.length;i++){const digit=digits[i],cx=x-width/2+digitW*(i+.5),barW=digitW*.68,barH=thickness,sideW=thickness,midY=centerY;for(const seg of segments[digit]||[]){if(seg===0)rect(cx,midY+height*.43,barW,barH);if(seg===3)rect(cx,midY,barW,barH);if(seg===6)rect(cx,midY-height*.43,barW,barH);if(seg===1)rect(cx-barW*.49,midY+height*.22,sideW,height*.38);if(seg===2)rect(cx+barW*.49,midY+height*.22,sideW,height*.38);if(seg===4)rect(cx-barW*.49,midY-height*.22,sideW,height*.38);if(seg===5)rect(cx+barW*.49,midY-height*.22,sideW,height*.38);}}
   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));geometry.computeBoundingSphere();return geometry;
 }
+function carryBoxGeometry(THREE){
+  const hw=.13,hh=.10,hd=.11,p=[],n=[];
+  const quad=(a,b,c,d,nx,ny,nz)=>{for(const v of [a,b,c,a,c,d]){p.push(...v);n.push(nx,ny,nz);}};
+  quad([-hw,-hh,hd],[hw,-hh,hd],[hw,hh,hd],[-hw,hh,hd],0,0,1);
+  quad([hw,-hh,-hd],[-hw,-hh,-hd],[-hw,hh,-hd],[hw,hh,-hd],0,0,-1);
+  quad([-hw,hh,hd],[hw,hh,hd],[hw,hh,-hd],[-hw,hh,-hd],0,1,0);
+  quad([-hw,-hh,-hd],[hw,-hh,-hd],[hw,-hh,hd],[-hw,-hh,hd],0,-1,0);
+  quad([hw,-hh,hd],[hw,-hh,-hd],[hw,hh,-hd],[hw,hh,hd],1,0,0);
+  quad([-hw,-hh,-hd],[-hw,-hh,hd],[-hw,hh,hd],[-hw,hh,-hd],-1,0,0);
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));g.computeBoundingSphere();return g;
+}
+function carryBoxAnchor(data){
+  const pos=data.positions;let x=0,y=0,z=0,count=0;
+  for(const base of [82,205])for(let f=base;f<base+12;f++)for(let c=0;c<3;c++){const i=f*9+c*3;x+=pos[i];y+=pos[i+1];z+=pos[i+2];count++;}
+  return {x:x/(count||1),y:y/(count||1)+.03,z:z/(count||1)+.04};
+}
 export function splitGarmentSurface(data,mask,piece=null){
   const body=[],bodyNormals=[],clothes=[],clothesNormals=[];
   for(let t=0;t<data.positions.length/9;t++){
@@ -179,7 +194,7 @@ export function splitGarmentSurface(data,mask,piece=null){
 }
 export class CityCitizenModels {
   constructor(THREE,group,{fetchAsset=globalThis.fetch?.bind(globalThis),baseURL=new URL('../data/model/',import.meta.url),decorateMaterial=()=>{}}={}){
-    this.THREE=THREE;this.group=group;this.decorateMaterial=decorateMaterial;this.fetchAsset=fetchAsset;this.baseURL=baseURL;this.frames=new Map();this.outfits=new Map();this.headwear=new Map();this.headwearAnchors=new Map();this.headAttachments=new Map();this.headwearBatches=new Map();this.batches=new Map();this.activeBatches=new Set();this.activeHeadwearBatches=new Set();this.motion=new WeakMap();this.bodyShapeCache=new WeakMap();this.appearanceCache=new WeakMap();this.printMaterials=new Map();this.combinedSurfaces=new WeakMap();this.clock=0;this.frameToken=0;this.ready=false;this.error=null;
+    this.THREE=THREE;this.group=group;this.decorateMaterial=decorateMaterial;this.fetchAsset=fetchAsset;this.baseURL=baseURL;this.frames=new Map();this.outfits=new Map();this.headwear=new Map();this.headwearAnchors=new Map();this.carryAnchors=new Map();this.headAttachments=new Map();this.headwearBatches=new Map();this.batches=new Map();this.activeBatches=new Set();this.activeHeadwearBatches=new Set();this.motion=new WeakMap();this.bodyShapeCache=new WeakMap();this.appearanceCache=new WeakMap();this.printMaterials=new Map();this.combinedSurfaces=new WeakMap();this.clock=0;this.frameToken=0;this.ready=false;this.error=null;
     this.matrix=new THREE.Matrix4();this.accessoryMatrix=new THREE.Matrix4();this.position=new THREE.Vector3();this.accessoryOffset=new THREE.Vector3();this.scale=new THREE.Vector3();this.quaternion=new THREE.Quaternion();this.axis=new THREE.Vector3(0,1,0);this.headFlagNormal=new THREE.Vector3();this.lyingRotation=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),Math.PI/2);this.color=new THREE.Color();this.dirtColor=new THREE.Color(0x62584b);this.activeDirtColor=new THREE.Color(0x62584b);this.dirtPalette={sangue:0x7a1216,bosta:0x4e3618,barro:0x4a3520,terra:0x6b5338,tinta:0x3b78b8};this.flyCount=0;this.flyCapacity=0;this.flyMesh=null;
     this.material=new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide});this.enableWeightMorph(this.material);this.combinedMaterial=this.enableWeightMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}));const morphCompile=this.combinedMaterial.onBeforeCompile;this.combinedMaterial.onBeforeCompile=shader=>{morphCompile(shader);shader.vertexShader=shader.vertexShader.replace('attribute vec3 weightMorph;','attribute vec3 weightMorph;\nattribute float citizenSurfaceType;\nattribute vec3 instanceGarmentColor;\nvarying float vCitizenSurfaceType;\nvarying vec3 vCitizenGarmentColor;').replace('#include <begin_vertex>','#include <begin_vertex>\nvCitizenSurfaceType = citizenSurfaceType;\nvCitizenGarmentColor = instanceGarmentColor;');shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying float vCitizenSurfaceType;\nvarying vec3 vCitizenGarmentColor;').replace('#include <color_fragment>','#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vCitizenGarmentColor, vCitizenSurfaceType);');};this.combinedMaterial.customProgramCacheKey=()=> 'citizen-combined-surface-weight-morph-2';this.dressMaterial=this.enableDressMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}));this.skirtMaterial=this.enableSkirtMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}));this.campaignFlags=new Map();this.campaignFlagMaterials=new Map();this.activeCampaignFlags=new Set();
     // Bias fitted face materials in depth instead of moving each triangle
@@ -189,14 +204,43 @@ export class CityCitizenModels {
     for(const material of [this.material,this.combinedMaterial,this.dressMaterial,this.skirtMaterial,this.fittedMaterial,this.footwearMaterial])this.decorateMaterial(material);
     this.loading=this.load().catch(error=>{this.error=error.message;console.warn('Modelos dos cidadãos indisponíveis; usando sprites.',error.message);return false;});
   }
+  applyPixelDirtShader(shader){
+    shader.vertexShader=shader.vertexShader
+      .replace('#include <common>','#include <common>\nattribute vec4 instanceDirt;\nattribute vec4 instanceDirtZoneA;\nattribute vec4 instanceDirtZoneB;\nvarying vec4 vCitizenDirt;\nvarying vec4 vCitizenDirtZoneA;\nvarying vec4 vCitizenDirtZoneB;\nvarying vec3 vCitizenLocalPos;')
+      .replace('#include <begin_vertex>','#include <begin_vertex>\nvCitizenDirt = instanceDirt;\nvCitizenDirtZoneA = instanceDirtZoneA;\nvCitizenDirtZoneB = instanceDirtZoneB;\nvCitizenLocalPos = position;');
+    shader.fragmentShader=shader.fragmentShader
+      .replace('#include <common>','#include <common>\nvarying vec4 vCitizenDirt;\nvarying vec4 vCitizenDirtZoneA;\nvarying vec4 vCitizenDirtZoneB;\nvarying vec3 vCitizenLocalPos;')
+      .replace('#include <color_fragment>',`#include <color_fragment>
+if (vCitizenDirt.a > 0.05) {
+  float y = vCitizenLocalPos.y, x = vCitizenLocalPos.x, z = vCitizenLocalPos.z;
+  float feetMask = smoothstep(0.22 + vCitizenDirtZoneA.x * 0.62, 0.14 + vCitizenDirtZoneA.x * 0.62, y) * step(0.01, vCitizenDirtZoneA.x);
+  float armMask = step(0.15, abs(x)) * step(0.42, y) * step(y, 1.16) * vCitizenDirtZoneA.y;
+  float headMask = step(1.15, y) * vCitizenDirtZoneA.z;
+  float seatMask = (step(z, 0.02) * step(0.36, y) * step(y, 0.72) + step(0.20, y) * step(y, 0.56) * step(z, 0.06)) * vCitizenDirtZoneA.w;
+  float backMask = step(z, -0.02) * step(0.35, y) * step(y, 1.24) * vCitizenDirtZoneB.x;
+  float sideMask = step(x, -0.06) * step(0.15, y) * step(y, 1.26) * vCitizenDirtZoneB.y;
+  float torsoMask = step(abs(x), 0.18) * step(0.55, y) * step(y, 1.16) * vCitizenDirtZoneB.z;
+  float zoneWeight = clamp(max(max(feetMask, armMask), max(max(headMask, seatMask), max(max(backMask, sideMask), max(torsoMask, vCitizenDirtZoneB.w)))), 0.0, 1.0);
+  if (zoneWeight > 0.02) {
+    vec3 pCell = floor(vCitizenLocalPos * 26.0);
+    float h = fract(sin(dot(pCell, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+    float h2 = fract(sin(dot(floor(vCitizenLocalPos * 11.0), vec3(41.13, 19.7, 73.9))) * 29431.7);
+    float threshold = clamp(zoneWeight * (0.28 + vCitizenDirt.a * 0.48), 0.0, 0.78);
+    float speck = step(1.0 - threshold, h * 0.72 + h2 * 0.28);
+    diffuseColor.rgb = mix(diffuseColor.rgb, vCitizenDirt.rgb, zoneWeight * vCitizenDirt.a * 0.18);
+    diffuseColor.rgb = mix(diffuseColor.rgb, vCitizenDirt.rgb * (0.72 + 0.35 * h2), speck * 0.94);
+  }
+}`);
+  }
   enableWeightMorph(material){
     if(!this.THREE.InstancedBufferAttribute)return material;
     material.onBeforeCompile=shader=>{
       shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute float instanceFat;\nattribute vec3 weightMorph;\nattribute vec3 weightNormalLinear;\nattribute vec3 weightNormalQuadratic;');
       shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>','#include <beginnormal_vertex>\nobjectNormal = normalize(objectNormal + instanceFat * weightNormalLinear + instanceFat * instanceFat * weightNormalQuadratic);');
       shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed += instanceFat * weightMorph;');
+      this.applyPixelDirtShader(shader);
     };
-    material.customProgramCacheKey=()=> 'citizen-weight-morph-16';
+    material.customProgramCacheKey=()=> 'citizen-weight-morph-17';
     return material;
   }
   enableSkirtMorph(material){
@@ -205,8 +249,9 @@ export class CityCitizenModels {
       shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute float instanceFat;\nattribute vec3 skirtMorph;\nattribute vec3 skirtNormalLinear;\nattribute vec3 skirtNormalQuadratic;');
       shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>','#include <beginnormal_vertex>\nobjectNormal = normalize(objectNormal + instanceFat * skirtNormalLinear + instanceFat * instanceFat * skirtNormalQuadratic);');
       shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed += instanceFat * skirtMorph;');
+      this.applyPixelDirtShader(shader);
     };
-    material.customProgramCacheKey=()=> 'citizen-skirt-anatomical-fit-3';
+    material.customProgramCacheKey=()=> 'citizen-skirt-anatomical-fit-4';
     return material;
   }
   enableDressMorph(material){
@@ -215,14 +260,15 @@ export class CityCitizenModels {
       shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute float instanceFat;\nattribute vec3 weightMorph;\nattribute vec3 weightNormalLinear;\nattribute vec3 weightNormalQuadratic;\nattribute vec3 skirtMorph;\nattribute vec3 skirtNormalLinear;\nattribute vec3 skirtNormalQuadratic;');
       shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>','#include <beginnormal_vertex>\nobjectNormal = normalize(objectNormal + instanceFat * (weightNormalLinear + skirtNormalLinear) + instanceFat * instanceFat * (weightNormalQuadratic + skirtNormalQuadratic));');
       shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed += instanceFat * (weightMorph + skirtMorph);');
+      this.applyPixelDirtShader(shader);
     };
-    material.customProgramCacheKey=()=> 'citizen-dress-blouse-fitted-skirt-2';
+    material.customProgramCacheKey=()=> 'citizen-dress-blouse-fitted-skirt-3';
     return material;
   }
   instancedGeometry(source,capacity){
     if(!this.THREE.InstancedBufferAttribute)return source;
     const geometry=source.clone();
-    geometry.setAttribute('instanceFat',new this.THREE.InstancedBufferAttribute(new Float32Array(capacity),1));geometry.setAttribute('instancePattern',new this.THREE.InstancedBufferAttribute(new Float32Array(capacity),1));if(source.userData.citizenCombinedSurface)geometry.setAttribute('instanceGarmentColor',new this.THREE.InstancedBufferAttribute(new Float32Array(capacity*3),3));return geometry;
+    geometry.setAttribute('instanceFat',new this.THREE.InstancedBufferAttribute(new Float32Array(capacity),1));geometry.setAttribute('instancePattern',new this.THREE.InstancedBufferAttribute(new Float32Array(capacity),1));geometry.setAttribute('instanceDirt',new this.THREE.InstancedBufferAttribute(new Float32Array(capacity*4),4));geometry.setAttribute('instanceDirtZoneA',new this.THREE.InstancedBufferAttribute(new Float32Array(capacity*4),4));geometry.setAttribute('instanceDirtZoneB',new this.THREE.InstancedBufferAttribute(new Float32Array(capacity*4),4));if(source.userData.citizenCombinedSurface)geometry.setAttribute('instanceGarmentColor',new this.THREE.InstancedBufferAttribute(new Float32Array(capacity*3),3));return geometry;
   }
   combinedCitizenSurface(body,clothes){
     let byClothes=this.combinedSurfaces.get(body);if(!byClothes)this.combinedSurfaces.set(body,byClothes=new WeakMap());let cached=byClothes.get(clothes);if(cached)return cached;
@@ -256,6 +302,25 @@ export class CityCitizenModels {
     if(attribute.array[index]!==pattern){attribute.array[index]=pattern;mesh.userData.instancePatternDirty=true;}
   }
   flushInstancePattern(mesh){const attribute=mesh.geometry.attributes.instancePattern;if(attribute&&mesh.userData.instancePatternDirty){attribute.needsUpdate=true;mesh.userData.instancePatternDirty=false;}}
+  setInstanceDirt(mesh,index,color,level01,zones=null){
+    const attribute=mesh.geometry.attributes.instanceDirt;if(!attribute)return;const o=index*4,a=attribute.array;
+    const za=mesh.geometry.attributes.instanceDirtZoneA?.array,zb=mesh.geometry.attributes.instanceDirtZoneB?.array;
+    const f=zones?Math.min(1,((zones.feet||0)+(zones.legs||0)*1.3)/150):0;
+    const ar=zones?Math.min(1,(zones.arms||0)/60):0,hd=zones?Math.min(1,(zones.head||0)/60):0,st=zones?Math.min(1,(zones.seat||0)/60):0;
+    const bk=zones?Math.min(1,(zones.back||0)/60):0,sd=zones?Math.min(1,(zones.side||0)/60):0,tr=zones?Math.min(1,(zones.torso||0)/70):0;
+    const hasSpecific=f>0||ar>0||hd>0||st>0||bk>0||sd>0||tr>0;
+    const gn=hasSpecific?0:level01*.55;
+    a[o]=color.r;a[o+1]=color.g;a[o+2]=color.b;a[o+3]=level01;mesh.userData.instanceDirtDirty=true;
+    if(za){za[o]=f;za[o+1]=ar;za[o+2]=hd;za[o+3]=st;}
+    if(zb){zb[o]=bk;zb[o+1]=sd;zb[o+2]=tr;zb[o+3]=gn;}
+  }
+  flushInstanceDirt(mesh){
+    for(const name of ['instanceDirt','instanceDirtZoneA','instanceDirtZoneB']){
+      const attribute=mesh.geometry.attributes[name];
+      if(attribute&&mesh.userData.instanceDirtDirty)attribute.needsUpdate=true;
+    }
+    mesh.userData.instanceDirtDirty=false;
+  }
   setInstanceColor(mesh,index,color){
     const attribute=mesh.instanceColor,offset=index*3;
     if(attribute&&Math.abs(attribute.array[offset]-color.r)<1e-6&&Math.abs(attribute.array[offset+1]-color.g)<1e-6&&Math.abs(attribute.array[offset+2]-color.b)<1e-6)return;
@@ -444,6 +509,7 @@ export class CityCitizenModels {
         if(LOWER_PIECES.has(piece)||HAND_PIECES.has(piece))this.headwear.set(`${key}:${piece}`,outfit.clothes);
       }
       for(const piece of HEADWEAR_PIECES){const part=headwearSurface(data,piece),anchorKey=`${key}:${piece}`;this.headwearAnchors.set(anchorKey,part.anchor);if(!this.headwear.has(`static:${piece}`)){const g=new this.THREE.BufferGeometry();g.setAttribute('position',new this.THREE.Float32BufferAttribute(part.positions,3));g.setAttribute('normal',new this.THREE.Float32BufferAttribute(part.normals,3));g.computeBoundingSphere();this.headwear.set(`static:${piece}`,g);}}
+      if(key.startsWith('carregar:')){this.carryAnchors.set(key,carryBoxAnchor(data));if(!this.headwear.has('static:carry-box'))this.headwear.set('static:carry-box',carryBoxGeometry(this.THREE));}
     }
     this.ready=true;return true;
   }
@@ -456,7 +522,7 @@ export class CityCitizenModels {
     return {level,hex};
   }
   begin(dt=0,speed=1,simTick=null){this.frameToken++;this.animationPaused=speed<=0;this.frameDelta=Math.max(0,Math.min(.1,dt));this.clock+=this.frameDelta*Math.max(0,Math.min(2,speed));this.campaignFlagTime=Number.isFinite(simTick)?Math.floor(simTick/20)*.1:Math.floor(this.clock*3)/10;this.activeCampaignFlags.clear();this.flyCount=0;if(this.flyMesh)this.flyMesh.count=0;for(const batch of this.activeBatches){batch.count=0;if(batch.mesh)batch.mesh.count=0;if(batch.clothingMesh)batch.clothingMesh.count=0;}this.activeBatches.clear();for(const batch of this.activeHeadwearBatches){batch.count=0;if(batch.mesh)batch.mesh.count=0;}this.activeHeadwearBatches.clear();}
-  add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false,smoothMovement=false,vehicleAngle=null,visualOffset=null,indoorBounds=null,activeCampaignElectionId=null,activeCampaignStatus=null}={}){
+  add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false,smoothMovement=false,vehicleAngle=null,visualOffset=null,indoorBounds=null,activeCampaignElectionId=null,activeCampaignStatus=null,shallowShore=false}={}){
     if(!this.ready)return false;
     const c=entity.properties.citizen;if(!c)return false;
     if(hidden)return true;
@@ -502,7 +568,7 @@ export class CityCitizenModels {
     // the seated body back into the walking one at the seat anchor.
     const settledFurniture=!!c.furnitureUse?.seated||c.furnitureUse?.pose==='lying';
     const traveling=citizenHasPath(c)||!!c.indoorLocation?.path?.length||!settledFurniture&&(moved||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding');
-    const sleeping=citizenIsSleeping(c),lying=!sleeping&&!traveling&&c.furnitureUse?.pose==='lying',clip=citizenAnimation(c,traveling),actionState=clip==='murro'||clip==='chute'||clip==='derrotado',actionToken=c.combatAnimation?.sequence??c.combatReaction?.sequence??c.unconsciousUntil??null;
+    const sleeping=citizenIsSleeping(c),lying=!sleeping&&!traveling&&c.furnitureUse?.pose==='lying',clip=citizenAnimation(c,traveling,!shallowShore),actionState=clip==='murro'||clip==='chute'||clip==='derrotado',actionToken=c.combatAnimation?.sequence??c.combatReaction?.sequence??c.unconsciousUntil??null;
     // The seated OBJ pose puts the legs in the same vertical bands used by
     // the standing-body fat mask. Cap its morph so those vertices do not
     // balloon sideways while sitting; standing citizens retain the full shape.
@@ -551,12 +617,13 @@ export class CityCitizenModels {
       carrier.group.matrix.copy(this.matrix);carrier.group.matrixWorldNeedsUpdate=true;
       animateClothFlag(carrier.group.userData.cloth,this.campaignFlagTime??Math.floor(this.clock*3)/10,(entity.id%19)*.31);this.activeCampaignFlags.add(entity.id);
     }
-    const combatFlash=entity.combatFlash>0,garmentDirt=garment?.dirt||0,dirtVisual=this.citizenDirtVisual(c,garmentDirt),dirtMix=dirtVisual.level>0?Math.min(.75,dirtVisual.level/130):0,dirtToken=`${Math.round(dirtVisual.level)}:${dirtVisual.hex}`;
+    const dz=c.dirtZones,zoneToken=dz?`${Math.round(dz.feet||0)}:${Math.round(dz.legs||0)}:${Math.round(dz.arms||0)}:${Math.round(dz.head||0)}:${Math.round(dz.seat||0)}:${Math.round(dz.back||0)}:${Math.round(dz.side||0)}:${Math.round(dz.torso||0)}`:'';
+    const combatFlash=entity.combatFlash>0,garmentDirt=garment?.dirt||0,dirtVisual=this.citizenDirtVisual(c,garmentDirt),dirtMix=dirtVisual.level>0?Math.min(.75,dirtVisual.level/130):0,dirtToken=`${Math.round(dirtVisual.level)}:${dirtVisual.hex}:${zoneToken}`,dirtLevel01=dirtVisual.level>0?Math.min(1,dirtVisual.level/100):0;
     const bodyColorToken=combatFlash?'flash':dimmed?'dim':`${entity.properties.render.color??0xe8e8e8}:${dirtToken}`;
-    if(!transformUnchanged||motion.bodyColorToken!==bodyColorToken){this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:entity.properties.render.color??0xe8e8e8);if(!dimmed&&!combatFlash&&dirtMix>0){this.activeDirtColor.setHex(dirtVisual.hex);this.color.lerp(this.activeDirtColor,dirtMix*.65);}this.setInstanceColor(batch.mesh,batch.count,this.color);motion.bodyColorToken=bodyColorToken;}
+    if(!transformUnchanged||motion.bodyColorToken!==bodyColorToken){this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:entity.properties.render.color??0xe8e8e8);this.setInstanceColor(batch.mesh,batch.count,this.color);this.activeDirtColor.setHex(dirtVisual.hex);this.setInstanceDirt(batch.mesh,batch.count,this.activeDirtColor,dimmed||combatFlash?0:dirtLevel01,dz);motion.bodyColorToken=bodyColorToken;}
     const presenceColor=presence?.color,clothingColorUnchanged=transformUnchanged&&motion.clothingColorAppearance===appearance&&motion.clothingColorDirt===dirtToken&&motion.clothingColorCombat===combatFlash&&motion.clothingColorDimmed===dimmed&&motion.clothingColorPresence===presenceColor;
-    if(batch.clothingMesh){if(!transformUnchanged)this.setInstanceMatrix(batch.clothingMesh,bodyIndex,this.matrix);if(!transformUnchanged||motion.clothingFatToken!==poseBodyShape.fat){this.setInstanceFat(batch.clothingMesh,bodyIndex,poseBodyShape);motion.clothingFatToken=poseBodyShape.fat;}if(patterned&&(!transformUnchanged||motion.bodyPatternToken!==printId)){this.setInstancePattern(batch.clothingMesh,bodyIndex,printId);motion.bodyPatternToken=printId;}if(!clothingColorUnchanged){this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:patterned?garmentColorHex:printed?0xffffff:presenceColor?Number.parseInt(String(presenceColor).replace('#',''),16):garmentColorHex);if(!dimmed&&!combatFlash&&dirtMix>0){this.activeDirtColor.setHex(dirtVisual.hex);this.color.lerp(this.activeDirtColor,dirtMix);}this.setInstanceColor(batch.clothingMesh,bodyIndex,this.color);}}
-    else if(batch.combined&&!clothingColorUnchanged){this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:presenceColor?Number.parseInt(String(presenceColor).replace('#',''),16):garmentColorHex);if(!dimmed&&!combatFlash&&dirtMix>0){this.activeDirtColor.setHex(dirtVisual.hex);this.color.lerp(this.activeDirtColor,dirtMix);}this.setInstanceGarmentColor(batch.mesh,bodyIndex,this.color);}
+    if(batch.clothingMesh){if(!transformUnchanged)this.setInstanceMatrix(batch.clothingMesh,bodyIndex,this.matrix);if(!transformUnchanged||motion.clothingFatToken!==poseBodyShape.fat){this.setInstanceFat(batch.clothingMesh,bodyIndex,poseBodyShape);motion.clothingFatToken=poseBodyShape.fat;}if(patterned&&(!transformUnchanged||motion.bodyPatternToken!==printId)){this.setInstancePattern(batch.clothingMesh,bodyIndex,printId);motion.bodyPatternToken=printId;}if(!clothingColorUnchanged){this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:patterned?garmentColorHex:printed?0xffffff:presenceColor?Number.parseInt(String(presenceColor).replace('#',''),16):garmentColorHex);this.setInstanceColor(batch.clothingMesh,bodyIndex,this.color);this.activeDirtColor.setHex(dirtVisual.hex);this.setInstanceDirt(batch.clothingMesh,bodyIndex,this.activeDirtColor,dimmed||combatFlash?0:dirtLevel01,dz);}}
+    else if(batch.combined&&!clothingColorUnchanged){this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:presenceColor?Number.parseInt(String(presenceColor).replace('#',''),16):garmentColorHex);this.setInstanceGarmentColor(batch.mesh,bodyIndex,this.color);this.activeDirtColor.setHex(dirtVisual.hex);this.setInstanceDirt(batch.mesh,bodyIndex,this.activeDirtColor,dimmed||combatFlash?0:dirtLevel01,dz);}
     if(batch.clothingMesh||batch.combined){motion.clothingColorAppearance=appearance;motion.clothingColorDirt=dirtToken;motion.clothingColorCombat=combatFlash;motion.clothingColorDimmed=dimmed;motion.clothingColorPresence=presenceColor;}
     batch.count++;
     const items=appearance.items;
@@ -572,7 +639,27 @@ export class CityCitizenModels {
       const accessoryIndex=head.count,accessoryTransform=motion.accessoryTransforms[itemIndex],accessoryUnchanged=transformUnchanged&&accessoryTransform.key===itemKey&&accessoryTransform.batch===head&&accessoryTransform.mesh===head.mesh&&accessoryTransform.index===accessoryIndex,accessoryColorSlotUnchanged=accessoryTransform.batch===head&&accessoryTransform.mesh===head.mesh&&accessoryTransform.index===accessoryIndex;
       if(!accessoryUnchanged){if(!matrixReady){this.quaternion.setFromAxisAngle(this.axis,renderAngle);if(lying)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size*heightScale,size);this.matrix.compose(this.position,this.quaternion,this.scale);matrixReady=true;}if(isStaticHeadwear){const anchor=this.headwearAnchors.get(itemKey);this.accessoryOffset.set(anchor?.x||0,anchor?.y||0,anchor?.z||0).applyMatrix4(this.matrix);this.accessoryMatrix.copy(this.matrix).setPosition(this.accessoryOffset);this.setInstanceMatrix(head.mesh,accessoryIndex,this.accessoryMatrix);}else this.setInstanceMatrix(head.mesh,accessoryIndex,this.matrix);}
       accessoryTransform.key=itemKey;accessoryTransform.batch=head;accessoryTransform.mesh=head.mesh;accessoryTransform.index=accessoryIndex;if(isFittedClothing&&(!accessoryUnchanged||accessoryTransform.fatToken!==poseBodyShape.fat)){this.setInstanceFat(head.mesh,accessoryIndex,poseBodyShape);accessoryTransform.fatToken=poseBodyShape.fat;}
-      const hex=itemColorHexes[itemIndex],itemDirt=Math.max(item.dirt||0,dirtVisual.level),itemDirtToken=`${Math.round(itemDirt)}:${dirtVisual.hex}`,accessoryColorUnchanged=accessoryColorSlotUnchanged&&accessoryTransform.colorItem===item&&accessoryTransform.colorHex===hex&&accessoryTransform.colorDirt===itemDirtToken&&accessoryTransform.colorCombat===combatFlash&&accessoryTransform.colorDimmed===dimmed;if(!accessoryColorUnchanged){this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:hex);if(!dimmed&&!combatFlash&&itemDirt>0){this.activeDirtColor.setHex(dirtVisual.hex);this.color.lerp(this.activeDirtColor,Math.min(.75,itemDirt/130));}this.setInstanceColor(head.mesh,head.count,this.color);accessoryTransform.colorItem=item;accessoryTransform.colorHex=hex;accessoryTransform.colorDirt=itemDirtToken;accessoryTransform.colorCombat=combatFlash;accessoryTransform.colorDimmed=dimmed;}head.count++;
+      const hex=itemColorHexes[itemIndex],itemDirt=Math.max(item.dirt||0,dirtVisual.level),itemDirtToken=`${Math.round(itemDirt)}:${dirtVisual.hex}`,accessoryColorUnchanged=accessoryColorSlotUnchanged&&accessoryTransform.colorItem===item&&accessoryTransform.colorHex===hex&&accessoryTransform.colorDirt===itemDirtToken&&accessoryTransform.colorCombat===combatFlash&&accessoryTransform.colorDimmed===dimmed;if(!accessoryColorUnchanged){this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:hex);this.setInstanceColor(head.mesh,head.count,this.color);this.activeDirtColor.setHex(dirtVisual.hex);this.setInstanceDirt(head.mesh,head.count,this.activeDirtColor,dimmed||combatFlash?0:Math.min(1,itemDirt/100),dz);accessoryTransform.colorItem=item;accessoryTransform.colorHex=hex;accessoryTransform.colorDirt=itemDirtToken;accessoryTransform.colorCombat=combatFlash;accessoryTransform.colorDimmed=dimmed;}head.count++;
+    }
+    if(clip==='carregar'&&this.headwear.has('static:carry-box')){
+      const source=this.headwear.get('static:carry-box');
+      let boxBatch=this.headwearBatches.get('carry-box');
+      if(!boxBatch){boxBatch={count:0,capacity:0,mesh:null};this.headwearBatches.set('carry-box',boxBatch);}
+      this.activeHeadwearBatches.add(boxBatch);
+      if(boxBatch.count===boxBatch.capacity){
+        const capacity=Math.max(16,boxBatch.capacity*2),mesh=new this.THREE.InstancedMesh(source,this.material,capacity);
+        mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=false;
+        if(boxBatch.mesh){for(let i=0;i<boxBatch.count;i++){boxBatch.mesh.getMatrixAt(i,this.matrix);mesh.setMatrixAt(i,this.matrix);boxBatch.mesh.getColorAt(i,this.color);this.setInstanceColor(mesh,i,this.color);}mesh.userData.instanceMatrixDirty=true;mesh.userData.matrixDirtyMin=0;mesh.userData.matrixDirtyMax=boxBatch.count-1;this.group.remove(boxBatch.mesh);boxBatch.mesh.dispose();}
+        this.group.add(mesh);boxBatch.mesh=mesh;boxBatch.capacity=capacity;
+      }
+      if(!matrixReady){this.quaternion.setFromAxisAngle(this.axis,renderAngle);if(lying)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size*heightScale,size);this.matrix.compose(this.position,this.quaternion,this.scale);matrixReady=true;}
+      const anchor=this.carryAnchors.get(key);
+      this.accessoryOffset.set(anchor?.x||0,anchor?.y||.55,(anchor?.z||.2)+Math.max(0,poseBodyShape.fat)*.07).applyMatrix4(this.matrix);
+      this.accessoryMatrix.copy(this.matrix).setPosition(this.accessoryOffset);
+      this.setInstanceMatrix(boxBatch.mesh,boxBatch.count,this.accessoryMatrix);
+      this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:c.forestryJob?.stage==='return'?0x8c5f36:0xb98b56);
+      this.setInstanceColor(boxBatch.mesh,boxBatch.count,this.color);
+      boxBatch.count++;
     }
     if((c.dead||dirtVisual.level>=55)&&!dimmed&&this.THREE.BoxGeometry&&this.THREE.MeshBasicMaterial){
       const fliesPerCitizen=c.dead?6:Math.min(6,3+Math.floor((dirtVisual.level-55)/15));
@@ -595,11 +682,11 @@ export class CityCitizenModels {
   end(){
     const flushBatch=batch=>{
       batch.mesh.count=batch.count;
-      if(batch.count){this.flushInstanceMatrix(batch.mesh);if(batch.mesh.instanceColor&&batch.mesh.userData.instanceColorDirty){batch.mesh.instanceColor.needsUpdate=true;batch.mesh.userData.instanceColorDirty=false;}const fat=batch.mesh.geometry.attributes.instanceFat;if(fat&&batch.mesh.userData.instanceFatDirty){fat.needsUpdate=true;batch.mesh.userData.instanceFatDirty=false;}const garmentColor=batch.mesh.geometry.attributes.instanceGarmentColor;if(garmentColor&&batch.mesh.userData.instanceGarmentColorDirty){garmentColor.needsUpdate=true;batch.mesh.userData.instanceGarmentColorDirty=false;}this.flushInstancePattern(batch.mesh);}
-      if(batch.clothingMesh){batch.clothingMesh.count=batch.count;if(batch.count){this.flushInstanceMatrix(batch.clothingMesh);if(batch.clothingMesh.instanceColor&&batch.clothingMesh.userData.instanceColorDirty){batch.clothingMesh.instanceColor.needsUpdate=true;batch.clothingMesh.userData.instanceColorDirty=false;}const fat=batch.clothingMesh.geometry.attributes.instanceFat;if(fat&&batch.clothingMesh.userData.instanceFatDirty){fat.needsUpdate=true;batch.clothingMesh.userData.instanceFatDirty=false;}this.flushInstancePattern(batch.clothingMesh);}}
+      if(batch.count){this.flushInstanceMatrix(batch.mesh);if(batch.mesh.instanceColor&&batch.mesh.userData.instanceColorDirty){batch.mesh.instanceColor.needsUpdate=true;batch.mesh.userData.instanceColorDirty=false;}const fat=batch.mesh.geometry.attributes.instanceFat;if(fat&&batch.mesh.userData.instanceFatDirty){fat.needsUpdate=true;batch.mesh.userData.instanceFatDirty=false;}const garmentColor=batch.mesh.geometry.attributes.instanceGarmentColor;if(garmentColor&&batch.mesh.userData.instanceGarmentColorDirty){garmentColor.needsUpdate=true;batch.mesh.userData.instanceGarmentColorDirty=false;}this.flushInstancePattern(batch.mesh);this.flushInstanceDirt(batch.mesh);}
+      if(batch.clothingMesh){batch.clothingMesh.count=batch.count;if(batch.count){this.flushInstanceMatrix(batch.clothingMesh);if(batch.clothingMesh.instanceColor&&batch.clothingMesh.userData.instanceColorDirty){batch.clothingMesh.instanceColor.needsUpdate=true;batch.clothingMesh.userData.instanceColorDirty=false;}const fat=batch.clothingMesh.geometry.attributes.instanceFat;if(fat&&batch.clothingMesh.userData.instanceFatDirty){fat.needsUpdate=true;batch.clothingMesh.userData.instanceFatDirty=false;}this.flushInstancePattern(batch.clothingMesh);this.flushInstanceDirt(batch.clothingMesh);}}
     };
     for(const batch of this.activeBatches)flushBatch(batch);
-    for(const batch of this.activeHeadwearBatches){batch.mesh.count=batch.count;if(batch.count){this.flushInstanceMatrix(batch.mesh);if(batch.mesh.instanceColor&&batch.mesh.userData.instanceColorDirty){batch.mesh.instanceColor.needsUpdate=true;batch.mesh.userData.instanceColorDirty=false;}const fat=batch.mesh.geometry.attributes.instanceFat;if(fat&&batch.mesh.userData.instanceFatDirty){fat.needsUpdate=true;batch.mesh.userData.instanceFatDirty=false;}this.flushInstancePattern(batch.mesh);}}
+    for(const batch of this.activeHeadwearBatches){batch.mesh.count=batch.count;if(batch.count){this.flushInstanceMatrix(batch.mesh);if(batch.mesh.instanceColor&&batch.mesh.userData.instanceColorDirty){batch.mesh.instanceColor.needsUpdate=true;batch.mesh.userData.instanceColorDirty=false;}const fat=batch.mesh.geometry.attributes.instanceFat;if(fat&&batch.mesh.userData.instanceFatDirty){fat.needsUpdate=true;batch.mesh.userData.instanceFatDirty=false;}this.flushInstancePattern(batch.mesh);this.flushInstanceDirt(batch.mesh);}}
     if(this.flyMesh){this.flyMesh.count=this.flyCount;if(this.flyCount>0)this.flyMesh.instanceMatrix.needsUpdate=true;}
     for(const [id,carrier]of this.campaignFlags)if(!this.activeCampaignFlags.has(id)){this.group.remove(carrier.group);carrier.group.traverse(o=>{o.geometry?.dispose();if(o.material!==carrier.material)o.material?.dispose();});this.campaignFlags.delete(id);}
   }

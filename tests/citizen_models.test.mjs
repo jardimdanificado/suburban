@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {CITIZEN_MODEL_FRAMES,parseCitizenOBJ,garmentSurface,headwearSurface,citizenAnimation,citizenFrame,citizenIsSleeping,CityCitizenModels} from '../js/city_citizen_models.js';
-class Vector3{constructor(x=0,y=0,z=0){this.set(x,y,z);}set(x,y,z){Object.assign(this,{x,y,z});return this;}}
-class Matrix4{constructor(){this.elements=new Float32Array(16);}compose(p,q,s){this.data={position:{...p},angle:q.angle,lying:!!q.lying,scale:{...s}};this.elements.fill(0);this.elements[0]=s.x;this.elements[5]=s.y;this.elements[10]=s.z;this.elements[12]=p.x;this.elements[13]=p.y;this.elements[14]=p.z;this.elements[15]=1;return this;}}
+class Vector3{constructor(x=0,y=0,z=0){this.set(x,y,z);}set(x,y,z){Object.assign(this,{x,y,z});return this;}applyMatrix4(m){const p=m.data?.position||{x:0,y:0,z:0};this.x+=p.x;this.y+=p.y;this.z+=p.z;return this;}}
+class Matrix4{constructor(){this.elements=new Float32Array(16);}compose(p,q,s){this.data={position:{...p},angle:q.angle,lying:!!q.lying,scale:{...s}};this.elements.fill(0);this.elements[0]=s.x;this.elements[5]=s.y;this.elements[10]=s.z;this.elements[12]=p.x;this.elements[13]=p.y;this.elements[14]=p.z;this.elements[15]=1;return this;}copy(m){this.data=structuredClone(m.data);this.elements.set(m.elements);return this;}setPosition(p){if(this.data)this.data.position={x:p.x,y:p.y,z:p.z};this.elements[12]=p.x;this.elements[13]=p.y;this.elements[14]=p.z;return this;}}
 class Quaternion{setFromAxisAngle(axis,angle){this.angle=angle;this.lying=false;return this;}multiply(){this.lying=true;return this;}}
 class Color{setHex(value){this.value=value;this.r=((value>>16)&255)/255;this.g=((value>>8)&255)/255;this.b=(value&255)/255;return this;}}
 class BufferGeometry{constructor(){this.attributes={};}setAttribute(k,v){this.attributes[k]=v;}computeBoundingSphere(){}}
@@ -280,4 +280,14 @@ test('anatomical weight morph preserves arm thickness, foot shape and triangle a
   minX0=Math.min(minX0,x0);maxX0=Math.max(maxX0,x0);minX1=Math.min(minX1,x1);maxX1=Math.max(maxX1,x1);
  }
  assert((maxX1-minX1)>(maxX0-minX0)*1.1,'upper arm X thickness must expand rather than squash flat at high body fat');
+});
+
+test('carrying citizens hold an instanced box anchored between their hands',async()=>{
+ const {model}=await models(),e=person(95),c=e.properties.citizen;
+ c.deliveryId=42;c.path=[{x:4,y:0}];
+ model.begin(.05,1);model.add(e,0);model.end();
+ const boxBatch=model.headwearBatches.get('carry-box');
+ assert(boxBatch&&boxBatch.count===1,'carrying citizen should render a box in hand');
+ model.begin(.05,1);e.properties.citizen.deliveryId=null;e.properties.citizen.path=[];model.add(e,0);model.end();
+ assert.equal(boxBatch.count,0,'non-carrying citizen should not render a box');
 });

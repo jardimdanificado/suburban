@@ -479,9 +479,9 @@ export class TerrainTracks {
         p.wearProgress=Math.min(1,(p.wearProgress||0)+(Math.abs(stamp.kind)===1?.025:.045));
         p._smudgeSteps=(p._smudgeSteps||0)+1;
         if(p._smudgeSteps===1||p._smudgeSteps%4===0||p.wearProgress>=1){p.smudgeRevision=(p.smudgeRevision||0)+1;if(p.wearProgress>=1)this._groundArtCache=null;}
-        if(citizen)city?.sanitation?.soilCitizen?.(citizen,'tinta',2.5,item.inkColor);
+        if(citizen)city?.sanitation?.soilCitizen?.(citizen,'tinta',2.5,item.inkColor,'arms');
       }else if(item.dirtKind&&citizen){
-        city?.sanitation?.soilCitizen?.(citizen,item.dirtKind,item.dirtKind==='bosta'?4:3);
+        city?.sanitation?.soilCitizen?.(citizen,item.dirtKind,item.dirtKind==='bosta'?4:3,null,'feet');
       }
     };
     this._mudStainCooldown??=new Map();
@@ -521,8 +521,8 @@ export class TerrainTracks {
       }
       if(citizen&&contacts.length){
         const tx=Math.floor(x),tz=Math.floor(z),tile=world.getTile?world.getTile(tx,tz):world.map?.[tz*world.width+tx];
-        if(dirtDeposits.length)city?.sanitation?.soilCitizen?.(citizen,'barro',.5);
-        else if(tile===TILE_ROAD_GRASS||tile===TILE_ROAD_HILL||tile===TILE_HILL)city?.sanitation?.soilCitizen?.(citizen,'terra',.25);
+        if(dirtDeposits.length)city?.sanitation?.soilCitizen?.(citizen,'barro',.5,null,'feet');
+        else if(tile===TILE_ROAD_GRASS||tile===TILE_ROAD_HILL||tile===TILE_HILL)city?.sanitation?.soilCitizen?.(citizen,'terra',.25,null,'feet');
       }
       if(groundSources.length||this.paintCarry.history.has(entity)){
         paintStamps.push(...this.paintCarry.contacts(entity,contacts,world,groundSources,(item,u,v,stamp)=>onStepGroundSource(item,u,v,stamp,citizen)));

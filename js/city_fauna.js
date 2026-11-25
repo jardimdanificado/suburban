@@ -661,7 +661,7 @@ export class CityFauna {
       if (threat.dist < 1.3 && threat.citizen && !threat.citizen.dead) {
         threat.citizen.needs.health = Math.max(0, (threat.citizen.needs.health ?? 100) - 8);
         this.city.sanitation?.emitCombatBlood?.(threat.citizen.entity.x, threat.citizen.entity.y, 0.7);
-        this.city.sanitation?.soilCitizen?.(threat.citizen, 'sangue', 10);
+        this.city.sanitation?.soilCitizen?.(threat.citizen, 'sangue', 10, null, 'legs');
         animal.hunger = Math.min(100, animal.hunger + 15);
       }
       return;
@@ -1050,7 +1050,7 @@ export class CityFauna {
     target.health -= FAUNA_RULES.huntDamage * weaponBoost;
     target.provokedUntil = this.city.minute + 10;
     this.city.sanitation?.emitCombatBlood?.(target.x, target.y, target.health <= 0 ? 1.0 : 0.45);
-    this.city.sanitation?.soilCitizen?.(hunter, 'sangue', target.health <= 0 ? 6 : 2);
+    this.city.sanitation?.soilCitizen?.(hunter, 'sangue', target.health <= 0 ? 6 : 2, null, 'arms');
     if (target.health <= 0) {
       this.markDead(target, 'Abatido', this.city.minute);
       const spec = ANIMAL_SPECIES[target.species];
