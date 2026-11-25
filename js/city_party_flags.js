@@ -231,6 +231,26 @@ export function makeMunicipalFlag(city,identity={}){
  for(let attempt=0;attempt<48;attempt++){flag=makePartyFlag(city,-1,[],subject);if(flag.emblems.length&&flag.backgroundStyle!=='solid')return flag;}
  return flag;
 }
+export function makeClothingPattern(city,options={}){
+ const rng=typeof city?.random==='function'?city:{random:Math.random};
+ const legacy=()=>{const hue=rng.random()*360,background=randomColor(hue,.22+rng.random()*.42,.68);let foreground=randomColor((hue+180)%360,.85,.62);if(flagContrast(foreground,background)<4.5)foreground=flagContrast('#ffffff',background)>=flagContrast('#111111',background)?'#ffffff':'#111111';return {background,foreground,colors:flagPalette(rng,hue,background,foreground),colorSource:'legacy'};};
+ const palette=Array.isArray(options.colors)&&options.colors.length>=2?{background:options.colors[0],foreground:options.colors[1],colors:Object.freeze([...options.colors]),colorSource:'custom'}:choosePartyPalette(rng,legacy);
+ const {background,foreground,colors}=palette;
+ const count=1+Math.floor(rng.random()*4);
+ const arrangements=ICON_LAYOUTS[count];
+ const nonSolid=PARTY_FLAG_BACKGROUNDS.filter(style=>style!=='solid');
+ const backgroundChoices=[...Array(14).fill('solid'),...nonSolid];
+ const backgroundStyle=options.backgroundStyle&&PARTY_FLAG_BACKGROUNDS.includes(options.backgroundStyle)?options.backgroundStyle:backgroundChoices[Math.floor(rng.random()*backgroundChoices.length)];
+ const arrangement=chooseFlagArrangement(rng,arrangements,backgroundStyle,count);
+ const textLayout=TEXT_LAYOUTS[0];
+ const layout=PARTY_FLAG_LAYOUTS.find(item=>item.id===`${count}-${arrangement.name}-${textLayout.id}`)||PARTY_FLAG_LAYOUTS.find(item=>item.count===count&&item.textLayout==='sem-texto');
+ let emblems=layoutEmblems(rng,null,layout,colors);
+ if(options.preferredSymbol&&emblems.length){
+  const skin=Number.isInteger(options.preferredSymbol)?CITY_SYMBOLS[options.preferredSymbol]:CITY_SYMBOLS.includes(options.preferredSymbol)?options.preferredSymbol:null;
+  if(skin)emblems=Object.freeze(emblems.map((emblem,i)=>i===0||emblem.skin===emblems[0].skin&&layout.slots[i]?.repeatGroup?Object.freeze({...emblem,skin}):emblem));
+ }
+ return Object.freeze({foreground,background,colors,paletteVersion:3,detailVersion:1,pattern:Math.floor(rng.random()*3),backgroundStyle,layoutId:layout.id,layoutName:arrangement.name,textLayout:'sem-texto',colorSource:palette.colorSource,emblems,texts:Object.freeze([])});
+}
 function remapMunicipalFlag(city,flag,emblems,texts,identity){
  const count=emblems.length,textCount=texts.length,oldTextLayout=flag.textLayout,layouts=PARTY_FLAG_LAYOUTS.filter(layout=>layout.count===count),matching=layouts.filter(layout=>layout.textLayout===oldTextLayout&&layout.textBoxes.length===textCount),pool=matching.length?matching:layouts.filter(layout=>layout.textBoxes.length===textCount),chosen=pool.length?pool[Math.floor(city.random()*pool.length)]:layouts[Math.floor(city.random()*layouts.length)];
  if(!chosen)return flag;
@@ -462,7 +482,7 @@ function currentTextBox(flag,text){
  if(top==='frase-em-cima-numero-embaixo'||top==='nome-e-numero-em-faixas')return text.kind==='number'?{x:.04,y:.895,w:.92,h:.09}:{x:.04,y:.015,w:.92,h:.09};
  return text;
 }
-export function drawPartyFlag(ctx,flag,x,y,w=60,h=38,onReady=null){
+export function drawPartyFlag(ctx,flag,x,y,w=60,h=38,onReady=null,options=null){
  if(!flag)return;ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();drawFlagBackground(ctx,flag,x,y,w,h);
  const emblems=flag.emblems?.length?flag.emblems:flag.skin?[{skin:flag.skin,x:.3,y:.12,w:.4,h:.76}]:[];
  for(const emblem of emblems){
@@ -479,7 +499,7 @@ export function drawPartyFlag(ctx,flag,x,y,w=60,h=38,onReady=null){
   const box=currentTextBox(flag,original),text=original;
   drawText(ctx,text,flag,x+box.x*w,y+box.y*h,box.w*w,box.h*h);
  }
- ctx.strokeStyle=flag.foreground;ctx.strokeRect(x,y,w,h);ctx.restore();
+ if(options?.border!==false){ctx.strokeStyle=flag.foreground;ctx.strokeRect(x,y,w,h);}ctx.restore();
 }
 export function partyFlagCanvas(flag,onReady){
  const canvas=document.createElement('canvas');canvas.width=120;canvas.height=76;const redraw=()=>{drawPartyFlag(canvas.getContext('2d',{willReadFrequently:true}),flag,0,0,120,76);onReady?.();};drawPartyFlag(canvas.getContext('2d',{willReadFrequently:true}),flag,0,0,120,76,redraw);return canvas;

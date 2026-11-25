@@ -16,13 +16,13 @@ import {equityShares,equityValue} from './city_equity.js?v=daily-mayor-privatiza
 import {contextActions} from './city_context_actions.js';
 import {renderMarket} from './city_wealth_ui.js?v=landlord-stock-market-1';
 import {renderColorPreferences,renderFactoryPaint,renderBuildingPaint} from './city_paint_ui.js';
-import {colorName} from './city_colors.js';
+import {colorName,favoriteColors} from './city_colors.js';
 import {civicSpec,civicStatus,renderCivicServices} from './city_public_services.js';
 import {renderEmployment,renderCompanyRecruitment} from './city_employment_ui.js';
 import {renderResume,requirements,occupiedPositions,ownerSelfHire} from './city_employment.js?v=fast-speeds-1';
 import {renderFiscalReport} from './city_fiscal_ui.js';
 import {renderMobility,renderVehicle,renderWorldVessel,renderAssembly,renderParking} from './city_vehicles_ui.js?v=shared-crossings-1';
-import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,wornHandwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=party-apparel-1';
+import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,wornHandwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference,craftClothingPattern} from './city_clothing.js?v=party-apparel-1';
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
 import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=custom-history-filters-1';
@@ -46,7 +46,8 @@ import { REPUTATION_LABELS } from './city_reputation.js';
 import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js?v=ff-growth-events-1';
 import { HISTORY_LIMIT } from './city_history.js';
 import { FAVORITE_GLYPH_COUNT, GOVERNMENT_TOPICS, HISTORY_FILTER_GROUPS } from './city_favorites.js';
-import {drawFavoriteSymbol} from './city_party_flags.js';
+import {drawFavoriteSymbol,drawPartyFlag} from './city_party_flags.js';
+import {favoriteSymbols} from './city_symbols.js';
 import { INDUSTRIES } from './city_industries.js';
 import { SANITATION_RULES } from './city_sanitation.js?v=ff2-speed-2';
 import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js';
@@ -438,7 +439,18 @@ export class CityUI {
     } else if(this.detailTab==='wardrobe') {
       const mode=this.wardrobeView||'pieces';p.links([['pieces','PEÇAS'],['preferences','PREFERÊNCIAS'],['history','PROCEDÊNCIA E LAVAGENS'],['brands','MARCAS']].map(([id,label])=>({label,selected:mode===id,click:()=>{this.wardrobeView=id;this.resetScroll();}})));
       if(mode==='pieces'){p.metrics([['APRESENTAÇÃO',`${Math.round(appearance(c))}%`],['SUJEIRA / ODOR',`${Math.round(clothingOdor(c))}%`]]);p.table([{label:'Peça',weight:2},{label:'Estilo'},{label:'Cor'},{label:'Estado'},{label:'Sujeira'}],(c.wardrobe||[]).map(g=>({cells:[`${[wornGarment(c),wornLowerGarment(c),wornHeadwear(c),wornFootwear(c),wornHandwear(c)].includes(g)?'Em uso · ':''}${g.piece}`,g.style,colorName(g.color),`${Math.round(g.condition)}%`,`${Math.round(g.dirt||0)}%`],click:g.brandId?()=>this.openBuilding(g.brandId):null})),{empty:'Nenhuma peça registrada.'});}
-      if(mode==='preferences')p.columns(q=>{q.heading('PEÇAS');q.table([{label:'Peça',weight:2},{label:'Afinidade'}],GARMENT_TYPES.map(g=>({cells:[g,Math.round(clothingPreference(c.id,g)*100)]})));},q=>{q.heading('ESTILOS');q.table([{label:'Estilo',weight:2},{label:'Afinidade'}],CLOTHING_STYLES.map(g=>({cells:[g,Math.round(clothingPreference(c.id,g)*100)]})));});
+      if(mode==='preferences'){
+        const favSyms=favoriteSymbols(c),favCols=favoriteColors(c).slice(0,4);
+        p.columns(q=>{
+          q.heading('SÍMBOLOS FAVORITOS');
+          if(q.visible(28)){favSyms.forEach((sym,idx)=>{drawFavoriteSymbol(q.ui.ctx,sym.index,q.x+idx*28,q.y,favCols[0]?.hex||C.ink,3);});q.space(28);}
+          q.heading('PEÇAS');q.table([{label:'Peça',weight:2},{label:'Afinidade'}],GARMENT_TYPES.map(g=>({cells:[g,Math.round(clothingPreference(c.id,g)*100)]})));
+        },q=>{
+          q.heading('CORES FAVORITAS');
+          q.note(favCols.map(col=>col.name).join(' · '));
+          q.heading('ESTILOS');q.table([{label:'Estilo',weight:2},{label:'Afinidade'}],CLOTHING_STYLES.map(g=>({cells:[g,Math.round(clothingPreference(c.id,g)*100)]})));
+        });
+      }
       if(mode==='history')for(const g of c.wardrobe||[]){p.heading(`${g.piece} · ${g.brandName}`);p.table([{label:'Dono',weight:2},{label:'Desde',weight:2}],(g.ownerHistory||[]).map(h=>({cells:[h.ownerName,stamp(h.minute)]})));p.table([{label:'Lavagem',weight:2},{label:'Método'}],(g.washingHistory||[]).map(w=>({cells:[stamp(w.minute),w.method]})),{empty:'Nenhuma lavagem registrada.'});}
       if(mode==='brands')p.table([{label:'Estabelecimento',weight:2},{label:'Afinidade'}],city.economy.businesses.filter(b=>['tailor','clothing_store','thrift_store','laundromat'].includes(b.type)).map(b=>({cells:[b.entity.properties.name,Math.round(brandPreference(c,b.id)*100)],click:()=>this.openBuilding(b.id)})));
     } else if(this.detailTab==='personality') {
@@ -606,7 +618,17 @@ export class CityUI {
       for(const o of works)p.record(o.name,o.error||o.status,()=>this.openContract(o.id));
     } else if (this.detailTab === 'stock') {
       p.heading('INVENTÁRIO REAL'); p.kv('Capacidade', `${inventoryUsed(b)}/${b.inventoryCapacity} itens`); p.kv('Reservado para recebimento', incomingItems(b)); p.kv('Espaço livre', inventoryFree(b)); p.meter('Ocupação do armazém', inventoryUsed(b) / b.inventoryCapacity * 100, inventoryFree(b) < 12 ? C.red : C.cyan); for (const [id, spec] of Object.entries(GOODS)) p.kv(spec.label, b.inventory?.[id] || 0);
-      if(b.garments?.length){p.heading('PEÇAS INDIVIDUAIS E PROCEDÊNCIA');for(const g of b.garments.slice(-24).reverse()){const owners=(g.ownerHistory||[]).map(h=>`${h.ownerName} · ${stamp(h.minute)}`).join(' → ')||g.brandName;p.record(`${g.piece} · ${g.style} · ${g.dirt<8?'limpa':'aguarda lavagem'}`,`${g.brandName} · condição ${g.condition.toFixed(0)}% · sujeira ${(g.dirt||0).toFixed(0)}% · donos: ${owners} · lavagens: ${washes}`,g.brandId?()=>this.openBuilding(g.brandId):()=>{});}}
+      if(['clothing_store','tailor'].includes(b.type)){
+        p.heading('PADRÕES DE ESTAMPA');
+        p.buttons([{label:'CONFECCIONAR NOVO PADRÃO',click:()=>{const created=craftClothingPattern(city,b,{applyToStock:true});this.notice=created?`Novo padrão ${created.patternId} confeccionado (${created.symbols.length} símbolos).`:'Não foi possível confeccionar padrão.';}}]);
+        const patterns=(b.clothingPatterns||[]).slice(-6).reverse();
+        if(!patterns.length)p.note('Nenhum padrão confeccionado ainda.');
+        else if(p.visible(44)){
+          patterns.forEach((pat,idx)=>{drawPartyFlag(p.ui.ctx,pat.flag,p.x+idx*46,p.y,40,40,null,{border:false});});
+          p.space(46);
+        }
+      }
+      if(b.garments?.length){p.heading('PEÇAS INDIVIDUAIS E PROCEDÊNCIA');for(const g of b.garments.slice(-24).reverse()){const owners=(g.ownerHistory||[]).map(h=>`${h.ownerName} · ${stamp(h.minute)}`).join(' → ')||g.brandName;p.record(`${g.piece} · ${g.style} · ${g.dirt<8?'limpa':'aguarda lavagem'}`,`${g.brandName} · ${colorName(g.color)}${g.patternFlag?` · ${g.patternFlag.emblems?.length||0} símbolos`:''} · condição ${g.condition.toFixed(0)}% · sujeira ${(g.dirt||0).toFixed(0)}% · donos: ${owners} · lavagens: ${washes}`,g.brandId?()=>this.openBuilding(g.brandId):()=>{});}}
       if (b.type === 'quarry') p.kv('Reserva mineral restante', b.stoneReserve || 0);
       if(b.type==='farm'){const farm=city.economy.farmCapacity(b);p.heading('ÁREA E CAPACIDADE AGRÍCOLA');p.kv('Solo ocupado / área de cultivo',`${b.width*b.depth} / ${farm.area} células`);if(isVerticalFarm(b))p.kv('Cultivo vertical',`${b.floors} andares · corredores e escadas fora dos canteiros`);p.kv('Talhões',farm.fields);p.kv('Funcionários / postos totais',`${occupiedPositions(city,b)} / ${farm.jobs}`);p.kv('Colheita com todos os talhões',`${farm.harvest} unidades`);p.kv('Potencial estimado/dia',`${farm.daily} unidades`);p.note('Estimativa para 480 minutos de trabalho. Sementes, crescimento, equipe, refeições, transporte e capacidade do armazém limitam a produção real.');}
       if(b.type==='forestry'){const license=city.nature.fellingLicense(b),pending=city.nature.fellingLicenses?.find(r=>r.holderId===b.id&&r.status==='pending');p.heading('LICENÇA DE CORTE SILVESTRE');p.kv('Situação',license?`${license.remaining} cortes · vence ${stamp(license.expiresAt)}`:pending?'Em análise municipal':'Sem licença vigente');p.note('Oito cortes por sete dias. Taxa municipal de 80. Árvores de manejo próprio e limpeza autorizada para obras são isentas.');p.buttons([{label:'REQUERER LICENÇA',click:()=>city.nature.requestFellingLicense(b)}]);}

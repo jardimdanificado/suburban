@@ -1,5 +1,6 @@
 import {controlledCitizen} from './character_game.js';
 import {ownsBusiness,ownsProperty,playerGoods,playerRecipes,playerSalePrice,PLAYER_FURNITURE} from './character_player_actions.js';
+import {colorName} from './city_colors.js';
 import {PRIVATE_TYPES} from './city_economy.js';
 import {equityShares} from './city_equity.js';
 import {demolitionIssue} from './city_player_property.js';
@@ -63,7 +64,7 @@ export function drawPlayerActions(game,p,state){
     }
     p.heading('Roupas');
     const shop=select(p,state,'clothingShop','Loja de roupas',buildings.filter(b=>b.active&&b.garments?.length&&b.inventory.roupas>0));
-    if(shop){const garment=choose(p,state,'garment','Peça',shop.garments.map((g,i)=>({id:g.garmentId??i,label:`${g.piece} · ${g.brandName||'Sem marca'} · ${Math.round(g.condition)}%`,record:g})),form.garment);if(garment){p.kv('Preço',money(city.economy.goods.roupas.price));p.button('Ir e comprar esta peça',()=>act('buy-clothes',{buildingId:shop.id,garmentId:garment.garmentId}));}}
+    if(shop){const garment=choose(p,state,'garment','Peça',shop.garments.map((g,i)=>({id:g.garmentId??i,label:`${g.piece} · ${colorName(g.color)}${g.patternFlag?` · ${g.patternFlag.emblems?.length||0} símbolos`:''} · ${g.brandName||'Sem marca'} · ${Math.round(g.condition)}%`,record:g})),form.garment);if(garment){p.kv('Preço',money(city.economy.goods.roupas.price));p.button('Ir e comprar esta peça',()=>act('buy-clothes',{buildingId:shop.id,garmentId:garment.garmentId}));}}
     return;
   }
   if(form.tab==='items'){

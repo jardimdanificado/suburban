@@ -1,5 +1,7 @@
 import {COLOR_PALETTE,colorAffinity,dislikesColor,favoriteColors} from './city_colors.js';
 import {companyUniform,manufactureCompanyUniform} from './city_company_uniforms.js';
+import {symbolAffinity} from './city_symbols.js';
+import {makeClothingPattern} from './city_party_flags.js';
 /** Durable garments keep their manufacturer through wholesale transport. */
 export const GARMENT_TYPES=['camisa','camisa social','camisa estampada','camiseta','regata','terno','vestido','vestido estampado','casaco','saia','saia longa','macacão','calça','calça social','shorts','bermuda','sunga','biquíni','maiô','luvas','sapatos','botas','boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande'];
 export const HEADWEAR_TYPES=new Set(['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande']);
@@ -10,11 +12,76 @@ const ONE_PIECE_TYPES=new Set(['vestido','vestido estampado','macacão','terno',
 export const CLOTHING_STYLES=['simples','social','esportivo','colorido','clássico','estampado','listrado','floral','sertanejo','festa'];
 export const TROPICAL_PRINTS=Object.freeze(['hibisco','palmeiras','folhagem','frutas-tropicais','ondas-caribenhas','flores-miudas']);
 export const tropicalPrintFor=(id,seed=0)=>TROPICAL_PRINTS[((Math.imul((Number(id)||0)+1,2654435761)^(Number(seed)||0))>>>0)%TROPICAL_PRINTS.length];
+export function seededClothingPattern(id,seed=0,options={}){
+  let state=((Math.imul((Number(id)||0)+17,2654435761)^(Number(seed)||0))>>>0)||1;
+  const rng={random:()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;}};
+  const flag=makeClothingPattern(rng,options);
+  return {patternId:`seed-${seed}-${id}`,flag,symbols:flag.emblems.map(e=>e.skin),colors:[...flag.colors],background:flag.background};
+}
+export function applyPatternToGarment(g,pattern){
+  if(!g||!pattern?.flag)return g;
+  g.patternFlag=pattern.flag;
+  g.patternId=pattern.patternId;
+  g.color=pattern.background||pattern.flag.background||g.color;
+  g.patternColors=pattern.colors||[...(pattern.flag.colors||[])];
+  g.patternSymbols=pattern.symbols||pattern.flag.emblems?.map(e=>e.skin)||[];
+  g.style='estampado';
+  return g;
+}
+export function craftClothingPattern(city,b,options={}){
+  if(!b)return null;
+  b.clothingPatterns??=[];
+  const seq=b.clothingPatternSerial=(b.clothingPatternSerial||0)+1;
+  const flag=makeClothingPattern(city,options);
+  const pattern={
+    patternId:`pattern-${b.id}-${seq}`,
+    flag,
+    symbols:flag.emblems.map(e=>e.skin),
+    colors:[...(flag.colors||[flag.background,flag.foreground])],
+    background:flag.background,
+    createdAt:city?.minute??0,
+    creatorBuildingId:b.id,
+    creatorName:b.entity?.properties?.name||'Confecção'
+  };
+  b.clothingPatterns.push(pattern);
+  if(b.clothingPatterns.length>24)b.clothingPatterns.splice(0,b.clothingPatterns.length-24);
+  if(options.applyToStock&&b.garments?.length){
+    const eligible=b.garments.filter(g=>g.reservedPartyId==null&&g.uniformCompanyId==null&&!HEADWEAR_TYPES.has(g.piece)&&!FOOTWEAR_TYPES.has(g.piece)&&!HANDWEAR_TYPES.has(g.piece)&&!LOWER_BODY_TYPES.has(g.piece));
+    const target=(Number.isInteger(options.garmentIndex)?b.garments[options.garmentIndex]:null)||eligible.find(g=>!g.patternFlag)||eligible[0];
+    if(target){
+      target.piece=target.piece==='vestido'||target.piece==='vestido estampado'?'vestido estampado':'camisa estampada';
+      applyPatternToGarment(target,pattern);
+    }
+  }
+  return pattern;
+}
 const preferenceSeeds=new Map();
 export const clothingPreference=(id,key)=>{let seed=preferenceSeeds.get(key);if(seed===undefined){seed=[...String(key)].reduce((n,c)=>(Math.imul(n,31)+c.charCodeAt(0))|0,17);preferenceSeeds.set(key,seed);}return ((Math.imul(id+71,seed)>>>0)%201-100)/100;};
 export function brandPreference(c,id){if(!c||id==null)return 0;c.brandPreferences??={};return c.brandPreferences[id]??=clothingPreference(c.id,`marca:${id}`);}
 export function companyPreference(c,b){return b?brandPreference(c,b.id)*2:0;}
-export function garmentScore(c,g){const affinity=colorAffinity(c,g.color),patterned=['camisa estampada','vestido estampado'].includes(g.piece),partyIssue=g.partyOwnerId!=null&&g.partyOwnerId===c.political?.partyId;return g.condition*.55+(100-(g.dirt||0))*.3+g.quality*.15+clothingPreference(c.id,g.piece)*10+clothingPreference(c.id,g.style)*8+brandPreference(c,g.brandId)*7+affinity*12+(patterned?40:0)+(partyIssue?32:0)+(affinity<=-.65&&!partyIssue?-120:0);}
+function patternColorBonus(c,g,partyIssue){
+  const colors=g?.patternColors||g?.patternFlag?.colors;
+  if(!colors?.length)return 0;
+  const accents=colors.slice(1).filter(Boolean);
+  if(!accents.length)return 0;
+  let sum=0,penalty=0;
+  for(const hex of accents){
+    const aff=colorAffinity(c,hex);
+    sum+=aff;
+    if(aff<=-.65&&!partyIssue)penalty-=25;
+  }
+  return (sum/accents.length)*8+penalty;
+}
+function patternSymbolBonus(c,g){
+  const raw=g?.patternSymbols||g?.patternFlag?.emblems?.map(e=>e.skin)||g?.artPrint?.partyFlag?.emblems?.map(e=>e.skin)||g?.artPrint?.companyLogo?.emblems?.map(e=>e.skin);
+  if(!raw?.length)return 0;
+  const unique=[...new Set(raw.filter(Boolean))];
+  if(!unique.length)return 0;
+  const scores=unique.map(skin=>symbolAffinity(c,skin));
+  const best=Math.max(...scores),avg=scores.reduce((a,b)=>a+b,0)/scores.length;
+  return best*18+avg*8;
+}
+export function garmentScore(c,g){const affinity=colorAffinity(c,g.color),patterned=['camisa estampada','vestido estampado'].includes(g.piece),partyIssue=g.partyOwnerId!=null&&g.partyOwnerId===c.political?.partyId;return g.condition*.55+(100-(g.dirt||0))*.3+g.quality*.15+clothingPreference(c.id,g.piece)*10+clothingPreference(c.id,g.style)*8+brandPreference(c,g.brandId)*7+affinity*12+patternColorBonus(c,g,partyIssue)+patternSymbolBonus(c,g)+(patterned?40:0)+(partyIssue?32:0)+(affinity<=-.65&&!partyIssue?-120:0);}
 export function wornGarment(c){return companyUniform(c)||(c?.wearingIndex===-1?null:c?.wardrobe?.[Number.isInteger(c?.wearingIndex)?c.wearingIndex:0]);}
 export function wornHeadwear(c){return Number.isInteger(c?.headwearIndex)&&c.headwearIndex>=0?c.wardrobe?.[c.headwearIndex]:null;}
 export function wornFootwear(c){return Number.isInteger(c?.footwearIndex)&&c.footwearIndex>=0?c.wardrobe?.[c.footwearIndex]:null;}
@@ -30,14 +97,15 @@ export function initializeClothes(city,c){
     if(!c.wardrobe.some(g=>FOOTWEAR_TYPES.has(g.piece)))add(c.id%5===0?'botas':'sapatos');
   }}
   // One-time wardrobe migration lets current residents actually wear the newly added designs.
-  if((c.visualWardrobeCatalogVersion??0)<1){c.visualWardrobeCatalogVersion=1;const colors=favoriteColors(c),color=colors[(c.id*7)%colors.length]?.hex||'#675f58',piece=['camisa estampada','vestido estampado','camisa social','terno','saia','biquíni','maiô','calça social'][c.id%8],style=piece.includes('estampado')?'estampado':piece==='terno'||piece==='camisa social'||piece==='calça social'?'social':piece==='saia'?'clássico':'colorido',g={piece,style,color,brandId:null,brandName:'Coleção de estreia',quality:100,condition:100,dirt:0,acquiredAt:city.minute,...(piece.includes('estampado')?{printId:tropicalPrintFor(c.id,city.initialSeed)}:{})};changeOwner(city,g,c.accountId,c.entity.properties.name,'catálogo visual');c.wardrobe.push(g);
+  if((c.visualWardrobeCatalogVersion??0)<1){c.visualWardrobeCatalogVersion=1;const colors=favoriteColors(c),color=colors[(c.id*7)%colors.length]?.hex||'#675f58',piece=['camisa estampada','vestido estampado','camisa social','terno','saia','biquíni','maiô','calça social'][c.id%8],style=piece.includes('estampado')?'estampado':piece==='terno'||piece==='camisa social'||piece==='calça social'?'social':piece==='saia'?'clássico':'colorido',g={piece,style,color,brandId:null,brandName:'Coleção de estreia',quality:100,condition:100,dirt:0,acquiredAt:city.minute,...(piece.includes('estampado')?{printId:tropicalPrintFor(c.id,city.initialSeed)}:{})};if(piece.includes('estampado'))applyPatternToGarment(g,seededClothingPattern(c.id,city.initialSeed,{colors:[color,colors[(c.id+1)%colors.length]?.hex||'#f5e9bf']}));changeOwner(city,g,c.accountId,c.entity.properties.name,'catálogo visual');c.wardrobe.push(g);
     if(c.id%3===0){const hats=['cartola','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','boné'],hat={piece:hats[Math.floor(c.id/3)%hats.length],style:'clássico',color,brandId:null,brandName:'Coleção de estreia',quality:100,condition:100,dirt:0,acquiredAt:city.minute};changeOwner(city,hat,c.accountId,c.entity.properties.name,'catálogo visual');c.wardrobe.push(hat);}
   }
   if((c.visualWardrobeCatalogVersion??0)<2){c.visualWardrobeCatalogVersion=2;const colors=favoriteColors(c),color=colors[(c.id*11)%colors.length]?.hex||'#675f58',piece=['camiseta','regata','shorts','sunga','luvas'][c.id%5],g={piece,style:['esportivo','simples','esportivo','esportivo','clássico'][c.id%5],color,brandId:null,brandName:'Coleção cotidiana',quality:88,condition:100,dirt:0,acquiredAt:city.minute};changeOwner(city,g,c.accountId,c.entity.properties.name,'variação cotidiana');c.wardrobe.push(g);}
   // Existing saves get a vivid everyday print too; the earlier catalog gave
   // prints to too few residents, so players could easily miss them in crowds.
-  if((c.visualWardrobePatternVersion??0)<2){c.visualWardrobePatternVersion=2;const colors=favoriteColors(c),color=colors[0]?.hex||'#675f58',piece=c.id%4===0?'vestido estampado':'camisa estampada',g={piece,style:'estampado',color,brandId:null,brandName:'Coleção de estampas',quality:100,condition:100,dirt:0,acquiredAt:city.minute,printId:tropicalPrintFor(c.id,city.initialSeed)};changeOwner(city,g,c.accountId,c.entity.properties.name,'catálogo de estampas');c.wardrobe.push(g);}
+  if((c.visualWardrobePatternVersion??0)<2){c.visualWardrobePatternVersion=2;const colors=favoriteColors(c),color=colors[0]?.hex||'#675f58',piece=c.id%4===0?'vestido estampado':'camisa estampada',g={piece,style:'estampado',color,brandId:null,brandName:'Coleção de estampas',quality:100,condition:100,dirt:0,acquiredAt:city.minute,printId:tropicalPrintFor(c.id,city.initialSeed)};applyPatternToGarment(g,seededClothingPattern(c.id+1000,city.initialSeed,{colors:[color,colors[1]?.hex||'#f5e9bf']}));changeOwner(city,g,c.accountId,c.entity.properties.name,'catálogo de estampas');c.wardrobe.push(g);}
   if((c.visualWardrobePatternVersion??0)<3){c.visualWardrobePatternVersion=3;for(const g of c.wardrobe)if(['camisa estampada','vestido estampado'].includes(g.piece))g.printId??=tropicalPrintFor(c.id,city.initialSeed);}
+  if((c.visualWardrobePatternVersion??0)<4){c.visualWardrobePatternVersion=4;let idx=0;for(const g of c.wardrobe)if(['camisa estampada','vestido estampado'].includes(g.piece)&&!g.patternFlag&&!g.artPrint)applyPatternToGarment(g,seededClothingPattern(c.id*31+(idx++),city.initialSeed));}
   selectClothes(c);
 }
 const appearanceCache=new WeakMap();
@@ -71,11 +139,29 @@ export function clothingMood(c){
   moodCache.set(c,{g,dirt:g?.dirt||0,piece:g?.piece,quality:g?.quality,condition:g?.condition,brand:g?.brandId==null?0:c.brandPreferences?.[g?.brandId],colors:c.colorPreferences,partyOwner:g?.partyOwnerId,party:c.political?.partyId,mood});
   return mood;
 }
-export function manufactureClothes(city,b,n){b.garments??=[];for(let i=0;i<n;i++){const serial=b.garmentSerial=(b.garmentSerial||0)+1,orders=[...(b.partyCapOrders||[]).map(source=>({source,...source})),...(b.partyShirtOrders||[]).map(source=>({source,...source}))],order=b.type==='tailor'&&orders.find(o=>o.remaining>0&&city.politics.party(o.partyId)?.active),party=order&&city.politics.party(order.partyId),piece=party?(order.piece||'boné'):GARMENT_TYPES[(b.id+serial)%GARMENT_TYPES.length],g={piece,style:piece==='camisa estampada'?'estampado':CLOTHING_STYLES[(b.id*3+serial)%5],color:party?party.flag.background:COLOR_PALETTE[(b.id+serial*7)%COLOR_PALETTE.length].hex,brandId:b.id,brandName:b.entity.properties.name,quality:Math.min(100,40+(b.productionQuality||0)+Math.min(40,(b.workers||[]).length*5)),condition:100,dirt:0,manufacturedAt:city.minute,...(['camisa estampada','vestido estampado'].includes(piece)?{printId:tropicalPrintFor(b.id+serial,city.initialSeed)}:{}),...(party?{reservedPartyId:party.id,partyNumber:party.number,partyFlag:party.flag,...(piece==='camisa estampada'?{artPrint:{artId:`tailor-${b.id}-${serial}`,cacheKey:`party-${party.id}-${party.number}`,kind:'flags',partyNumber:party.number,partyFlag:party.flag,message:party.short,color:party.flag.foreground}}:{})}: {})};if(order)order.source.remaining--;if(!party)manufactureCompanyUniform(city,b,g);identifyGarment(city,g);changeOwner(city,g,b.accountId,b.entity.properties.name,party?'encomenda partidária':'produção');b.garments.push(g);}}
+export function manufactureClothes(city,b,n){
+  b.garments??=[];
+  for(let i=0;i<n;i++){
+    const serial=b.garmentSerial=(b.garmentSerial||0)+1,orders=[...(b.partyCapOrders||[]).map(source=>({source,...source})),...(b.partyShirtOrders||[]).map(source=>({source,...source}))],order=b.type==='tailor'&&orders.find(o=>o.remaining>0&&city.politics.party(o.partyId)?.active),party=order&&city.politics.party(order.partyId),piece=party?(order.piece||'boné'):GARMENT_TYPES[(b.id+serial)%GARMENT_TYPES.length],patterned=!party&&['camisa estampada','vestido estampado'].includes(piece);
+    const g={piece,style:patterned?'estampado':piece==='camisa estampada'?'estampado':CLOTHING_STYLES[(b.id*3+serial)%5],color:party?party.flag.background:COLOR_PALETTE[(b.id+serial*7)%COLOR_PALETTE.length].hex,brandId:b.id,brandName:b.entity.properties.name,quality:Math.min(100,40+(b.productionQuality||0)+Math.min(40,(b.workers||[]).length*5)),condition:100,dirt:0,manufacturedAt:city.minute,...(patterned?{printId:tropicalPrintFor(b.id+serial,city.initialSeed)}:{}),...(party?{reservedPartyId:party.id,partyNumber:party.number,partyFlag:party.flag,...(piece==='camisa estampada'?{artPrint:{artId:`tailor-${b.id}-${serial}`,cacheKey:`party-${party.id}-${party.number}`,kind:'flags',partyNumber:party.number,partyFlag:party.flag,message:party.short,color:party.flag.foreground}}:{})}: {})};
+    if(patterned){
+      if(!b.clothingPatterns?.length||serial%3===1||b.clothingPatterns.length<6)craftClothingPattern(city,b);
+      const pattern=b.clothingPatterns[(serial-1)%b.clothingPatterns.length];
+      if(pattern)applyPatternToGarment(g,pattern);
+    }
+    if(order)order.source.remaining--;
+    if(!party)manufactureCompanyUniform(city,b,g);
+    identifyGarment(city,g);changeOwner(city,g,b.accountId,b.entity.properties.name,party?'encomenda partidária':'produção');b.garments.push(g);
+  }
+}
 export function clothingOffer(city,c,b){
   initializeClothes(city,c);
   // Annotate legacy stock without adding any physical clothes.
   if((b.garments?.length||0)<(b.inventory.roupas||0))manufactureClothes(city,b,b.inventory.roupas-(b.garments?.length||0));
+  if(b.type==='clothing_store'&&(!b.clothingPatterns?.length||(b.garments||[]).some(g=>['camisa estampada','vestido estampado'].includes(g.piece)&&!g.patternFlag&&!g.artPrint))){
+    if(!b.clothingPatterns?.length)craftClothingPattern(city,b);
+    for(const g of b.garments||[])if(['camisa estampada','vestido estampado'].includes(g.piece)&&!g.patternFlag&&!g.artPrint&&b.clothingPatterns.length)applyPatternToGarment(g,b.clothingPatterns[Math.floor(city.random()*b.clothingPatterns.length)]);
+  }
   const price=Math.ceil(city.economy.goods.roupas.price*(b.type==='thrift_store'?.58:b.type==='clothing_store'?1.2:1));
   if(!b.inventory.roupas||c.balance<price+city.currency.price(2500)||city.minute-(c.lastClothingPurchaseAt??-Infinity)<1440)return null;
   const garments=b.garments||[],best=garments.map((g,i)=>({g,i,score:garmentScore(c,g)+(LOWER_BODY_TYPES.has(g.piece)&&!wornLowerGarment(c)?35:HANDWEAR_TYPES.has(g.piece)&&!wornHandwear(c)?28:FOOTWEAR_TYPES.has(g.piece)&&!wornFootwear(c)?30:0)})).filter(({g})=>g.reservedPartyId==null&&g.uniformCompanyId==null&&(g.dirt||0)<8&&!dislikesColor(c,g.color)).sort((a,b)=>b.score-a.score)[0];
