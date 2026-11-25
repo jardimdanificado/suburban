@@ -77,6 +77,7 @@ import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=ff2-speed-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {findBoatPath,BOAT_CLASSES} from './city_water_transport.js?v=regional-supply-4';
 import {createSeaEdgeNavigation} from './sea_edge_navigation.js?v=sea-edge-routes-1';
+const DYNAMIC_RECIPE_EXCLUDED_TYPES=new Set(['artisan','composting','flagmaker','newsroom','publisher','tobacco_workshop','toolmaker','fishery','fishmonger']);
 
 function outdoorRouteDistance(start,path){
   let total=0,previous=start;
@@ -1200,16 +1201,18 @@ export class CitySimulation {
       for(const b of this.buildings){if(this.economy.isBusiness(b)&&this.economy.consumerOffer(c,b))shops.push({b,target:b.door,index:shops.length,score:Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)+this.relationships.businessPenalty(c,b)-((c.knownAdvertisements?.[b.id]||0)>this.minute?2:0)});}
       for(const row of this.economy.streetMarketVendors())if(this.economy.streetMarketConsumerOffer(c,row.vendor)){const {business,vendor}=row;shops.push({b:business,target:vendor.position,vendor,index:shops.length,score:Math.hypot(vendor.position.x-c.entity.x,vendor.position.y-c.entity.y)+this.relationships.businessPenalty(c,business)-((c.knownAdvertisements?.[business.id]||0)>this.minute?2:0)});}
       shops.sort((a,b)=>a.score-b.score||a.index-b.index);
-      for(const option of shops) {const path=this.findPath(c.entity,option.target);if(path!==null){c.path=path;c.targetId=option.b.id;if(option.vendor){c.streetMarketTarget={marketId:option.vendor.marketId,businessId:option.b.id};c.task='street-market-shopping';}else{c.streetMarketTarget=null;c.task='shopping';}return;}}
+      const maxShopChecks=Math.min(shops.length,6);
+      for(let si=0;si<maxShopChecks;si++) {const option=shops[si];const path=this.findPath(c.entity,option.target);if(path!==null){c.path=path;c.targetId=option.b.id;if(option.vendor){c.streetMarketTarget={marketId:option.vendor.marketId,businessId:option.b.id};c.task='street-market-shopping';}else{c.streetMarketTarget=null;c.task='shopping';}return;}}
     }
     // Citizens with no pressing need or appointment should not flood the town
     // hall for leisure they have already satisfied. Take a short walk instead.
     if(task==='leisure' && !urgent && n.leisure>=75 && this.hour>=6 && this.hour<22 && this.society.isAdult(c)) {
       const origin=c.entity, offsets=[[3,0],[0,3],[-3,0],[0,-3],[3,3],[-3,3],[-3,-3],[3,-3]];
       const first=(c.id+Math.floor(this.minute/30))%offsets.length;
-      for(let i=0;i<offsets.length;i++){
+      for(let i=0,tries=0;i<offsets.length&&tries<3;i++){
         const [dx,dy]=offsets[(first+i)%offsets.length],destination={x:Math.floor(origin.x)+dx+.5,y:Math.floor(origin.y)+dy+.5};
         if(!this.walkable(Math.floor(destination.x),Math.floor(destination.y)))continue;
+        tries++;
         const path=this.findPath(origin,destination);if(path?.length){c.task='walk';c.targetId=null;c.path=path;c.action='Passeando pela cidade';return;}
       }
     }
@@ -1331,15 +1334,19 @@ export class CitySimulation {
       const wage = b.wage + this.currency.price(Math.floor((c.skills[JOB_SKILL[b.type]] || 0) / 30));
       if (!isOwner && b.balance < wage) { this.payWage(c,b,wage); c.action = 'Empregador sem caixa'; c.task = null; return; }
       if(b.constructionKind==='open-air'&&!['farm','quarry','iron_mine','bauxite_mine','forestry','fishery'].includes(b.type)){const cells=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType)),cell=cells[c.id%Math.max(1,cells.length)];if(cell&&!outdoorCellReady(this,c,b,cell))return;}
-      const recipe=INDUSTRIES[b.type],dynamicRecipe=['artisan','composting','flagmaker','newsroom','publisher','tobacco_workshop','toolmaker','fishery','fishmonger'].includes(b.type)?null:recipe;
-      const recipeGoods=dynamicRecipe?[...Object.keys(dynamicRecipe.inputs||{}),...Object.keys(dynamicRecipe.outputs||{})]:[];
-      const productionSignature=dynamicRecipe?`${b.id}:${b.active}:${b.inventoryCapacity}:${inventoryFree(b)}:${recipeGoods.sort().map(g=>`${g}:${b.inventory[g]||0}:${b.incoming[g]||0}`).join('|')}`:null;
-      const productionBlocked=!!dynamicRecipe&&(
-        Object.entries(dynamicRecipe.inputs||{}).some(([good,amount])=>(b.inventory[good]||0)<amount)||
-        inventoryFree(b)<Math.max(0,Object.values(dynamicRecipe.outputs||{}).reduce((sum,n)=>sum+n,0)-Object.values(dynamicRecipe.inputs||{}).reduce((sum,n)=>sum+n,0))||
-        Object.keys(dynamicRecipe.outputs||{}).some(g=>(b.inventory[g]||0)>=48)
-      );
-      const wait=ff2ProductionWaits.get(c),canSkip=this.fastForward2&&productionBlocked&&wait?.buildingId===b.id&&wait.signature===productionSignature&&this.minute<wait.until;
+      const recipe=INDUSTRIES[b.type],dynamicRecipe=DYNAMIC_RECIPE_EXCLUDED_TYPES.has(b.type)?null:recipe;
+      let canSkip=false,productionBlocked=false,productionSignature=null;
+      if(this.fastForward2&&dynamicRecipe){
+        const recipeGoods=[...Object.keys(dynamicRecipe.inputs||{}),...Object.keys(dynamicRecipe.outputs||{})];
+        productionSignature=`${b.id}:${b.active}:${b.inventoryCapacity}:${inventoryFree(b)}:${recipeGoods.sort().map(g=>`${g}:${b.inventory[g]||0}:${b.incoming[g]||0}`).join('|')}`;
+        productionBlocked=(
+          Object.entries(dynamicRecipe.inputs||{}).some(([good,amount])=>(b.inventory[good]||0)<amount)||
+          inventoryFree(b)<Math.max(0,Object.values(dynamicRecipe.outputs||{}).reduce((sum,n)=>sum+n,0)-Object.values(dynamicRecipe.inputs||{}).reduce((sum,n)=>sum+n,0))||
+          Object.keys(dynamicRecipe.outputs||{}).some(g=>(b.inventory[g]||0)>=48)
+        );
+        const wait=ff2ProductionWaits.get(c);
+        canSkip=productionBlocked&&wait?.buildingId===b.id&&wait.signature===productionSignature&&this.minute<wait.until;
+      }
       const productive=canSkip?false:this.economy.productionWork(b,c);
       if(!canSkip&&this.fastForward2&&!productive&&productionBlocked)ff2ProductionWaits.set(c,{buildingId:b.id,signature:productionSignature,until:this.minute+8});else if(!canSkip)ff2ProductionWaits.delete(c);
       const present=!!(c.indoorLocation?.buildingId===b.id&&c.indoorLocation.unitId&&!c.indoorLocation.path?.length)||
@@ -1583,7 +1590,7 @@ export class CitySimulation {
       // window expires. Accumulate their passive need changes in one pass;
       // active workers, travelers, conversations and children still run each
       // minute. Reviews wake at hourly boundaries and on changed conditions.
-      if(!c.playerControlled&&!c.entity.destroyed&&!c.substanceState?.effects?.length&&c.initialAge>=18&&!c.task&&!c.path.length&&!c.deliveryId&&!c.cleaningJobId&&!c.conversation&&!c.workMeal&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.indoorLocation&&!this.childrenOf(c.id).length&&c._idleHomeId===c.homeUnitId&&this.minute<(c._nextTaskAt||0)&&this.minute%60!==(c.id%8)&&c._routineRevision===routineRevision(this,c)&&!this.urgentNeed(c)&&Math.min(n.food,n.water,n.energy,n.hygiene,n.toilet,n.health)>35)continue;
+      if(!c.playerControlled&&!c.entity.destroyed&&!c.substanceState?.effects?.length&&c.initialAge>=18&&!c.task&&!c.path.length&&!c.deliveryId&&!c.cleaningJobId&&!c.conversation&&!c.workMeal&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.indoorLocation&&!this.childrenOf(c.id).length&&c._idleHomeId===c.homeUnitId&&this.minute<(c._nextTaskAt||0)&&this.minute%60!==(c.id%60)&&c._routineRevision===routineRevision(this,c)&&!this.urgentNeed(c)&&Math.min(n.food,n.water,n.energy,n.hygiene,n.toilet,n.health)>35)continue;
       const elapsed=Math.max(1,this.minute-(c._lastNeedsAt??this.minute-1));c._lastNeedsAt=this.minute;c._idleHomeId=c.homeUnitId;
       const age=this.society.age(c);
       if(c._renderAge!==age){c._renderAge=age;c.entity.properties.render.size=age<6?.55:age>=18?1:.8;}

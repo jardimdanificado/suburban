@@ -5,6 +5,7 @@ import {reducedCadence} from './city_fast_forward.js';
 export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 0, paidCleaningInterval: 180, privateCleaningInterval: 1440, bathroomCleaningLabor:12, fecesCleaningBaseLabor:8, fecesCleaningExtraLabor:4, cleaningPrice: 400, usePrice: 300, wastePerUse: 1, wasteToStone: 2 };
 const clamp = n => Math.max(0, Math.min(100, n));
 const facilityChoiceIndexes=new WeakMap();
+const sanitationStepCache=new WeakMap();
 const sameIds=(a,b)=>a===b||Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((id,index)=>id===b[index]);
 function facilityChoiceIndex(sanitation){
   const city=sanitation.city,signature=`${city.minute}:${city.structureRevision}:${city.housing.homes.size}:${sanitation.facilities.size}`;
@@ -276,8 +277,23 @@ export class CitySanitation {
     return b.accountId;
   }
   selectCompany(site) {
-    const street=String(site.id).startsWith('street:'),companies=this.city.economy.businesses.filter(b=>b.type==='cleaner' && (this.city.economy.workingOwner(b) || b.workers.length && b.balance>=b.wage) && (street?this.city.findPath(b.door,site.door)!==null:this.city.economy.connected(b,site)));
-    const load=b=>this.jobs.filter(j=>j.providerId===b.id && !['completed','cancelled'].includes(j.status)).length/Math.max(1,b.workers.length+(b.ownerId?1:0));
+    const street=String(site.id).startsWith('street:'),companies=[];
+    for(const b of this.city.buildings){
+      if(b.type!=='cleaner'||!this.city.economy.isBusiness(b))continue;
+      if(!(this.city.economy.workingOwner(b)||b.workers.length&&b.balance>=b.wage))continue;
+      if(street?this.city.findPath(b.door,site.door)!==null:this.city.economy.connected(b,site))companies.push(b);
+    }
+    if(companies.length<=1)return companies[0]||null;
+    const cache=sanitationStepCache.get(this);
+    let counts=cache?.minute===this.city.minute?cache.jobCounts:null;
+    if(!counts){
+      counts=new Map();
+      for(const j of this.jobs){
+        if(j.providerId==null||j.status==='completed'||j.status==='cancelled')continue;
+        counts.set(j.providerId,(counts.get(j.providerId)||0)+1);
+      }
+    }
+    const load=b=>(counts.get(b.id)||0)/Math.max(1,b.workers.length+(b.ownerId?1:0));
     return companies.sort((a,b)=>load(a)-load(b)||a.id-b.id)[0]||null;
   }
   rebalanceWaiting() {
@@ -307,10 +323,34 @@ export class CitySanitation {
     this.jobs.push(job); f.cleaningJobId = id; return job;
   }
   worker(job) {
-    const b = this.city.building(job.providerId), hall = this.city.buildings.find(b => b.type === 'townhall');
-    const ids = b ? [...b.workers, b.ownerId] : hall?.workers || [];
+    const b = this.city.building(job.providerId);
+    const cache = sanitationStepCache.get(this);
     const target=job.kind==='feces'?this.city.building(job.buildingId)?.door||job.door:this.city.building(this.facilities.get(job.facilityId)?.buildingId)?.door;
     const distance=c=>{const origin=this.city.building(c.indoorLocation?.buildingId)?.door||c.entity;return target?Math.hypot(origin.x-target.x,origin.y-target.y):0;};
+    if (cache?.minute === this.city.minute) {
+      const key = b ? b.id : 0;
+      let pool = cache.idleWorkersByProvider.get(key);
+      if (!pool) {
+        pool = [];
+        const ids = b ? [...b.workers, b.ownerId] : cache.hall?.workers || [];
+        for (const id of ids) {
+          if (id == null) continue;
+          const c = this.city.society.citizen(id);
+          if (c && !c.entity.destroyed && !c.sleep?.active && !c.custody && c.role!=='councilor' && (!b||c.id===b.ownerId||c.jobId===b.id&&b.balance>=b.wage) && !c.deliveryId && !c.cleaningJobId && !c.informalJobId && !c.workMeal && !c.conversation && !c.mobilityTrip && !c.ridingVehicleId && !this.city.urgentNeed(c)) pool.push(c);
+        }
+        cache.idleWorkersByProvider.set(key, pool);
+      }
+      if (!pool.length) return undefined;
+      let best, bestDist = Infinity;
+      for (const c of pool) {
+        if (c.cleaningJobId) continue;
+        const d = distance(c);
+        if (d < bestDist || d === bestDist && c.id < best.id) { best = c; bestDist = d; }
+      }
+      return best;
+    }
+    const hall = this.city.buildings.find(b => b.type === 'townhall');
+    const ids = b ? [...b.workers, b.ownerId] : hall?.workers || [];
     return ids.map(id => this.city.society.citizen(id)).filter(c => c && !c.entity.destroyed && !c.sleep?.active && !c.custody && c.role!=='councilor' && (!b||c.id===b.ownerId||c.jobId===b.id&&b.balance>=b.wage) && !c.deliveryId && !c.cleaningJobId && !c.informalJobId && !c.workMeal && !c.conversation && !c.mobilityTrip && !c.ridingVehicleId && !this.city.urgentNeed(c)).sort((a,b)=>distance(a)-distance(b)||a.id-b.id)[0];
   }
   releaseCitizen(c) {
@@ -326,7 +366,16 @@ export class CitySanitation {
     job.status='cancelled';job.completedAt=this.city.minute;job.reason=reason;
   }
   updateMinute() {
-    const bathrooms=this.jobs.filter(job=>job.kind!=='feces'&&!['completed','cancelled'].includes(job.status)).sort((a,b)=>(this.facilities.get(a.facilityId)?.cleanliness??100)-(this.facilities.get(b.facilityId)?.cleanliness??100)||a.createdAt-b.createdAt||a.id-b.id);
+    const bathrooms=[],fecesJobs=[],jobCounts=new Map();
+    for(const job of this.jobs){
+      if(job.status==='completed'||job.status==='cancelled')continue;
+      if(job.providerId!=null)jobCounts.set(job.providerId,(jobCounts.get(job.providerId)||0)+1);
+      if(job.kind==='feces')fecesJobs.push(job);else bathrooms.push(job);
+    }
+    bathrooms.sort((a,b)=>(this.facilities.get(a.facilityId)?.cleanliness??100)-(this.facilities.get(b.facilityId)?.cleanliness??100)||a.createdAt-b.createdAt||a.id-b.id);
+    const hall=this.city.buildings.find(b=>b.type==='townhall')||null;
+    const stepCache={minute:this.city.minute,hall,jobCounts,idleWorkersByProvider:new Map(),dispatchBudget:16};
+    sanitationStepCache.set(this,stepCache);
     for (const job of bathrooms) {
       const f = this.facilities.get(job.facilityId), site = f && this.city.building(f.buildingId);
       const room=this.city.units.get(f?.unitId);
@@ -335,14 +384,19 @@ export class CitySanitation {
       if(job.providerId&&(!provider?.active||provider.entity.destroyed||!this.city.economy.workingOwner(provider)&&(!provider.workers.length||provider.balance<provider.wage))){
         const old=this.city.society.citizen(job.workerId);if(old?.cleaningJobId===job.id){this.releaseCitizen(old);old.task=null;old.path=[];}
         provider=this.selectCompany(site);if(!provider)continue;job.providerId=provider.id;
+        jobCounts.set(provider.id,(jobCounts.get(provider.id)||0)+1);
       }
       let c = this.city.society.citizen(job.workerId);
       if (c && (c.entity.destroyed||c.sleep?.active||c.custody||this.city.urgentNeed(c)||provider&&c.id!==provider.ownerId&&c.jobId!==provider.id)) { this.releaseCitizen(c); c.task = null; c.path = []; c = null; }
       job.nextWorkerSearchAt??=this.city.minute;
       if (!c && (this.city.fastForward?this.city.minute>=job.nextWorkerSearchAt:this.city.minute%5===0) && this.city.hour >= 7 && this.city.hour < 19) {
+        if (stepCache.dispatchBudget <= 0) continue;
+        c = this.worker(job);
+        if (!c) { job.nextWorkerSearchAt=this.city.minute+(this.city.fastForward?(this.city.fastForward2?20+(job.id%11):10+(job.id%6)):5); continue; }
+        stepCache.dispatchBudget--;
         job.nextWorkerSearchAt=this.city.minute+(this.city.fastForward?(this.city.fastForward2?20+(job.id%11):10+(job.id%6)):5);
-        c = this.worker(job); const path = c && (c.indoorLocation?[]:this.city.findPath(c.entity, site.door));
-        if (!c || path === null) continue;
+        const path = c.indoorLocation?[]:this.city.findPath(c.entity, site.door);
+        if (path === null) continue;
         c.cleaningJobId = job.id; c.task = 'clean'; c.servicePaid = null; c.targetId = site.id; c.path = path; job.workerId = c.id; job.status = 'working';
       }
       if (!c || c.workMeal || c.task==='workmeal' || c.conversation) continue;
@@ -375,11 +429,14 @@ export class CitySanitation {
       for(const b of city.buildings)for(const [cell,pile] of b.feces||[])if(!pile.jobId){const unit=b.units.find(u=>`${u.x},${u.y},${u.z}`===cell);if(unit)this.requestFecesCleaning({scope:'building',buildingId:b.id,unitId:unit.id,cellKey:cell,x:b.entity.x+unit.x+.5,y:b.entity.y+unit.y+.5,z:unit.z*1.8});}
       this.exposeNearby();
     }
-    this.updateFecesJobs();
+    this.updateFecesJobs(fecesJobs);
   }
-  updateFecesJobs(){
+  updateFecesJobs(fecesJobs){
     const city=this.city;
-    for(const job of this.jobs.filter(j=>j.kind==='feces'&&!['completed','cancelled'].includes(j.status))){
+    const cache=sanitationStepCache.get(this);
+    const activeCache=cache?.minute===city.minute?cache:null;
+    const jobs=fecesJobs||this.jobs.filter(j=>j.kind==='feces'&&!['completed','cancelled'].includes(j.status));
+    for(const job of jobs){
       const site=job.scope==='building'?city.building(job.buildingId):null,pile=job.scope==='building'?site?.feces?.get(job.cellKey):this.streetFeces.get(job.cellKey);
       if(!pile||site?.entity.destroyed){const c=city.society.citizen(job.workerId);if(c){c.cleaningJobId=null;c.task=null;c.path=[];}const account=city.accounts.get(job.accountId);if(account?.balance)city.transfer(job.accountId,job.payerId,account.balance,'Estorno: local de fezes removido',{jobId:job.id});job.status='cancelled';continue;}
       const target=site||{id:`street:${job.cellKey}`,door:job.door,entity:{properties:{name:'Via pública'}}};
@@ -389,10 +446,19 @@ export class CitySanitation {
         // The job fee is already in escrow. Reassigning an unavailable cleaner
         // changes the provider, not the price charged to the property owner.
         job.providerId=company.id;
+        if(activeCache)activeCache.jobCounts.set(company.id,(activeCache.jobCounts.get(company.id)||0)+1);
       }
       let worker=city.society.citizen(job.workerId);
       if(worker&&city.urgentNeed(worker)){this.releaseCitizen(worker);worker.task=null;worker.path=[];worker=null;}
-      if(!worker&&city.minute%5===0&&city.hour>=7&&city.hour<19){worker=this.worker(job);if(!worker)continue;const destination=site?.door||job.door,path=worker.indoorLocation?[]:city.findPath(worker.entity,destination);if(path===null)continue;worker.cleaningJobId=job.id;worker.task='clean';worker.targetId=site?.id??null;worker.path=path;worker.servicePaid=null;job.workerId=worker.id;job.status='working';}
+      job.nextWorkerSearchAt??=city.minute;
+      if(!worker&&(city.fastForward?city.minute>=job.nextWorkerSearchAt:city.minute%5===0)&&city.hour>=7&&city.hour<19){
+        if(activeCache&&activeCache.dispatchBudget<=0)continue;
+        worker=this.worker(job);
+        if(!worker){job.nextWorkerSearchAt=city.minute+(city.fastForward?(city.fastForward2?20+(job.id%11):10+(job.id%6)):5);continue;}
+        if(activeCache)activeCache.dispatchBudget--;
+        job.nextWorkerSearchAt=city.minute+(city.fastForward?(city.fastForward2?20+(job.id%11):10+(job.id%6)):5);
+        const destination=site?.door||job.door,path=worker.indoorLocation?[]:city.findPath(worker.entity,destination);if(path===null)continue;worker.cleaningJobId=job.id;worker.task='clean';worker.targetId=site?.id??null;worker.path=path;worker.servicePaid=null;job.workerId=worker.id;job.status='working';
+      }
       if(!worker||worker.workMeal||worker.task==='workmeal'||worker.conversation)continue;
       if(worker.indoorLocation&&worker.path.length)worker.path=[];
       if(worker.path.length)continue;

@@ -82,8 +82,8 @@ export function deferFastForwardCitizen(city,c){
 const routineRevisions=new WeakMap();
 // Hourly reviews keep the same wake spread documented at deferFastForwardCitizen.
 export function routineRevision(city,c){
-  const hour=Math.floor((city.minute-(c.id%8))/60);
-  const jobId=c.jobId??null,homeUnitId=c.homeUnitId??null,businessIds=c.businessIds,structureRevision=city.structureRevision,worldRevision=city.world.revision;
+  const hour=Math.floor((city.minute-(c.id%60))/60);
+  const jobId=c.jobId??null,homeUnitId=c.homeUnitId??null,businessIds=c.businessIds,structureRevision=city.structureRevision,worldRevision=city.world.topologyRevision??city.world.revision;
   const cached=routineRevisions.get(c);
   if(cached&&cached.hour===hour&&cached.jobId===jobId&&cached.homeUnitId===homeUnitId&&cached.businessIds===businessIds&&cached.structureRevision===structureRevision&&cached.worldRevision===worldRevision)return cached.value;
   const value=`${c.jobId}:${c.homeUnitId}:${businessIds.join(',')}:${structureRevision}:${worldRevision}:${hour}`;
