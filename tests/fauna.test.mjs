@@ -256,12 +256,12 @@ test('pastures preserve grass and grazed cells clear temporarily then regrow', a
     assert.ok(a.x >= 10 && a.x <= 17 && a.y >= 10 && a.y <= 17, 'ranch animals should spawn inside pasture');
   }
 
-  city.fauna.grazeCell(12, 12, 90);
-  assert.equal(city.fauna.grazedTiles.has('12,12'), true);
+  city.fauna.grazeCell(25, 25, 90);
+  assert.equal(city.fauna.grazedTiles.has('25,25'), true);
   assert.ok(city.fauna.grazeRevision > 0);
   city.minute += 90;
   city.fauna.updateMinute();
-  assert.equal(city.fauna.grazedTiles.has('12,12'), false, 'grazed grass should regrow after 90 minutes');
+  assert.equal(city.fauna.grazedTiles.has('25,25'), false, 'grazed grass should regrow after 90 minutes');
 });
 
 test('all 24 species generate diffuse textures and tangent-space normal maps', async () => {
@@ -337,11 +337,18 @@ test('circular grazing clears only a circle, arboreal animals climb trees, and 2
 
   const world = createWorld(32, 32, 0);
   const city = createMockCity(world);
-  city.nature.plants.set(1, { id: 1, x: 10, y: 10, entity: { destroyed: false, properties: { tree: true } } });
+  // Non-timber plant or seedling must not be climbed
+  city.nature.plants.set(1, { id: 1, species: 'monstera', stage: 'mature', x: 10, y: 10, entity: { destroyed: false, properties: { tree: true, render: { size: 0.8 } } } });
   const sloth = city.fauna.spawn(10, 10, 'preguica', { hunger: 50 });
   sloth.stateTimer = 0;
   city.fauna.decideBehavior(sloth, false);
-  assert.ok(sloth.altitude > 1.0, 'sloth should climb into tree canopy');
+  assert.equal(sloth.altitude, 0, 'sloth must not float on non-timber plant');
+
+  // Mature timber tree can be climbed at its canopy altitude
+  city.nature.plants.set(2, { id: 2, species: 'oak', stage: 'mature', visualScale: 1.1, x: 10, y: 10, entity: { destroyed: false, properties: { tree: true, render: { size: 1.0 } } } });
+  sloth.stateTimer = 0;
+  city.fauna.decideBehavior(sloth, false);
+  assert.ok(sloth.altitude > 1.0, 'sloth should climb into mature timber tree canopy');
 
   // Nests on all 4 surface types
   for (const surface of ['tree', 'balcony', 'fence', 'roof']) {

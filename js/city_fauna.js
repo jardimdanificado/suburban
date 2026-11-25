@@ -1,4 +1,5 @@
 import { ANIMAL_SPECIES, ANIMAL_SPECIES_IDS } from './animal_catalog.js';
+import { NATURAL_PLANTS } from './plant_catalog.js';
 import { tileAt, ROAD_TILES } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import { TILE_WATER } from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 
@@ -77,10 +78,18 @@ export class CityFauna {
     return nest;
   }
 
+  treeCanopyAltitude(plant) {
+    if (!plant || plant.entity?.destroyed) return 0;
+    const scale = (plant.entity.properties?.render?.size || 1) * (plant.visualScale || 1);
+    return Math.max(0.95, Math.min(2.6, 1.45 * scale));
+  }
+
   findTreeSpot(x, y, maxDist = 10) {
     let best = null, bestDist = maxDist;
     for (const plant of this.city.nature?.plants?.values?.() || []) {
-      if (plant.entity?.destroyed || !plant.entity?.properties?.tree) continue;
+      if (plant.entity?.destroyed || plant.stage !== 'mature') continue;
+      const spec = NATURAL_PLANTS[plant.species];
+      if (!spec || !(spec.wood > 0)) continue;
       const d = Math.hypot(plant.x + 0.5 - x, plant.y + 0.5 - y);
       if (d < bestDist) { bestDist = d; best = plant; }
     }
@@ -92,7 +101,7 @@ export class CityFauna {
     const bx = bird.x, by = bird.y;
     const candidates = [];
     const tree = this.findTreeSpot(bx, by, 14);
-    if (tree) candidates.push({ x: tree.x + 0.5, y: tree.y + 0.5, z: 2.1, surface: 'tree', plantId: tree.id });
+    if (tree) candidates.push({ x: tree.x + 0.5, y: tree.y + 0.5, z: this.treeCanopyAltitude(tree), surface: 'tree', plantId: tree.id });
     for (const b of this.city.buildings || []) {
       if (b.entity?.destroyed) continue;
       const d = Math.hypot(b.entity.x + (b.width || 3) * 0.5 - bx, b.entity.y + (b.depth || 3) * 0.5 - by);
@@ -406,7 +415,7 @@ export class CityFauna {
       }
     }
 
-    // 2.5 Arboreal animals climb trees to eat and sleep
+    // 2.5 Arboreal animals climb mature timber trees to eat and sleep
     if (spec.arboreal && animal.stateTimer <= 0) {
       const tree = this.findTreeSpot(animal.x, animal.y, 12);
       if (tree) {
@@ -414,7 +423,7 @@ export class CityFauna {
         const dist = Math.hypot(tx - animal.x, ty - animal.y);
         if (dist <= 0.9) {
           animal.inTreePlantId = tree.id;
-          animal.altitude = 1.6 + (animal.id % 5) * 0.14;
+          animal.altitude = this.treeCanopyAltitude(tree);
           animal.targetX = null;
           animal.targetY = null;
           if (isNight || animal.hunger >= 75) {
@@ -434,9 +443,12 @@ export class CityFauna {
         animal.action = 'Indo para árvore';
         animal.targetX = tx;
         animal.targetY = ty;
+        animal.targetTreeId = tree.id;
         animal.stateTimer = 5.0;
         return;
       }
+      animal.altitude = 0;
+      animal.inTreePlantId = null;
     }
 
     // 2.6 Flying birds build nests, fly, and perch
@@ -564,6 +576,14 @@ export class CityFauna {
           continue;
         }
       }
+      if (animal.inTreePlantId != null) {
+        const hostTree = this.city.nature?.plants?.get?.(animal.inTreePlantId);
+        if (!hostTree || hostTree.entity?.destroyed) {
+          animal.inTreePlantId = null;
+          animal.altitude = 0;
+          animal.state = 'idle';
+        }
+      }
       animal.stateTimer = Math.max(0, (animal.stateTimer ?? 0) - stepDt);
       animal.thinkTimer = (animal.thinkTimer ?? 0) - stepDt;
 
@@ -584,9 +604,11 @@ export class CityFauna {
           animal.targetX = null;
           animal.targetY = null;
           if (animal.action === 'Indo para árvore' && spec?.arboreal) {
-            animal.altitude = 1.6 + (animal.id % 5) * 0.14;
-            animal.state = 'eat';
-            animal.action = 'Alimentando-se na copa';
+            const tree = animal.targetTreeId != null ? this.city.nature?.plants?.get?.(animal.targetTreeId) : this.findTreeSpot(animal.x, animal.y, 2);
+            animal.inTreePlantId = tree?.id ?? null;
+            animal.altitude = tree ? this.treeCanopyAltitude(tree) : 0;
+            animal.state = tree ? 'eat' : 'idle';
+            animal.action = tree ? 'Alimentando-se na copa' : 'Observando';
             animal.stateTimer = 3.5 + Math.random() * 2.5;
             animal.thinkTimer = 0.5;
           } else if (animal.action === 'Voando para o ninho' && animal.nestId && this.nests.has(animal.nestId)) {
