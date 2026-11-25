@@ -920,6 +920,75 @@ export class CitySimulation {
     if(this.pathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.pathCache.delete(this.pathCache.keys().next().value);
     this.pathCache.set(key,mapped);return mapped;
   }
+  swimPath(start, goal) {
+    const sx = Math.floor(start.x), sy = Math.floor(start.y), gx = Math.floor(goal.x), gy = Math.floor(goal.y);
+    const w = this.world.width, h = this.world.height;
+    if (sx < 0 || sy < 0 || gx < 0 || gy < 0 || sx >= w || sy >= h || gx >= w || gy >= h) return null;
+    if (!this.walkable(gx, gy)) return null;
+    if (sx === gx && sy === gy) return [];
+    const total = w * h, gScore = new Float32Array(total).fill(Infinity), came = new Int32Array(total).fill(-1), closed = new Uint8Array(total);
+    const startIdx = sy * w + sx, goalIdx = gy * w + gx;
+    gScore[startIdx] = 0;
+    const open = [[Math.hypot(gx - sx, gy - sy), startIdx]];
+    let expanded = 0;
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    while (open.length && expanded++ < 4500) {
+      let best = 0;
+      for (let i = 1; i < open.length; i++) if (open[i][0] < open[best][0]) best = i;
+      const [, cur] = open[best];
+      open[best] = open[open.length - 1]; open.pop();
+      if (closed[cur]) continue;
+      closed[cur] = 1;
+      if (cur === goalIdx) {
+        const path = [];
+        for (let at = goalIdx; at !== startIdx; at = came[at]) {
+          const x = at % w, y = Math.floor(at / w), isWater = this.world.getTile(x, y) === TILE_WATER;
+          path.push(isWater ? { x: x + 0.5, y: y + 0.5, swim: true } : { x: x + 0.5, y: y + 0.5 });
+        }
+        return path.reverse();
+      }
+      const cx = cur % w, cy = Math.floor(cur / w), curWater = this.world.getTile(cx, cy) === TILE_WATER;
+      for (const [dx, dy] of dirs) {
+        const nx = cx + dx, ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const nIdx = ny * w + nx;
+        if (closed[nIdx]) continue;
+        const nWater = this.world.getTile(nx, ny) === TILE_WATER, nWalk = this.walkable(nx, ny);
+        if (!nWalk && !nWater) continue;
+        if (!curWater && !nWater && !canStep(this.world, cx, cy, nx, ny)) continue;
+        const stepCost = nWater ? 2.4 : roadTravelCost(tileAt(this.world, nx, ny));
+        const ng = gScore[cur] + stepCost;
+        if (ng < gScore[nIdx]) {
+          gScore[nIdx] = ng; came[nIdx] = cur;
+          open.push([ng + Math.hypot(gx - nx, gy - ny), nIdx]);
+        }
+      }
+    }
+    return null;
+  }
+  findSwimSpot(c, maxRadius = 18) {
+    const ox = Math.floor(c.entity.x), oy = Math.floor(c.entity.y), w = this.world.width, h = this.world.height;
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    let checked = 0;
+    for (let r = 1; r <= maxRadius && checked < 6; r++) {
+      for (let dx = -r; dx <= r && checked < 6; dx++) {
+        for (const dy of (Math.abs(dx) === r ? [0] : [-r, r])) {
+          const wx = ox + dx, wy = oy + dy;
+          if (wx < 0 || wy < 0 || wx >= w || wy >= h || this.world.getTile(wx, wy) !== TILE_WATER) continue;
+          for (const [sxOff, syOff] of dirs) {
+            const sx = wx + sxOff, sy = wy + syOff;
+            if (sx < 0 || sy < 0 || sx >= w || sy >= h || !this.walkable(sx, sy)) continue;
+            checked++;
+            const shore = { x: sx + 0.5, y: sy + 0.5 };
+            const path = this.groundPath(c.entity, shore);
+            if (path !== null) return { shore, water: { x: wx + 0.5, y: wy + 0.5, swim: true }, path };
+            break;
+          }
+        }
+      }
+    }
+    return null;
+  }
   skybridgeLinksForRevision(revision) {
     revision ??= this.pathCacheRevision ?? `${this.world.revision || 0}:${this.structureRevision||0}:${this.obstacleRevision||0}:${this.occupied.size}`;
     if(this._skybridgeCache?.revision!==revision)this._skybridgeCache={revision,links:skybridgeLinks(this.buildings,this.world)};
@@ -938,7 +1007,7 @@ export class CitySimulation {
     }
     return result;
   }
-  _findPath(start, goal, {copy=true,allowSkybridges=true,allowBoats=true}={}) {
+  _findPath(start, goal, {copy=true,allowSkybridges=true,allowBoats=true,allowSwim=allowBoats}={}) {
     // Plan the outdoor leg from the exit; the resident walks there first.
     const location=start.properties?.citizen?.indoorLocation;
     if(location){const site=this.building(location.buildingId),shell=this.building(site?.officeTenantOf)||site;if(shell)start={...shell.door,properties:start.properties};}
@@ -963,7 +1032,7 @@ export class CitySimulation {
         const canReachBridge=links.some(link=>
           settlementConnected(this,start,link.startAccess)!==false&&settlementConnected(this,link.endAccess,goal)!==false||
           settlementConnected(this,start,link.endAccess)!==false&&settlementConnected(this,link.startAccess,goal)!==false);
-        if(!canReachBridge&&!allowBoats){
+        if(!canReachBridge&&!allowBoats&&!allowSwim){
           if(links.length)this.skybridgePathCache.set(key,null);
           else{if(this.pathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.pathCache.delete(this.pathCache.keys().next().value);this.pathCache.set(key,null);}
           return null;
@@ -1002,7 +1071,8 @@ export class CitySimulation {
         }
       }
     }
-    if(links.length&&!path?.some(point=>point.boatClass)){if(this.skybridgePathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.skybridgePathCache.delete(this.skybridgePathCache.keys().next().value);this.skybridgePathCache.set(key,path);}
+    if(path===null&&allowSwim&&start.properties?.citizen)path=this.swimPath(start,goal);
+    if(links.length&&!path?.some(point=>point.boatClass)&&!path?.some(point=>point.swim)){if(this.skybridgePathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.skybridgePathCache.delete(this.skybridgePathCache.keys().next().value);this.skybridgePathCache.set(key,path);}
     // Keep insertion-order eviction: touching every cache hit costs two Map
     // mutations across the hot path, while FIFO gives the same route answers.
     // Consumers shift their own array but never mutate waypoint coordinates.
@@ -1174,8 +1244,11 @@ export class CitySimulation {
     if(task==='leisure'&&!urgent&&joblessDuringShift&&(measure?measure('taskEmploymentSearch',()=>searchEmployment(this,c)):searchEmployment(this,c)))return;
     if(!urgent&&Math.min(n.food,n.water,n.energy,n.toilet,n.health)>=45&&this.hour>=6&&this.hour<22&&(measure?measure('taskPaintingRoute',()=>this.paint.route(c)):this.paint.route(c)))return;
     if(task==='social'&&(measure?measure('taskSocialSearch',()=>this.relationships.seekContact(c)):this.relationships.seekContact(c)))return;
+    if(task==='leisure'&&!urgent&&n.leisure<85&&this.hour>=6&&this.hour<22&&(c.id+this.hour)%3===0){const swim=this.findSwimSpot(c,16);if(swim){c.path=[...swim.path,swim.water];c.task='swim-leisure';c.swimSpot=swim;c.swimUntil=this.minute+35;c.action='Indo nadar para se divertir';return;}}
     if(task==='leisure'&&!urgent&&(measure?measure('taskFurnitureRoute',()=>this.furniture.routeLeisure(c)):this.furniture.routeLeisure(c)))return;
+    if(task==='leisure'&&!urgent&&n.leisure<85&&this.hour>=6&&this.hour<22){const swim=this.findSwimSpot(c,18);if(swim){c.path=[...swim.path,swim.water];c.task='swim-leisure';c.swimSpot=swim;c.swimUntil=this.minute+35;c.action='Indo nadar para se divertir';return;}}
     if(task==='hygiene'&&(measure?measure('taskHygieneSearch',()=>this.sanitation.choose(c,'hygiene')):this.sanitation.choose(c,'hygiene')))return;
+    if(task==='hygiene'){const swim=this.findSwimSpot(c,22);if(swim){c.path=[...swim.path,swim.water];c.task='swim-hygiene';c.swimSpot=swim;c.swimUntil=this.minute+20;c.action='Indo se lavar na água';return;}}
     if (task === 'toilet') {
       // Optional toilet visits used to route nearly everyone who crossed the
       // same need threshold during one hourly decision pass. Phase those
@@ -1282,6 +1355,25 @@ export class CitySimulation {
     if(c.task==='visit'){this.relationships.arrive(c);return;}
     if (c.task === 'toilet') { this.sanitation.use(c); c._toiletRouteAfter=null; return; }
     if (c.task === 'workmeal') { if (!this.workMeals.tryStart(c)) {c.task = null;c.mealResume=null;} return; }
+    if(c.task==='swim-exit'){c.swimming=false;c.task=null;c.swimSpot=null;c.swimUntil=null;return;}
+    if(c.task==='swim-hygiene'||c.task==='swim-leisure'){
+      c.swimming=this.world.getTile(Math.floor(c.entity.x),Math.floor(c.entity.y))===TILE_WATER;
+      this.sanitation?.washCitizenDirt?.(c,1);
+      if(c.task==='swim-hygiene'){
+        c.needs.hygiene=clamp(c.needs.hygiene+20);
+        c.action='Se lavando na água';
+        if(c.needs.hygiene>=95||this.minute>=(c.swimUntil||Infinity)){
+          if(c.swimSpot?.shore){c.path=[c.swimSpot.shore];c.task='swim-exit';}else{c.task=null;c.swimming=false;}
+        }
+      }else{
+        c.needs.leisure=clamp(c.needs.leisure+8);c.needs.hygiene=clamp(c.needs.hygiene+6);c.mood=Math.min(25,(c.mood||0)+.04);
+        c.action='Nadando para se divertir';
+        if(c.needs.leisure>=92||this.hour>=22||this.minute>=(c.swimUntil||Infinity)){
+          if(c.swimSpot?.shore){c.path=[c.swimSpot.shore];c.task='swim-exit';}else{c.task=null;c.swimming=false;}
+        }
+      }
+      return;
+    }
     if(c.task==='outdoor_leisure'){
       const visit=c.outdoorLeisure,location=c.indoorLocation;visit.until??=this.minute+45;
       c.needs.leisure=clamp(c.needs.leisure+1.2);c.mood=Math.min(25,(c.mood||0)+.02);
@@ -1763,26 +1855,28 @@ export class CitySimulation {
           if(!this.beginSkybridgeTransit(c,leg)){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;c.skybridgeTransit=null;}
           break;
         }
-        const pBridge=p.skybridgeId||(c.skybridgeZ>0?c.skybridgeId:null),elevated=!!pBridge,boatWaypoint=!!p.boatClass,tx=Math.floor(p.x),ty=Math.floor(p.y);
+        const pBridge=p.skybridgeId||(c.skybridgeZ>0?c.skybridgeId:null),elevated=!!pBridge,boatWaypoint=!!p.boatClass,tx=Math.floor(p.x),ty=Math.floor(p.y),swimTile=!elevated&&!boatWaypoint&&this.world.getTile(tx,ty)===TILE_WATER;
         if(pBridge&&!this.skybridgeLinksForRevision().some(link=>link.id===pBridge)){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
         if(boatWaypoint&&this.world.getTile(tx,ty)!==TILE_WATER){c.path=[];c.task=null;c.boatClass=null;break;}
-        if(!elevated&&!boatWaypoint&&(!this.walkable(tx,ty)||!canStep(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y),tx,ty))){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
+        if(!elevated&&!boatWaypoint&&!swimTile&&(!this.walkable(tx,ty)||!canStep(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y),tx,ty))){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
         const dx=p.x-c.entity.x,dy=p.y-c.entity.y,dz=(p.z||0)-(c.skybridgeZ||0),len=Math.hypot(dx,dy,dz);
-        const tile=tileAt(this.world,tx,ty),boatSpec=boatWaypoint?BOAT_CLASSES[p.boatClass]:null,cost=elevated?1.05:boatWaypoint?1/Math.max(.1,boatSpec?.speed||1):roadTravelCost(tile),available=distance/cost,travelled=Math.min(len,available);
-        if(len<=available){c.entity.x=p.x;c.entity.y=p.y;c.skybridgeZ=p.z||0;c.skybridgeId=pBridge||null;c.boatClass=boatWaypoint?p.boatClass:this.world.getTile(Math.floor(c.entity.x),Math.floor(c.entity.y))===TILE_WATER?c.boatClass:null;if(!elevated&&!boatWaypoint){this.recordTraffic(p);discoverStreetMarket(this.economy,c,p);}c.path.shift();distance=Math.max(0,distance-len*cost);}
+        const tile=tileAt(this.world,tx,ty),boatSpec=boatWaypoint?BOAT_CLASSES[p.boatClass]:null,cost=elevated?1.05:boatWaypoint?1/Math.max(.1,boatSpec?.speed||1):swimTile?2.2:roadTravelCost(tile),available=distance/cost,travelled=Math.min(len,available);
+        if(len<=available){c.entity.x=p.x;c.entity.y=p.y;c.skybridgeZ=p.z||0;c.skybridgeId=pBridge||null;c.boatClass=boatWaypoint?p.boatClass:this.world.getTile(Math.floor(c.entity.x),Math.floor(c.entity.y))===TILE_WATER?c.boatClass:null;if(!elevated&&!boatWaypoint&&!swimTile){this.recordTraffic(p);discoverStreetMarket(this.economy,c,p);}c.path.shift();distance=Math.max(0,distance-len*cost);}
         else{const ratio=available/len;c.entity.x+=dx*ratio;c.entity.y+=dy*ratio;c.skybridgeZ=(c.skybridgeZ||0)+dz*ratio;c.skybridgeId=elevated?pBridge:null;c.boatClass=boatWaypoint?p.boatClass:this.world.getTile(Math.floor(c.entity.x),Math.floor(c.entity.y))===TILE_WATER?c.boatClass:null;distance=0;}
+        c.swimming=!elevated&&!boatWaypoint&&this.world.getTile(Math.floor(c.entity.x),Math.floor(c.entity.y))===TILE_WATER;
         if(travelled>0){
           if(c.playerControlled&&this.characterGame?.input?.run)c.needs.energy=Math.max(0,c.needs.energy-travelled*.18);
           c.mobilityTimeLostToday=(c.mobilityTimeLostToday||0)+travelled*cost;
           c.mobilityNeed=Math.min(100,(c.mobilityNeed||0)+travelled*cost*.22*(c.mobilityPriority||1));
-          if(!elevated&&!boatWaypoint){wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
+          if(c.swimming)this.sanitation?.washCitizenDirt?.(c,travelled*.3);
+          if(!elevated&&!boatWaypoint&&!swimTile){wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
           if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);this.sanitation?.soilCitizen?.(c,'barro',travelled*1.2);c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}}
         }
         let actionState=movementActionCache.get(c);if(!actionState){actionState={action:null};movementActionCache.set(c,actionState);}
-        const actionDelivery=c.deliveryId??null,actionBoat=c.boatClass??null,actionSky=c.skybridgeZ>0,actionForestry=c.forestryJob?.stage??null,actionVisit=c.socialVisitId??null;
-        if(actionState.task!==c.task||actionState.delivery!==actionDelivery||actionState.boat!==actionBoat||actionState.sky!==actionSky||actionState.forestry!==actionForestry||actionState.visit!==actionVisit||actionState.action!==c.action){
-          c.action = c.boatClass?`Navegando de ${BOAT_CLASSES[c.boatClass]?.label?.toLowerCase()||'barco'}`:c.skybridgeZ>0?'Atravessando a passarela elevada':c.deliveryId ? 'Transportando mercadorias' : c.task==='combat-flee' ? 'Fugindo da agressão' : c.task==='player-walk'?'Caminhando sob seu controle':c.task==='walk'?'Passeando pela cidade':c.task==='supplies'?'Indo repor comida e água':c.task==='lake-water'?'Buscando água do lago':c.task==='job-interview'?'Indo à Secretaria do Trabalho':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
-          actionState.task=c.task;actionState.delivery=actionDelivery;actionState.boat=actionBoat;actionState.sky=actionSky;actionState.forestry=actionForestry;actionState.visit=actionVisit;actionState.action=c.action;
+        const actionDelivery=c.deliveryId??null,actionBoat=c.boatClass??null,actionSky=c.skybridgeZ>0,actionSwim=!!c.swimming,actionForestry=c.forestryJob?.stage??null,actionVisit=c.socialVisitId??null;
+        if(actionState.task!==c.task||actionState.delivery!==actionDelivery||actionState.boat!==actionBoat||actionState.sky!==actionSky||actionState.swim!==actionSwim||actionState.forestry!==actionForestry||actionState.visit!==actionVisit||actionState.action!==c.action){
+          c.action = c.boatClass?`Navegando de ${BOAT_CLASSES[c.boatClass]?.label?.toLowerCase()||'barco'}`:c.swimming?(c.task==='swim-hygiene'?'Nadando para se lavar':c.task==='swim-leisure'?'Nadando para se divertir':'Atravessando a nado'):c.skybridgeZ>0?'Atravessando a passarela elevada':c.deliveryId ? 'Transportando mercadorias' : c.task==='combat-flee' ? 'Fugindo da agressão' : c.task==='player-walk'?'Caminhando sob seu controle':c.task==='walk'?'Passeando pela cidade':c.task==='supplies'?'Indo repor comida e água':c.task==='lake-water'?'Buscando água do lago':c.task==='job-interview'?'Indo à Secretaria do Trabalho':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
+          actionState.task=c.task;actionState.delivery=actionDelivery;actionState.boat=actionBoat;actionState.sky=actionSky;actionState.swim=actionSwim;actionState.forestry=actionForestry;actionState.visit=actionVisit;actionState.action=c.action;
         }
       }
       if(!c.path.length)syncCitizenInterior(this,c);

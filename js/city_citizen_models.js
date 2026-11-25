@@ -10,7 +10,7 @@ import {CITIZEN_BODY_FACE_COUNT,CITIZEN_GARMENT_FACES} from './city_garment_face
 import {fittedSkirtSurface} from './city_citizen_skirts.js?v=anatomical-dress-skirt-1';
 import {createPoseWeightMorph,computeWeightMorphAttributes} from './city_citizen_weight_morph.js?v=anatomical-3d-morph-1';
 /** OBJ snapshots share one geometry per frame and one instanced draw per visible frame. */
-export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0]});
+export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0],acenar:[0,1,2,3],comemorar:[0,1,2,3],conversar:[0,1,2,3],varrer:[0,1,2,3],cavar:[0,1,2,3],nadar:[0,1,2,3],dancar:[0,1,2,3],carregar:[0,1,2,3],caminhar:[0,1,2,3,4]});
 const citizenHasPath=c=>c?._renderPathActive??!!c?.path?.length;
 export function citizenIsSleeping(c){
  if(c?.task!=='energy'||!c.sleep?.active||citizenHasPath(c)||c.mobilityTrip||c.ridingVehicleId||c.deliveryId)return false;
@@ -19,9 +19,10 @@ export function citizenIsSleeping(c){
  return !!c.homelessSleepSpot&&!!c.entity&&Math.hypot(c.entity.x-c.homelessSleepSpot.x,c.entity.y-c.homelessSleepSpot.y)<=.3;
 }
 const WORK_TASKS=new Set(['work','manage','construction','clean','cleaning','research','campaign','care','caregiving','food','provisions','water','hygiene','supplies','shopping','health','vote','council-session','informal-service','informal-frontage','informal-gardening']);
+const CASUAL_WALK_TASKS=new Set(['walk','leisure','social','visit','shopping','street-market-shopping']);
 const BIKE_KINDS=new Set(['bicicleta','bicicleta_carga']),GLIDE_KINDS=new Set(['patinete','patins','skate']);
 const ALT_USE_TASKS=new Set(['food','workmeal','provisions','toilet','hygiene','water','health','shopping','supplies','care','caregiving','leisure','social','vote']);
-const ACTION_CLIPS=new Set(['run','pedal','murro','chute','derrotado']);
+const ACTION_CLIPS=new Set(['run','pedal','murro','chute','derrotado','caminhar','nadar','dancar','carregar']);
 const PRINTED_GARMENTS=new Set(['camisa social','camisa estampada','vestido estampado']),PATTERNED_GARMENTS=new Set(['camisa estampada','vestido estampado']),DRESS_PIECES=new Set(['vestido','vestido estampado']),SKIRT_PIECES=new Set(['saia','saia longa']),HAND_PIECES=new Set(['luvas']);
 const COMBINABLE_GARMENTS=new Set(['camisa','camiseta','regata','terno','casaco','trapos','macacão']);
 const HEADWEAR_PIECES=new Set(['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','cesta']);
@@ -37,7 +38,12 @@ export function citizenAnimation(c,moving=false){
     if(BIKE_KINDS.has(c.ridingVehicleKind))return c.ridingAsPassenger?'sentado_no_banco':'seated';
     return GLIDE_KINDS.has(c.ridingVehicleKind)?'glide':'passenger';
   }
-  if(moving)return 'run';
+  if(c.swimming)return 'nadar';
+  if(moving){
+    if(c.deliveryId||c.forestryJob?.stage==='return'||c.carryLoad)return 'carregar';
+    if(CASUAL_WALK_TASKS.has(c.task))return 'caminhar';
+    return 'run';
+  }
   if(c.fishingPose)return c.fishingPose.chair||c.fishingPose.boat?'sentado_no_banco':'sentado_no_chao';
   if(c.combatReaction)return 'derrotado';
   if(c.combatAnimation?.clip)return c.combatAnimation.clip;
@@ -46,12 +52,18 @@ export function citizenAnimation(c,moving=false){
   if(c.task==='sit'&&c.seated||c.furnitureUse?.type==='bench'||c.furnitureUse?.type==='beach_chair')return 'sentado_no_banco';
   if(c.seated)return 'seated';
   if(c.policePatrol)return 'a_postos';
+  if(c.conversation)return 'conversar';
+  if(c.celebrating||c.task==='celebrate')return 'comemorar';
+  if(c.dancing||c.task==='dance')return 'dancar';
+  if(c.waving||c.task==='wave')return 'acenar';
   const activelyUsingFurniture=!!c.furnitureUse&&!c.furnitureUse.seated;
   const activelyWorkingOutside=!!c.workCell||!!c.forestryJob||!!c.paintWorkId;
   const activelyInsideWork=!!c.indoorLocation?.unitId&&WORK_TASKS.has(c.task);
   const activelyOnGig=!!c.informalJobId&&!citizenHasPath(c);
   const activelyWorking=WORK_TASKS.has(c.task)&&!citizenHasPath(c)&&(activelyUsingFurniture||activelyWorkingOutside||activelyInsideWork||activelyOnGig||c.task==='construction'&&c.workProjectId!=null);
   if(!activelyWorking)return 'idle';
+  if(c.task==='clean'||c.task==='cleaning')return 'varrer';
+  if(c.task==='construction'||c.forestryJob?.stage==='cut'||c.forestryJob?.stage==='plant'||c.task==='informal-gardening')return 'cavar';
   return ALT_USE_TASKS.has(c.task)?'use_alt':'use';
 }
 export function citizenFrame(clip,time,phase=0,oneShot=false){
@@ -562,17 +574,18 @@ export class CityCitizenModels {
       accessoryTransform.key=itemKey;accessoryTransform.batch=head;accessoryTransform.mesh=head.mesh;accessoryTransform.index=accessoryIndex;if(isFittedClothing&&(!accessoryUnchanged||accessoryTransform.fatToken!==poseBodyShape.fat)){this.setInstanceFat(head.mesh,accessoryIndex,poseBodyShape);accessoryTransform.fatToken=poseBodyShape.fat;}
       const hex=itemColorHexes[itemIndex],itemDirt=Math.max(item.dirt||0,dirtVisual.level),itemDirtToken=`${Math.round(itemDirt)}:${dirtVisual.hex}`,accessoryColorUnchanged=accessoryColorSlotUnchanged&&accessoryTransform.colorItem===item&&accessoryTransform.colorHex===hex&&accessoryTransform.colorDirt===itemDirtToken&&accessoryTransform.colorCombat===combatFlash&&accessoryTransform.colorDimmed===dimmed;if(!accessoryColorUnchanged){this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:hex);if(!dimmed&&!combatFlash&&itemDirt>0){this.activeDirtColor.setHex(dirtVisual.hex);this.color.lerp(this.activeDirtColor,Math.min(.75,itemDirt/130));}this.setInstanceColor(head.mesh,head.count,this.color);accessoryTransform.colorItem=item;accessoryTransform.colorHex=hex;accessoryTransform.colorDirt=itemDirtToken;accessoryTransform.colorCombat=combatFlash;accessoryTransform.colorDimmed=dimmed;}head.count++;
     }
-    if(c.dead&&!dimmed&&this.THREE.BoxGeometry&&this.THREE.MeshBasicMaterial){
-      const fliesPerCorpse=6;
-      if(this.flyCount+fliesPerCorpse>this.flyCapacity){
+    if((c.dead||dirtVisual.level>=55)&&!dimmed&&this.THREE.BoxGeometry&&this.THREE.MeshBasicMaterial){
+      const fliesPerCitizen=c.dead?6:Math.min(6,3+Math.floor((dirtVisual.level-55)/15));
+      if(this.flyCount+fliesPerCitizen>this.flyCapacity){
         const cap=Math.max(64,(this.flyCapacity||32)*2),geo=new this.THREE.BoxGeometry(.025,.016,.025),mat=new this.THREE.MeshBasicMaterial({color:0x16181c}),mesh=new this.THREE.InstancedMesh(geo,mat,cap);
         mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);mesh.frustumCulled=false;
         if(this.flyMesh){for(let i=0;i<this.flyCount;i++){this.flyMesh.getMatrixAt(i,this.matrix);mesh.setMatrixAt(i,this.matrix);}this.group.remove(this.flyMesh);this.flyMesh.geometry.dispose();this.flyMesh.material.dispose();}
         this.group.add(mesh);this.flyMesh=mesh;this.flyCapacity=cap;
       }
-      for(let i=0;i<fliesPerCorpse;i++){
+      const baseFlyY=c.dead?surfaceH+.22:surfaceH+.85*size*heightScale;
+      for(let i=0;i<fliesPerCitizen;i++){
         const t=this.clock*5.2+(entity.id||0)*1.37+i*2.09,r=.18+(i%3)*.09;
-        const fx=renderX+Math.cos(t+Math.sin(t*.7))*r,fz=renderY+Math.sin(t*1.15+i)*r,fy=surfaceH+.22+Math.abs(Math.sin(t*1.8+i))*.24+(i%2)*.06;
+        const fx=renderX+Math.cos(t+Math.sin(t*.7))*r,fz=renderY+Math.sin(t*1.15+i)*r,fy=baseFlyY+Math.abs(Math.sin(t*1.8+i))*.24+(i%2)*.06;
         this.position.set(fx,fy,fz);this.quaternion.setFromAxisAngle(this.axis,t*2);this.scale.set(1,1,1);this.matrix.compose(this.position,this.quaternion,this.scale);
         this.flyMesh.setMatrixAt(this.flyCount++,this.matrix);
       }

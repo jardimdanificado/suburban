@@ -89,10 +89,10 @@ function roomCellGeometry(THREE,facadeMask,openingMask,doorMask=0){
   g.translate(0,-h/2,0);g.computeVertexNormals();return g;
 }
 function createFecesCoilGeometry(THREE){
-  const turns=2.15,segments=38,radial=7,positions=[],normals=[],colors=[],indices=[];
+  const turns=2.3,segments=44,radial=8,positions=[],colors=[],indices=[];
   const centerAt=t=>{
-    const a=t*Math.PI*2*turns,r=(1-t*.88)*.105;
-    return new THREE.Vector3(Math.cos(a)*r*(1+Math.sin(t*13)*.08),t*.145+.018,Math.sin(a)*r*(1+Math.cos(t*11)*.08));
+    const a=t*Math.PI*2*turns,r=(1-t*.86)*.115;
+    return new THREE.Vector3(Math.cos(a)*r*(1+Math.sin(t*19)*.12),t*.155+.016,Math.sin(a)*r*(1+Math.cos(t*17)*.12));
   };
   for(let i=0;i<=segments;i++){
     const t=i/segments,p=centerAt(t),next=centerAt(Math.min(1,t+.02)),prev=centerAt(Math.max(0,t-.02));
@@ -100,15 +100,17 @@ function createFecesCoilGeometry(THREE){
     const ref=Math.abs(tangent.y)>.9?new THREE.Vector3(1,0,0):new THREE.Vector3(0,1,0);
     const binormal=new THREE.Vector3().crossVectors(tangent,ref).normalize();
     const normal=new THREE.Vector3().crossVectors(binormal,tangent).normalize();
-    const pinch=1+Math.sin(t*28)*.15,r=((1-t*.78)*.046+.008)*pinch;
-    const shade=.72+t*.28;
+    const pinch=1+Math.sin(t*36)*.24+Math.cos(t*19)*.10,r=((1-t*.76)*.048+.009)*pinch;
+    const shade=.55+t*.45;
     for(let j=0;j<=radial;j++){
       const phi=(j/radial)*Math.PI*2,cos=Math.cos(phi),sin=Math.sin(phi);
+      const lump=1+Math.sin(t*47+phi*3)*.18+Math.cos(t*29-phi*2)*.12;
       const dir=normal.clone().multiplyScalar(cos).addScaledVector(binormal,sin);
-      const v=p.clone().addScaledVector(dir,r);
-      positions.push(v.x,v.y,v.z);normals.push(dir.x,dir.y,dir.z);
-      const ridge=.84+sin*.12,cR=.42*shade*ridge,cG=.27*shade*ridge,cB=.15*shade*ridge;
-      colors.push(cR,cG,cB);
+      const v=p.clone().addScaledVector(dir,r*lump);
+      positions.push(v.x,v.y,v.z);
+      // Linear-space rich dark browns (0x2a170a crevices -> 0x4f2e15 ridges)
+      const ridge=.68+sin*.22+(lump-1)*.8;
+      colors.push(.072*shade*ridge,.025*shade*ridge,.0065*shade*ridge);
     }
   }
   const stride=radial+1;
@@ -116,20 +118,23 @@ function createFecesCoilGeometry(THREE){
     const a=i*stride+j,b=(i+1)*stride+j,c=(i+1)*stride+j+1,d=i*stride+j+1;
     indices.push(a,b,d,b,c,d);
   }
-  const geo=new THREE.BufferGeometry();
-  geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
-  geo.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));
-  geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
-  geo.setIndex(indices);
+  const indexed=new THREE.BufferGeometry();
+  indexed.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  indexed.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  indexed.setIndex(indices);
+  const geo=indexed.toNonIndexed();
+  indexed.dispose();
+  geo.computeVertexNormals();
   return geo;
 }
 function createFecesLumpGeometry(THREE){
-  const geo=new THREE.IcosahedronGeometry(.055,1),pos=geo.attributes.position,colors=[];
+  const base=new THREE.IcosahedronGeometry(.058,1),geo=base.toNonIndexed();base.dispose();
+  const pos=geo.attributes.position,colors=[];
   for(let i=0;i<pos.count;i++){
-    const vx=pos.getX(i),vy=pos.getY(i),vz=pos.getZ(i),warp=.88+Math.sin(vx*37+vz*29)*.18;
-    pos.setXYZ(i,vx*1.25*warp,Math.max(-.02,vy*.72+.02),vz*.95*warp);
-    const shade=.65+Math.max(0,vy/.055)*.35;
-    colors.push(.38*shade,.24*shade,.13*shade);
+    const vx=pos.getX(i),vy=pos.getY(i),vz=pos.getZ(i),warp=.82+Math.sin(vx*49+vz*37)*.28;
+    pos.setXYZ(i,vx*1.32*warp,Math.max(-.018,vy*.76+.02),vz*.92*warp);
+    const shade=.55+Math.max(0,vy/.058)*.45;
+    colors.push(.068*shade,.023*shade,.006*shade);
   }
   geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
   geo.computeVertexNormals();
@@ -141,7 +146,7 @@ function syncFecesVisuals(renderer,THREE,city,world){
   if(renderer.fecesVisualRevision!==revision){
     if(renderer.fecesVisuals){renderer.scene.remove(renderer.fecesVisuals);const geometries=new Set(),materials=new Set();renderer.fecesVisuals.traverse(o=>{if(o!==renderer.fecesVisuals){if(o.geometry)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material])if(m)materials.add(m);}});for(const g of geometries)g.dispose();for(const m of materials)m.dispose();}
     const group=new THREE.Group(),coilGeo=createFecesCoilGeometry(THREE),lumpGeo=createFecesLumpGeometry(THREE);
-    const pileMaterial=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.62,metalness:.02});
+    const pileMaterial=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.54,metalness:.03,flatShading:true});
     const add=(x,y,z,amount,area,buildingId=null,floor=null)=>{
       const n=Math.max(1,Math.floor(amount)||1),clumps=Math.min(14,n-1),growth=Math.min(1,Math.log1p(n)/Math.log(19)),overflow=Math.min(2.2,Math.log1p(Math.max(0,n-18)/6)*.3);
       const main=new THREE.Mesh(coilGeo,pileMaterial);
@@ -163,6 +168,47 @@ function syncFecesVisuals(renderer,THREE,city,world){
     renderer.scene.add(group);renderer.fecesVisuals=group;renderer.fecesVisualRevision=revision;
   }
   for(const mesh of renderer.fecesVisuals.children)mesh.visible=mesh.userData.fecesArea==='street';
+}
+function mergeTexturedGroup(THREE,root){
+  const batches=new Map();
+  for(const child of [...root.children]){
+    if(!child.isMesh||Array.isArray(child.material)||!child.geometry?.attributes?.position)continue;
+    const list=batches.get(child.material)||[];list.push(child);batches.set(child.material,list);
+  }
+  for(const [material,batch]of batches){
+    if(batch.length<2)continue;
+    const geos=[];let vertices=0;
+    for(const mesh of batch){
+      const g=mesh.geometry.index?mesh.geometry.toNonIndexed():mesh.geometry.clone();
+      mesh.updateMatrix();g.applyMatrix4(mesh.matrix);
+      const pos=g.getAttribute('position'),norm=g.getAttribute('normal'),uv=g.getAttribute('uv');
+      if(!pos||!norm||!uv){g.dispose();continue;}
+      geos.push(g);vertices+=pos.count;
+    }
+    if(!geos.length)continue;
+    const positions=new Float32Array(vertices*3),normals=new Float32Array(vertices*3),uvs=new Float32Array(vertices*2);
+    let pOff=0,uOff=0;
+    for(const g of geos){
+      const pos=g.getAttribute('position'),norm=g.getAttribute('normal'),uv=g.getAttribute('uv');
+      for(let i=0;i<pos.count;i++){
+        positions[pOff]=pos.getX(i);normals[pOff++]=norm.getX(i);
+        positions[pOff]=pos.getY(i);normals[pOff++]=norm.getY(i);
+        positions[pOff]=pos.getZ(i);normals[pOff++]=norm.getZ(i);
+        uvs[uOff++]=uv.getX(i);uvs[uOff++]=uv.getY(i);
+      }
+      g.dispose();
+    }
+    const merged=new THREE.BufferGeometry();
+    merged.setAttribute('position',new THREE.BufferAttribute(positions,3));
+    merged.setAttribute('normal',new THREE.BufferAttribute(normals,3));
+    merged.setAttribute('uv',new THREE.BufferAttribute(uvs,2));
+    merged.computeBoundingSphere();
+    const first=batch[0];
+    for(const mesh of batch){mesh.removeFromParent();mesh.geometry.dispose();}
+    const result=new THREE.Mesh(merged,material);
+    result.castShadow=first.castShadow;result.receiveShadow=first.receiveShadow;
+    root.add(result);
+  }
 }
 function shackMaterial(renderer,THREE,kind,color,variant=0){
   const cache=renderer._shackMaterials??=new Map(),key=`${kind}:${color>>>0}:${variant}`;
@@ -222,7 +268,7 @@ function syncCardboardShelters(renderer,THREE,city,world){
         makeMat(.055,.48,.60,wallA,-.31,0,.34,0,0,kindA);makeMat(.055,.48,.60,wallB,.31,0,.34,0,0,kindB);makeMat(.62,.055,.60,wallB,0,-.24,.34,0,0,kindB);makeMat(.22,.055,.60,wallA,-.20,.24,.34,0,0,kindA);makeMat(.22,.055,.60,wallB,.20,.24,.34,0,0,kindA);
       }
       if(stage>=4){makeMat(.24,.23,.28,0x7a5d40,-.34,.26,.16,0,0,'plywood');makeMat(.26,.25,.035,0x8c7450,-.34,.26,.32,0,0,'cardboard');makeMat(.12,.12,.48,wood,.37,.25,.24,0,0,'plywood');makeMat(.16,.16,.08,canvas,.37,.25,.50,0,0,'tarp');}
-      mergeStaticMeshes(THREE,bed);group.add(bed);
+      mergeTexturedGroup(THREE,bed);group.add(bed);
     }
     renderer.cardboardVisuals=group;renderer.cardboardVisualSignature=signature;renderer.scene.add(group);
   }
@@ -1263,11 +1309,11 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
         const treeGeo=createBotanicalTreeGeometry(THREE,speciesList[bed%speciesList.length]);
         const tree=new THREE.Mesh(treeGeo,treeMat);
         const scale=.68+((Math.imul((Number(b.id)||0)+bed*17,2654435761)>>>0)%15)/100;
-        tree.position.set(x,ground,z);tree.scale.setScalar(scale);tree.rotation.y=(bed*1.57+parkVariant*.6);tree.castShadow=true;tree.receiveShadow=true;
+        tree.position.set(x,ground,z);tree.scale.setScalar(scale);tree.rotation.y=(bed*1.57+parkVariant*.6);tree.castShadow=true;tree.receiveShadow=true;tree.userData.skipStaticMerge=true;
         parkDecor.add(tree);
         const shrubAngle=bed*1.5+0.9,sx=x+Math.cos(shrubAngle)*.45,sz=z+Math.sin(shrubAngle)*.45,sg=surfaceElevation(world,entity.x+sx,entity.y+sz);
-        const shrubL=new THREE.Mesh(shrubLeafGeo,shrubLeafMat);shrubL.position.set(sx,sg,sz);shrubL.scale.setScalar(.72);shrubL.rotation.y=shrubAngle;shrubL.castShadow=true;parkDecor.add(shrubL);
-        const shrubF=new THREE.Mesh(shrubFlowerGeo,shrubFlowerMat);shrubF.position.set(sx,sg,sz);shrubF.scale.setScalar(.72);shrubF.rotation.y=shrubAngle;parkDecor.add(shrubF);
+        const shrubL=new THREE.Mesh(shrubLeafGeo,shrubLeafMat);shrubL.position.set(sx,sg,sz);shrubL.scale.setScalar(.72);shrubL.rotation.y=shrubAngle;shrubL.castShadow=true;shrubL.userData.skipStaticMerge=true;parkDecor.add(shrubL);
+        const shrubF=new THREE.Mesh(shrubFlowerGeo,shrubFlowerMat);shrubF.position.set(sx,sg,sz);shrubF.scale.setScalar(.72);shrubF.rotation.y=shrubAngle;shrubF.userData.skipStaticMerge=true;parkDecor.add(shrubF);
       }
       // A colonial garden pavilion varies between island thatch and tiled shade.
       const shadeX=b.width/2,shadeZ=Math.min(b.depth-1.2,1.45),postMaterial=shackMaterial(renderer,THREE,'plywood',0x8b6847,0),thatch=new THREE.MeshLambertMaterial({color:0xb99255});
@@ -1283,7 +1329,7 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
         bench.rotation.y=seat===0?Math.PI/2:-Math.PI/2;
         parkDecor.add(bench);
       }
-      mergeStaticMeshes(THREE,parkDecor);group.add(parkDecor);renderer.parkPalmWindDecorations.set(entity.id,palmCrowns);
+      mergeStaticMeshes(THREE,parkDecor,{filter:m=>!m.material?.map});group.add(parkDecor);renderer.parkPalmWindDecorations.set(entity.id,palmCrowns);
     }
     group.userData.sheds = [];
     if (['quarry', 'farm'].includes(b.type)) {

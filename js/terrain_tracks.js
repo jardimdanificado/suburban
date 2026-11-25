@@ -462,7 +462,12 @@ export class TerrainTracks {
       for(const stain of city.sanitation.stains.values()){
         if(stain.scope==='street'&&stain.kind==='blood'&&!stain._paintedToTerrain){
           stain._paintedToTerrain=true;
-          paintStamps.push({x:stain.x,z:stain.y,width:stain.radius*2.4,length:stain.radius*2.4,angle:0,kind:2,paintColor:stain.color??0x8c1118,paintLoad:Math.min(.85,.45+stain.amount*.15)});
+          const r=stain.radius||.35,c=stain.color??0x7a0e14;
+          paintStamps.push({x:stain.x,z:stain.y,width:r*1.8,length:r*1.8,angle:0,kind:2,paintColor:c,paintLoad:.62});
+          for(let d=0;d<4;d++){
+            const a=d*1.57+stain.x*3.1,off=r*(.55+.35*(d%2)),dr=r*(.55+.25*(d%2));
+            paintStamps.push({x:stain.x+Math.cos(a)*off,z:stain.y+Math.sin(a)*off,width:dr,length:dr,angle:a,kind:2,paintColor:c,paintLoad:.45});
+          }
         }
       }
     }

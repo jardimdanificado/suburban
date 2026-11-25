@@ -50,46 +50,46 @@ export function shackSurfacePixels(kind = 'cardboard', variant = 0, size = 64) {
       let tintB = 1;
 
       if (kind === 'cardboard') {
-        // Corrugated kraft cardboard: subtle parallel flute ribs, fibrous speckle, fold creases
-        const flute = Math.sin(u * Math.PI * 2 * 16) * 0.5 + 0.5;
+        // Corrugated kraft cardboard: visible parallel flute ribs, fibrous speckle, fold creases
+        const flute = Math.sin(u * Math.PI * 2 * 10) * 0.5 + 0.5;
         const fiber = periodicNoise(u, v, 16, seed + 71) * 0.6 + periodicNoise(u, v, 32, seed + 113) * 0.4;
-        const crease = Math.abs(((v + 0.25) % 0.5) - 0.25) < 0.025 ? 1 : 0;
-        const tape = u > 0.38 && u < 0.52 && v > 0.1 && v < 0.85 ? 0.35 : 0;
-        h = clamp(0.42 + flute * 0.26 + (fiber - 0.5) * 0.14 - crease * 0.24 + tape * 0.08 + (fine - 0.5) * 0.05);
-        lum = 210 + flute * 20 + (fiber - 0.5) * 26 - crease * 42 + tape * 18 + (fine - 0.5) * 14;
-        tintR = 1.03;
+        const crease = Math.abs(((v + 0.25) % 0.5) - 0.25) < 0.03 ? 1 : 0;
+        const tape = u > 0.36 && u < 0.52 && v > 0.1 && v < 0.85 ? 0.4 : 0;
+        h = clamp(0.4 + flute * 0.34 + (fiber - 0.5) * 0.16 - crease * 0.3 + tape * 0.1 + (fine - 0.5) * 0.06);
+        lum = 198 + flute * 34 + (fiber - 0.5) * 34 - crease * 60 + tape * 26 + (fine - 0.5) * 18;
+        tintR = 1.05;
         tintG = 0.96;
-        tintB = 0.87;
+        tintB = 0.84;
       } else if (kind === 'plywood') {
         // Rough madeirite plywood: elongated wood grain, knots, board seams
-        const grain = periodicNoise(u * 0.5 + periodicNoise(u, v, 4, seed + 31) * 0.15, v * 4, 8, seed + 59);
+        const grain = periodicNoise(u * 0.5 + periodicNoise(u, v, 4, seed + 31) * 0.18, v * 4, 8, seed + 59);
         const knotDist = Math.hypot((u - 0.34) * 1.4, (v - 0.62) * 2.2);
-        const knot = clamp(1 - knotDist / 0.14);
-        const seam = (y % 32 === 0 || x % 32 === 0) ? 1 : 0;
-        h = clamp(0.46 + (grain - 0.5) * 0.32 - knot * 0.22 - seam * 0.28 + (fine - 0.5) * 0.06);
-        lum = 212 + (grain - 0.5) * 44 - knot * 48 - seam * 55 + (fine - 0.5) * 14;
-        tintR = 1.02;
-        tintG = 0.95;
-        tintB = 0.86;
+        const knot = clamp(1 - knotDist / 0.15);
+        const seam = (y % 32 <= 1 || x % 32 <= 1) ? 1 : 0;
+        h = clamp(0.46 + (grain - 0.5) * 0.38 - knot * 0.26 - seam * 0.32 + (fine - 0.5) * 0.07);
+        lum = 204 + (grain - 0.5) * 56 - knot * 60 - seam * 68 + (fine - 0.5) * 16;
+        tintR = 1.03;
+        tintG = 0.94;
+        tintB = 0.84;
       } else if (kind === 'tarp') {
         // Woven plastic/canvas tarp: cross-hatch weave + diagonal fold creases
-        const weaveX = Math.sin(u * Math.PI * 2 * 24) * 0.5 + 0.5;
-        const weaveY = Math.sin(v * Math.PI * 2 * 24) * 0.5 + 0.5;
+        const weaveX = Math.sin(u * Math.PI * 2 * 16) * 0.5 + 0.5;
+        const weaveY = Math.sin(v * Math.PI * 2 * 16) * 0.5 + 0.5;
         const weave = (weaveX + weaveY) * 0.5;
         const fold = Math.sin((u * 2 + v * 3 + periodicNoise(u, v, 4, seed + 97) * 0.8) * Math.PI * 2) * 0.5 + 0.5;
         const scuff = periodicNoise(u, v, 8, seed + 139);
-        h = clamp(0.38 + weave * 0.24 + fold * 0.28 + (fine - 0.5) * 0.04);
-        lum = 205 + weave * 20 + fold * 28 + (scuff - 0.5) * 20 + (fine - 0.5) * 10;
+        h = clamp(0.35 + weave * 0.28 + fold * 0.32 + (fine - 0.5) * 0.05);
+        lum = 196 + weave * 28 + fold * 38 + (scuff - 0.5) * 26 + (fine - 0.5) * 12;
       } else {
         // Corrugated metal sheet (zinco): deep ribs + rust/oxide streaks
-        const rib = Math.sin(u * Math.PI * 2 * 8) * 0.5 + 0.5;
+        const rib = Math.sin(u * Math.PI * 2 * 7) * 0.5 + 0.5;
         const rustNoise = periodicNoise(u, v, 6, seed + 211);
-        const rust = clamp((rustNoise - 0.56) * 2.6);
-        h = clamp(0.2 + rib * 0.68 + (fine - 0.5) * 0.05 - rust * 0.08);
-        lum = 195 + rib * 48 + (fine - 0.5) * 14;
-        tintR = mix(0.96, 1.15, rust);
-        tintG = mix(0.98, 0.72, rust);
-        tintB = mix(1.02, 0.55, rust);
+        const rust = clamp((rustNoise - 0.52) * 2.8);
+        h = clamp(0.16 + rib * 0.74 + (fine - 0.5) * 0.05 - rust * 0.08);
+        lum = 182 + rib * 64 + (fine - 0.5) * 16;
+        tintR = mix(0.95, 1.18, rust);
+        tintG = mix(0.98, 0.70, rust);
+        tintB = mix(1.03, 0.52, rust);
       }
 
       heights[idx] = h;
