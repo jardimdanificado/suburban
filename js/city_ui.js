@@ -55,7 +55,7 @@ import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js'
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=regional-supply-5';
-import { WORLD_PRESETS, randomWorldSeed, randomWorldPreset, randomSettlementPreset } from './world_settings.js?v=random-presets-1';
+import { WORLD_PRESETS, DEFAULT_SETTLEMENT_PRESET, randomWorldSeed, randomWorldPreset, randomSettlementPreset } from './world_settings.js?v=random-presets-1';
 import { SETTLEMENT_PRESETS } from './city_terrain.js?v=minimal-settlement-2';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=ff2-speed-1';
 import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=game-approach-camera-9';
@@ -159,7 +159,7 @@ export class CityUI {
     this.element.append(this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.analyticsTypeInput,this.sortInput,this.publicationDraft,this.artworkBuildingInput,this.artworkBuyerInput,this.artworkPlacementInput,this.artworkKindInput,this.artworkMaterialInput,this.artworkSubjectInput,this.artworkPartyInput,this.artworkTruthInput,this.artworkPurposeInput,this.artworkNarrativeInput,this.artworkEventInput,this.artworkClaimedPlaceInput,this.artworkClaimedDateInput,this.artworkSourceClaimInput,...this.artworkRoleInputs,this.artworkDraft,this.worksBudgetInput,this.worksTransferInput,this.municipalNameInput,this.municipalSloganInput,this.municipalSloganFromInput,this.municipalSloganToInput,this.municipalFlagColorInput,this.municipalFlagTextInput);
     for(const input of this.inputs)input.hidden=true;
     this.terrain = city.world?.preset || randomWorldPreset();
-    this.settlementPreset = city.settlementPreset || randomSettlementPreset();
+    this.settlementPreset = city.settlementPreset || DEFAULT_SETTLEMENT_PRESET;
     this.profileNextWorld=new URLSearchParams(window.location?.search||'').has('profile');
   }
   get inputs(){return [...Object.values(this.dynamicSelects||{}),...Object.values(this.favoriteColorInputs||{}),this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.analyticsTypeInput,this.sortInput,this.publicationDraft,this.artworkBuildingInput,this.artworkBuyerInput,this.artworkPlacementInput,this.artworkKindInput,this.artworkMaterialInput,this.artworkSubjectInput,this.artworkPartyInput,this.artworkTruthInput,this.artworkPurposeInput,this.artworkNarrativeInput,this.artworkEventInput,this.artworkClaimedPlaceInput,this.artworkClaimedDateInput,this.artworkSourceClaimInput,...this.artworkRoleInputs,this.artworkDraft,this.worksBudgetInput,this.worksTransferInput,this.municipalNameInput,this.municipalSloganInput,this.municipalSloganFromInput,this.municipalSloganToInput,this.municipalFlagColorInput,this.municipalFlagTextInput];}
@@ -1081,7 +1081,7 @@ export class CityUI {
     p.note('Cidadãos iniciais (1 a 2.000)');iy=p.y;p.space(24);if(iy>=p.top&&iy+20<=p.bottom)this.inputAt(this.populationInput,p.x,iy,p.w);
     p.note('Tamanho do mapa (128 a 1024 células por lado)');iy=p.y;p.space(24);if(iy>=p.top&&iy+20<=p.bottom)this.inputAt(this.mapSizeInput,p.x,iy,p.w);
     p.button(`PAISAGEM: ${(WORLD_PRESETS[this.terrain]?.label||'Arquipélago').toUpperCase()} ▸`,()=>{const keys=Object.keys(WORLD_PRESETS);this.terrain=keys[(keys.indexOf(this.terrain)+1)%keys.length];});
-    p.button(`CIDADE INICIAL: ${(SETTLEMENT_PRESETS[this.settlementPreset]?.label||'Núcleo mínimo').toUpperCase()} ▸`,()=>{const keys=Object.keys(SETTLEMENT_PRESETS);this.settlementPreset=keys[(keys.indexOf(this.settlementPreset)+1)%keys.length];});
+    p.button(`CIDADE INICIAL: ${(SETTLEMENT_PRESETS[this.settlementPreset]?.label||SETTLEMENT_PRESETS[DEFAULT_SETTLEMENT_PRESET].label).toUpperCase()} ▸`,()=>{const keys=Object.keys(SETTLEMENT_PRESETS);this.settlementPreset=keys[(keys.indexOf(this.settlementPreset)+1)%keys.length];});
     p.button(`PROFILER NO PRÓXIMO MUNDO: ${this.profileNextWorld?'ATIVADO':'DESATIVADO'}`,()=>{this.profileNextWorld=!this.profileNextWorld;});
     p.note('Quando ativo, mostra métricas na tela e registra engasgos acima de 500 ms no console.');
     p.note('Gerar terreno reinicia a simulação e descarta a cidade atual.',C.red);

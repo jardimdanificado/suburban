@@ -11,7 +11,7 @@ test('MainMenu initializes with proper default states and scenarios', () => {
   assert.equal(menu.hasActiveGame, false);
   assert.equal(menu.screen, 'TITLE');
   assert.equal(menu.selectedPreset, 'archipelago');
-  assert.equal(menu.selectedSettlementPreset, 'developed');
+  assert.equal(menu.selectedSettlementPreset, 'growing');
   assert.equal(menu.selectedSize, 256);
   assert.equal(menu.selectedPopulation, 512);
   assert.equal(menu.selectedSeed, 482910);

@@ -681,6 +681,9 @@ export class CitySimulation {
     if(!arrivalTiles.length)throw new Error('Não há células de terra acessíveis para distribuir a população neste mapa.');
     populateFoundingCommunity(this,arrivalTiles);
     this.economy.initialize();
+    // The middle preset starts with housing available, so part of the founding
+    // community moves in immediately instead of everyone starting homeless.
+    if(this.settlementPreset==='growing')this.housing.assignSocialHomes();
     this.vehicles.equipInitialWorkers();
     this.nature.initialize();
     this.fauna.initialize();

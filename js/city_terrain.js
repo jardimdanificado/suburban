@@ -387,8 +387,9 @@ export function pavePath(world, path, blockedTiles = null, treeTiles = null, onP
 }
 
 export const SETTLEMENT_PRESETS = Object.freeze({
-  minimal: { id: 'minimal', label: 'Núcleo mínimo' },
   frontier: { id: 'frontier', label: 'Desbravamento (sem casas)' },
+  minimal: { id: 'minimal', label: 'Núcleo mínimo' },
+  growing: { id: 'growing', label: 'Cidade em crescimento' },
   developed: { id: 'developed', label: 'Cidade estruturada' },
 });
 
@@ -406,6 +407,10 @@ export function generateSettlement(city) {
   } else if (preset === 'frontier') {
     officeTypes=['builder','bank','carrier'].filter(type=>OFFICE_BUSINESSES.has(type));
     specs = [['townhall', 4, 4, hallFloors], ['office_tower', 3, 3, officeTypes.length + 1], ['quarry', 4, 4, 1]];
+  } else if (preset === 'growing') {
+    officeTypes=['builder','bank','carrier'].filter(type=>OFFICE_BUSINESSES.has(type));
+    const starterHousing=Array.from({length:Math.max(2,Math.ceil((city.initialPopulation||0)/160))},()=>['super_popular_housing',4,4,4]);
+    specs = [['townhall', 4, 4, hallFloors], ['office_tower', 3, 3, officeTypes.length+3], ['quarry', 4, 4, 1], ['popular_refectory',4,4,4], ['public_toilet',4,4,4], ...starterHousing];
   } else {
     officeTypes=['builder','bank','carrier'].filter(type=>OFFICE_BUSINESSES.has(type));
     specs = [['townhall', 4, 4, hallFloors], ['office_tower', 3, 3, officeTypes.length + 1], ['quarry', 4, 4, 1], ['super_popular_housing', 4, 4, 2]];
