@@ -9,6 +9,7 @@ import {
   TEMAS_DO_JOGO,
 } from '../js/vocabulario.js';
 import { SUBSTANTIVOS, VERBOS_TRANSITIVOS } from '../js/lexico_sinonimos.js';
+import { CENAS } from '../js/gerador_textos.js';
 
 function seeded(seed) {
   let state = seed >>> 0;
@@ -19,7 +20,7 @@ function seeded(seed) {
 }
 
 const FORMAS_INVENTADAS = /\b(?:sube|ofereca|oferecam|busce|buscem|preferam|pracat\w*|casamat\w*|monarquiar\w*|sindicatariam|nutrifica\w*|arteso\w*|artemet\w*|mobralense)\b/iu;
-const PREPOSICAO_SEM_CONTRACAO = /(?<![\p{L}])(?:por|de|em) (?:o|a|os|as)\b/iu;
+const PREPOSICAO_SEM_CONTRACAO = /(?<![\p{L}])(?:por|de|em) (?:o|a|os|as)(?=\s)/iu;
 
 test('curated generator keeps grammatical forms across every theme and level', () => {
   for (const tema of TEMAS_DO_JOGO) {
@@ -58,6 +59,28 @@ const primeiraPalavra = texto => texto.split(' ')[0];
 const PLURAIS_INVARIAVEIS = new Set(['sem-teto']);
 const pluralAparente = palavra => PLURAIS_INVARIAVEIS.has(palavra) || (/s$/u.test(palavra)
   && !['ônibus', 'vírus', 'país', 'gás', 'pires', 'atlas', 'cais', 'lápis'].includes(palavra));
+
+test('verbs in -air and -uir keep the hiatus in every tense', () => {
+  const formas = {
+    atrair: ['atrai', 'atraem', 'atraiu', 'atraíram', 'atraía', 'atraíam', 'atraia', 'atraiam', 'atraído'],
+    distribuir: ['distribui', 'distribuem', 'distribuiu', 'distribuíram', 'distribuía', 'distribuíam', 'distribua', 'distribuam', 'distribuído'],
+    instruir: ['instrui', 'instruem', 'instruiu', 'instruíram', 'instruía', 'instruíam', 'instrua', 'instruam', 'instruído'],
+  };
+  for (const [verbo, esperadas] of Object.entries(formas)) {
+    const produzidas = [
+      conjugarVerbo(verbo, { tempo: 'presente', pessoa: 3 }),
+      conjugarVerbo(verbo, { tempo: 'presente', pessoa: 6 }),
+      conjugarVerbo(verbo, { tempo: 'pretérito-perfeito', pessoa: 3 }),
+      conjugarVerbo(verbo, { tempo: 'pretérito-perfeito', pessoa: 6 }),
+      conjugarVerbo(verbo, { tempo: 'pretérito-imperfeito', pessoa: 3 }),
+      conjugarVerbo(verbo, { tempo: 'pretérito-imperfeito', pessoa: 6 }),
+      conjugarVerbo(verbo, { tempo: 'subjuntivo-presente', pessoa: 3 }),
+      conjugarVerbo(verbo, { tempo: 'subjuntivo-presente', pessoa: 6 }),
+      conjugarVerbo(verbo, { tempo: 'participio', pessoa: 3 }),
+    ];
+    assert.deepEqual(produzidas, esperadas, verbo);
+  }
+});
 
 test('lexicon substitutions keep number and conjugate every tense', () => {
   for (const [chave, variantes] of Object.entries(SUBSTANTIVOS)) {

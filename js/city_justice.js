@@ -21,7 +21,7 @@ import {beginBuildingSiteSearch} from './city_terrain.js?v=entrance-retaining-cl
 import {PREJUDICE_TYPES,PREJUDICE_CRIME_TYPES,prejudicesInCommon} from './city_prejudice.js?v=discrimination-laws-1';
 import {selectClothes} from './city_clothing.js';
 import {favoriteColors,pickGraffitiColor} from './city_colors.js';
-export const GRAFFITI_STYLES=['pixo','tag','stencil','bubble','spray','irregular','stacked'];
+export const GRAFFITI_STYLES=['pixo','tag','stencil','bubble','spray','irregular','stacked','bomb','rasurada'];
 function pickGraffitiStyle(c,random=Math.random){return GRAFFITI_STYLES[Math.floor(random()*GRAFFITI_STYLES.length)]||'pixo';}
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const buildingContainsPoint=(building,x,y)=>{const px=x-building.entity.x,py=y-building.entity.y;let localX,localY;switch((building.rotation||0)%4){case 1:localX=building.depth-py;localY=px;break;case 2:localX=building.width-px;localY=building.depth-py;break;case 3:localX=py;localY=building.width-px;break;default:localX=px;localY=py;}return localX>=0&&localX<building.width&&localY>=0&&localY<building.depth;};

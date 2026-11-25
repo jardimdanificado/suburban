@@ -373,4 +373,16 @@ test('circular grazing clears only a circle, arboreal animals climb trees, and 2
     city.fauna.update(0.1);
     assert.ok(hawk.altitude > startAlt && hawk.altitude < hawk.targetAltitude, 'bird should ascend progressively');
   }
+
+  // Wild animals penalize urban centers, and nest/perch heights match CITY_FLOOR_HEIGHT & fence cap
+  city.buildings = [
+    { id: 300, type: 'residential', floors: 2, width: 3, depth: 3, entity: { x: 20, y: 20, destroyed: false }, units: [] },
+    { id: 301, type: 'cattle_ranch', width: 7, depth: 7, door: { x: 14, y: 10 }, entity: { x: 10, y: 10, destroyed: false } },
+  ];
+  assert.ok(city.fauna.urbanPenalty(21, 21) > city.fauna.urbanPenalty(2, 2));
+  const perches = city.fauna.surfacePerchCandidates(15, 15, 20);
+  const roof = perches.find(p => p.surface === 'roof');
+  const fence = perches.find(p => p.surface === 'fence');
+  assert.ok(roof && Math.abs(roof.z - (2 * 1.8 + 0.12)) < 0.01);
+  assert.ok(fence && Math.abs(fence.z - 0.8) < 0.01);
 });

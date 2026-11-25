@@ -117,12 +117,18 @@ test('graffitiInkColor preserves high-contrast custom colors and enforces contra
   // Dark color on dark retaining/ground falls back to white; medium brown on timber falls back to white
   piece.support.surface = 'ground';
   assert.equal(graffitiInkColor(city, piece, { color: 0x222128 }), 0xffffff);
+  // Saturated custom low-contrast color preserves its hue by lifting lightness
+  const lifted = graffitiInkColor(city, piece, { color: 0x882244 });
+  assert.notEqual(lifted, 0xffffff);
+  assert.notEqual(lifted, 0x882244);
+  assert.ok((lifted >> 16 & 255) > (lifted >> 8 & 255), 'lifted rose preserves red dominance');
   piece.support.surface = 'wall';
-  assert.equal(graffitiInkColor(city, piece, { color: 0x7a6550 }), 0xffffff);
+  assert.notEqual(graffitiInkColor(city, piece, { color: 0x7a6550 }), 0x7a6550);
 
-  // Too-bright color on light hacienda wall falls back to dark ink for contrast
+  // Too-bright color on light hacienda wall darkens for contrast
   building.architecture = 'hacienda';
-  assert.equal(graffitiInkColor(city, piece, { color: 0xfefefe }), 0x1b1a20);
+  const darkened = graffitiInkColor(city, piece, { color: 0xfefefe });
+  assert.ok(darkened < 0x909090, `expected darkened ink on light wall, got ${darkened.toString(16)}`);
   // Dark blue on light hacienda wall is preserved
   assert.equal(graffitiInkColor(city, piece, { color: 0x1e3a8a }), 0x1e3a8a);
 });
@@ -172,4 +178,110 @@ test('street graffiti renders all font styles including irregular mixed letter s
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
   }
+});
+
+test('cleaning an active graffiti layer smears and fades pixels progressively', () => {
+  const originalDocument = globalThis.document;
+  let putCalls = 0;
+  let lastAlphaSum = Infinity;
+  globalThis.document = {
+    createElement: () => {
+      const canvas = makeFakeCanvas();
+      const ctx = canvas.getContext('2d');
+      ctx.getImageData = (x, y, w, h) => {
+        const data = new Uint8ClampedArray(w * h * 4);
+        for (let py = 100; py < 140; py++) {
+          for (let px = 60; px < 180; px++) {
+            const idx = (py * w + px) * 4;
+            data[idx] = 255; data[idx + 1] = 200; data[idx + 2] = 50; data[idx + 3] = 255;
+          }
+        }
+        return { data };
+      };
+      ctx.putImageData = img => {
+        if (img.data.length !== 256 * 256 * 4) return;
+        putCalls++;
+        let sum = 0;
+        for (let i = 3; i < img.data.length; i += 4) sum += img.data[i];
+        lastAlphaSum = sum;
+      };
+      return canvas;
+    }
+  };
+  try {
+    const building = { id: 3, width: 2, depth: 2, architecture: 'timber', entity: { x: 4, y: 4, destroyed: false }, terrain: { base: 0 }, floors: 1 };
+    const world = { width: 16, height: 16, revision: 0, getTile: () => 0 };
+    const piece = {
+      id: 9,
+      kind: 'graffiti',
+      graffitiStyle: 'bomb',
+      message: 'Poder Popular',
+      color: 0xffd040,
+      entity: { x: 4.5, y: 3.9, destroyed: false },
+      support: { kind: 'street-graffiti', surface: 'wall', buildingId: 3, side: 0, position: { x: 4.5, y: 3.975, z: 0.9 }, width: 0.86, height: 1.64, rotation: 0 },
+      layers: [{ id: 1, kind: 'graffiti', message: 'Poder Popular', color: 0xffd040, graffitiStyle: 'bomb' }]
+    };
+    const job = { kind: 'art-cleaning', artId: 9, layerId: 1, status: 'working', progress: 9, required: 18 };
+    const city = { world, buildings: [building], justice: { art: [piece] }, gigs: { jobs: [job] }, building: () => building };
+    const renderer = { scene: { add() {}, remove() {} }, renderedMinTx: 0, renderedMaxTx: 16, renderedMinTy: 0, renderedMaxTy: 16 };
+
+    syncUrbanArt(renderer, THREE, city, world);
+    assert.equal(putCalls, 1);
+    const earlyAlpha = lastAlphaSum;
+    assert.ok(earlyAlpha > 0 && earlyAlpha !== (40 * 120 * 255), 'early cleaning partially smears and fades ink');
+
+    job.progress = 17;
+    syncUrbanArt(renderer, THREE, city, world);
+    assert.equal(putCalls, 2);
+    assert.ok(lastAlphaSum < earlyAlpha, 'further scrubbing removes even more ink');
+  } finally {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+});
+
+test('walking across ground graffiti smudges the paint and leaves colored footprints on shoes', async () => {
+  const { TerrainTracks, TerrainTrackMotion, SandCarry, PaintCarry } = await import('../js/terrain_tracks.js');
+  const tracker = Object.create(TerrainTracks.prototype);
+  const painted = [];
+  const paintFootprints = [];
+  Object.assign(tracker, {
+    time: 0,
+    motion: new TerrainTrackMotion(),
+    sandCarry: new SandCarry(),
+    dirtCarry: new SandCarry(),
+    paintCarry: new PaintCarry(),
+    grassWear: { coverage: () => 0, record() {}, prune() {} },
+    uniforms: { terrainTrackTime: { value: 0 } },
+    ensureWorld() {},
+    paint(_r, stamps) { painted.push(...stamps); },
+    paintPaint(_r, stamps) { paintFootprints.push(...stamps); }
+  });
+  const world = { width: 16, height: 16, revision: 0, getTile: () => 8 };
+  const groundPiece = {
+    id: 42,
+    kind: 'graffiti',
+    message: 'Rua Viva',
+    color: 0x33ddff,
+    renderedInkColor: 0x33ddff,
+    entity: { x: 5.5, y: 5.5, destroyed: false },
+    support: { kind: 'street-graffiti', surface: 'ground', position: { x: 5.5, y: 5.5, z: 0 }, width: 0.86, height: 0.86 },
+    layers: []
+  };
+  const city = { justice: { art: [groundPiece] } };
+  const walker = { id: 1, x: 5.0, y: 5.5, properties: { citizen: {} } };
+
+  // Start outside, then walk across the ground graffiti at (5.5, 5.5) and continue past it
+  tracker.update({}, world, [walker], 0.1, null, null, null, city);
+  walker.x = 5.6;
+  tracker.update({}, world, [walker], 0.1, null, null, null, city);
+  assert.ok((groundPiece.groundSmudges?.length || 0) >= 1, 'footsteps on ground graffiti record smudges');
+  assert.ok((groundPiece.smudgeRevision || 0) >= 1);
+  assert.ok((groundPiece.wearProgress || 0) > 0);
+
+  // Walk further off the graffiti: shoes shed colored paint footprints
+  walker.x = 6.8;
+  tracker.update({}, world, [walker], 0.1, null, null, null, city);
+  assert.ok(paintFootprints.length >= 1, 'shoes carry graffiti paint onto adjacent ground');
+  assert.ok(paintFootprints.every(s => s.paintColor === 0x33ddff && s.paintLoad > 0));
 });

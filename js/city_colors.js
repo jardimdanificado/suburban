@@ -39,17 +39,32 @@ export function colorAffinity(c,value){
 export function favoriteColors(c){initializeColors(c);return [...COLOR_PALETTE].sort((a,b)=>colorAffinity(c,b.hex)-colorAffinity(c,a.hex));}
 export function factoryColors(b){return b.paintPalette??=Array.from({length:4},(_,i)=>COLOR_PALETTE[(Math.imul(b.id+7,13)+i*7)%COLOR_PALETTE.length].hex);}
 export function buildingColor(b){return b?.wallColor??b?.architectureColor??b?.color;}
+function rgbToHsl(r,g,b){
+ r/=255;g/=255;b/=255;const max=Math.max(r,g,b),min=Math.min(r,g,b),l=(max+min)/2;
+ if(max===min)return [0,0,l];
+ const d=max-min,s=l>.5?d/(2-max-min):d/(max+min);
+ let h=max===r?(g-b)/d+(g<b?6:0):max===g?(b-r)/d+2:(r-g)/d+4;
+ return [h/6,s,l];
+}
+function hslToRgb(h,s,l){
+ h=((h%1)+1)%1;
+ if(s===0){const v=Math.round(l*255);return [v,v,v];}
+ const hue2rgb=(p,q,t)=>{if(t<0)t+=1;if(t>1)t-=1;if(t<1/6)return p+(q-p)*6*t;if(t<1/2)return q;if(t<2/3)return p+(q-p)*(2/3-t)*6;return p;};
+ const q=l<.5?l*(1+s):l+s-l*s,p=2*l-q;
+ return [Math.round(hue2rgb(p,q,h+1/3)*255),Math.round(hue2rgb(p,q,h)*255),Math.round(hue2rgb(p,q,h-1/3)*255)];
+}
 export function pickGraffitiColor(c,random=Math.random){
  if(!c)return 0x222128;
- const ranked=favoriteColors(c),pool=ranked.slice(0,Math.min(5,ranked.length));
+ const ranked=favoriteColors(c),pool=ranked.slice(0,Math.min(6,ranked.length));
  const chosen=pool[Math.floor(random()*pool.length)]||ranked[0];
  if(!chosen?.hex)return 0x222128;
- const base=rgb(chosen.hex);
- // Allow any RGB tint near the tagger's preferred hue without falling into disliked shades.
- for(let attempt=0;attempt<4;attempt++){
-  const r=Math.max(0,Math.min(255,base[0]+Math.round((random()-.5)*48)));
-  const g=Math.max(0,Math.min(255,base[1]+Math.round((random()-.5)*48)));
-  const b=Math.max(0,Math.min(255,base[2]+Math.round((random()-.5)*48)));
+ const [r0,g0,b0]=rgb(chosen.hex),[h0,s0]=rgbToHsl(r0,g0,b0);
+ // Map the tagger's preferred hue into vivid spray-paint colors across any lightness.
+ for(let attempt=0;attempt<6;attempt++){
+  const hueShift=(random()-.5)*.18+(random()<.12?.5:0);
+  const sat=Math.max(.58,Math.min(1,s0*.65+.45+(random()-.5)*.22));
+  const light=.24+random()*.58;
+  const [r,g,b]=hslToRgb(h0+hueShift,sat,light);
   const intColor=(r<<16)|(g<<8)|b;
   if(!dislikesColor(c,`#${intColor.toString(16).padStart(6,'0')}`))return intColor;
  }

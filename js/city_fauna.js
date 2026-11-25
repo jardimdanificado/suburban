@@ -1,5 +1,7 @@
 import { ANIMAL_SPECIES, ANIMAL_SPECIES_IDS } from './animal_catalog.js';
 import { NATURAL_PLANTS } from './plant_catalog.js';
+import { CITY_FLOOR_HEIGHT } from './city_building_geometry.js?v=banner-placement-2';
+import { buildingLeisureSpaces } from './city_balconies.js?v=sertanejo-house-styles-1';
 import { tileAt, ROAD_TILES } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import { TILE_WATER } from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 
@@ -96,27 +98,51 @@ export class CityFauna {
     return best;
   }
 
-  tryBuildNest(bird) {
-    if (!bird || bird.nestId && this.nests.has(bird.nestId)) return this.nests.get(bird.nestId);
-    const bx = bird.x, by = bird.y;
-    const candidates = [];
-    const tree = this.findTreeSpot(bx, by, 14);
-    if (tree) candidates.push({ x: tree.x + 0.5, y: tree.y + 0.5, z: this.treeCanopyAltitude(tree), surface: 'tree', plantId: tree.id });
+  urbanPenalty(x, y) {
+    let penalty = 0;
     for (const b of this.city.buildings || []) {
       if (b.entity?.destroyed) continue;
-      const d = Math.hypot(b.entity.x + (b.width || 3) * 0.5 - bx, b.entity.y + (b.depth || 3) * 0.5 - by);
-      if (d > 16) continue;
+      const cx = b.entity.x + (b.width || 3) * 0.5, cy = b.entity.y + (b.depth || 3) * 0.5;
+      const d = Math.hypot(cx - x, cy - y);
+      if (d < 12) penalty += (12 - d);
+    }
+    for (const c of this.city.citizens || []) {
+      if (c.dead || !c.entity || c.entity.destroyed) continue;
+      const d = Math.hypot(c.entity.x - x, c.entity.y - y);
+      if (d < 8) penalty += (8 - d) * 1.5;
+    }
+    return penalty;
+  }
+
+  surfacePerchCandidates(bx, by, maxDist = 16) {
+    const candidates = [];
+    const tree = this.findTreeSpot(bx, by, maxDist);
+    if (tree) candidates.push({ x: tree.x + 0.5, y: tree.y + 0.5, z: this.treeCanopyAltitude(tree), surface: 'tree', plantId: tree.id });
+    for (const b of this.city.buildings || []) {
+      if (b.entity?.destroyed || !b.entity) continue;
+      const cx = b.entity.x + (b.width || 3) * 0.5, cy = b.entity.y + (b.depth || 3) * 0.5;
+      if (Math.hypot(cx - bx, cy - by) > maxDist) continue;
       if (['farm', 'park', 'cattle_ranch', 'dairy_farm', 'sheep_farm', 'pig_farm', 'poultry', 'hay_farm'].includes(b.type)) {
-        candidates.push({ x: b.entity.x + 0.5, y: b.entity.y + 0.5, z: 0.95, surface: 'fence', buildingId: b.id });
-      } else if (b.constructionKind !== 'open-air') {
-        const balcony = b.units?.find?.(u => u.roomType === 'balcony');
-        if (balcony) {
-          candidates.push({ x: b.entity.x + balcony.x + 0.5, y: b.entity.y + balcony.y + 0.5, z: (balcony.z || 0) * 2.2 + 0.9, surface: 'balcony', buildingId: b.id });
-        } else {
-          candidates.push({ x: b.entity.x + (b.width || 3) * 0.5, y: b.entity.y + (b.depth || 3) * 0.5, z: (b.floors || 1) * 2.2 + 0.15, surface: 'roof', buildingId: b.id });
+        // Exact fence post cap position (skipping gate area around b.door)
+        const px = b.entity.x + 0.04, py = b.entity.y + 0.04;
+        if (!b.door || Math.hypot(px - b.door.x, py - b.door.y) >= 1.4) {
+          candidates.push({ x: px, y: py, z: 0.8, surface: 'fence', buildingId: b.id });
         }
+      } else if (b.constructionKind !== 'open-air') {
+        const balconies = b.units?.length ? buildingLeisureSpaces(b).filter(s => s.kind === 'balcony') : [];
+        for (const bal of balconies) {
+          candidates.push({ x: b.entity.x + bal.position.x, y: b.entity.y + bal.position.y, z: bal.position.z + 0.02, surface: 'balcony', buildingId: b.id });
+        }
+        // Roof eave/edge at exact CITY_FLOOR_HEIGHT so it sits on the roof, never inside a gable or floating
+        candidates.push({ x: b.entity.x + 0.35, y: b.entity.y + 0.35, z: (b.floors || 1) * CITY_FLOOR_HEIGHT + 0.12, surface: 'roof', buildingId: b.id });
       }
     }
+    return candidates;
+  }
+
+  tryBuildNest(bird) {
+    if (!bird || bird.nestId && this.nests.has(bird.nestId)) return this.nests.get(bird.nestId);
+    const candidates = this.surfacePerchCandidates(bird.x, bird.y, 16);
     if (!candidates.length) return null;
     const pick = candidates[Math.floor(Math.random() * candidates.length)];
     const nest = this.placeNest({ ...pick, species: bird.species, ownerId: bird.id, eggs: 1 + Math.floor(Math.random() * 3) });
@@ -247,6 +273,7 @@ export class CityFauna {
         const x = Math.floor(Math.random() * world.width);
         const y = Math.floor(Math.random() * world.height);
         if (!this.matchesHabitat(x, y, species)) continue;
+        if (!spec.canFly && this.urbanPenalty(x + 0.5, y + 0.5) > 6 && attempt < target * 25) continue;
         if (this.spawn(x, y, species)) spawned++;
       }
     }
@@ -315,6 +342,8 @@ export class CityFauna {
   findRoamTarget(animal) {
     const spec = ANIMAL_SPECIES[animal.species];
     const ranch = animal.buildingId != null ? this.city.building?.(animal.buildingId) : null;
+    const avoidUrban = !animal.tamed && animal.category === 'wild' && !spec.canFly;
+    let best = null, bestPenalty = Infinity;
     for (let attempt = 0; attempt < 12; attempt++) {
       const tx = ranch
         ? ranch.entity.x + 0.6 + Math.random() * Math.max(1, ranch.width - 1.2)
@@ -323,11 +352,13 @@ export class CityFauna {
         ? ranch.entity.y + 0.6 + Math.random() * Math.max(1, ranch.depth - 1.2)
         : Math.floor(animal.y) + Math.floor(Math.random() * 19) - 9 + 0.5;
       if (Math.hypot(tx - animal.x, ty - animal.y) < 1.2) continue;
-      if (spec.nearWater ? this.matchesHabitat(Math.floor(tx), Math.floor(ty), animal.species) : this.canOccupy(tx, ty, animal.species, animal.buildingId)) {
-        return { x: tx, y: ty };
-      }
+      const ok = spec.nearWater ? this.matchesHabitat(Math.floor(tx), Math.floor(ty), animal.species) : this.canOccupy(tx, ty, animal.species, animal.buildingId);
+      if (!ok) continue;
+      if (!avoidUrban) return { x: tx, y: ty };
+      const p = this.urbanPenalty(tx, ty);
+      if (p < bestPenalty) { bestPenalty = p; best = { x: tx, y: ty }; if (p === 0) break; }
     }
-    return null;
+    return best;
   }
 
   findPrey(predator) {
@@ -475,7 +506,19 @@ export class CityFauna {
         animal.stateTimer = 4.0;
         return;
       }
-      if (!isNight && Math.random() < 0.6) {
+      if (!isNight && Math.random() < 0.7) {
+        const perches = this.surfacePerchCandidates(animal.x, animal.y, 18);
+        if (perches.length && Math.random() < 0.78) {
+          const perch = perches[Math.floor(Math.random() * perches.length)];
+          animal.state = 'walk';
+          animal.action = 'Voando para poleiro';
+          animal.targetX = perch.x;
+          animal.targetY = perch.y;
+          animal.perchAltitude = perch.z;
+          animal.targetAltitude = Math.max(2.2, perch.z + 0.8);
+          animal.stateTimer = 4.5;
+          return;
+        }
         for (let attempt = 0; attempt < 10; attempt++) {
           const fx = Math.max(1, Math.min(this.city.world.width - 2, Math.floor(animal.x) + Math.floor(Math.random() * 25) - 12 + 0.5));
           const fy = Math.max(1, Math.min(this.city.world.height - 2, Math.floor(animal.y) + Math.floor(Math.random() * 25) - 12 + 0.5));
@@ -484,6 +527,7 @@ export class CityFauna {
           animal.action = 'Voando';
           animal.targetX = fx;
           animal.targetY = fy;
+          animal.perchAltitude = 0;
           animal.targetAltitude = 2.2 + Math.random() * 1.4;
           animal.stateTimer = 4.5;
           return;
@@ -612,13 +656,20 @@ export class CityFauna {
         const spec = ANIMAL_SPECIES[animal.species];
         if (spec?.canFly) {
           const distLeft = Math.hypot(animal.targetX - animal.x, animal.targetY - animal.y);
-          animal.targetAltitude = distLeft < 1.8 && animal.action !== 'Voando para o ninho' ? 0.25 : Math.max(animal.targetAltitude || 0, 2.2);
+          const destAlt = animal.action === 'Voando para poleiro' ? (animal.perchAltitude ?? 1.5) : animal.action === 'Voando para o ninho' ? (this.nests.get(animal.nestId)?.z ?? 1.8) : 0.25;
+          animal.targetAltitude = distLeft < 1.8 ? destAlt : Math.max(animal.targetAltitude || 0, destAlt + 0.6, 2.2);
         }
         const arrived = this.moveTowards(animal, animal.targetX, animal.targetY, animal.state === 'flee' ? 1.75 : 1.0, stepDt);
         if (arrived) {
           animal.targetX = null;
           animal.targetY = null;
-          if (animal.action === 'Indo para árvore' && spec?.arboreal) {
+          if (animal.action === 'Voando para poleiro') {
+            animal.targetAltitude = animal.perchAltitude ?? 1.5;
+            animal.state = 'idle';
+            animal.action = 'Empoleirado';
+            animal.stateTimer = 3.0 + Math.random() * 4.0;
+            animal.thinkTimer = 0.5;
+          } else if (animal.action === 'Indo para árvore' && spec?.arboreal) {
             const tree = animal.targetTreeId != null ? this.city.nature?.plants?.get?.(animal.targetTreeId) : this.findTreeSpot(animal.x, animal.y, 2);
             animal.inTreePlantId = tree?.id ?? null;
             animal.targetAltitude = tree ? this.treeCanopyAltitude(tree) : 0;

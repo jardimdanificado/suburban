@@ -137,15 +137,54 @@ export class SandCarry {
   }
 }
 
+export class PaintCarry {
+  constructor(){this.history=new WeakMap();}
+  reset(entity){this.history.delete(entity);}
+  contacts(entity,stamps,world,groundArt=[],onStep=null){
+    if(!stamps.length)return [];
+    const shoes=this.history.get(entity),deposits=[];
+    if(!shoes&&!groundArt.length)return deposits;
+    const map=shoes||new Map();
+    if(!shoes)this.history.set(entity,map);
+    for(const stamp of stamps){
+      const walking=Math.abs(stamp.kind)===1;
+      const foot=walking?(stamp.kind<0?0:1):stamp.kind===2?'hull':`wheel:${stamp.carryContact}`;
+      const capacity=walking?3:.75;
+      let state=map.get(foot);
+      let stepped=null;
+      for(let i=0;i<groundArt.length;i++){
+        const item=groundArt[i],w=item.width||.86,h=item.height||.86;
+        const u=(stamp.x-item.x)/w+.5,v=(stamp.z-item.y)/h+.5;
+        if(u>=0&&u<=1&&v>=0&&v<=1){stepped=item;onStep?.(item,u,v,stamp);break;}
+      }
+      if(stepped){
+        if(!state){state={remaining:0,load:0,color:0xffffff};map.set(foot,state);}
+        state.remaining=capacity;state.load=1;state.color=stepped.inkColor??0xffffff;
+        continue;
+      }
+      if(!state||state.remaining<=0)continue;
+      const x=Math.floor(stamp.x),z=Math.floor(stamp.z);
+      const tile=x<0||z<0||x>=world.width||z>=world.height?TILE_VOID:(world.getTile?world.getTile(x,z):world.map?.[z*world.width+x]);
+      if(tile===TILE_WATER||tile===TILE_VOID){state.remaining=0;continue;}
+      const amount=state.remaining;
+      state.remaining=Math.max(0,state.remaining-(walking?1:stamp.carryDistance||0));
+      const load=amount/capacity*state.load;
+      if(load>0)deposits.push({...stamp,paintColor:state.color,paintLoad:load});
+    }
+    return deposits;
+  }
+}
+
 // A timestamp atlas is painted only where new contacts arrive. Old marks fade
 // in the terrain shaders, without rebuilding chunks or uploading a world mask.
 export function createTerrainTrackUniforms(THREE){
   const empty=new THREE.DataTexture(new Uint8Array(4),1,1,THREE.RGBAFormat);empty.needsUpdate=true;
-  return {terrainTrackMap:{value:empty},terrainPermanentTrackMap:{value:empty},terrainTrackWorldSize:{value:new THREE.Vector2(1,1)},terrainTrackTexel:{value:new THREE.Vector2(1,1)},terrainTrackTime:{value:0}};
+  return {terrainTrackMap:{value:empty},terrainPermanentTrackMap:{value:empty},terrainPaintMap:{value:empty},terrainTrackWorldSize:{value:new THREE.Vector2(1,1)},terrainTrackTexel:{value:new THREE.Vector2(1,1)},terrainTrackTime:{value:0}};
 }
 export const TERRAIN_TRACK_GLSL = `
   uniform sampler2D terrainTrackMap;
   uniform sampler2D terrainPermanentTrackMap;
+  uniform sampler2D terrainPaintMap;
   uniform vec2 terrainTrackWorldSize;
   uniform float terrainTrackTime;
   uniform vec2 terrainTrackTexel;
@@ -180,9 +219,11 @@ function addGroundTracksToMaterial(material,uniforms,grass){
         ${grass===null ? '' : grass ? 'diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.065, .046, .025), imprint * .72);' : 'diffuseColor.rgb *= 1.0 - imprint * .32 + lip * .12;'}
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.64,.49,.26), sand * 1.85);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.34,.23,.12), dirt * 1.35);
+        vec4 paintMark = texture2D(terrainPaintMap, vTrackWorld / terrainTrackWorldSize);
+        diffuseColor.rgb = mix(diffuseColor.rgb, paintMark.rgb, paintMark.a * .85);
       `);
   };
-  material.customProgramCacheKey=()=>`${programKey}|ground-contact-tracks-v8-${grass}`;
+  material.customProgramCacheKey=()=>`${programKey}|ground-contact-tracks-v9-${grass}`;
 }
 
 export function addSandDepositsToMaterial(material,uniforms){addGroundTracksToMaterial(material,uniforms,null);}
@@ -191,9 +232,27 @@ export function addGrassTracksToMaterial(material,uniforms){addGroundTracksToMat
 
 export class TerrainTracks {
   constructor(THREE,uniforms){
-    this.THREE=THREE;this.uniforms=uniforms;this.empty=uniforms.terrainTrackMap.value;this.motion=new TerrainTrackMotion();this.sandCarry=new SandCarry();this.dirtCarry=new SandCarry();this.grassWear=new GrassWear();
-    this.scene=new THREE.Scene();this.camera=new THREE.Camera();this.time=0;
+    this.THREE=THREE;this.uniforms=uniforms;this.empty=uniforms.terrainTrackMap.value;this.motion=new TerrainTrackMotion();this.sandCarry=new SandCarry();this.dirtCarry=new SandCarry();this.paintCarry=new PaintCarry();this.grassWear=new GrassWear();
+    this.scene=new THREE.Scene();this.paintScene=new THREE.Scene();this.camera=new THREE.Camera();this.time=0;
     this.permanentRoadTiles=new Map();
+    this.paintMaterial=new THREE.ShaderMaterial({depthTest:false,depthWrite:false,transparent:true,toneMapped:false,
+      uniforms:{...uniforms},vertexShader:`
+        attribute vec4 contactShape; attribute vec2 contactInfo; attribute vec4 paintRgba;
+        varying vec4 vPaintRgba; varying vec2 vContact; varying float vContactKind;
+        uniform vec2 terrainTrackWorldSize;
+        void main(){
+          vPaintRgba=paintRgba; vContact=position.xy; vContactKind=contactInfo.y;
+          vec2 local=position.xy * contactShape.zw * .5;
+          float c=cos(contactInfo.x),s=sin(contactInfo.x);
+          vec2 world=contactShape.xy + vec2(c*local.x+s*local.y,-s*local.x+c*local.y);
+          gl_Position=vec4(world / terrainTrackWorldSize * 2.0 - 1.0,0.0,1.0);
+        }`,fragmentShader:`
+        varying vec4 vPaintRgba; varying vec2 vContact; varying float vContactKind;
+        void main(){
+          if(abs(vContactKind)>1.5){if(abs(vContact.x)>sqrt(max(0.0,1.0-vContact.y*vContact.y)))discard;}
+          else if(abs(vContactKind)>.5){vec2 p=vContact;float toe=length(vec2(p.x/.96,(p.y-.30)/.70)),heel=length(vec2(p.x/.73,(p.y+.66)/.34));if(min(toe,heel)>1.0||p.x*vContactKind>.55&&p.y>-.45&&p.y<-.05)discard;}
+          gl_FragColor=vPaintRgba;
+        }`});
     this.material=new THREE.ShaderMaterial({depthTest:false,depthWrite:false,blending:THREE.NoBlending,blendEquation:THREE.MaxEquation,blendSrc:THREE.OneFactor,blendDst:THREE.OneFactor,toneMapped:false,
       uniforms:{...uniforms,permanentPass:{value:0}},vertexShader:`
         attribute vec4 contactClip; varying vec4 vContactClip; varying vec2 vContactWorld;
@@ -238,8 +297,8 @@ export class TerrainTracks {
         }`});
   }
   clear(){
-    this.target?.dispose();this.target=null;this.permanentTarget?.dispose();this.permanentTarget=null;this.permanentRoadTiles=new Map();this.roadRevision=null;this.world=null;this.time=0;this.motion=new TerrainTrackMotion();this.sandCarry=new SandCarry();this.dirtCarry=new SandCarry();this.grassWear=new GrassWear();
-    this.uniforms.terrainTrackMap.value=this.empty;this.uniforms.terrainPermanentTrackMap.value=this.empty;this.uniforms.terrainTrackTime.value=0;
+    this.target?.dispose();this.target=null;this.permanentTarget?.dispose();this.permanentTarget=null;this.paintTarget?.dispose();this.paintTarget=null;this.permanentRoadTiles=new Map();this.roadRevision=null;this.world=null;this.time=0;this.motion=new TerrainTrackMotion();this.sandCarry=new SandCarry();this.dirtCarry=new SandCarry();this.paintCarry=new PaintCarry();this.grassWear=new GrassWear();
+    this.uniforms.terrainTrackMap.value=this.empty;this.uniforms.terrainPermanentTrackMap.value=this.empty;if(this.uniforms.terrainPaintMap)this.uniforms.terrainPaintMap.value=this.empty;this.uniforms.terrainTrackTime.value=0;
   }
   ensureWorld(renderer,world){
     if(this.world===world&&this.width===world.width&&this.height===world.height)return;
@@ -250,11 +309,35 @@ export class TerrainTracks {
     this.permanentTarget=new T.WebGLRenderTarget(Math.min(limit,world.width*32),Math.min(limit,world.height*32),{
       format:renderer.capabilities.isWebGL2?T.RedFormat:T.RGBAFormat,
       minFilter:T.NearestFilter,magFilter:T.NearestFilter,depthBuffer:false,stencilBuffer:false,generateMipmaps:false});
+    this.paintTarget=new T.WebGLRenderTarget(Math.min(limit,world.width*32),Math.min(limit,world.height*32),{
+      minFilter:T.NearestFilter,magFilter:T.NearestFilter,depthBuffer:false,stencilBuffer:false,generateMipmaps:false});
     this.uniforms.terrainPermanentTrackMap.value=this.permanentTarget.texture;
+    if(this.uniforms.terrainPaintMap)this.uniforms.terrainPaintMap.value=this.paintTarget.texture;
     this.uniforms.terrainTrackMap.value=this.target.texture;this.uniforms.terrainTrackWorldSize.value.set(world.width,world.height);
     this.uniforms.terrainTrackTexel.value.set(world.width/this.target.width,world.height/this.target.height);
     const old=renderer.getRenderTarget(),color=renderer.getClearColor(new T.Color()).clone(),alpha=renderer.getClearAlpha();
-    renderer.setRenderTarget(this.permanentTarget);renderer.setClearColor(0,0);renderer.clear();renderer.setRenderTarget(this.target);renderer.clear();renderer.setClearColor(color,alpha);renderer.setRenderTarget(old);
+    renderer.setRenderTarget(this.permanentTarget);renderer.setClearColor(0,0);renderer.clear();renderer.setRenderTarget(this.paintTarget);renderer.clear();renderer.setRenderTarget(this.target);renderer.clear();renderer.setClearColor(color,alpha);renderer.setRenderTarget(old);
+  }
+  paintPaint(renderer,stamps){
+    if(!stamps.length||!this.paintTarget)return;
+    const T=this.THREE;
+    if(!this.paintMesh||this.paintCapacity<stamps.length){
+      if(this.paintMesh){this.paintScene.remove(this.paintMesh);this.paintMesh.geometry.dispose();}
+      this.paintCapacity=2**Math.ceil(Math.log2(Math.max(64,stamps.length)));
+      const geometry=new T.InstancedBufferGeometry();
+      geometry.setAttribute('position',new T.Float32BufferAttribute([-1,-1,0,1,-1,0,1,1,0,-1,1,0],3));geometry.setIndex([0,1,2,0,2,3]);
+      geometry.setAttribute('contactShape',new T.InstancedBufferAttribute(new Float32Array(this.paintCapacity*4),4).setUsage(T.DynamicDrawUsage));
+      geometry.setAttribute('contactInfo',new T.InstancedBufferAttribute(new Float32Array(this.paintCapacity*2),2).setUsage(T.DynamicDrawUsage));
+      geometry.setAttribute('paintRgba',new T.InstancedBufferAttribute(new Float32Array(this.paintCapacity*4),4).setUsage(T.DynamicDrawUsage));
+      this.paintMesh=new T.Mesh(geometry,this.paintMaterial);this.paintMesh.frustumCulled=false;this.paintScene.add(this.paintMesh);
+    }
+    const shape=this.paintMesh.geometry.getAttribute('contactShape'),info=this.paintMesh.geometry.getAttribute('contactInfo'),rgba=this.paintMesh.geometry.getAttribute('paintRgba');
+    stamps.forEach((s,i)=>{shape.setXYZW(i,s.x,s.z,s.width,s.length);info.setXY(i,s.angle,s.kind);const c=s.paintColor??0xffffff;rgba.setXYZW(i,(c>>16&255)/255,(c>>8&255)/255,(c&255)/255,Math.max(.1,Math.min(.9,s.paintLoad??.7)));});
+    shape.needsUpdate=info.needsUpdate=rgba.needsUpdate=true;this.paintMesh.geometry.instanceCount=stamps.length;
+    const old=renderer.getRenderTarget(),autoClear=renderer.autoClear,shadowUpdate=renderer.shadowMap.autoUpdate,shadowNeedsUpdate=renderer.shadowMap.needsUpdate;
+    renderer.autoClear=false;renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=false;
+    renderer.setRenderTarget(this.paintTarget);renderer.render(this.paintScene,this.camera);renderer.setRenderTarget(old);
+    renderer.autoClear=autoClear;renderer.shadowMap.autoUpdate=shadowUpdate;renderer.shadowMap.needsUpdate=shadowNeedsUpdate;
   }
   paint(renderer,stamps,target=this.target,permanentPass=0){
     if(!stamps.length)return;
@@ -281,23 +364,38 @@ export class TerrainTracks {
     this.material.uniforms.permanentPass.value=0;this.material.blending=T.NoBlending;
     renderer.autoClear=autoClear;renderer.shadowMap.autoUpdate=shadowUpdate;renderer.shadowMap.needsUpdate=shadowNeedsUpdate;
   }
-  update(renderer,world,entities,dt,models,offsets,bounds){
-    this.sandCarry ||= new SandCarry();this.grassWear ||= new GrassWear();
+  update(renderer,world,entities,dt,models,offsets,bounds,city=null){
+    this.sandCarry ||= new SandCarry();this.dirtCarry ||= new SandCarry();this.paintCarry ||= new PaintCarry();this.grassWear ||= new GrassWear();
     this.ensureWorld(renderer,world);this.time+=Math.max(0,dt);this.uniforms.terrainTrackTime.value=this.time;
     if(dt<=0)return;
-    const stamps=[];
+    const groundArt=[];
+    if(city?.justice?.art?.length){
+      for(const piece of city.justice.art){
+        if(piece.entity?.destroyed||piece.support?.kind!=='street-graffiti'||piece.support.surface!=='ground'||(piece.wearProgress||0)>=1)continue;
+        const face=piece.layers?.at(-1)||piece;
+        groundArt.push({piece,x:piece.support.position?.x??piece.entity.x,y:piece.support.position?.y??piece.entity.y,width:piece.support.width||.86,height:piece.support.height||.86,inkColor:piece.renderedInkColor??face.color??piece.color??0xffffff});
+      }
+    }
+    const stamps=[],paintStamps=[];
+    const onStepGraffiti=(item,u,v,stamp)=>{
+      const p=item.piece;p.groundSmudges??=[];
+      p.groundSmudges.push({u,v,dx:Math.sin(stamp.angle),dz:Math.cos(stamp.angle),kind:stamp.kind});
+      if(p.groundSmudges.length>48)p.groundSmudges.shift();
+      p.wearProgress=Math.min(1,(p.wearProgress||0)+(Math.abs(stamp.kind)===1?.025:.045));
+      p.smudgeRevision=(p.smudgeRevision||0)+1;
+    };
     for(const entity of entities){
       const citizen=entity.properties?.citizen,vehicle=entity.properties?.cityVehicle,animal=entity.properties?.cityAnimal;
       if(!citizen&&!vehicle&&!animal)continue;
       const elevated=citizen&&(citizen.skybridgeZ>0||citizen._renderIndoorPosition?.z>0||citizen.furnitureUse?.seated||citizen.furnitureUse?.pose==='lying');
       const animalElevated=animal&&((animal.altitude||0)>0.35||animal.dead);
-      if(entity.destroyed||animalElevated||citizen&&(citizen.ridingVehicleId||citizen.indoorLocation||elevated)||vehicle&&(vehicle.boatClass&&!vehicle.towedByVehicleId||vehicle.ferrying||vehicle.scrapped)) {this.motion.reset(entity);this.sandCarry.reset(entity);this.dirtCarry.reset(entity);continue;}
+      if(entity.destroyed||animalElevated||citizen&&(citizen.ridingVehicleId||citizen.indoorLocation||elevated)||vehicle&&(vehicle.boatClass&&!vehicle.towedByVehicleId||vehicle.ferrying||vehicle.scrapped)) {this.motion.reset(entity);this.sandCarry.reset(entity);this.dirtCarry.reset(entity);this.paintCarry.reset(entity);continue;}
       const motion=citizen&&models?.motion?.get(entity),visible=motion&&Number.isFinite(motion.bodyX)&&Number.isFinite(motion.bodyZ)&&motion.bodyFrame===models.frameToken;
       const offset=offsets?.get(entity.id),x=visible?motion.bodyX:entity.x+(offset?.x||0),z=visible?motion.bodyZ:entity.y+(offset?.y||0);
-      if(bounds&&(x<bounds.renderedMinTx-2||x>bounds.renderedMaxTx+2||z<bounds.renderedMinTy-2||z>bounds.renderedMaxTy+2)){this.motion.reset(entity);this.sandCarry.reset(entity);this.dirtCarry.reset(entity);continue;}
+      if(bounds&&(x<bounds.renderedMinTx-2||x>bounds.renderedMaxTx+2||z<bounds.renderedMinTy-2||z>bounds.renderedMaxTy+2)){this.motion.reset(entity);this.sandCarry.reset(entity);this.dirtCarry.reset(entity);this.paintCarry.reset(entity);continue;}
       const angle=vehicle?vehicle.angle||0:animal?animal.angle||0:motion?.renderAngle||0;
       const previous=this.motion.history.get(entity);
-      if(!previous||previous.vehicle!==(vehicle?.good||null)||this.time-previous.time>1||Math.hypot(x-previous.x,z-previous.z)>3){this.sandCarry.reset(entity);this.dirtCarry.reset(entity);}
+      if(!previous||previous.vehicle!==(vehicle?.good||null)||this.time-previous.time>1||Math.hypot(x-previous.x,z-previous.z)>3){this.sandCarry.reset(entity);this.dirtCarry.reset(entity);this.paintCarry.reset(entity);}
       const dimensions=vehicle?.towedByVehicleId&&BOAT_HULL_DIMENSIONS[vehicle.boatClass],hull=dimensions?{width:dimensions.width*(vehicle.boatClass==='canoe'?1:BOAT_CLASSES[vehicle.boatClass].scale),length:dimensions.length*(vehicle.boatClass==='canoe'?1:BOAT_CLASSES[vehicle.boatClass].scale)}:null;
       const scale=animal?Math.max(.35,(entity.properties.render?.size||.8)*.7):(motion?.bodySize||1);
       const contacts=this.motion.move(entity,{x,z,angle,vehicle:vehicle?.good||null,scale,hull},this.time);
@@ -305,10 +403,14 @@ export class TerrainTracks {
       stamps.push(...this.sandCarry.contacts(entity,contacts,world));
       stamps.push(...this.dirtCarry.contacts(entity,contacts,world,[TILE_ROAD_GRASS,TILE_ROAD_HILL,TILE_FLOOR,TILE_HILL],'dirt',
         stamp=>this.grassWear.coverage(stamp,world,this.time)));
+      if(groundArt.length||this.paintCarry.history.has(entity)){
+        paintStamps.push(...this.paintCarry.contacts(entity,contacts,world,groundArt,onStepGraffiti));
+      }
       this.grassWear.record(contacts,world,this.time);
     }
     this.grassWear.prune(this.time,256,world);
     this.paint(renderer,stamps);
+    if(paintStamps.length&&this.paintPaint)this.paintPaint(renderer,paintStamps);
     const permanent=permanentRoadContacts(stamps,world);
     this.permanentRoadTiles??=new Map();
     for(const stamp of permanent){const [x,z]=stamp.clip;this.permanentRoadTiles.set(z*world.width+x,{x,z});}

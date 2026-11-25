@@ -9512,7 +9512,7 @@ export class RCT3DRenderer {
 
     // Draw WebGL Frame with Depth of Field & Chromatic Aberration in Perspective Modes
     const profilePrepared = this.profileFrame ? performance.now() : 0;
-    this.terrainTracks.update(this.renderer,world,entities,dt*effectiveSpeed,this.cityCitizenModels,citizenRenderOffsets,this);
+    this.terrainTracks.update(this.renderer,world,entities,dt*effectiveSpeed,this.cityCitizenModels,citizenRenderOffsets,this,this.city);
     syncMovementDust(THREE,this,world,entities,citizenRenderOffsets,dt*effectiveSpeed,this.graphicOptions.dust!==false);
     const activeCam = this.isPerspectiveActive() ? this.fpCamera : this.camera;
     const lightBlockers=(this.cityDevelopment?.city?.buildings||[])

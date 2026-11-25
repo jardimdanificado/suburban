@@ -853,15 +853,36 @@ function cenasDosTemas(temas) {
 // modificador preposicional ("O cinema de rua" não vira "O cinema de via").
 // No objeto, a busca percorre os tokens porque o núcleo pode vir depois de um
 // adjetivo ou de outro substantivo.
+const PREPOSICOES_DO_SINTAGMA = new Set([
+  'a', 'à', 'ao', 'aos', 'às', 'com', 'como', 'contra', 'de', 'do', 'da',
+  'dos', 'das', 'desde', 'em', 'entre', 'na', 'nas', 'no', 'nos', 'para',
+  'pel', 'pela', 'pelas', 'pelo', 'pelos', 'por', 'sem', 'sob', 'sobre',
+]);
+
 function trocarCabeca(tokens, inicio, random, limite = tokens.length) {
   for (let i = inicio; i < limite; i++) {
+    if (PREPOSICOES_DO_SINTAGMA.has(tokens[i].toLocaleLowerCase('pt-BR'))) break;
     const opcoes = SUBSTANTIVOS[tokens[i].toLocaleLowerCase('pt-BR')];
     if (!opcoes) continue;
     const copia = tokens.slice();
     copia[i] = escolhe(opcoes, random);
-    return copia.join(' ');
+    return removerRepeticoes(copia.join(' '));
   }
   return tokens.join(' ');
+}
+
+// Uma variante com modificador pode repetir a palavra seguinte da cena:
+// "programas sociais" -> "benefícios sociais sociais". Remove só a repetição
+// imediatamente vizinha, sem mexer no resto do sintagma.
+function removerRepeticoes(texto) {
+  const palavras = texto.split(' ');
+  const saida = [];
+  for (const palavra of palavras) {
+    if (saida.length
+      && saida[saida.length - 1].toLocaleLowerCase('pt-BR') === palavra.toLocaleLowerCase('pt-BR')) continue;
+    saida.push(palavra);
+  }
+  return saida.join(' ');
 }
 
 // Aplica uma variante por campo, com chance independente. O verbo só troca em

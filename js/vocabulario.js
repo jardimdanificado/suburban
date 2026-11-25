@@ -384994,20 +384994,34 @@ function palavraPertenceAoCatalogo(word){return catalogoSet().has(normalizaLexem
 export function palavraNoCatalogo(word){return palavraPertenceAoCatalogo(String(word??''));}
 function verboRegular(lemma,tempo,index){
   const end=lemma.slice(-2);let stem=lemma.slice(0,-2);if(!['ar','er','ir'].includes(end))return null;
+  const hiato = end==='ir'&&(/air$/.test(lemma)||(/uir$/.test(lemma)&&!/guir$/.test(lemma)));
   if(tempo==='presente'){
+    if(/air$/.test(lemma)){const stems=[stem+'io',stem+'is',stem+'i',stem+'ímos',stem+'ís',stem+'em'];return stems[index];}
     if(/uir$/.test(lemma)&&!/guir$/.test(lemma)){const stems=[stem+'o',stem+'is',stem+'i',stem+'ímos',stem+'ís',stem+'em'];return stems[index];}
     const endings=end==='ar'?['o','as','a','amos','ais','am']:['o','es','e',end==='er'?'emos':'imos',end==='er'?'eis':'is','em'];
     if(index===2&&/zir$/.test(lemma))return stem;
     if(index===0&&/cer$/.test(lemma))stem=stem.slice(0,-1)+'ç';else if(index===0&&/(ger|gir)$/.test(lemma))stem=stem.slice(0,-1)+'j';else if(index===0&&/guir$/.test(lemma))stem=stem.slice(0,-3)+'ig';
     if(/ear$/.test(lemma)&&[0,1,2,5].includes(index))stem+='i';return stem+endings[index];
   }
-  if(tempo==='pretérito-perfeito')return stem+(end==='ar'?['ei','aste','ou','amos','astes','aram'][index]:end==='er'?['i','este','eu','emos','estes','eram'][index]:['i','iste','iu','imos','istes','iram'][index]);
-  if(tempo==='pretérito-imperfeito')return stem+(end==='ar'?['ava','avas','ava','ávamos','áveis','avam'][index]:['ia','ias','ia','íamos','íeis','iam'][index]);
+  if(tempo==='pretérito-perfeito'){
+    if(hiato)return stem+['í','íste','iu','ímos','ístes','íram'][index];
+    return stem+(end==='ar'?['ei','aste','ou','amos','astes','aram'][index]:end==='er'?['i','este','eu','emos','estes','eram'][index]:['i','iste','iu','imos','istes','iram'][index]);
+  }
+  if(tempo==='pretérito-imperfeito'){
+    if(hiato)return stem+['ía','ías','ía','íamos','íeis','íam'][index];
+    return stem+(end==='ar'?['ava','avas','ava','ávamos','áveis','avam'][index]:['ia','ias','ia','íamos','íeis','iam'][index]);
+  }
   if(tempo==='futuro')return lemma+['ei','ás','á','emos','eis','ão'][index];
   if(tempo==='condicional')return lemma+['ia','ias','ia','íamos','íeis','iam'][index];
-  if(tempo==='subjuntivo-presente')return stem+(end==='ar'?['e','es','e','emos','eis','em'][index]:['a','as','a','amos','ais','am'][index]);
+  if(tempo==='subjuntivo-presente'){
+    if(hiato&&/air$/.test(lemma))return stem+['ia','ias','ia','iamos','iais','iam'][index];
+    return stem+(end==='ar'?['e','es','e','emos','eis','em'][index]:['a','as','a','amos','ais','am'][index]);
+  }
   if(tempo==='gerundio')return stem+(end==='ar'?'ando':end==='ir'?'indo':'endo');
-  if(tempo==='participio')return stem+(end==='ar'?'ado':'ido');return null;
+  if(tempo==='participio'){
+    if(hiato)return stem+'ído';
+    return stem+(end==='ar'?'ado':'ido');
+  }return null;
 }
 const irregulares={
   ser:{presente:['sou','és','é','somos','sois','são'],'pretérito-perfeito':['fui','foste','foi','fomos','fostes','foram'],'pretérito-imperfeito':['era','eras','era','éramos','éreis','eram'],'subjuntivo-presente':['seja','sejas','seja','sejamos','sejais','sejam'],gerundio:['sendo','sendo','sendo','sendo','sendo','sendo'],participio:['sido','sido','sido','sido','sido','sido']},

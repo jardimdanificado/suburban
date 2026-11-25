@@ -290,8 +290,9 @@ export function drawWallPainting(ctx,piece,onReady=null){
   }
 }
 
-const GRAFFITI_STYLES=['pixo','tag','stencil','bubble','spray','irregular','stacked'];
+const GRAFFITI_STYLES=['pixo','tag','stencil','bubble','spray','irregular','stacked','bomb','rasurada'];
 const GRAFFITI_MIXED_FONTS=['sans-serif','Georgia, serif','"JetBrains Mono", monospace','Impact, "Arial Black", sans-serif'];
+const GRAFFITI_SYMBOL_TOKENS=['[flag]','[star]','[crown]','[bolt]','[heart]','[eye]','[arrow]','[anarchy]'];
 function srgbLuminance(color){
   const linear=v=>{const c=v/255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4;};
   return .2126*linear(color>>16&255)+.7152*linear(color>>8&255)+.0722*linear(color&255);
@@ -301,6 +302,19 @@ function parseHexInt(value,fallback=0x222128){
   if(Number.isInteger(value))return value;
   if(typeof value==='string'){const clean=value.trim().replace(/^#/,'');if(/^[0-9a-f]{6}$/i.test(clean))return parseInt(clean,16);}
   return fallback;
+}
+function adjustColorForContrast(color,bgLum,targetRatio=2.5){
+  const r0=color>>16&255,g0=color>>8&255,b0=color&255;
+  const lighten=bgLum<.35;
+  for(let step=1;step<=10;step++){
+    const t=step/10;
+    const r=Math.round(lighten?r0+(255-r0)*t:r0*(1-t));
+    const g=Math.round(lighten?g0+(255-g0)*t:g0*(1-t));
+    const b=Math.round(lighten?b0+(255-b0)*t:b0*(1-t));
+    const candidate=(r<<16)|(g<<8)|b;
+    if(contrastRatio(srgbLuminance(candidate),bgLum)>=targetRatio)return candidate;
+  }
+  return lighten?0xffffff:0x1b1a20;
 }
 function graffitiHash(seed,index){let h=(seed^Math.imul(index+1,2654435761))>>>0;h^=h>>>16;h=Math.imul(h,2246822519)>>>0;h^=h>>>13;return (h>>>0)/4294967296;}
 function resolveGraffitiStyle(piece,face){
@@ -325,116 +339,268 @@ export function graffitiInkColor(city,piece,face=piece){
     if(bgLum!==null){
       const inkLum=srgbLuminance(rawInk);
       if(contrastRatio(inkLum,bgLum)>=2.2)return rawInk;
-      return bgLum<.3?0xffffff:0x1b1a20;
+      if(bgLum<.3&&(rawInk===0xb64335||rawInk===0x222128))return 0xffffff;
+      return adjustColorForContrast(rawInk,bgLum,2.5);
     }
   }
   return rawInk;
 }
 
-function drawStyledStreetGraffiti(ctx,piece,face,inkColor){
-  const style=resolveGraffitiStyle(piece,face);
-  const seed=((piece?.id||1)*2654435761+(face?.id||0)*977)>>>0;
-  const inkHex=`#${inkColor.toString(16).padStart(6,'0')}`;
-  const inkLum=srgbLuminance(inkColor);
-  const outlineHex=inkLum>.35?'#1b1a20':'#ffffff';
-  const rawText=String(face.message||'');
-  const display=(style==='pixo'||style==='stencil')?rawText.toUpperCase():rawText;
-  const words=display.split(/\s+/).filter(Boolean);
-  const fontSpec=(size,idx=0)=>{
-    if(style==='pixo')return `900 ${size}px "VT323", "JetBrains Mono", monospace`;
-    if(style==='tag')return `italic 900 ${size}px Georgia, "Times New Roman", serif`;
-    if(style==='stencil')return `900 ${size}px Impact, "Arial Black", sans-serif`;
-    if(style==='bubble')return `900 ${size}px "Press Start 2P", "Arial Black", sans-serif`;
-    if(style==='spray')return `700 ${size}px "JetBrains Mono", monospace`;
-    if(style==='irregular')return `${idx%2?'italic ':''}900 ${size}px ${GRAFFITI_MIXED_FONTS[idx%GRAFFITI_MIXED_FONTS.length]}`;
-    return `900 ${size}px sans-serif`;
-  };
-  let lines=[],baseSize=48;
-  for(let size=92;size>=16;size-=4){
-    ctx.font=fontSpec(size,0);lines=[];let line='';
-    const maxW=style==='irregular'||style==='pixo'?212:232;
-    for(const word of words){if(line&&ctx.measureText(`${line} ${word}`).width>maxW){lines.push(line);line=word;}else line=line?`${line} ${word}`:word;}
-    if(line)lines.push(line);
-    baseSize=size;
-    if(lines.length*size<=220)break;
-  }
-  const lineHeight=Math.min(224/Math.max(1,lines.length),92);
-  ctx.save();
-  if(style==='tag'||style==='pixo'){
-    const tilt=(graffitiHash(seed,3)-.5)*(style==='tag'?.18:.1);
-    ctx.translate(128,128);ctx.rotate(tilt);ctx.translate(-128,-128);
-  }
-  if(style==='spray'){
-    ctx.fillStyle=inkHex;
-    for(let i=0;i<28;i++){
-      const sx=20+graffitiHash(seed,100+i)*216,sy=24+graffitiHash(seed,200+i)*208,sz=1+Math.floor(graffitiHash(seed,300+i)*3);
-      ctx.fillRect(Math.round(sx),Math.round(sy),sz,sz);
-    }
-  }
-  const drawGlyphsIrregular=(text,cy,lineIdx,lineSize)=>{
-    const chars=[...text],widths=[],sizes=[];let totalW=0;
-    for(let i=0;i<chars.length;i++){
-      const scale=style==='irregular'?(.68+graffitiHash(seed,lineIdx*64+i)*.64):(.84+graffitiHash(seed,lineIdx*64+i)*.32);
-      const charSize=Math.max(12,Math.min(96,Math.round(lineSize*scale)));
-      sizes.push(charSize);ctx.font=fontSpec(charSize,i+lineIdx);
-      const w=Math.max(charSize*.38,ctx.measureText(chars[i]).width*(style==='pixo'?.88:1));
-      widths.push(w);totalW+=w;
-    }
-    const fit=totalW>236?236/totalW:1;
-    let cx=128-(totalW*fit)/2;
-    for(let i=0;i<chars.length;i++){
-      const ch=chars[i],w=widths[i]*fit,charSize=Math.max(10,Math.round(sizes[i]*fit));
-      const yJitter=(graffitiHash(seed,500+lineIdx*64+i)-.5)*lineSize*(style==='irregular'?.34:.18);
-      const rot=(graffitiHash(seed,900+lineIdx*64+i)-.5)*(style==='irregular'?.32:.14);
-      const gx=cx+w/2,gy=cy+yJitter;
-      if(ch.trim()){
-        ctx.save();ctx.translate(gx,gy);ctx.rotate(rot);
-        ctx.font=fontSpec(charSize,i+lineIdx);ctx.textAlign='center';ctx.textBaseline='middle';
-        if(style==='bubble'){
-          ctx.fillStyle=outlineHex;
-          drawPixelText(ctx,ch,-2,0,w+12);drawPixelText(ctx,ch,2,0,w+12);drawPixelText(ctx,ch,0,-2,w+12);drawPixelText(ctx,ch,0,2,w+12);
-        }
-        ctx.fillStyle=inkHex;
-        const charCase=style==='irregular'&&graffitiHash(seed,1300+i+lineIdx)>.5?ch.toUpperCase():ch;
-        drawPixelText(ctx,charCase,0,0,Math.max(16,w+12));
-        ctx.restore();
-      }
-      cx+=w;
-    }
-  };
-  lines.forEach((text,i)=>{
-    const cy=128+(i-(lines.length-1)/2)*lineHeight;
-    if(style==='irregular'||style==='pixo'){
-      drawGlyphsIrregular(text,cy,i,baseSize);
-    }else if(style==='stacked'){
-      const mult=i%2===0?1.18:.78,lineSize=Math.max(14,Math.min(92,Math.round(baseSize*mult)));
-      ctx.font=fontSpec(lineSize,i);ctx.fillStyle=inkHex;
-      drawPixelText(ctx,text,128,cy,236);
-    }else if(style==='bubble'){
-      ctx.font=fontSpec(baseSize,i);
-      ctx.fillStyle=outlineHex;
-      drawPixelText(ctx,text,126,cy,236);drawPixelText(ctx,text,130,cy,236);drawPixelText(ctx,text,128,cy-2,236);drawPixelText(ctx,text,128,cy+2,236);
-      ctx.fillStyle=inkHex;drawPixelText(ctx,text,128,cy,236);
-    }else{
-      ctx.font=fontSpec(baseSize,i);ctx.fillStyle=inkHex;
-      drawPixelText(ctx,text,128,cy,236);
-    }
-  });
-  if(style==='tag'&&lines.length){
-    const y=Math.min(242,128+((lines.length-1)/2)*lineHeight+baseSize*.52);
-    ctx.strokeStyle=inkHex;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(32,y);ctx.quadraticCurveTo(128,y+10,224,y-4);ctx.stroke();
+function drawInlineGraffitiSymbol(ctx,token,cx,cy,size,inkHex,outlineHex,piece,seed){
+  const s=Math.max(10,Math.round(size*.85)),half=s/2;
+  ctx.save();ctx.translate(cx,cy);
+  if(token==='[flag]'){
+    const w=Math.max(12,Math.round(s*1.25)),h=Math.max(8,Math.round(s*.82));
+    const flag=piece?.partyFlag;
+    const colors=flag?.colors?.length?flag.colors:[inkHex,outlineHex,graffitiHash(seed,71)>.5?'#e8bd43':'#d84d43'];
+    ctx.fillStyle=outlineHex;ctx.fillRect(-w/2-2,-h/2-1,2,h+Math.round(s*.35));
+    const stripes=Math.min(3,colors.length);
+    for(let i=0;i<stripes;i++){ctx.fillStyle=colors[i];ctx.fillRect(-w/2,-h/2+Math.floor(i*h/stripes),w,Math.ceil(h/stripes));}
+    ctx.strokeStyle=outlineHex;ctx.lineWidth=1;ctx.strokeRect(-w/2,-h/2,w,h);
+  }else if(token==='[star]'){
+    ctx.fillStyle=inkHex;ctx.beginPath();
+    for(let i=0;i<10;i++){const r=i%2?half*.44:half*.95,a=-Math.PI/2+i*Math.PI/5;if(i===0)ctx.moveTo(Math.cos(a)*r,Math.sin(a)*r);else ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);}
+    ctx.closePath();ctx.fill();
+  }else if(token==='[crown]'){
+    ctx.fillStyle=inkHex;ctx.beginPath();
+    ctx.moveTo(-half*.85,half*.55);ctx.lineTo(-half*.9,-half*.45);ctx.lineTo(-half*.35,half*.05);ctx.lineTo(0,-half*.7);ctx.lineTo(half*.35,half*.05);ctx.lineTo(half*.9,-half*.45);ctx.lineTo(half*.85,half*.55);
+    ctx.closePath();ctx.fill();
+  }else if(token==='[bolt]'){
+    ctx.fillStyle=inkHex;ctx.beginPath();
+    ctx.moveTo(half*.2,-half*.9);ctx.lineTo(-half*.55,half*.05);ctx.lineTo(0,half*.05);ctx.lineTo(-half*.25,half*.9);ctx.lineTo(half*.55,-half*.05);ctx.lineTo(0,-half*.05);
+    ctx.closePath();ctx.fill();
+  }else if(token==='[heart]'){
+    ctx.fillStyle=inkHex;ctx.beginPath();
+    ctx.moveTo(0,half*.75);ctx.lineTo(-half*.8,-half*.05);ctx.arc(-half*.4,-half*.25,half*.4,Math.PI,0);ctx.arc(half*.4,-half*.25,half*.4,Math.PI,0);ctx.lineTo(0,half*.75);
+    ctx.closePath();ctx.fill();
+  }else if(token==='[eye]'){
+    ctx.strokeStyle=inkHex;ctx.lineWidth=Math.max(2,s*.14);ctx.beginPath();ctx.moveTo(-half*.9,0);ctx.quadraticCurveTo(0,-half*.7,half*.9,0);ctx.quadraticCurveTo(0,half*.7,-half*.9,0);ctx.stroke();
+    ctx.fillStyle=inkHex;ctx.beginPath();ctx.arc(0,0,half*.28,0,Math.PI*2);ctx.fill();
+  }else if(token==='[anarchy]'){
+    ctx.strokeStyle=inkHex;ctx.lineWidth=Math.max(2,s*.13);ctx.beginPath();ctx.arc(0,0,half*.72,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(-half*.5,half*.75);ctx.lineTo(0,-half*.8);ctx.lineTo(half*.5,half*.75);ctx.moveTo(-half*.7,half*.15);ctx.lineTo(half*.7,half*.15);ctx.stroke();
+  }else{
+    ctx.fillStyle=inkHex;ctx.fillRect(-half*.8,-half*.16,s*.55,half*.32);
+    ctx.beginPath();ctx.moveTo(half*.15,-half*.55);ctx.lineTo(half*.9,0);ctx.lineTo(half*.15,half*.55);ctx.closePath();ctx.fill();
   }
   ctx.restore();
 }
 
-function addStreetGraffiti(THREE,group,world,piece,face,inkColor){
+function injectGraffitiSymbols(rawText,piece,seed){
+  const text=String(rawText||'').trim();if(!text)return [];
+  const words=text.split(/\s+/);
+  const symA=piece?.partyFlag||piece?.purpose==='protest'?'[flag]':GRAFFITI_SYMBOL_TOKENS[Math.floor(graffitiHash(seed,11)*GRAFFITI_SYMBOL_TOKENS.length)];
+  const symB=GRAFFITI_SYMBOL_TOKENS[Math.floor(graffitiHash(seed,29)*GRAFFITI_SYMBOL_TOKENS.length)];
+  const mode=Math.floor(graffitiHash(seed,37)*4);
+  if(mode===0)return [symA,...words];
+  if(mode===1&&words.length>=2){const mid=Math.floor(words.length/2);return [...words.slice(0,mid),symA,...words.slice(mid)];}
+  if(mode===2)return [...words,symA];
+  return [symA,...words,symB];
+}
+
+function applyCleaningSmudges(ctx,w,h,progress,seed){
+  if(progress<=0)return;
+  const img=ctx.getImageData(0,0,w,h),data=img.data;
+  const src=new Uint8ClampedArray(data);
+  const bands=8+Math.floor(graffitiHash(seed,401)*5);
+  const dir=graffitiHash(seed,402)>.5?1:-1;
+  const activeLimit=progress*1.35;
+  for(let y=0;y<h;y++){
+    const band=Math.min(bands-1,Math.floor(y/h*bands));
+    const bandThreshold=graffitiHash(seed,410+band)*.5;
+    const bandIntensity=Math.max(0,Math.min(1,(activeLimit-bandThreshold)/.55));
+    if(bandIntensity<=0)continue;
+    const shiftX=Math.round(dir*(4+bandIntensity*16)*(0.6+graffitiHash(seed,430+band)*.8));
+    const shiftY=Math.round((graffitiHash(seed,450+band)-.5)*5*bandIntensity);
+    for(let x=0;x<w;x++){
+      const idx=(y*w+x)*4;
+      const sx=Math.max(0,Math.min(w-1,x-shiftX)),sy=Math.max(0,Math.min(h-1,y-shiftY));
+      const sIdx=(sy*w+sx)*4;
+      const a0=src[idx+3],aS=src[sIdx+3];
+      if(!a0&&!aS)continue;
+      const noise=graffitiHash(seed,((y>>2)*97+(x>>2)*31));
+      const wipe=progress>=.98?0:Math.max(0,1-bandIntensity*(.55+noise*.75));
+      if(aS>a0&&bandIntensity<.85){
+        const smearA=Math.round(aS*.45*wipe);
+        if(smearA>data[idx+3]){data[idx]=src[sIdx];data[idx+1]=src[sIdx+1];data[idx+2]=src[sIdx+2];data[idx+3]=smearA;}
+      }
+      data[idx+3]=Math.round(data[idx+3]*wipe);
+    }
+  }
+  ctx.putImageData(img,0,0);
+}
+
+function applyFootSmudges(ctx,w,h,smudges,seed){
+  if(!smudges?.length)return;
+  const img=ctx.getImageData(0,0,w,h),data=img.data;
+  const src=new Uint8ClampedArray(data);
+  for(let i=0;i<smudges.length;i++){
+    const sm=smudges[i],cx=Math.round(sm.u*w),cy=Math.round(sm.v*h);
+    const radius=Math.abs(sm.kind)===1?18:24,r2=radius*radius;
+    const shiftX=Math.round((sm.dx||1)*10),shiftY=Math.round((sm.dz||0)*10);
+    const minX=Math.max(0,cx-radius),maxX=Math.min(w-1,cx+radius);
+    const minY=Math.max(0,cy-radius),maxY=Math.min(h-1,cy+radius);
+    for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++){
+      const dx=x-cx,dy=y-cy,d2=dx*dx+dy*dy;if(d2>r2)continue;
+      const falloff=1-Math.sqrt(d2)/radius;
+      const idx=(y*w+x)*4;
+      const sx=Math.max(0,Math.min(w-1,x-shiftX)),sy=Math.max(0,Math.min(h-1,y-shiftY));
+      const sIdx=(sy*w+sx)*4;
+      const a0=data[idx+3],aS=src[sIdx+3];
+      if(!a0&&!aS)continue;
+      const noise=graffitiHash(seed+i*37,((y>>1)*97+(x>>1)*31));
+      const wipe=Math.max(0,1-falloff*(.45+noise*.45));
+      if(aS>a0){
+        const smearA=Math.round(aS*.52*falloff);
+        if(smearA>data[idx+3]){data[idx]=src[sIdx];data[idx+1]=src[sIdx+1];data[idx+2]=src[sIdx+2];data[idx+3]=smearA;}
+      }
+      data[idx+3]=Math.round(data[idx+3]*wipe);
+    }
+  }
+  ctx.putImageData(img,0,0);
+}
+
+function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
+  const style=resolveGraffitiStyle(piece,face);
+  const seed=((piece?.id||1)*2654435761+(face?.id||0)*977)>>>0;
+  const inkHex=`#${inkColor.toString(16).padStart(6,'0')}`;
+  const inkLum=srgbLuminance(inkColor);
+  const outlineHex=inkLum>.35?'#141418':'#ffffff';
+  const rawText=String(face.message||'');
+  const tokens=injectGraffitiSymbols(rawText,piece,seed);
+  const fontSpec=(size,idx=0)=>{
+    if(style==='pixo')return `900 ${size}px "VT323", "JetBrains Mono", monospace`;
+    if(style==='tag')return `italic 900 ${size}px Georgia, "Times New Roman", serif`;
+    if(style==='stencil')return `900 ${size}px Impact, "Arial Black", sans-serif`;
+    if(style==='bomb')return `900 ${size}px "Arial Black", Impact, sans-serif`;
+    if(style==='bubble')return `900 ${size}px "Press Start 2P", "Arial Black", sans-serif`;
+    if(style==='spray')return `700 ${size}px "JetBrains Mono", monospace`;
+    if(style==='rasurada')return `${idx%2?'italic ':''}900 ${size}px Georgia, sans-serif`;
+    if(style==='irregular')return `${idx%2?'italic ':''}900 ${size}px ${GRAFFITI_MIXED_FONTS[idx%GRAFFITI_MIXED_FONTS.length]}`;
+    return `900 ${size}px sans-serif`;
+  };
+  let lines=[],baseSize=44;
+  const maxW=style==='pixo'?185:style==='bomb'||style==='irregular'?205:226;
+  for(let size=84;size>=16;size-=4){
+    ctx.font=fontSpec(size,0);lines=[];let cur=[];let curW=0;
+    for(const tok of tokens){
+      const isSym=tok.startsWith('[')&&tok.endsWith(']');
+      const label=(style==='pixo'||style==='stencil'||style==='bomb')&&!isSym?tok.toUpperCase():tok;
+      const w=isSym?size*1.1:ctx.measureText(label).width*(style==='pixo'?.72:style==='bomb'?1.12:1);
+      const gap=cur.length?size*.28:0;
+      if(cur.length&&curW+gap+w>maxW){lines.push(cur);cur=[label];curW=w;}
+      else{cur.push(label);curW+=gap+w;}
+    }
+    if(cur.length)lines.push(cur);
+    baseSize=size;
+    if(lines.length*size<=212)break;
+  }
+  const lineHeight=Math.min(220/Math.max(1,lines.length),90);
+  ctx.save();
+  if(style==='tag'||style==='pixo'||style==='bomb'){
+    const tilt=(graffitiHash(seed,3)-.5)*(style==='tag'?.22:style==='bomb'?.14:.12);
+    ctx.translate(128,128);ctx.rotate(tilt);ctx.translate(-128,-128);
+  }
+  if(style==='spray'){
+    ctx.fillStyle=inkHex;
+    for(let i=0;i<36;i++){
+      const sx=18+graffitiHash(seed,100+i)*220,sy=20+graffitiHash(seed,200+i)*216,sz=1+Math.floor(graffitiHash(seed,300+i)*3);
+      ctx.fillRect(Math.round(sx),Math.round(sy),sz,sz);
+    }
+  }
+  const drawWordOrChar=(tok,gx,gy,size,idx,scaleX=1,scaleY=1,rot=0)=>{
+    if(tok.startsWith('[')&&tok.endsWith(']')){drawInlineGraffitiSymbol(ctx,tok,gx,gy,size,inkHex,outlineHex,piece,seed);return;}
+    ctx.save();ctx.translate(gx,gy);if(rot)ctx.rotate(rot);if(scaleX!==1||scaleY!==1)ctx.scale?.(scaleX,scaleY);
+    ctx.font=fontSpec(size,idx);ctx.textAlign='center';ctx.textBaseline='middle';
+    if(style==='bomb'){
+      ctx.fillStyle=outlineHex;
+      drawPixelText(ctx,tok,4,4,240);drawPixelText(ctx,tok,-2,0,240);drawPixelText(ctx,tok,2,0,240);drawPixelText(ctx,tok,0,-2,240);drawPixelText(ctx,tok,0,2,240);
+      ctx.fillStyle=inkHex;drawPixelText(ctx,tok,0,0,240);
+    }else if(style==='bubble'){
+      ctx.fillStyle=outlineHex;
+      drawPixelText(ctx,tok,-2,0,240);drawPixelText(ctx,tok,2,0,240);drawPixelText(ctx,tok,0,-2,240);drawPixelText(ctx,tok,0,2,240);
+      ctx.fillStyle=inkHex;drawPixelText(ctx,tok,0,0,240);
+    }else{
+      ctx.fillStyle=inkHex;drawPixelText(ctx,tok,0,0,240);
+    }
+    ctx.restore();
+  };
+  lines.forEach((lineTokens,lineIdx)=>{
+    const cy=128+(lineIdx-(lines.length-1)/2)*lineHeight;
+    const lineSize=style==='stacked'?Math.max(14,Math.min(88,Math.round(baseSize*(lineIdx%2===0?1.2:.76)))):baseSize;
+    if(style==='irregular'||style==='pixo'||style==='rasurada'){
+      const items=[];let totalW=0;
+      for(let t=0;t<lineTokens.length;t++){
+        const tok=lineTokens[t];
+        if(tok.startsWith('[')&&tok.endsWith(']')){const w=lineSize*1.05;items.push({tok,w,size:lineSize,isSym:true});totalW+=w+(t?lineSize*.2:0);continue;}
+        if(t>0){const sp=lineSize*.24;items.push({tok:' ',w:sp,size:lineSize,space:true});totalW+=sp;}
+        for(let c=0;c<tok.length;c++){
+          const scale=style==='irregular'?(.62+graffitiHash(seed,lineIdx*97+t*19+c)*.76):(.84+graffitiHash(seed,lineIdx*97+t*19+c)*.32);
+          const cs=Math.max(12,Math.min(94,Math.round(lineSize*scale)));
+          ctx.font=fontSpec(cs,c+lineIdx);
+          const cw=Math.max(cs*.36,ctx.measureText(tok[c]).width*(style==='pixo'?.72:1));
+          items.push({tok:tok[c],w:cw,size:cs,idx:c+lineIdx+t});totalW+=cw;
+        }
+      }
+      const fit=totalW>232?232/totalW:1;let cx=128-(totalW*fit)/2;
+      for(let i=0;i<items.length;i++){
+        const item=items[i],w=item.w*fit;
+        if(!item.space){
+          const cs=Math.max(10,Math.round(item.size*fit));
+          const yJit=(graffitiHash(seed,500+lineIdx*64+i)-.5)*lineSize*(style==='irregular'?.34:.16);
+          const rot=(graffitiHash(seed,900+lineIdx*64+i)-.5)*(style==='irregular'?.36:.14);
+          const ch=style==='irregular'&&!item.isSym&&graffitiHash(seed,1300+i)>.5?item.tok.toUpperCase():item.tok;
+          drawWordOrChar(ch,cx+w/2,cy+yJit,cs,item.idx||0,style==='pixo'?.72:1,style==='pixo'?1.38:1,rot);
+        }
+        cx+=w;
+      }
+    }else{
+      const widths=[];let totalW=0;
+      for(let t=0;t<lineTokens.length;t++){
+        const tok=lineTokens[t],isSym=tok.startsWith('[')&&tok.endsWith(']');
+        ctx.font=fontSpec(lineSize,t+lineIdx);
+        const w=isSym?lineSize*1.05:ctx.measureText(tok).width*(style==='bomb'?1.12:1);
+        widths.push(w);totalW+=w+(t?lineSize*.24:0);
+      }
+      const fit=totalW>232?232/totalW:1;let cx=128-(totalW*fit)/2;
+      for(let t=0;t<lineTokens.length;t++){
+        const w=widths[t]*fit;
+        drawWordOrChar(lineTokens[t],cx+w/2,cy,Math.max(12,Math.round(lineSize*fit)),t+lineIdx,style==='bomb'?1.1:1,1,0);
+        cx+=w+lineSize*.24*fit;
+      }
+    }
+  });
+  if(style==='rasurada'){
+    ctx.strokeStyle=inkHex;ctx.lineWidth=4;
+    for(let s=0;s<3;s++){
+      const y1=60+s*55+(graffitiHash(seed,700+s)-.5)*20,y2=y1+(graffitiHash(seed,710+s)-.5)*28;
+      ctx.beginPath();ctx.moveTo(22,y1);ctx.lineTo(234,y2);ctx.stroke();
+    }
+  }
+  if(style==='stencil'){
+    ctx.clearRect(0,124,256,3);ctx.clearRect(126,20,3,216);
+  }
+  if(style==='tag'||style==='spray'){
+    ctx.fillStyle=inkHex;
+    for(let d=0;d<4;d++){const dx=56+graffitiHash(seed,800+d)*144,dy=150+graffitiHash(seed,810+d)*28,dh=12+graffitiHash(seed,820+d)*28;ctx.fillRect(Math.round(dx),Math.round(dy),2,Math.round(dh));}
+    if(style==='tag'&&lines.length){
+      const y=Math.min(242,128+((lines.length-1)/2)*lineHeight+baseSize*.52);
+      ctx.strokeStyle=inkHex;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(32,y);ctx.quadraticCurveTo(128,y+12,224,y-4);ctx.stroke();
+    }
+  }
+  ctx.restore();
+  if(piece?.groundSmudges?.length)applyFootSmudges(ctx,256,256,piece.groundSmudges,seed);
+  if(cleaningProgress>0)applyCleaningSmudges(ctx,256,256,cleaningProgress,seed);
+}
+
+function addStreetGraffiti(THREE,group,world,piece,face,inkColor,cleaningProgress=0){
   let texture;
   const canvas=document.createElement('canvas');canvas.width=256;canvas.height=256;
-  const ctx=canvas.getContext('2d',{willReadFrequently:piece.kind==='painting'&&!piece.layers.length&&piece.materialUsed!=='fezes'});ctx.fillStyle=`#${inkColor.toString(16).padStart(6,'0')}`;ctx.textAlign='center';ctx.textBaseline='middle';
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.fillStyle=`#${inkColor.toString(16).padStart(6,'0')}`;ctx.textAlign='center';ctx.textBaseline='middle';
   if(piece.kind==='painting'&&!piece.layers.length&&piece.materialUsed!=='fezes'){
     canvas.width=512;canvas.height=256;drawWallPainting(ctx,piece,()=>{ctx.clearRect(0,0,512,256);drawWallPainting(ctx,piece);if(texture)texture.needsUpdate=true;});
   }else{
-    drawStyledStreetGraffiti(ctx,piece,face,inkColor);
+    drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress);
   }
   texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;
   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(graffitiSurfaceVertices(world,piece.support),3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute([0,0,1,0,1,1,0,1],2));geometry.setIndex([0,1,2,0,2,3]);geometry.computeVertexNormals();
@@ -466,11 +632,16 @@ export function syncUrbanArt(renderer,THREE,city,world){
       if(invalid){const point=city.gigs?.sidewalkArtworkPoint({entity:{x,y}});if(!point){if(group)group.visible=false;continue;}x=piece.x=piece.entity.x=point.x;y=piece.y=piece.entity.y=point.y;}
     }
     const inkColor=graffitiInkColor(city,piece,face);
+    piece.renderedInkColor=inkColor;
+    const cleaningJob=support?.kind==='street-graffiti'?city.gigs?.jobs?.find(j=>j.kind==='art-cleaning'&&j.artId===piece.id&&j.layerId===face.id&&j.status==='working'&&j.progress>0):null;
+    const cleaningProgress=cleaningJob?Math.min(1,cleaningJob.progress/Math.max(1,cleaningJob.required||18)):0;
+    const cleaningStep=cleaningProgress>0?Math.min(8,Math.ceil(cleaningProgress*8)):0;
+    const smudgeRev=piece.smudgeRevision||0;
     const streetFacing=!piece.entity.destroyed&&!support&&!piece.campaignDecorationId&&piece.buildingId==null?artworkStreetFacingRotation(world,x,y,piece.id):null;
-    const key=`${support?.kind==='street-graffiti'?`${world.revision??0}:${inkColor}`:''}:${piece.id}:${piece.entity.destroyed?'debris':`${piece.layers.length}:${face.message}:${face.graffitiStyle??piece.graffitiStyle??''}:${piece.damaged}:${piece.materialUsed||''}:${piece.color??''}:${JSON.stringify(face.narrative||null)}:${JSON.stringify(face.design||null)}`}:${JSON.stringify(support||null)}`;
+    const key=`${support?.kind==='street-graffiti'?`${world.revision??0}:${inkColor}:${cleaningStep}:${smudgeRev}`:''}:${piece.id}:${piece.entity.destroyed?'debris':`${piece.layers.length}:${face.message}:${face.graffitiStyle??piece.graffitiStyle??''}:${piece.damaged}:${piece.materialUsed||''}:${piece.color??''}:${JSON.stringify(face.narrative||null)}:${JSON.stringify(face.design||null)}`}:${JSON.stringify(support||null)}`;
     if(group?.userData.key!==key){if(group){renderer.scene.remove(group);group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();o.material?.map?.dispose();});}group=new THREE.Group();
       if(piece.entity.destroyed){const seed=(piece.id*2654435761)>>>0,masonry=['statue','monument'].includes(piece.kind),stone=new THREE.MeshLambertMaterial({color:piece.damaged>0?0x716d64:piece.color??0x8a857a}),dark=new THREE.MeshLambertMaterial({color:0x625e57});for(let i=0;i<7;i++){const n=(seed+i*1013904223)>>>0,angle=(n%6283)/1000,radius=.12+((n>>>8)%100)/220,width=.12+((n>>>16)%14)/100,height=masonry?.08+((n>>>20)%18)/100:.018,depth=.12+((n>>>24)%14)/100,fragment=new THREE.Mesh(new THREE.BoxGeometry(width,height,depth),i%3===0&&masonry?dark:stone);fragment.position.set(Math.cos(angle)*radius,height*.5,Math.sin(angle)*radius);fragment.rotation.set(masonry?((n>>>4)%80)/100:0,angle,masonry?((n>>>12)%80)/100:0);group.add(fragment);}}
-      else if(support?.kind==='street-graffiti')addStreetGraffiti(THREE,group,world,piece,face,inkColor);
+      else if(support?.kind==='street-graffiti')addStreetGraffiti(THREE,group,world,piece,face,inkColor,cleaningProgress);
       else if(['statue','monument'].includes(piece.kind)){const palettes={pedra:0x8a857a,argila:0xa76545,ferro:0x55595b,aco:0x89939a,ceramica:0xb97a58,fezes:0x49301f},stone=new THREE.MeshLambertMaterial({color:piece.damaged>0?0x716d64:palettes[piece.materialUsed]??piece.color});if(piece.materialUsed==='fezes'){const base=new THREE.Mesh(new THREE.BoxGeometry(.62,.16,.62),new THREE.MeshLambertMaterial({color:0x55402e}));base.position.y=.08;group.add(base);for(let i=0;i<5;i++){const blob=new THREE.Mesh(new THREE.SphereGeometry(.16+(i%2)*.04,7,5),stone);blob.position.set(((i%3)-1)*.17,.24+Math.floor(i/3)*.13,((i*2)%3-1)*.13);blob.scale.set(1,.72,1);group.add(blob);}}else if(face.narrative)addNarrativeStatue(THREE,group,piece,face,stone);else if(piece.subjectId!=null)addNarrativeStatue(THREE,group,piece,{narrative:{participantIds:[piece.subjectId],participantRoles:[],title:'Retrato'}},stone);else addVariedStatue(THREE,group,piece,stone);addArtPlaque(THREE,group,face.message);}
       else if(piece.kind==='vase'&&!piece.layers.length){const ceramic=new THREE.MeshLambertMaterial({color:piece.color??0xa65c43}),dark=new THREE.MeshLambertMaterial({color:0x49352d}),body=new THREE.Mesh(new THREE.CylinderGeometry(.16,.28,.48,9),ceramic),foot=new THREE.Mesh(new THREE.CylinderGeometry(.19,.22,.08,9),dark),rim=new THREE.Mesh(new THREE.CylinderGeometry(.29,.22,.09,9),ceramic),lip=new THREE.Mesh(new THREE.TorusGeometry(.25,.035,6,12),dark);body.position.y=.29;foot.position.y=.04;rim.position.y=.56;lip.position.y=.62;lip.rotation.x=Math.PI/2;group.add(body,foot,rim,lip);for(let i=0;i<5;i++){const bead=new THREE.Mesh(new THREE.SphereGeometry(.045,6,4),i%2?dark:new THREE.MeshLambertMaterial({color:0xe0bf79}));const angle=i*Math.PI*2/5;bead.position.set(Math.cos(angle)*.26,.31,Math.sin(angle)*.26);group.add(bead);}}
       else if(piece.kind==='flags'&&!piece.layers.length&&!face.narrative&&!addPartyArtFlag(THREE,group,city,piece)){const compact=!['facade-banner','interior-wall','window'].includes(support?.kind);if(compact)addArtDisplayStand(THREE,group,{width:.82,height:1.18});const canvas=document.createElement('canvas');canvas.width=512;canvas.height=256;const ctx=canvas.getContext('2d',{willReadFrequently:!!face.design});if(face.design)drawArtworkComposition(ctx,face,0,0,512,256);else{const colors=[0xd84d43,0xe8bd43,0x4d9b67,0x4b78b6,0xbd5a9b];for(let i=0;i<5;i++){const pennant=new THREE.Shape();pennant.moveTo(-.16,.11);pennant.lineTo(.16,.11);pennant.lineTo(0,-.22);pennant.closePath();const mesh=new THREE.Mesh(new THREE.ShapeGeometry(pennant),new THREE.MeshLambertMaterial({color:colors[i],side:THREE.DoubleSide}));mesh.position.set(-.78+i*.39,1.32-Math.abs(2-i)*.035,.018);group.add(mesh);}ctx.fillStyle='#654a35';ctx.fillRect(0,0,512,128);ctx.fillStyle='#f5e5c4';ctx.textAlign='center';ctx.textBaseline='middle';drawPixelText(ctx,String(face.message),256,64,470);}const texture=new THREE.CanvasTexture(canvas);texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;const plaque=new THREE.Mesh(new THREE.PlaneGeometry(compact ? .72 : 1.72,compact ? .34 : .76),new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide}));plaque.position.set(0,compact?.86:.86,.01);group.add(plaque);}
@@ -493,7 +664,7 @@ export function syncUrbanArt(renderer,THREE,city,world){
       group.position.set(debrisX,surfaceElevation(world,debrisX,debrisY)+.025,debrisY);group.visible=debrisX>=(renderer.renderedMinTx??-Infinity)-2&&debrisX<=(renderer.renderedMaxTx??Infinity)+2&&debrisY>=(renderer.renderedMinTy??-Infinity)-2&&debrisY<=(renderer.renderedMaxTy??Infinity)+2;
     }
     else if(support?.kind==='street-graffiti'){
-      group.position.set(0,0,0);group.visible=graffitiSurfaceExists(city,support)&&x>=(renderer.renderedMinTx??-Infinity)-2&&x<=(renderer.renderedMaxTx??Infinity)+2&&y>=(renderer.renderedMinTy??-Infinity)-2&&y<=(renderer.renderedMaxTy??Infinity)+2;
+      group.position.set(0,0,0);group.visible=(piece.wearProgress||0)<1&&graffitiSurfaceExists(city,support)&&x>=(renderer.renderedMinTx??-Infinity)-2&&x<=(renderer.renderedMaxTx??Infinity)+2&&y>=(renderer.renderedMinTy??-Infinity)-2&&y<=(renderer.renderedMaxTy??Infinity)+2;
     }
     else if(support?.kind==='facade-banner'){
       const building=city.building(support.buildingId),point=support.position;if(!building||building.entity.destroyed||!point){group.visible=false;continue;}
