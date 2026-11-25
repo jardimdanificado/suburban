@@ -520,25 +520,31 @@ function getEntityBounds(e) {
   const isBirch = isPlantOrFlora && (e.properties?.species === "birch" || e.properties?.name?.toLowerCase().includes("bétula") || e.properties?.name?.toLowerCase().includes("betula"));
   const isMaple = isPlantOrFlora && (e.properties?.species === "maple" || e.properties?.name?.toLowerCase().includes("bordo") || e.properties?.name?.toLowerCase().includes("maple"));
   const isBerryBush = isPlantOrFlora && (e.properties?.species === "berry" || e.properties?.name?.toLowerCase().includes("amora") || (e.properties?.species === "bush" && !e.properties?.name?.toLowerCase().includes("florido")));
-  const isRoseBush = isPlantOrFlora && (['rose_bush','hibiscus','bougainvillea'].includes(e.properties?.species) || ['flowering','foliage'].includes(e.properties?.cityPlant?.form) || e.properties?.name?.toLowerCase().includes("florido") || e.properties?.name?.toLowerCase().includes("rose"));
+  const isTropicalFoliage = isPlantOrFlora && e.properties?.cityPlant?.form === 'foliage';
+  const isTropicalFlowering = isPlantOrFlora && e.properties?.cityPlant?.form === 'flowering';
+  const isBroadLeafPlant = isPlantOrFlora && e.properties?.cityPlant?.form === 'broad_leaf';
+  const isRoseBush = isPlantOrFlora && (['rose_bush','hibiscus','bougainvillea'].includes(e.properties?.species) || e.properties?.name?.toLowerCase().includes("florido") || e.properties?.name?.toLowerCase().includes("rose"));
   const isCrop = isPlantOrFlora && e.properties?.cityPlant?.form === 'crop';
   const isShrub = isPlantOrFlora && (e.properties?.species === "shrub" || e.properties?.name?.toLowerCase().includes("shrub") || e.properties?.name?.toLowerCase().includes("arbusto"));
   const isWaterLily = isPlantOrFlora && (e.properties?.species === "waterlily" || e.properties?.species === "water_lily" || e.properties?.name?.toLowerCase().includes("lily") || e.properties?.name?.toLowerCase().includes("vitória-régia") || e.properties?.name?.toLowerCase().includes("vitoria"));
   const isSeaweed = isPlantOrFlora && (e.properties?.species === "seaweed" || e.properties?.name?.toLowerCase().includes("seaweed") || e.properties?.name?.toLowerCase().includes("alga"));
-  const isTree = !isCactus && !isBerryBush && !isRoseBush && !isCrop && !isShrub && !isWaterLily && !isSeaweed && (isCherry || isBirch || isMaple || e.properties?.species === "oak" || e.properties?.species === "pine" || e.properties?.species === "willow" || e.properties?.species === "tree" || !!e.properties?.tree || (r?.skin && r?.skin.toLowerCase().includes("tree")) || (e.properties?.photosynthesis && !e.properties?.life?.isDead));
+  const isTree = !isCactus && !isBerryBush && !isRoseBush && !isTropicalFoliage && !isTropicalFlowering && !isBroadLeafPlant && !isCrop && !isShrub && !isWaterLily && !isSeaweed && (isCherry || isBirch || isMaple || e.properties?.species === "oak" || e.properties?.species === "pine" || e.properties?.species === "willow" || e.properties?.species === "tree" || !!e.properties?.tree || (r?.skin && r?.skin.toLowerCase().includes("tree")) || (e.properties?.photosynthesis && !e.properties?.life?.isDead));
 
   // Tree crowns are visually broad, but letting the whole crown act as a
   // collider made it possible to select a tree from several tiles away.
   // Keep selection close to the trunk while retaining enough vertical span
   // for the visible model.
-  if (isTree) return { radius: 0.48, h: 3.2, yBottom: 0.0 };
+  if (isTree) return { radius: 0.45, h: 3.0, yBottom: 0.0 };
+  if (isBroadLeafPlant) return { radius: 0.42, h: 1.25, yBottom: 0.0 };
+  if (isTropicalFlowering) return { radius: 0.38, h: 1.75, yBottom: 0.0 };
+  if (isTropicalFoliage) return { radius: 0.35, h: 0.75, yBottom: 0.0 };
   if (isCrop) {
     const sp = e.properties?.cityPlant?.species || e.properties?.species;
     const smallCrop = ['cebola', 'alface', 'coentro', 'peyote', 'cubensis', 'amanita'].includes(sp);
     return smallCrop ? { radius: 0.28, h: 0.6, yBottom: 0.0 } : { radius: 0.35, h: 1.0, yBottom: 0.0 };
   }
-  if (isBerryBush || isRoseBush || isShrub) return { radius: 0.9, h: 1.8, yBottom: 0.0 };
-  if (isWaterLily || isSeaweed) return { radius: 0.75, h: 0.6, yBottom: 0.0 };
+  if (isRoseBush || isBerryBush || isShrub) return { radius: 0.45, h: 0.75, yBottom: 0.0 };
+  if (isWaterLily || isSeaweed) return { radius: 0.45, h: 0.35, yBottom: 0.0 };
   if (isHouse) {
     const floors = e.properties?.house?.maxFloors || e.properties?.house?.floors?.length || 2;
     const fpW = e.properties?.house?.footprintW || 1;
@@ -546,7 +552,7 @@ function getEntityBounds(e) {
     const fpMax = Math.max(fpW, fpH);
     return { radius: Math.max(1.2, fpMax * 0.7 + floors * 0.2), h: 1.6 + floors * 1.25, yBottom: 0.0 };
   }
-  if (isCactus) return { radius: 0.9, h: 2.2, yBottom: 0.0 };
+  if (isCactus) return { radius: 0.38, h: 1.85, yBottom: 0.0 };
   if (isWall) return { radius: 0.75, h: 1.5, yBottom: 0.0 };
   if (isItem) return { radius: 0.65, h: 0.9, yBottom: 0.0 }; // Generous 3D clickable radius for ground items
   return { radius: 0.55, h: 1.1, yBottom: 0.0 }; // Compact creatures
