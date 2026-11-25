@@ -70,7 +70,7 @@ test('dresses combine a blouse with the fitted skirt surface instead of trouser 
   assert(containsTriangle(cloth,p.subarray(9,18)),`${key}: dress includes the skirt's fitted inner lining`);
   assert(!containsFace(cloth,p.subarray(54*9,55*9)),`${key}: dress does not continue down the shins like trousers`);
   assert(!containsFace(cloth,p.subarray(13*9,14*9)),`${key}: dress leaves the head uncovered`);
-  for(const name of ['weightMorph','skirtMorph','skirtNormalLinear','skirtNormalQuadratic'])assert.equal(cloth.attributes[name].array.length,cloth.attributes.position.array.length*(name==='weightMorph'?2/3:1),`${key}: ${name} covers the combined blouse and skirt`);
+  for(const name of ['weightMorph','weightNormalLinear','weightNormalQuadratic','skirtMorph','skirtNormalLinear','skirtNormalQuadratic'])assert.equal(cloth.attributes[name].array.length,cloth.attributes.position.array.length,`${key}: ${name} covers the combined blouse and skirt`);
  }
 });
 test('skirt instances retain their bound morph attributes and tops are tucked above the pelvis',async()=>{
@@ -240,4 +240,44 @@ test('a confirmed bench seat keeps bent legs when an earlier delivery is still m
  c.furnitureUse={id:'bench:1:0',type:'bench',seated:true,posePoint:{x:2,y:3,z:0}};
  model.begin(.05,1);model.add(e,0);model.end();
  assert([...model.batches.entries()].some(([key,b])=>key.startsWith('sentado_no_banco:')&&b.count),'a stationary seated delivery worker must use bent legs, not the running body at the seat anchor');
+});
+
+test('anatomical weight morph preserves arm thickness, foot shape and triangle area across all poses',async()=>{
+ const {model}=await models();
+ const area=(a,b,c)=>{
+  const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];
+  return Math.hypot(uy*vz-uz*vy,uz*vx-ux*vz,ux*vy-uy*vx);
+ };
+ for(const [key,geometry]of model.frames){
+  const pos=geometry.attributes.position.array,morph=geometry.attributes.weightMorph.array;
+  for(const attr of ['weightMorph','weightNormalLinear','weightNormalQuadratic']){
+   assert.equal(geometry.attributes[attr].array.length,pos.length,`${key}: ${attr} length`);
+   assert(geometry.attributes[attr].array.every(Number.isFinite),`${key}: ${attr} finite`);
+  }
+  for(const fat of [-.42,1.8]){
+   for(let f=0;f<pos.length/9;f++){
+    const base=[0,1,2].map(c=>[pos[f*9+c*3],pos[f*9+c*3+1],pos[f*9+c*3+2]]);
+    const morphed=[0,1,2].map(c=>[pos[f*9+c*3]+fat*morph[f*9+c*3],pos[f*9+c*3+1]+fat*morph[f*9+c*3+1],pos[f*9+c*3+2]+fat*morph[f*9+c*3+2]]);
+    assert(area(...morphed)>area(...base)*.2,`${key} face ${f} fat=${fat}: triangle must not collapse`);
+   }
+  }
+ }
+ // Feet stay rigid in run poses instead of spiking along Z.
+ for(const key of ['run:0','run:1','run:2','run:3','run:4']){
+  const g=model.frames.get(key),pos=g.attributes.position.array,morph=g.attributes.weightMorph.array;
+  let minZ0=Infinity,maxZ0=-Infinity,minZ1=Infinity,maxZ1=-Infinity;
+  for(const f of [0,35,36,37,38,39,40,41,42,43])for(let c=0;c<3;c++){
+   const z0=pos[f*9+c*3+2],z1=z0+1.8*morph[f*9+c*3+2];
+   minZ0=Math.min(minZ0,z0);maxZ0=Math.max(maxZ0,z0);minZ1=Math.min(minZ1,z1);maxZ1=Math.max(maxZ1,z1);
+  }
+  assert(Math.abs((maxZ1-minZ1)-(maxZ0-minZ0))<.01,`${key}: foot length must not spike at high body fat`);
+ }
+ // Upper arms expand radially rather than squashing flat along X.
+ const idle=model.frames.get('idle:0'),ipos=idle.attributes.position.array,imorph=idle.attributes.weightMorph.array;
+ let minX0=Infinity,maxX0=-Infinity,minX1=Infinity,maxX1=-Infinity;
+ for(let f=74;f<=81;f++)for(let c=0;c<3;c++){
+  const x0=ipos[f*9+c*3],x1=x0+1.8*imorph[f*9+c*3];
+  minX0=Math.min(minX0,x0);maxX0=Math.max(maxX0,x0);minX1=Math.min(minX1,x1);maxX1=Math.max(maxX1,x1);
+ }
+ assert((maxX1-minX1)>(maxX0-minX0)*1.1,'upper arm X thickness must expand rather than squash flat at high body fat');
 });

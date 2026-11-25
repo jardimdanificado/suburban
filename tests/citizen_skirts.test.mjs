@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import {CITIZEN_MODEL_FRAMES,parseCitizenOBJ,citizenVertexWeightDelta} from '../js/city_citizen_models.js';
+import {CITIZEN_MODEL_FRAMES,parseCitizenOBJ} from '../js/city_citizen_models.js';
+import {createPoseWeightMorph} from '../js/city_citizen_weight_morph.js';
 import {fittedSkirtSurface} from '../js/city_citizen_skirts.js';
 
 const dot=(a,b)=>a.reduce((n,v,i)=>n+v*b[i],0);
@@ -11,7 +12,7 @@ const sample=(point,fat)=>point.p.map((v,i)=>v+fat*point.d[i]);
 const fixtures=Promise.all(Object.entries(CITIZEN_MODEL_FRAMES).flatMap(([clip,frames])=>frames.map(async frame=>({key:`${clip}:${frame}`,data:parseCitizenOBJ(await fs.readFile(new URL(`../data/model/${clip}/${frame}.obj`,import.meta.url),'utf8'))})))).then(entries=>{
  const idle=entries.find(e=>e.key==='idle:0').data.bounds,origin=[(idle.min[0]+idle.max[0])/2,Math.min(...entries.map(e=>e.data.bounds.min[1])),(idle.min[2]+idle.max[2])/2],scale=1.05/(idle.max[1]-idle.min[1]);
  for(const {data} of entries)for(let i=0;i<data.positions.length;i++)data.positions[i]=(data.positions[i]-origin[i%3])*scale;
- return entries.map(entry=>({...entry,skirts:['saia','saia longa'].map(piece=>({piece,surface:fittedSkirtSurface(entry.data,piece,citizenVertexWeightDelta)}))}));
+ return entries.map(entry=>({...entry,skirts:['saia','saia longa'].map(piece=>({piece,surface:fittedSkirtSurface(entry.data,piece,createPoseWeightMorph(entry.data))}))}));
 });
 
 test('short and long skirts stay on anatomical pelvis and leg faces in all 24 poses',async()=>{
