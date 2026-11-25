@@ -557,7 +557,7 @@ export class CityEconomy {
       lot = city.development.buyPlot(founder.accountId, available.id);boughtLot=!!lot;
     }
     if (!lot) return null;
-    const vertical=type==='farm'&&!city.development.isFarmPlot(lot),options={crop,...(vertical?{kind:'building'}:{}),width:compact?Math.min(type==='farm'&&!vertical?6:2,lot.width):type==='farm'?Math.min(vertical?4:20,lot.width):Math.min(3,lot.width),depth:compact?Math.min(type==='farm'&&!vertical?6:2,lot.depth):type==='farm'?Math.min(vertical?4:20,lot.depth):Math.min(3,lot.depth)},floors=compact?1:vertical?3:businessFloors(type,lot.id);
+    const vertical=type==='farm'&&!city.development.isFarmPlot(lot),options={crop,...(vertical?{kind:'building'}:{}),width:compact?Math.min(type==='farm'&&!vertical?6:vertical?3:2,lot.width):type==='farm'?Math.min(vertical?8:20,lot.width):Math.min(3,lot.width),depth:compact?Math.min(type==='farm'&&!vertical?6:vertical?3:2,lot.depth):type==='farm'?Math.min(vertical?8:20,lot.depth):Math.min(3,lot.depth)},floors=compact?1:vertical?3:businessFloors(type,lot.id);
     const project = city.development.beginProject(founder.accountId, lot.id, type, {...options,floors}) || (floors>1?city.development.beginProject(founder.accountId,lot.id,type,{...options,floors:1}):null);
     if(!project&&boughtLot&&!lot.projectId&&city.transfer('treasury',founder.accountId,lot.price,'Estorno de terreno: empresa não iniciada')){lot.ownerId='treasury';lot.forSale=true;}
     if(project&&project.status!=='completed')founder.startupProjectId=project.id;

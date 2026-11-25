@@ -2,6 +2,10 @@ import {chooseBuildingSite} from './city_terrain.js?v=entrance-retaining-clearan
 const mines=new Set(['quarry','iron_mine','bauxite_mine']);
 function dimensions(lot,type,vertical=false,compact=false){
   if(type==='farm'&&!vertical||mines.has(type))return [[lot.width,lot.depth]];
+  if(vertical&&!compact){
+    const raw=[[Math.min(6,lot.width),Math.min(6,lot.depth)],[Math.min(5,lot.width),Math.min(5,lot.depth)],[Math.min(4,lot.width),Math.min(6,lot.depth)],[Math.min(6,lot.width),Math.min(4,lot.depth)],[Math.min(4,lot.width),Math.min(4,lot.depth)],[Math.min(3,lot.width),Math.min(3,lot.depth)],[Math.min(2,lot.width),Math.min(2,lot.depth)]];
+    return raw.filter(([w,d],i)=>w*d>=4&&raw.findIndex(([x,y])=>x===w&&y===d)===i);
+  }
   const size=compact?3:['super_popular_housing','popular_housing','popular_luxury_housing'].includes(type)?3:4,options=[[Math.min(size,lot.width),Math.min(size,lot.depth)],[Math.min(3,lot.width),Math.min(3,lot.depth)],[Math.min(2,lot.width),Math.min(2,lot.depth)]];
   return options.filter(([w,d],i)=>w*d>=4&&options.findIndex(([x,y])=>x===w&&y===d)===i);
 }
@@ -39,7 +43,7 @@ export function findPublicBuildingSite(dev,type,{allowPurchase=true,kind=null,pl
   }
   const states=dev.publicLandSearches??={},state=states[category]??={cursor:0,frontierCursor:0},revision=`${city.structureRevision}:${city.world.revision}:${city.world.parkingRevision||0}:${dev.plots.length}:${city.occupied.size}`;
   if((state.nextAt>city.minute||state.exhausted)&&state.revision===revision){report.reason=state.reason||'Procurando novo terreno acessível fora do catálogo atual.';return null;}state.nextAt=city.minute+60;if(state.revision!==revision)state.exhausted=false;state.revision=revision;
-  const sizes=category==='urban'&&dev.compactPlanning?[[3,3],[2,3],[3,2],[2,2]]:category==='farm'?[[10,10],[8,8]]:category==='quarry'?[[3,3]]:['super_popular_housing','popular_housing','popular_luxury_housing'].includes(type)?[[3,3],[2,2]]:[[4,4],[3,3],[2,2]],center=city.world.spawnCenter||city.spawn;
+  const sizes=category==='urban'&&dev.compactPlanning?[[3,3],[2,3],[3,2],[2,2]]:category==='farm'?[[10,10],[8,8]]:category==='quarry'?[[3,3]]:vertical?[[6,6],[5,5],[4,4],[3,3],[2,2]]:['super_popular_housing','popular_housing','popular_luxury_housing'].includes(type)?[[3,3],[2,2]]:[[4,4],[3,3],[2,2]],center=city.world.spawnCenter||city.spawn;
   let attempts=0;
   const attempt=(x,y)=>{
     if(x<1||y<1||x>=city.world.width-2||y>=city.world.height-2)return null;
