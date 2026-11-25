@@ -5,6 +5,7 @@ import path from 'node:path';
 import { ANIMAL_SPECIES, ANIMAL_CLIPS, ANIMAL_SPECIES_IDS } from '../js/animal_catalog.js';
 import { parseCitizenOBJ } from '../js/city_citizen_models.js';
 import { CityFauna, FAUNA_RULES } from '../js/city_fauna.js';
+import { CitySanitation } from '../js/city_sanitation.js';
 import { CityAnimalModels, animalAnimation, animalFrame } from '../js/city_animal_models.js';
 import { TILE_WATER } from '../js/world_gen.js';
 
@@ -414,6 +415,74 @@ test('circular grazing clears only a circle, arboreal animals climb trees, and 2
   }
   assert.equal(deer.entity.destroyed, true, 'consumed carcass entity must be destroyed');
   assert.equal(city.fauna.animals.has(deer.id), false, 'consumed carcass must be removed from fauna');
+
+  // Human corpses attract wild scavengers into urban tiles and get consumed
+  const corpseEntity = city.createEntity({ x: 14.5, y: 14.5, properties: { name: 'Corpo', cityCorpse: true } });
+  const body = { id: 99, citizenId: 50, name: 'Aldo', entity: corpseEntity, position: { x: 14.5, y: 14.5 }, status: 'waiting', carcassFood: 50, carcassMaxFood: 50 };
+  city.justice = { bodies: [body], corpseRevision: 0 };
+  const jaguar = city.fauna.spawn(14, 14, 'onca', { hunger: 20, force: true });
+  while (body.carcassFood > 0) {
+    jaguar.hunger = 20;
+    jaguar.stateTimer = 0;
+    city.fauna.decideBehavior(jaguar, false);
+  }
+  assert.equal(body.status, 'cremated', 'consumed human corpse must be marked done');
+  assert.equal(body.entity.destroyed, true, 'consumed human corpse entity must be destroyed');
+});
+
+test('combat blood splatters street/walls/plants, soilCitizen tracks dirt types, and cleaner removes stains', () => {
+  const world = createWorld(16, 16, 0);
+  const accounts = new Map([['treasury', { balance: 100000 }], ['cleaner:1', { balance: 0 }], ['c:1', { balance: 0 }]]);
+  const building = { id: 1, type: 'residential', width: 2, depth: 2, door: { x: 4, y: 6 }, entity: { x: 4, y: 4, destroyed: false }, units: [] };
+  const cleaner = { id: 2, type: 'cleaner', active: true, accountId: 'cleaner:1', balance: 5000, wage: 10, ownerId: 1, workers: [], door: { x: 8, y: 8 }, entity: { x: 8, y: 8, destroyed: false } };
+  const worker = { id: 1, accountId: 'c:1', skills: { cleaning: 20 }, needs: { hygiene: 100 }, wardrobe: [{ dirt: 0 }], wearingIndex: 0, path: [], entity: { x: 4, y: 6, destroyed: false } };
+  const city = {
+    world,
+    minute: 600,
+    hour: 10,
+    buildings: [building, cleaner],
+    citizens: [worker],
+    units: new Map(),
+    accounts,
+    nature: { plants: new Map([[1, { id: 1, x: 3, y: 5, entity: { destroyed: false } }]]) },
+    building: id => city.buildings.find(b => b.id === id) || null,
+    society: { citizen: id => city.citizens.find(c => c.id === id) || null },
+    economy: { isBusiness: b => b.type === 'cleaner', workingOwner: b => b.ownerId != null, connected: () => true, practice() {} },
+    currency: { price: n => n },
+    findPath: () => [],
+    urgentNeed: () => false,
+    payWage() {},
+    transfer(from, to, amt) {
+      const a = accounts.get(from), b = accounts.get(to);
+      if (!a || !b || a.balance < amt) return false;
+      a.balance -= amt; b.balance += amt; return true;
+    },
+    history: { record() {} },
+    reputation: { completed() {} },
+    log() {},
+  };
+  const sanitation = new CitySanitation(city);
+  sanitation.emitCombatBlood(3.8, 5.2, 1.0);
+  const scopes = new Set([...sanitation.stains.values()].map(s => s.scope));
+  assert.ok(scopes.has('street') && scopes.has('wall') && scopes.has('plant'), 'blood should splatter street, wall, and plant');
+
+  sanitation.soilCitizen(worker, 'sangue', 20);
+  sanitation.soilCitizen(worker, 'bosta', 10);
+  assert.equal(worker.dirtSources.sangue, 20);
+  assert.equal(worker.dirtSources.bosta, 10);
+  assert.ok(worker.needs.hygiene < 100);
+  sanitation.washCitizenDirt(worker, 1);
+  assert.equal(worker.dirtSources.sangue, 0);
+
+  const streetStain = [...sanitation.stains.values()].find(s => s.scope === 'street');
+  const job = sanitation.requestStainCleaning(streetStain);
+  assert.ok(job, 'cleaner company should accept stain cleaning job');
+  for (let i = 0; i < 10 && job.status !== 'completed'; i++) {
+    city.minute++;
+    sanitation.updateStainJobs([job]);
+  }
+  assert.equal(job.status, 'completed');
+  assert.equal(sanitation.stains.has(streetStain.id), false, 'cleaned stain must be removed');
 });
 
 test('terrestrial species have distinct silhouettes and species-specific gaits', () => {

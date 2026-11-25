@@ -47,6 +47,7 @@ import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-k
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=head-flag-crown-1';
 import { CityAnimalModels } from './city_animal_models.js?v=fauna-scale-2';
 import { syncBirdNests } from './city_bird_nests.js';
+import { syncCombatStains } from './city_stains_3d.js';
 import { flagNightFactor } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1-canvas-readback-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainStoneSurface,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces,roadRailingAllowed} from './road_terrain_geometry.js?v=low-water-shore-4';
@@ -9519,6 +9520,7 @@ export class RCT3DRenderer {
     this.cityCitizenModels.end();
     this.cityAnimalModels.end();
     syncBirdNests(THREE,this,this.cityDevelopment?.city?.fauna,map);
+    syncCombatStains(THREE,this,this.cityDevelopment?.city,map);
     syncSubstanceSmoke(THREE,this,this.cityDevelopment?.city,time);
     syncConstructionDust(THREE,this,this.cityDevelopment,time,false);
     // Clean inactive dynamic billboards

@@ -1401,7 +1401,7 @@ export class CitySimulation {
     const rate=SERVICE_RATES[task];
     if (rate===undefined) { this.life.resetTask(c, 'serviço indisponível'); return; }
     n[task] = clamp(n[task] + rate);
-    if(task==='hygiene'&&n.hygiene>=95){const facility=this.sanitation.facilities.get(c.hygieneTargetId);if(facility&&c.trespassHygieneFacilityId===facility.id){const building=this.building(facility.buildingId);if(building)this.justice.recordTrespassUse(c,building,facility,'unauthorized-hygiene-use');}c.trespassHygieneFacilityId=null;c.hygieneWaitingSince=null;}
+    if(task==='hygiene'&&n.hygiene>=95){this.sanitation?.washCitizenDirt?.(c,1);const facility=this.sanitation.facilities.get(c.hygieneTargetId);if(facility&&c.trespassHygieneFacilityId===facility.id){const building=this.building(facility.buildingId);if(building)this.justice.recordTrespassUse(c,building,facility,'unauthorized-hygiene-use');}c.trespassHygieneFacilityId=null;c.hygieneWaitingSince=null;}
     if(b.type==='townhall'&&task==='health'&&n.health>=65){n.health=65;c.task=null;c.servicePaid=null;return;}
     c.action = SERVICE_ACTIONS[task];
     if (task === 'social') { n.social = clamp(n.social - rate); c.socialWaitStarted ??= this.minute; if (this.minute - c.socialWaitStarted >= 30) { c.task = null; c.socialWaitStarted = null; n.leisure = clamp(n.leisure + 3); } }
@@ -1776,7 +1776,7 @@ export class CitySimulation {
           c.mobilityTimeLostToday=(c.mobilityTimeLostToday||0)+travelled*cost;
           c.mobilityNeed=Math.min(100,(c.mobilityNeed||0)+travelled*cost*.22*(c.mobilityPriority||1));
           if(!elevated&&!boatWaypoint){wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
-          if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}}
+          if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);this.sanitation?.soilCitizen?.(c,'barro',travelled*1.2);c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}}
         }
         let actionState=movementActionCache.get(c);if(!actionState){actionState={action:null};movementActionCache.set(c,actionState);}
         const actionDelivery=c.deliveryId??null,actionBoat=c.boatClass??null,actionSky=c.skybridgeZ>0,actionForestry=c.forestryJob?.stage??null,actionVisit=c.socialVisitId??null;

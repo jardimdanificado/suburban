@@ -318,7 +318,7 @@ export class CityFauna {
     }
   }
 
-  canOccupy(x, y, species, buildingId = null, altitude = 0) {
+  canOccupy(x, y, species, buildingId = null, altitude = 0, allowUrban = false) {
     const spec = ANIMAL_SPECIES[species];
     if (!spec) return false;
     const city = this.city, world = city.world;
@@ -326,6 +326,10 @@ export class CityFauna {
     if (ix < 0 || iy < 0 || ix >= world.width || iy >= world.height) return false;
     if (spec.canFly && altitude > 0.5) return true;
     const tile = tileAt(world, ix, iy);
+    if (allowUrban && tile !== TILE_WATER) {
+      const key = `${ix},${iy}`;
+      return !city.occupied?.has(key);
+    }
     if (!spec.terrain.includes(tile)) return false;
     if (ROAD_TILES.has(tile) || world.hasSidewalk?.(ix, iy)) return false;
     const key = `${ix},${iy}`;
@@ -482,7 +486,7 @@ export class CityFauna {
       const a = baseAngle + offset;
       const nx = animal.x + Math.sin(a) * step;
       const ny = animal.y + Math.cos(a) * step;
-      if (this.canOccupy(nx, ny, animal.species, animal.buildingId, animal.altitude || 0)) {
+      if (this.canOccupy(nx, ny, animal.species, animal.buildingId, animal.altitude || 0, animal.targetCarcassId != null)) {
         animal.x = nx;
         animal.y = ny;
         animal.entity.x = nx;
@@ -537,30 +541,65 @@ export class CityFauna {
     }
   }
 
-  findCarcass(eater, maxDist = 16) {
-    let closest = null, bestDist = maxDist;
+  findCarcass(eater, maxDist = 24) {
+    let closest = null, bestDist = maxDist, isHuman = false;
     for (const a of this.animals.values()) {
       if (a === eater || !a.dead || a.entity?.destroyed || (a.carcassFood ?? 0) <= 0) continue;
       const d = Math.hypot(a.x - eater.x, a.y - eater.y);
-      if (d < bestDist) { bestDist = d; closest = a; }
+      if (d < bestDist) { bestDist = d; closest = a; isHuman = false; }
     }
-    return closest ? { animal: closest, dist: bestDist } : null;
+    for (const body of this.city.justice?.bodies || []) {
+      if (body.status === 'cremated' || body.currentVehicleId || body.locationBuildingId != null || body.currentInterior || body.pickedUp || body.entity?.destroyed || (body.carcassFood ?? 0) <= 0) continue;
+      const bx = body.entity?.x ?? body.position?.x, by = body.entity?.y ?? body.position?.y;
+      if (!Number.isFinite(bx) || !Number.isFinite(by)) continue;
+      const d = Math.hypot(bx - eater.x, by - eater.y);
+      if (d < bestDist) { bestDist = d; closest = body; isHuman = true; }
+    }
+    if (!closest) return null;
+    const x = isHuman ? (closest.entity?.x ?? closest.position?.x) : closest.x;
+    const y = isHuman ? (closest.entity?.y ?? closest.position?.y) : closest.y;
+    return { animal: closest, x, y, dist: bestDist, isHuman, targetId: isHuman ? `body:${closest.id}` : closest.id };
+  }
+
+  getCarcassByTarget(targetId) {
+    if (targetId == null) return null;
+    if (typeof targetId === 'string' && targetId.startsWith('body:')) {
+      const id = Number(targetId.slice(5));
+      return this.city.justice?.bodies?.find(b => b.id === id) || null;
+    }
+    return this.animals.get(targetId) || null;
   }
 
   feedOnCarcass(eater, carcass) {
-    if (!eater || !carcass || !carcass.dead || carcass.entity?.destroyed || (carcass.carcassFood ?? 0) <= 0) return false;
+    if (!eater || !carcass || carcass.entity?.destroyed || (carcass.carcassFood ?? 0) <= 0) return false;
+    const isHuman = carcass.citizenId != null;
+    if (!isHuman && !carcass.dead) return false;
+    if (isHuman && carcass.status === 'cremated') return false;
     const bite = Math.min(carcass.carcassFood, 25);
     carcass.carcassFood -= bite;
     eater.hunger = Math.min(100, eater.hunger + bite * 1.4);
     eater.state = 'eat';
-    eater.action = `Comendo carcaça de ${ANIMAL_SPECIES[carcass.species]?.label?.toLowerCase() || 'animal'}`;
+    eater.action = isHuman
+      ? `Devorando cadáver de ${carcass.name || 'morador'}`
+      : `Comendo carcaça de ${ANIMAL_SPECIES[carcass.species]?.label?.toLowerCase() || 'animal'}`;
     eater.targetX = null;
     eater.targetY = null;
     eater.targetCarcassId = null;
     eater.stateTimer = 2.5;
+    const cx = isHuman ? (carcass.entity?.x ?? carcass.position?.x) : carcass.x;
+    const cy = isHuman ? (carcass.entity?.y ?? carcass.position?.y) : carcass.y;
+    this.city.sanitation?.emitCombatBlood?.(cx, cy, 0.22);
     if (carcass.carcassFood <= 0) {
-      carcass.entity.destroyed = true;
-      this.animals.delete(carcass.id);
+      if (carcass.entity) carcass.entity.destroyed = true;
+      if (isHuman) {
+        carcass.status = 'cremated';
+        carcass.consumedByFauna = true;
+        carcass.action = 'Corpo devorado por animais';
+        if (this.city.justice) this.city.justice.corpseRevision = (this.city.justice.corpseRevision || 0) + 1;
+        this.city.log?.(`O cadáver de ${carcass.name || 'um morador'} foi devorado por animais.`, 'justice', [carcass.citizenId].filter(Boolean), { kind: 'corpse-devoured', bodyId: carcass.id });
+      } else {
+        this.animals.delete(carcass.id);
+      }
     }
     return true;
   }
@@ -621,14 +660,16 @@ export class CityFauna {
       animal.stateTimer = 2.0;
       if (threat.dist < 1.3 && threat.citizen && !threat.citizen.dead) {
         threat.citizen.needs.health = Math.max(0, (threat.citizen.needs.health ?? 100) - 8);
+        this.city.sanitation?.emitCombatBlood?.(threat.citizen.entity.x, threat.citizen.entity.y, 0.7);
+        this.city.sanitation?.soilCitizen?.(threat.citizen, 'sangue', 10);
         animal.hunger = Math.min(100, animal.hunger + 15);
       }
       return;
     }
 
-    // 1.9 Scavenge carcasses (carnivores and omnivores)
+    // 1.9 Scavenge carcasses (carnivores and omnivores, including human corpses)
     if ((spec.diet === 'carnivore' || spec.diet === 'omnivore') && animal.hunger < 85 && animal.stateTimer <= 0) {
-      const carcass = this.findCarcass(animal, 16);
+      const carcass = this.findCarcass(animal, 28);
       if (carcass) {
         if (carcass.dist < 1.2) {
           this.feedOnCarcass(animal, carcass.animal);
@@ -636,10 +677,10 @@ export class CityFauna {
         }
         animal.inTreePlantId = null;
         animal.state = 'walk';
-        animal.action = 'Indo comer carcaça';
-        animal.targetX = carcass.animal.x;
-        animal.targetY = carcass.animal.y;
-        animal.targetCarcassId = carcass.animal.id;
+        animal.action = carcass.isHuman ? 'Atraído por cadáver' : 'Indo comer carcaça';
+        animal.targetX = carcass.x;
+        animal.targetY = carcass.y;
+        animal.targetCarcassId = carcass.targetId;
         animal.stateTimer = 3.0;
         return;
       }
@@ -906,8 +947,8 @@ export class CityFauna {
             animal.action = 'Empoleirado';
             animal.stateTimer = 3.0 + Math.random() * 4.0;
             animal.thinkTimer = 0.5;
-          } else if (animal.action === 'Indo comer carcaça' && animal.targetCarcassId != null) {
-            const carcass = this.animals.get(animal.targetCarcassId);
+          } else if ((animal.action === 'Indo comer carcaça' || animal.action === 'Atraído por cadáver') && animal.targetCarcassId != null) {
+            const carcass = this.getCarcassByTarget(animal.targetCarcassId);
             if (!this.feedOnCarcass(animal, carcass)) {
               animal.targetCarcassId = null;
               animal.state = 'idle';
@@ -1008,6 +1049,8 @@ export class CityFauna {
     const weaponBoost = (hunter.inventory?.arco_caca > 0 || lodge?.inventory?.arco_caca > 0) ? 2 : 1;
     target.health -= FAUNA_RULES.huntDamage * weaponBoost;
     target.provokedUntil = this.city.minute + 10;
+    this.city.sanitation?.emitCombatBlood?.(target.x, target.y, target.health <= 0 ? 1.0 : 0.45);
+    this.city.sanitation?.soilCitizen?.(hunter, 'sangue', target.health <= 0 ? 6 : 2);
     if (target.health <= 0) {
       this.markDead(target, 'Abatido', this.city.minute);
       const spec = ANIMAL_SPECIES[target.species];

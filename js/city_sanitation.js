@@ -60,7 +60,7 @@ function residentStatus(housing,home,c,access){
   return 1;
 }
 export class CitySanitation {
-  constructor(city) { this.city = city; this.facilities = new Map(); this.jobs = []; this.streetFeces = new Map(); this.fecesRevision=0; this.nextJobId = 1; this.cleaned = 0; this.cleanedFeces=0; this.collected = 0; }
+  constructor(city) { this.city = city; this.facilities = new Map(); this.jobs = []; this.streetFeces = new Map(); this.fecesRevision=0; this.stains = new Map(); this.stainRevision=0; this.nextStainId=1; this.cleanedStains=0; this.pendingTerrainErases=[]; this.nextJobId = 1; this.cleaned = 0; this.cleanedFeces=0; this.collected = 0; }
   invalidateFacilityChoiceIndex(){facilityChoiceIndexes.delete(this);}
   updateFacilityHomeIds(facility,homeIds){if(!facility||sameIds(facility.homeIds,homeIds))return false;facility.homeIds=homeIds;this.invalidateFacilityChoiceIndex();return true;}
   removeFacility(id){const removed=this.facilities.delete(id);if(removed)this.invalidateFacilityChoiceIndex();return removed;}
@@ -229,7 +229,7 @@ export class CitySanitation {
     for(const person of city.citizens){if(person===offender||person.entity.destroyed)continue;const inside=person.indoorLocation,near=place.scope==='street'?!inside&&Math.hypot(person.entity.x-place.x,person.entity.y-place.y)<=3:inside?.buildingId===place.buildingId&&Math.hypot((inside.position?.x||0)-place.x,(inside.position?.y||0)-place.y)<=3;if(!near)continue;const disgust=Math.min(7,1+(amount||1)*.5);person.mood=Math.max(-25,(person.mood||0)-disgust);person.needs.hygiene=clamp(person.needs.hygiene-disgust*.35);person.lastFecesDisgustAt=city.minute;}
   }
   exposeNearby(){
-    const city=this.city,expose=(x,y,amount,buildingId=null)=>{if(amount<2)return;for(const person of city.citizens){if(person.entity.destroyed||city.minute-(person.lastFecesExposureAt||-Infinity)<60)continue;const location=person.indoorLocation,near=buildingId!=null?location?.buildingId===buildingId&&Math.hypot((location.position?.x||0)-x,(location.position?.y||0)-y)<=2.2:!location&&Math.hypot(person.entity.x-x,person.entity.y-y)<=2.2;if(!near)continue;const dose=Math.min(3,amount*.18);person.needs.hygiene=clamp(person.needs.hygiene-dose);person.mood=Math.max(-25,(person.mood||0)-dose*.45);person.lastFecesExposureAt=city.minute;}};
+    const city=this.city,expose=(x,y,amount,buildingId=null)=>{if(amount<2)return;for(const person of city.citizens){if(person.entity.destroyed||city.minute-(person.lastFecesExposureAt||-Infinity)<60)continue;const location=person.indoorLocation,near=buildingId!=null?location?.buildingId===buildingId&&Math.hypot((location.position?.x||0)-x,(location.position?.y||0)-y)<=2.2:!location&&Math.hypot(person.entity.x-x,person.entity.y-y)<=2.2;if(!near)continue;const dose=Math.min(3,amount*.18);person.needs.hygiene=clamp(person.needs.hygiene-dose);this.soilCitizen(person,'bosta',Math.max(2,dose*3));person.mood=Math.max(-25,(person.mood||0)-dose*.45);person.lastFecesExposureAt=city.minute;}};
     for(const [key,pile]of this.streetFeces){const [x,y]=key.split(',').map(Number);expose(x+.5,y+.5,pile.amount);}
     for(const b of city.buildings)for(const [key,pile]of b.feces||[]){const unit=b.units.find(u=>`${u.x},${u.y},${u.z}`===key);if(unit)expose(b.entity.x+unit.x+.5,b.entity.y+unit.y+.5,pile.amount,b.id);}
   }
@@ -325,7 +325,7 @@ export class CitySanitation {
   worker(job) {
     const b = this.city.building(job.providerId);
     const cache = sanitationStepCache.get(this);
-    const target=job.kind==='feces'?this.city.building(job.buildingId)?.door||job.door:this.city.building(this.facilities.get(job.facilityId)?.buildingId)?.door;
+    const target=(job.kind==='feces'||job.kind==='stain')?this.city.building(job.buildingId)?.door||job.door:this.city.building(this.facilities.get(job.facilityId)?.buildingId)?.door;
     const distance=c=>{const origin=this.city.building(c.indoorLocation?.buildingId)?.door||c.entity;return target?Math.hypot(origin.x-target.x,origin.y-target.y):0;};
     if (cache?.minute === this.city.minute) {
       const key = b ? b.id : 0;
@@ -366,11 +366,11 @@ export class CitySanitation {
     job.status='cancelled';job.completedAt=this.city.minute;job.reason=reason;
   }
   updateMinute() {
-    const bathrooms=[],fecesJobs=[],jobCounts=new Map();
+    const bathrooms=[],fecesJobs=[],stainJobs=[],jobCounts=new Map();
     for(const job of this.jobs){
       if(job.status==='completed'||job.status==='cancelled')continue;
       if(job.providerId!=null)jobCounts.set(job.providerId,(jobCounts.get(job.providerId)||0)+1);
-      if(job.kind==='feces')fecesJobs.push(job);else bathrooms.push(job);
+      if(job.kind==='feces')fecesJobs.push(job);else if(job.kind==='stain')stainJobs.push(job);else bathrooms.push(job);
     }
     bathrooms.sort((a,b)=>(this.facilities.get(a.facilityId)?.cleanliness??100)-(this.facilities.get(b.facilityId)?.cleanliness??100)||a.createdAt-b.createdAt||a.id-b.id);
     const hall=this.city.buildings.find(b=>b.type==='townhall')||null;
@@ -427,9 +427,11 @@ export class CitySanitation {
     if(city.minute%60===0){
       for(const [cell,pile] of this.streetFeces) if(!pile.jobId){const [x,y]=cell.split(',').map(Number);this.requestFecesCleaning({scope:'street',cellKey:cell,x:x+.5,y:y+.5});}
       for(const b of city.buildings)for(const [cell,pile] of b.feces||[])if(!pile.jobId){const unit=b.units.find(u=>`${u.x},${u.y},${u.z}`===cell);if(unit)this.requestFecesCleaning({scope:'building',buildingId:b.id,unitId:unit.id,cellKey:cell,x:b.entity.x+unit.x+.5,y:b.entity.y+unit.y+.5,z:unit.z*1.8});}
+      for(const stain of this.stains.values())if(!stain.jobId)this.requestStainCleaning(stain);
       this.exposeNearby();
     }
     this.updateFecesJobs(fecesJobs);
+    this.updateStainJobs(stainJobs);
   }
   updateFecesJobs(fecesJobs){
     const city=this.city;
@@ -479,6 +481,193 @@ export class CitySanitation {
       const paid=city.transfer(job.accountId,company.accountId,city.accounts.get(job.accountId)?.balance||0,'Serviço de remoção de fezes',{jobId:job.id,scope:job.scope});job.status='completed';job.completedAt=city.minute;job.cleanedAmount=quantity;job.workerId=worker.id;worker.cleaningJobId=null;worker.task=null;worker.targetId=null;worker.path=[];worker.workCell=null;
       city.history.record('service',job.scope==='street'?'Limpeza de fezes em via pública.':'Limpeza de fezes em propriedade privada.',[job.payerId,company.accountId,worker.accountId],{amount:paid?job.fee:0,jobId:job.id,scope:job.scope,buildingId:job.buildingId,cellKey:job.cellKey,quantity});
       city.reputation.completed(company,worker,'limpeza concluída',{jobId:job.id});city.log(`${job.scope==='street'?'A prefeitura':'O proprietário'} pagou a limpeza de fezes ${job.scope==='street'?'na via pública':`em ${site.entity.properties.name}`}.`,'sanitation',[worker.id],{kind:'feces-cleaned',jobId:job.id,scope:job.scope,buildingId:job.buildingId,amount:job.fee});
+    }
+  }
+  addStain({ kind = 'blood', scope = 'street', x, y, z = 0, buildingId = null, unitId = null, plantId = null, color = null, radius = 0.42, amount = 1, side = null } = {}) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    for (const existing of this.stains.values()) {
+      if (existing.kind === kind && existing.scope === scope && existing.buildingId === buildingId && existing.plantId === plantId && Math.hypot(existing.x - x, existing.y - y) < 0.65) {
+        existing.amount = Math.min(5, existing.amount + amount);
+        existing.radius = Math.min(0.85, Math.max(existing.radius, radius));
+        existing.updatedAt = this.city.minute;
+        this.stainRevision++;
+        return existing;
+      }
+    }
+    if (this.stains.size >= 350) {
+      const oldest = this.stains.keys().next().value;
+      if (oldest != null) this.stains.delete(oldest);
+    }
+    const id = `stain:${this.nextStainId++}`;
+    const stain = {
+      id,
+      kind,
+      scope,
+      x,
+      y,
+      z,
+      buildingId,
+      unitId,
+      plantId,
+      side,
+      color: color ?? (kind === 'blood' ? 0x8c1118 : 0x5c4228),
+      radius,
+      amount: Math.min(5, Math.max(0.25, amount)),
+      createdAt: this.city.minute,
+      updatedAt: this.city.minute,
+      jobId: null,
+    };
+    this.stains.set(id, stain);
+    this.stainRevision++;
+    return stain;
+  }
+  emitCombatBlood(x, y, amount = 1) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    this.addStain({ kind: 'blood', scope: 'street', x, y, color: 0x8c1118, radius: 0.35 + Math.min(0.4, amount * 0.12), amount });
+    for (const b of this.city.buildings || []) {
+      if (b.entity?.destroyed || b.constructionKind === 'open-air') continue;
+      const bx = b.entity.x, by = b.entity.y, bw = b.width || 3, bd = b.depth || 3;
+      const cx = Math.max(bx, Math.min(bx + bw, x)), cy = Math.max(by, Math.min(by + bd, y));
+      if (Math.hypot(x - cx, y - cy) <= 1.35) {
+        const dLeft = Math.abs(cx - bx), dRight = Math.abs(bx + bw - cx), dTop = Math.abs(cy - by), dBot = Math.abs(by + bd - cy);
+        const minD = Math.min(dLeft, dRight, dTop, dBot);
+        const side = minD === dBot ? 0 : minD === dRight ? 1 : minD === dTop ? 2 : 3;
+        this.addStain({ kind: 'blood', scope: 'wall', x: cx, y: cy, z: 0.55 + Math.random() * 0.45, buildingId: b.id, side, color: 0x8c1118, radius: 0.32, amount: amount * 0.7 });
+        break;
+      }
+    }
+    for (const plant of this.city.nature?.plants?.values?.() || []) {
+      if (plant.entity?.destroyed) continue;
+      if (Math.hypot(plant.x + 0.5 - x, plant.y + 0.5 - y) <= 1.45) {
+        this.addStain({ kind: 'blood', scope: 'plant', x: plant.x + 0.5, y: plant.y + 0.5, z: 0.35, plantId: plant.id, color: 0x8c1118, radius: 0.3, amount: amount * 0.6 });
+        break;
+      }
+    }
+  }
+  soilCitizen(c, kind = 'terra', amount = 4, color = null) {
+    if (!c || c.dead || c.entity?.destroyed) return;
+    c.dirtSources ??= { sangue: 0, tinta: 0, barro: 0, bosta: 0, terra: 0 };
+    c.dirtSources[kind] = Math.min(100, (c.dirtSources[kind] || 0) + amount);
+    if (kind === 'tinta' && color != null) c.dirtTintColor = color;
+    if (c.needs && Number.isFinite(c.needs.hygiene)) {
+      c.needs.hygiene = Math.max(0, c.needs.hygiene - amount * 0.45);
+    }
+    const g = c.wardrobe?.[c.wearingIndex];
+    if (g) g.dirt = Math.min(100, (g.dirt || 0) + amount * 0.6);
+  }
+  washCitizenDirt(c, fraction = 1) {
+    if (!c?.dirtSources) return;
+    const keep = Math.max(0, 1 - fraction);
+    for (const key of Object.keys(c.dirtSources)) {
+      c.dirtSources[key] = Number((c.dirtSources[key] * keep).toFixed(2));
+    }
+    if ((c.dirtSources.tinta || 0) <= 1) delete c.dirtTintColor;
+  }
+  requestStainCleaning(stain) {
+    if (!stain || stain.jobId || !this.stains.has(stain.id)) return null;
+    const city = this.city;
+    const site = stain.scope === 'wall' && stain.buildingId != null ? city.building(stain.buildingId) : null;
+    if (stain.scope === 'wall' && (!site || site.entity?.destroyed)) return null;
+    const door = site?.door || { x: Math.floor(stain.x) + 0.5, y: Math.floor(stain.y) + 0.5 };
+    const target = site || { id: `street:${stain.id}`, door, entity: { properties: { name: 'Via pública' } } };
+    const company = this.selectCompany(target);
+    if (!company) return null;
+    const payerId = site ? (site.units?.[0]?.ownerId || site.ownerId || site.accountId || 'treasury') : 'treasury';
+    const fee = Math.ceil(city.currency.price(220 + Math.round(stain.amount * 60)) * (payerId === 'treasury' ? 1.25 : 1));
+    if ((city.accounts.get(payerId)?.balance || 0) < fee) return null;
+    const id = this.nextJobId++, accountId = `cleaning:${id}`;
+    city.accounts.set(accountId, { name: `Limpeza ${id}`, balance: 0 });
+    if (!city.transfer(payerId, accountId, fee, `Reserva de limpeza de ${stain.kind === 'blood' ? 'sangue' : 'barro'}`, { jobId: id })) {
+      city.accounts.delete(accountId);
+      return null;
+    }
+    const job = {
+      id,
+      kind: 'stain',
+      stainId: stain.id,
+      stainKind: stain.kind,
+      scope: stain.scope,
+      buildingId: stain.buildingId,
+      unitId: stain.unitId,
+      door,
+      providerId: company.id,
+      payerId,
+      accountId,
+      fee,
+      status: 'waiting',
+      workerId: null,
+      labor: 0,
+      createdAt: city.minute,
+    };
+    this.jobs.push(job);
+    stain.jobId = id;
+    return job;
+  }
+  updateStainJobs(stainJobs) {
+    const city = this.city;
+    const cache = sanitationStepCache.get(this);
+    const activeCache = cache?.minute === city.minute ? cache : null;
+    const jobs = stainJobs || this.jobs.filter(j => j.kind === 'stain' && !['completed', 'cancelled'].includes(j.status));
+    for (const job of jobs) {
+      const stain = this.stains.get(job.stainId);
+      const site = job.scope === 'wall' && job.buildingId != null ? city.building(job.buildingId) : null;
+      if (!stain || site?.entity?.destroyed) {
+        const c = city.society.citizen(job.workerId);
+        if (c) { c.cleaningJobId = null; c.task = null; c.path = []; }
+        const account = city.accounts.get(job.accountId);
+        if (account?.balance) city.transfer(job.accountId, job.payerId, account.balance, 'Estorno: mancha removida', { jobId: job.id });
+        job.status = 'cancelled';
+        continue;
+      }
+      const target = site || { id: `street:${job.stainId}`, door: job.door, entity: { properties: { name: 'Via pública' } } };
+      let company = city.building(job.providerId);
+      if (!company || company.type !== 'cleaner' || !company.active || !city.economy.connected(company, target)) {
+        company = this.selectCompany(target);
+        if (!company) continue;
+        job.providerId = company.id;
+        if (activeCache) activeCache.jobCounts.set(company.id, (activeCache.jobCounts.get(company.id) || 0) + 1);
+      }
+      let worker = city.society.citizen(job.workerId);
+      if (worker && city.urgentNeed(worker)) { this.releaseCitizen(worker); worker.task = null; worker.path = []; worker = null; }
+      job.nextWorkerSearchAt ??= city.minute;
+      if (!worker && (city.fastForward ? city.minute >= job.nextWorkerSearchAt : city.minute % 5 === 0) && city.hour >= 7 && city.hour < 19) {
+        if (activeCache && activeCache.dispatchBudget <= 0) continue;
+        worker = this.worker(job);
+        if (!worker) { job.nextWorkerSearchAt = city.minute + 5; continue; }
+        if (activeCache) activeCache.dispatchBudget--;
+        job.nextWorkerSearchAt = city.minute + 5;
+        const destination = site?.door || job.door, path = worker.indoorLocation ? [] : city.findPath(worker.entity, destination);
+        if (path === null) continue;
+        worker.cleaningJobId = job.id; worker.task = 'clean'; worker.targetId = site?.id ?? null; worker.path = path; worker.servicePaid = null;
+        job.workerId = worker.id; job.status = 'working';
+      }
+      if (!worker || worker.workMeal || worker.task === 'workmeal' || worker.conversation) continue;
+      if (worker.indoorLocation && worker.path.length) worker.path = [];
+      if (worker.path.length) continue;
+      if (Math.hypot(worker.entity.x - (site?.door?.x ?? job.door.x), worker.entity.y - (site?.door?.y ?? job.door.y)) > 0.8) {
+        const path = city.findPath(worker.entity, site?.door || job.door);
+        if (path === null) continue;
+        worker.path = path;
+        continue;
+      }
+      if (worker.id !== company.ownerId) {
+        if (company.balance < company.wage) { this.releaseCitizen(worker); continue; }
+        city.payWage(worker, company);
+      }
+      const kindLabel = stain.kind === 'blood' ? 'sangue' : 'barro';
+      job.labor += 1 + (worker.skills.cleaning || 0) / 50;
+      worker.action = stain.scope === 'wall' ? `Limpando ${kindLabel} da parede` : `Limpando ${kindLabel} da via`;
+      city.economy.practice(worker, 'cleaning');
+      if (job.labor < 4 + stain.amount * 2) continue;
+      this.stains.delete(stain.id);
+      this.stainRevision++;
+      this.cleanedStains++;
+      if (stain.scope === 'street') this.pendingTerrainErases.push({ x: stain.x, y: stain.y, radius: stain.radius, kind: stain.kind });
+      const paid = city.transfer(job.accountId, company.accountId, city.accounts.get(job.accountId)?.balance || 0, `Limpeza de ${kindLabel}`, { jobId: job.id, scope: job.scope, stainKind: stain.kind });
+      job.status = 'completed'; job.completedAt = city.minute; job.workerId = worker.id;
+      worker.cleaningJobId = null; worker.task = null; worker.targetId = null; worker.path = [];
+      city.history.record('service', `Limpeza de ${kindLabel} ${stain.scope === 'wall' ? 'em parede' : 'em via pública'}.`, [job.payerId, company.accountId, worker.accountId], { amount: paid ? job.fee : 0, jobId: job.id, scope: job.scope, stainKind: stain.kind });
+      city.reputation.completed(company, worker, 'limpeza concluída', { jobId: job.id });
     }
   }
   wasteMetrics() {

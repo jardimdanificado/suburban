@@ -382,6 +382,20 @@ export class TerrainTracks {
     renderer.setRenderTarget(this.paintTarget);renderer.render(this.paintScene,this.camera);renderer.setRenderTarget(old);
     renderer.autoClear=autoClear;renderer.shadowMap.autoUpdate=shadowUpdate;renderer.shadowMap.needsUpdate=shadowNeedsUpdate;
   }
+  erasePaint(renderer,erases){
+    if(!erases?.length||!this.paintTarget)return;
+    const T=this.THREE;
+    if(!this.paintMesh||this.paintCapacity<erases.length)return;
+    const shape=this.paintMesh.geometry.getAttribute('contactShape'),info=this.paintMesh.geometry.getAttribute('contactInfo'),rgba=this.paintMesh.geometry.getAttribute('paintRgba');
+    erases.forEach((e,i)=>{const r=(e.radius||.5)*2.4;shape.setXYZW(i,e.x,e.y,r,r);info.setXY(i,0,2);rgba.setXYZW(i,0,0,0,0);});
+    shape.needsUpdate=info.needsUpdate=rgba.needsUpdate=true;this.paintMesh.geometry.instanceCount=erases.length;
+    const old=renderer.getRenderTarget(),autoClear=renderer.autoClear,shadowUpdate=renderer.shadowMap.autoUpdate,shadowNeedsUpdate=renderer.shadowMap.needsUpdate,prevBlend=this.paintMaterial.blending;
+    renderer.autoClear=false;renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=false;
+    this.paintMaterial.blending=T.NoBlending;
+    renderer.setRenderTarget(this.paintTarget);renderer.render(this.paintScene,this.camera);renderer.setRenderTarget(old);
+    this.paintMaterial.blending=prevBlend;
+    renderer.autoClear=autoClear;renderer.shadowMap.autoUpdate=shadowUpdate;renderer.shadowMap.needsUpdate=shadowNeedsUpdate;
+  }
   paint(renderer,stamps,target=this.target,permanentPass=0){
     if(!stamps.length)return;
     const T=this.THREE;
@@ -428,15 +442,44 @@ export class TerrainTracks {
       groundArt=this._groundArtCache.items;
       for(let i=0;i<groundArt.length;i++){const item=groundArt[i];if(item.piece.renderedInkColor!=null)item.inkColor=item.piece.renderedInkColor;}
     }
+    const groundSources=[...groundArt];
+    if(city?.sanitation?.stains?.size){
+      for(const stain of city.sanitation.stains.values()){
+        if(stain.scope==='street'&&stain.kind==='blood'&&stain.amount>0){
+          groundSources.push({stain,dirtKind:'sangue',x:stain.x,y:stain.y,width:stain.radius*2,height:stain.radius*2,inkColor:stain.color??0x8c1118});
+        }
+      }
+    }
+    if(city?.sanitation?.streetFeces?.size){
+      for(const [key,pile] of city.sanitation.streetFeces){
+        if(!pile?.amount)continue;
+        const [fx,fy]=key.split(',').map(Number);
+        groundSources.push({fecesKey:key,dirtKind:'bosta',x:fx+.5,y:fy+.5,width:.7,height:.7,inkColor:0x4e3618});
+      }
+    }
     const stamps=[],paintStamps=[];
-    const onStepGraffiti=(item,u,v,stamp)=>{
-      const p=item.piece;p.groundSmudges??=[];
-      p.groundSmudges.push({u,v,dx:Math.sin(stamp.angle),dz:Math.cos(stamp.angle),kind:stamp.kind});
-      if(p.groundSmudges.length>48)p.groundSmudges.shift();
-      p.wearProgress=Math.min(1,(p.wearProgress||0)+(Math.abs(stamp.kind)===1?.025:.045));
-      p._smudgeSteps=(p._smudgeSteps||0)+1;
-      if(p._smudgeSteps===1||p._smudgeSteps%4===0||p.wearProgress>=1){p.smudgeRevision=(p.smudgeRevision||0)+1;if(p.wearProgress>=1)this._groundArtCache=null;}
+    if(city?.sanitation?.stains?.size){
+      for(const stain of city.sanitation.stains.values()){
+        if(stain.scope==='street'&&stain.kind==='blood'&&!stain._paintedToTerrain){
+          stain._paintedToTerrain=true;
+          paintStamps.push({x:stain.x,z:stain.y,width:stain.radius*2.4,length:stain.radius*2.4,angle:0,kind:2,paintColor:stain.color??0x8c1118,paintLoad:Math.min(.85,.45+stain.amount*.15)});
+        }
+      }
+    }
+    const onStepGroundSource=(item,u,v,stamp,citizen)=>{
+      if(item.piece){
+        const p=item.piece;p.groundSmudges??=[];
+        p.groundSmudges.push({u,v,dx:Math.sin(stamp.angle),dz:Math.cos(stamp.angle),kind:stamp.kind});
+        if(p.groundSmudges.length>48)p.groundSmudges.shift();
+        p.wearProgress=Math.min(1,(p.wearProgress||0)+(Math.abs(stamp.kind)===1?.025:.045));
+        p._smudgeSteps=(p._smudgeSteps||0)+1;
+        if(p._smudgeSteps===1||p._smudgeSteps%4===0||p.wearProgress>=1){p.smudgeRevision=(p.smudgeRevision||0)+1;if(p.wearProgress>=1)this._groundArtCache=null;}
+        if(citizen)city?.sanitation?.soilCitizen?.(citizen,'tinta',2.5,item.inkColor);
+      }else if(item.dirtKind&&citizen){
+        city?.sanitation?.soilCitizen?.(citizen,item.dirtKind,item.dirtKind==='bosta'?4:3);
+      }
     };
+    this._mudStainCooldown??=new Map();
     for(const entity of entities){
       const citizen=entity.properties?.citizen,vehicle=entity.properties?.cityVehicle,animal=entity.properties?.cityAnimal;
       if(!citizen&&!vehicle&&!animal)continue;
@@ -455,16 +498,39 @@ export class TerrainTracks {
       const contacts=this.motion.move(entity,{x,z,angle,vehicle:vehicle?.good||null,scale,hull,animalProfile},this.time);
       stamps.push(...contacts);
       stamps.push(...this.sandCarry.contacts(entity,contacts,world));
-      stamps.push(...this.dirtCarry.contacts(entity,contacts,world,[TILE_ROAD_GRASS,TILE_ROAD_HILL,TILE_FLOOR,TILE_HILL],'dirt',
-        stamp=>this.grassWear.coverage(stamp,world,this.time)));
-      if(groundArt.length||this.paintCarry.history.has(entity)){
-        paintStamps.push(...this.paintCarry.contacts(entity,contacts,world,groundArt,onStepGraffiti));
+      const dirtDeposits=this.dirtCarry.contacts(entity,contacts,world,[TILE_ROAD_GRASS,TILE_ROAD_HILL,TILE_FLOOR,TILE_HILL],'dirt',
+        stamp=>this.grassWear.coverage(stamp,world,this.time));
+      stamps.push(...dirtDeposits);
+      if(dirtDeposits.length&&city?.sanitation?.addStain){
+        for(const d of dirtDeposits){
+          const tx=Math.floor(d.x),tz=Math.floor(d.z),ck=`${tx},${tz}`;
+          const last=this._mudStainCooldown.get(ck)??-Infinity;
+          if(this.time-last>20){
+            const tile=world.getTile?world.getTile(tx,tz):world.map?.[tz*world.width+tx];
+            if(isDirtRoad(tile)||tile===TILE_ROAD_GRASS||tile===TILE_ROAD_HILL){
+              this._mudStainCooldown.set(ck,this.time);
+              city.sanitation.addStain({kind:'mud',scope:'street',x:d.x,y:d.z,radius:.45,amount:.5});
+            }
+          }
+        }
+      }
+      if(citizen&&contacts.length){
+        const tx=Math.floor(x),tz=Math.floor(z),tile=world.getTile?world.getTile(tx,tz):world.map?.[tz*world.width+tx];
+        if(dirtDeposits.length)city?.sanitation?.soilCitizen?.(citizen,'barro',.5);
+        else if(tile===TILE_ROAD_GRASS||tile===TILE_ROAD_HILL||tile===TILE_HILL)city?.sanitation?.soilCitizen?.(citizen,'terra',.25);
+      }
+      if(groundSources.length||this.paintCarry.history.has(entity)){
+        paintStamps.push(...this.paintCarry.contacts(entity,contacts,world,groundSources,(item,u,v,stamp)=>onStepGroundSource(item,u,v,stamp,citizen)));
       }
       this.grassWear.record(contacts,world,this.time);
     }
     this.grassWear.prune(this.time,256,world);
     this.paint(renderer,stamps);
     if(paintStamps.length&&this.paintPaint)this.paintPaint(renderer,paintStamps);
+    if(city?.sanitation?.pendingTerrainErases?.length&&this.erasePaint){
+      const erases=city.sanitation.pendingTerrainErases.splice(0,64);
+      this.erasePaint(renderer,erases);
+    }
     const permanent=permanentRoadContacts(stamps,world);
     this.permanentRoadTiles??=new Map();
     for(const stamp of permanent){const [x,z]=stamp.clip;this.permanentRoadTiles.set(z*world.width+x,{x,z});}
