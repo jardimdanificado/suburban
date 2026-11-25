@@ -1,5 +1,6 @@
-import { ANIMAL_SPECIES, ANIMAL_SPECIES_IDS } from './animal_catalog.js';
+import { ANIMAL_SPECIES, ANIMAL_SPECIES_IDS } from './animal_catalog.js?v=fauna-scale-2';
 import { NATURAL_PLANTS } from './plant_catalog.js';
+import { BOTANICAL_TREE_MODELS } from './botanical_trees.js?v=species-colors-3';
 import { CITY_FLOOR_HEIGHT } from './city_building_geometry.js?v=banner-placement-2';
 import { buildingLeisureSpaces } from './city_balconies.js?v=sertanejo-house-styles-1';
 import { tileAt, ROAD_TILES } from './city_terrain.js?v=entrance-retaining-clearance-1';
@@ -135,6 +136,17 @@ export class CityFauna {
           this.removeNest(nest);
           continue;
         }
+        const spot = this.treePerchSpot(plant, nest.entityId || nest.ownerId || plant.id || 1);
+        const trunkDist = Math.hypot(nest.x - (plant.x + 0.5), nest.y - (plant.y + 0.5));
+        if (trunkDist < 0.22 || (nest.z || 0) < spot.z * 0.75) {
+          nest.x = spot.x;
+          nest.y = spot.y;
+          nest.z = spot.z;
+          if (nest.entity) {
+            nest.entity.x = spot.x;
+            nest.entity.y = spot.y;
+          }
+        }
       }
       if (nest.buildingId != null && this.city.building) {
         const b = this.city.building(nest.buildingId);
@@ -145,10 +157,35 @@ export class CityFauna {
     }
   }
 
+  treePerchSpot(plant, seed = plant?.id || 1) {
+    if (!plant || plant.entity?.destroyed) return { x: 0, y: 0, z: 0, surface: 'tree', plantId: null };
+    const species = plant.species || plant.entity?.properties?.species || '';
+    const model = BOTANICAL_TREE_MODELS[species];
+    const renderSize = plant.entity?.properties?.render?.size || 1;
+    const savedVisual = plant.visualScale ?? plant.entity?.properties?.cityPlant?.visualScale;
+    const visualScale = Number.isFinite(savedVisual)
+      ? savedVisual
+      : (0.76 + (Math.abs(Math.sin(plant.x * 12.9898 + plant.y * 78.233 + species.length * 0.31) * 43758.5453) % 1) * 0.52);
+    const totalScale = renderSize * visualScale;
+    const isPalm = model?.kind === 'pinnate' || model?.kind === 'fan' || model?.kind === 'papaya' || species.includes('palm');
+    const baseHeight = model?.height || (species === 'coconut_palm' ? 3.2 : species === 'traveller_palm' ? 2.8 : 3.15);
+    const H = baseHeight * totalScale;
+    const z = isPalm ? Math.max(1.4, H * 0.90) : Math.max(1.2, H * 0.72);
+    const offsetR = isPalm
+      ? Math.max(0.28, Math.min(0.55, (model?.length || 1.3) * totalScale * 0.30))
+      : Math.max(0.32, Math.min(0.95, (model?.radius || 1.2) * totalScale * 0.48));
+    const angle = ((Number(seed) || 1) * 2.399963 + plant.x * 0.73 + plant.y * 1.17) % (Math.PI * 2);
+    return {
+      x: plant.x + 0.5 + Math.cos(angle) * offsetR,
+      y: plant.y + 0.5 + Math.sin(angle) * offsetR,
+      z,
+      surface: 'tree',
+      plantId: plant.id,
+    };
+  }
+
   treeCanopyAltitude(plant) {
-    if (!plant || plant.entity?.destroyed) return 0;
-    const scale = (plant.entity.properties?.render?.size || 1) * (plant.visualScale || 1);
-    return Math.max(0.95, Math.min(2.6, 1.45 * scale));
+    return this.treePerchSpot(plant).z;
   }
 
   findTreeSpot(x, y, maxDist = 10) {
@@ -159,6 +196,8 @@ export class CityFauna {
       const list=buckets.get((((cx+dx)&0xFFFF)<<16)|((cy+dy)&0xFFFF));if(!list)continue;
       for(let i=0;i<list.length;i++){
         const plant=list[i];if(plant.entity?.destroyed||plant.stage!=='mature')continue;
+        const model=BOTANICAL_TREE_MODELS[plant.species];
+        if(model&&model.height<1.8)continue;
         const px=plant.x+0.5-x,py=plant.y+0.5-y,d2=px*px+py*py;
         if(d2<bestDist2){bestDist2=d2;best=plant;}
       }
@@ -190,7 +229,7 @@ export class CityFauna {
   surfacePerchCandidates(bx, by, maxDist = 16) {
     const candidates = [];
     const tree = this.findTreeSpot(bx, by, maxDist);
-    if (tree) candidates.push({ x: tree.x + 0.5, y: tree.y + 0.5, z: this.treeCanopyAltitude(tree), surface: 'tree', plantId: tree.id });
+    if (tree) candidates.push(this.treePerchSpot(tree, Math.floor(bx * 7 + by * 13) || tree.id));
     for (const b of this.city.buildings || []) {
       if (b.entity?.destroyed || !b.entity) continue;
       const cx = b.entity.x + (b.width || 3) * 0.5, cy = b.entity.y + (b.depth || 3) * 0.5;
