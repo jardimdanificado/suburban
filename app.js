@@ -5,7 +5,7 @@ import { FreeCameraTouchControls } from './js/free_camera_touch_controls.js';
 import {CityFavorites} from './js/city_favorites.js?v=custom-history-limit-1';
 import { CitySimulationBridge } from './js/city_sim_bridge.js?v=fauna-motion-1';
 import { resolveWorldSettings, randomWorldPreset, randomSettlementPreset, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=game-approach-camera-9";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=pathcache-fix-1";
 import { CityDesktop } from "./js/city_desktop.js?v=game-approach-camera-9";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=stairs-height-1";

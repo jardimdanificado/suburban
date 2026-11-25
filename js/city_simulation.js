@@ -943,7 +943,7 @@ export class CitySimulation {
     const location=start.properties?.citizen?.indoorLocation;
     if(location){const site=this.building(location.buildingId),shell=this.building(site?.officeTenantOf)||site;if(shell)start={...shell.door,properties:start.properties};}
     const wRev = this.world.revision || 0, sRev = this.structureRevision || 0, oRev = this.obstacleRevision || 0, occSize = this.occupied.size;
-    if (this._lastPathWRev !== wRev || this._lastPathSRev !== sRev || this._lastPathORev !== oRev || this._lastPathOccSize !== occSize) {
+    if (!this.pathCache || this._lastPathWRev !== wRev || this._lastPathSRev !== sRev || this._lastPathORev !== oRev || this._lastPathOccSize !== occSize) {
       this._lastPathWRev = wRev; this._lastPathSRev = sRev; this._lastPathORev = oRev; this._lastPathOccSize = occSize;
       const revision = `${wRev}:${sRev}:${oRev}:${occSize}`;
       this.pathCacheRevision = revision;

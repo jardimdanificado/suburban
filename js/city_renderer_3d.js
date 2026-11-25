@@ -30,6 +30,9 @@ import {syncSkybridges} from './city_skybridges.js?v=seeded-business-visual-v1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
 import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-3';
 import {narrativeSceneType,narrativeRoleForParticipant} from './city_art_narratives.js';
+import {shackSurfaceTextures} from './shack_surface_textures.js';
+import {createBotanicalTreeGeometry,acquireBotanicalTreeTextures} from './botanical_trees.js?v=species-colors-3';
+import {floweringShrubSurfaceTextures,floweringShrubLeavesGeometry,floweringShrubFlowersGeometry} from './flowering_shrub_surface.js?v=leaf-bract-detail-2';
 const OPEN_PIT_MINES=new Set(['iron_mine','bauxite_mine']);
 const EMPTY_FLOORS=new Set();
 function buildingMaterial(renderer,THREE,kind,color,variant=0){
@@ -85,23 +88,74 @@ function roomCellGeometry(THREE,facadeMask,openingMask,doorMask=0){
   // instancing so every floor occupies exactly one CITY_FLOOR_HEIGHT.
   g.translate(0,-h/2,0);g.computeVertexNormals();return g;
 }
+function createFecesCoilGeometry(THREE){
+  const turns=2.15,segments=38,radial=7,positions=[],normals=[],colors=[],indices=[];
+  const centerAt=t=>{
+    const a=t*Math.PI*2*turns,r=(1-t*.88)*.105;
+    return new THREE.Vector3(Math.cos(a)*r*(1+Math.sin(t*13)*.08),t*.145+.018,Math.sin(a)*r*(1+Math.cos(t*11)*.08));
+  };
+  for(let i=0;i<=segments;i++){
+    const t=i/segments,p=centerAt(t),next=centerAt(Math.min(1,t+.02)),prev=centerAt(Math.max(0,t-.02));
+    const tangent=next.clone().sub(prev).normalize();
+    const ref=Math.abs(tangent.y)>.9?new THREE.Vector3(1,0,0):new THREE.Vector3(0,1,0);
+    const binormal=new THREE.Vector3().crossVectors(tangent,ref).normalize();
+    const normal=new THREE.Vector3().crossVectors(binormal,tangent).normalize();
+    const pinch=1+Math.sin(t*28)*.15,r=((1-t*.78)*.046+.008)*pinch;
+    const shade=.72+t*.28;
+    for(let j=0;j<=radial;j++){
+      const phi=(j/radial)*Math.PI*2,cos=Math.cos(phi),sin=Math.sin(phi);
+      const dir=normal.clone().multiplyScalar(cos).addScaledVector(binormal,sin);
+      const v=p.clone().addScaledVector(dir,r);
+      positions.push(v.x,v.y,v.z);normals.push(dir.x,dir.y,dir.z);
+      const ridge=.84+sin*.12,cR=.42*shade*ridge,cG=.27*shade*ridge,cB=.15*shade*ridge;
+      colors.push(cR,cG,cB);
+    }
+  }
+  const stride=radial+1;
+  for(let i=0;i<segments;i++)for(let j=0;j<radial;j++){
+    const a=i*stride+j,b=(i+1)*stride+j,c=(i+1)*stride+j+1,d=i*stride+j+1;
+    indices.push(a,b,d,b,c,d);
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geo.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));
+  geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  geo.setIndex(indices);
+  return geo;
+}
+function createFecesLumpGeometry(THREE){
+  const geo=new THREE.IcosahedronGeometry(.055,1),pos=geo.attributes.position,colors=[];
+  for(let i=0;i<pos.count;i++){
+    const vx=pos.getX(i),vy=pos.getY(i),vz=pos.getZ(i),warp=.88+Math.sin(vx*37+vz*29)*.18;
+    pos.setXYZ(i,vx*1.25*warp,Math.max(-.02,vy*.72+.02),vz*.95*warp);
+    const shade=.65+Math.max(0,vy/.055)*.35;
+    colors.push(.38*shade,.24*shade,.13*shade);
+  }
+  geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  geo.computeVertexNormals();
+  return geo;
+}
 function syncFecesVisuals(renderer,THREE,city,world){
   const sanitation=city?.sanitation;if(!sanitation)return;
   const revision=sanitation.fecesRevision||0;
   if(renderer.fecesVisualRevision!==revision){
     if(renderer.fecesVisuals){renderer.scene.remove(renderer.fecesVisuals);const geometries=new Set(),materials=new Set();renderer.fecesVisuals.traverse(o=>{if(o!==renderer.fecesVisuals){if(o.geometry)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material])if(m)materials.add(m);}});for(const g of geometries)g.dispose();for(const m of materials)m.dispose();}
-    const group=new THREE.Group(),pileGeometry=new THREE.SphereGeometry(.14,7,5),pileMaterial=new THREE.MeshLambertMaterial({color:0x64452e});
+    const group=new THREE.Group(),coilGeo=createFecesCoilGeometry(THREE),lumpGeo=createFecesLumpGeometry(THREE);
+    const pileMaterial=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.62,metalness:.02});
     const add=(x,y,z,amount,area,buildingId=null,floor=null)=>{
-      const n=Math.max(1,Math.floor(amount)||1),clumps=Math.min(18,n),growth=Math.min(1,Math.log1p(n)/Math.log(19)),overflow=Math.min(3,Math.log1p(Math.max(0,n-18)/6)*.35);
-      const base=new THREE.Mesh(pileGeometry,pileMaterial);base.position.set(x,y,z);base.scale.set(.5+growth*.8,.12+growth*.16+overflow*1.6,.5+growth*.8);base.userData={fecesArea:area,buildingId,floor};base.castShadow=true;group.add(base);
-      // Each deposit adds visible volume on the same tile. Clumps spread in
-      // compact rings and rise in layers; large accumulations keep growing
-      // without spilling across neighboring tiles.
+      const n=Math.max(1,Math.floor(amount)||1),clumps=Math.min(14,n-1),growth=Math.min(1,Math.log1p(n)/Math.log(19)),overflow=Math.min(2.2,Math.log1p(Math.max(0,n-18)/6)*.3);
+      const main=new THREE.Mesh(coilGeo,pileMaterial);
+      main.position.set(x,y-.03,z);
+      main.rotation.y=((Math.imul(Math.round(x*10)^Math.round(z*10),2654435761)>>>0)%628)/100;
+      const s=.78+growth*.55;main.scale.set(s,s+overflow*.45,s);
+      main.userData={fecesArea:area,buildingId,floor};main.castShadow=true;main.receiveShadow=true;group.add(main);
       for(let i=0;i<clumps;i++){
-        const ring=i===0?0:Math.ceil((Math.sqrt(i+1)-1)/.72),angle=i*2.399963229728653;
-        const radius=Math.min(.27,.055+ring*.055),layer=Math.floor(i/7),mesh=new THREE.Mesh(pileGeometry,pileMaterial);
-        mesh.position.set(x+Math.cos(angle)*radius,y+.09+layer*(.065+overflow*.12),z+Math.sin(angle)*radius);
-        const size=.58+growth*.18;mesh.scale.set(size,.58+growth*.22,size);mesh.userData={fecesArea:area,buildingId,floor};mesh.castShadow=true;group.add(mesh);
+        const ring=Math.ceil((Math.sqrt(i+2)-1)/.75),angle=i*2.399963229728653,radius=Math.min(.26,.09+ring*.055),layer=Math.floor(i/6);
+        const mesh=new THREE.Mesh(i%3===0?coilGeo:lumpGeo,pileMaterial);
+        mesh.position.set(x+Math.cos(angle)*radius,y-.02+layer*(.045+overflow*.08),z+Math.sin(angle)*radius);
+        mesh.rotation.y=angle;
+        const size=(i%3===0?.45:.78)+growth*.28;mesh.scale.set(size,size,size);
+        mesh.userData={fecesArea:area,buildingId,floor};mesh.castShadow=true;mesh.receiveShadow=true;group.add(mesh);
       }
     };
     const minX=renderer.renderedMinTx??-Infinity,maxX=renderer.renderedMaxTx??Infinity,minY=renderer.renderedMinTy??-Infinity,maxY=renderer.renderedMaxTy??Infinity;
@@ -110,53 +164,64 @@ function syncFecesVisuals(renderer,THREE,city,world){
   }
   for(const mesh of renderer.fecesVisuals.children)mesh.visible=mesh.userData.fecesArea==='street';
 }
+function shackMaterial(renderer,THREE,kind,color,variant=0){
+  const cache=renderer._shackMaterials??=new Map(),key=`${kind}:${color>>>0}:${variant}`;
+  if(cache.has(key))return cache.get(key);
+  const surf=shackSurfaceTextures(THREE,kind,variant);
+  const roughness=kind==='corrugated'?.54:kind==='tarp'?.78:kind==='plywood'?.88:.92;
+  const metalness=kind==='corrugated'?.28:0;
+  const mat=new THREE.MeshStandardMaterial({map:surf.map,normalMap:surf.normalMap,normalScale:new THREE.Vector2(.85,.85),color,roughness,metalness,dithering:true});
+  cache.set(key,mat);return mat;
+}
 function syncCardboardShelters(renderer,THREE,city,world){
   if(!city)return;const shelters=city.cardboardShelters||new Map(),minute=city.minute??0,stageOf=site=>Math.max(0,Math.min(4,Math.floor(Math.max(0,minute-(site.placedAt??minute))/(2*1440)))),signature=[city.cardboardRevision||0,...[...shelters.values()].map(site=>`${site.citizenId}:${stageOf(site)}`)].join('|');
   if(renderer.cardboardVisualSignature!==signature){
-    if(renderer.cardboardVisuals){renderer.scene.remove(renderer.cardboardVisuals);renderer.cardboardVisuals.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}
+    if(renderer.cardboardVisuals){renderer.scene.remove(renderer.cardboardVisuals);renderer.cardboardVisuals.traverse(o=>{o.geometry?.dispose();});}
     const group=new THREE.Group();
     for(const site of shelters.values()){
-      const x=site.x,y=site.y,z=surfaceElevation(world,x,y)+.035,bed=new THREE.Group(),seed=Math.imul((site.citizenId||0)+31,2654435761)>>>0,style=seed%8,stage=stageOf(site),palette=[0x92704b,0x6d6254,0x665d52,0x75634e,0x80684d,0x665e56,0x897052,0x625b50],wood=[0x8e6943,0x70533b,0x9a744b,0x635643][(seed>>>4)%4],canvas=[0x6c7771,0x837c69,0x6b747d,0x8b745a,0x6d625d][(seed>>>8)%5],ox=((seed>>>12)%3-1)*.12,oz=((seed>>>14)%3-1)*.12;
+      const x=site.x,y=site.y,z=surfaceElevation(world,x,y)+.035,bed=new THREE.Group(),seed=Math.imul((site.citizenId||0)+31,2654435761)>>>0,style=seed%8,stage=stageOf(site),palette=[0x92704b,0x6d6254,0x665d52,0x75634e,0x80684d,0x665e56,0x897052,0x625b50],wood=[0x8e6943,0x70533b,0x9a744b,0x635643][(seed>>>4)%4],canvas=[0x6c7771,0x837c69,0x6b747d,0x8b745a,0x6d625d][(seed>>>8)%5];
       const footprint=cardboardFootprint(site);bed.position.set(footprint.x,z,footprint.z);bed.rotation.y=footprint.angle;bed.userData.cardboardTile={x,y};
-      const makeMat=(w,d,h,color,px=0,pz=0,py=h/2,rx=0,rz=0)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color}));mesh.position.set(px,py,pz);mesh.rotation.set(rx,0,rz);mesh.castShadow=true;mesh.receiveShadow=true;bed.add(mesh);return mesh;};
-      const gableRoof=(left,right,ridge=1.25)=>{makeMat(.40,.68,.045,left,-.19,0,ridge-.10,0,.40);makeMat(.40,.68,.045,right,.19,0,ridge-.10,0,-.40);makeMat(.045,.73,.05,wood,0,0,ridge+.005);};
+      const variant=seed&1;
+      const makeMat=(w,d,h,color,px=0,pz=0,py=h/2,rx=0,rz=0,kind='cardboard')=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),shackMaterial(renderer,THREE,kind,color,variant));mesh.position.set(px,py,pz);mesh.rotation.set(rx,0,rz);mesh.castShadow=true;mesh.receiveShadow=true;bed.add(mesh);return mesh;};
+      const gableRoof=(left,right,leftKind='tarp',rightKind='tarp',ridge=1.25)=>{makeMat(.40,.68,.045,left,-.19,0,ridge-.10,0,.40,leftKind);makeMat(.40,.68,.045,right,.19,0,ridge-.10,0,-.40,rightKind);makeMat(.045,.73,.05,wood,0,0,ridge+.005,0,0,'plywood');};
       const roof=()=>{
         if(stage===2){
-          if(style%3===1){makeMat(.78,.70,.05,canvas,0,0,1.11,0,style%2?.18:-.18);makeMat(.18,.34,.035,wood,.24,.16,1.16,0,-.18);}
-          else{gableRoof(canvas,style%2?wood:canvas,1.25);makeMat(.27,.23,.025,style%2?canvas:wood,-.25,.16,1.17,0,.40);}
+          if(style%3===1){makeMat(.78,.70,.05,canvas,0,0,1.11,0,style%2?.18:-.18,'tarp');makeMat(.18,.34,.035,wood,.24,.16,1.16,0,-.18,'plywood');}
+          else{gableRoof(canvas,style%2?wood:canvas,'tarp',style%2?'plywood':'tarp',1.25);makeMat(.27,.23,.025,style%2?canvas:wood,-.25,.16,1.17,0,.40,style%2?'tarp':'plywood');}
           // Loose cloth tails make this read as a tarp tied over a pole frame.
-          makeMat(.72,.035,.15,canvas,0,.33,1.02,-.05,0);
+          makeMat(.72,.035,.15,canvas,0,.33,1.02,-.05,0,'tarp');
           return;
         }
         const metal=[0x687675,0x818786,0x746d62,0x927a58][(seed>>>20)%4],metalPatch=[0x8d918b,0x746254,0x5e6f70,0xa18a65][(seed>>>23)%4];
         if(style===0||style===5||style===7){
-          gableRoof(style===5?metal:canvas,style===7?metalPatch:canvas,1.29);
-          makeMat(.30,.26,.025,style===5?canvas:metalPatch,-.23,-.17,1.21,0,.40);makeMat(.27,.22,.025,style===0?metalPatch:wood,.24,.14,1.20,0,-.40);
+          gableRoof(style===5?metal:canvas,style===7?metalPatch:canvas,style===5?'corrugated':'tarp',style===7?'corrugated':'tarp',1.29);
+          makeMat(.30,.26,.025,style===5?canvas:metalPatch,-.23,-.17,1.21,0,.40,style===5?'tarp':'corrugated');makeMat(.27,.22,.025,style===0?metalPatch:wood,.24,.14,1.20,0,-.40,style===0?'corrugated':'plywood');
         }else if(style===1||style===6){
-          makeMat(.78,.72,.055,style===1?canvas:metal,0,0,1.08,0,style===1?.20:-.20);
-          for(let rib=0;rib<5;rib++)makeMat(.035,.68,.024,rib%2?metalPatch:wood,-.34+rib*.17,0,1.09+(style===1?.20:-.20)*(-.34+rib*.17),0,style===1?.20:-.20);
-          makeMat(.16,.23,.03,style===1?metalPatch:canvas,.23,.16,1.15,0,style===1?.20:-.20);
+          makeMat(.78,.72,.055,style===1?canvas:metal,0,0,1.08,0,style===1?.20:-.20,style===1?'tarp':'corrugated');
+          for(let rib=0;rib<5;rib++)makeMat(.035,.68,.024,rib%2?metalPatch:wood,-.34+rib*.17,0,1.09+(style===1?.20:-.20)*(-.34+rib*.17),0,style===1?.20:-.20,rib%2?'corrugated':'plywood');
+          makeMat(.16,.23,.03,style===1?metalPatch:canvas,.23,.16,1.15,0,style===1?.20:-.20,style===1?'corrugated':'tarp');
         }else if(style===2||style===3){
-          gableRoof(style===2?metal:wood,style===2?metalPatch:canvas,1.30);
+          gableRoof(style===2?metal:wood,style===2?metalPatch:canvas,style===2?'corrugated':'plywood',style===2?'corrugated':'tarp',1.30);
           for(let rib=0;rib<6;rib++){
             const px=-.38+rib*.152,side=px<0?1:-1;
-            makeMat(.022,.64,.022,rib%3===0?wood:metalPatch,px,0,1.17+(.22-Math.abs(px))*.42,0,side*.40);
+            makeMat(.022,.64,.022,rib%3===0?wood:metalPatch,px,0,1.17+(.22-Math.abs(px))*.42,0,side*.40,rib%3===0?'plywood':'corrugated');
           }
         }else{
-          gableRoof(canvas,metal,1.25);
-          for(let patch=0;patch<4;patch++)makeMat(.20,.17,.03,patch%2?metalPatch:wood,-.25+(patch%2)*.48,-.20+Math.floor(patch/2)*.39,1.16,0,patch%2?-.4:.4);
+          gableRoof(canvas,metal,'tarp','corrugated',1.25);
+          for(let patch=0;patch<4;patch++)makeMat(.20,.17,.03,patch%2?metalPatch:wood,-.25+(patch%2)*.48,-.20+Math.floor(patch/2)*.39,1.16,0,patch%2?-.4:.4,patch%2?'corrugated':'plywood');
         }
       };
       // Every stage keeps the original cardboard bedding and grows a distinct
       // one-tile shelter around it as the makeshift home persists.
-      makeMat(.68,.50,.035,palette[style]);makeMat(.26,.40,.018,0xb18a5d,-.16,.01,.047);makeMat(.18,.16,.06,0xc6b99c,-.22,-.16,.078);
-      if(stage>=1){for(const [px,pz]of [[-.34,-.27],[.34,-.27],[-.34,.27],[.34,.27]])makeMat(.035,.035,.72,wood,px,pz,.36);makeMat(.035,.035,.68,wood,-.34,0,.71);makeMat(.035,.035,.68,wood,.34,0,.71);}
-      if(stage>=2){for(const [px,pz]of [[-.34,-.27],[.34,-.27],[-.34,.27],[.34,.27]])makeMat(.035,.035,.30,wood,px,pz,.84);makeMat(.72,.035,.04,wood,0,-.30,.98);makeMat(.72,.035,.04,wood,0,.30,.98);roof();}
+      makeMat(.68,.50,.035,palette[style],0,0,.0175,0,0,'cardboard');makeMat(.26,.40,.018,0xb18a5d,-.16,.01,.047,0,0,'tarp');makeMat(.18,.16,.06,0xc6b99c,-.22,-.16,.078,0,0,'tarp');
+      if(stage>=1){for(const [px,pz]of [[-.34,-.27],[.34,-.27],[-.34,.27],[.34,.27]])makeMat(.035,.035,.72,wood,px,pz,.36,0,0,'plywood');makeMat(.035,.035,.68,wood,-.34,0,.71,0,0,'plywood');makeMat(.035,.035,.68,wood,.34,0,.71,0,0,'plywood');}
+      if(stage>=2){for(const [px,pz]of [[-.34,-.27],[.34,-.27],[-.34,.27],[.34,.27]])makeMat(.035,.035,.30,wood,px,pz,.84,0,0,'plywood');makeMat(.72,.035,.04,wood,0,-.30,.98,0,0,'plywood');makeMat(.72,.035,.04,wood,0,.30,.98,0,0,'plywood');roof();}
       if(stage>=3){
         const wallA=[0x8f7658,0x9a805d,0x786a57,0xa18460][style%4],wallB=[0x6d5d4b,0x82715a,0x9b805d,0x665c50][(style+1)%4];
-        makeMat(.055,.48,.60,wallA,-.31,0,.34);makeMat(.055,.48,.60,wallB,.31,0,.34);makeMat(.62,.055,.60,wallB,0,-.24,.34);makeMat(.22,.055,.60,wallA,-.20,.24,.34);makeMat(.22,.055,.60,wallB,.20,.24,.34);
+        const kindA=style%2===0?'plywood':'cardboard',kindB=style%3===0?'corrugated':'plywood';
+        makeMat(.055,.48,.60,wallA,-.31,0,.34,0,0,kindA);makeMat(.055,.48,.60,wallB,.31,0,.34,0,0,kindB);makeMat(.62,.055,.60,wallB,0,-.24,.34,0,0,kindB);makeMat(.22,.055,.60,wallA,-.20,.24,.34,0,0,kindA);makeMat(.22,.055,.60,wallB,.20,.24,.34,0,0,kindA);
       }
-      if(stage>=4){makeMat(.24,.23,.28,0x7a5d40,-.34,.26,.16);makeMat(.26,.25,.035,0x8c7450,-.34,.26,.32);makeMat(.12,.12,.48,wood,.37,.25,.24);makeMat(.16,.16,.08,canvas,.37,.25,.50);}
+      if(stage>=4){makeMat(.24,.23,.28,0x7a5d40,-.34,.26,.16,0,0,'plywood');makeMat(.26,.25,.035,0x8c7450,-.34,.26,.32,0,0,'cardboard');makeMat(.12,.12,.48,wood,.37,.25,.24,0,0,'plywood');makeMat(.16,.16,.08,canvas,.37,.25,.50,0,0,'tarp');}
       mergeStaticMeshes(THREE,bed);group.add(bed);
     }
     renderer.cardboardVisuals=group;renderer.cardboardVisualSignature=signature;renderer.scene.add(group);
@@ -1185,38 +1250,38 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
     if(b.type==='park'){
       const parkDecor=new THREE.Group();
       const palmCrowns=[];
-      const parkStyle=HOUSE_STYLES[architectureFor(b.type,b.id,world.seed??0)]||HOUSE_STYLES.modern,parkVariant=(Math.imul((Number(b.id)||0)+11,2654435761)>>>0)%3,wood=new THREE.MeshLambertMaterial({color:parkVariant===1?0x674732:0x79553d}),palmWood=new THREE.MeshLambertMaterial({color:0x8b6847}),palmGreen=new THREE.MeshLambertMaterial({color:0x397b43}),flowerMats=[0xe85d57,0xf0bb48,0xf0e4c1,0xc64b73].map(color=>new THREE.MeshLambertMaterial({color}));
-      const gardenSpots=[[.62,.72],[b.width-.62,.72],[.62,b.depth-.72],[b.width-.62,b.depth-.72]], flowerGeo=new THREE.SphereGeometry(.095,6,5),leafGeo=new THREE.SphereGeometry(1,6,4),trunkGeo=new THREE.CylinderGeometry(.065,.12,1.75,6);
-      // Park ground remains natural grass; paths are represented by the shared
-      // sidewalk and road network outside the lot, not loose paving slabs.
-      // Tropical planting beds mix palms, broad leaves, and bright island flowers.
+      const parkStyle=HOUSE_STYLES[architectureFor(b.type,b.id,world.seed??0)]||HOUSE_STYLES.modern,parkVariant=(Math.imul((Number(b.id)||0)+11,2654435761)>>>0)%3;
+      const treeMat=renderer.materials?.botanicalTree||new THREE.MeshStandardMaterial({map:acquireBotanicalTreeTextures(THREE).map,alphaTest:.5,vertexColors:true,side:THREE.DoubleSide,roughness:.92});
+      const shrubLeafMat=renderer.materials?.roseLeaves||new THREE.MeshStandardMaterial({map:floweringShrubSurfaceTextures(THREE).map,color:0x55923a,side:THREE.DoubleSide,roughness:.88});
+      const shrubFlowerMat=renderer.materials?.roseFlowers||new THREE.MeshStandardMaterial({map:floweringShrubSurfaceTextures(THREE,true).map,color:0xffffff,side:THREE.DoubleSide,roughness:.90});
+      const treeSpeciesSets=[['areca_palm','yellow_ipe','jeriva_palm','quaresmeira'],['flamboyant','areca_palm','manaca_serra','guava'],['royal_palm','cherry_blossom','pau_brasil','mango']];
+      const speciesList=treeSpeciesSets[parkVariant];
+      const gardenSpots=[[.72,.78],[b.width-.72,.78],[.72,b.depth-.78],[b.width-.72,b.depth-.78]];
+      const shrubLeafGeo=floweringShrubLeavesGeometry(THREE),shrubFlowerGeo=floweringShrubFlowersGeometry(THREE);
       for(let bed=0;bed<gardenSpots.length;bed++){
-        const [x,z]=gardenSpots[bed],ground=surfaceElevation(world,entity.x+x,entity.y+z),trunk=new THREE.Mesh(trunkGeo,palmWood);trunk.position.set(x,ground+.83,z);trunk.rotation.z=(bed%2?-.13:.12);parkDecor.add(trunk);
-        const crown=new THREE.Group(),crownY=ground+1.7;crown.position.set(x,crownY,z);parkDecor.add(crown);
-        for(let frond=0;frond<7;frond++){
-          const angle=frond*Math.PI*2/7,leaf=new THREE.Mesh(leafGeo,palmGreen);leaf.scale.set(.12,.07,.58);leaf.position.set(Math.sin(angle)*.34,-.12,Math.cos(angle)*.34);leaf.rotation.y=angle;leaf.rotation.x=.24;crown.add(leaf);
-        }
-        mergeStaticMeshes(THREE,crown);crown.userData.windPhase=((Math.imul((Number(b.id)||0)+bed*31+17,2654435761)>>>0)%1000)/1000;palmCrowns.push(crown);
-        for(let shrub=0;shrub<3;shrub++){
-          const angle=shrub*Math.PI*2/3+.4,px=x+Math.sin(angle)*.37,pz=z+Math.cos(angle)*.37,base=new THREE.Mesh(leafGeo,new THREE.MeshLambertMaterial({color:[0x42844a,0x57924b,0x397744][shrub]}));base.scale.set(.21,.17,.22);base.position.set(px,ground+.18,pz);parkDecor.add(base);
-          const petalMat=flowerMats[(bed+shrub)%flowerMats.length];
-          for(let petal=0;petal<5;petal++){const a=petal*Math.PI*2/5,blossom=new THREE.Mesh(flowerGeo,petalMat);blossom.scale.set(.065,.035,.09);blossom.position.set(px+Math.cos(a)*.07,ground+.38,pz+Math.sin(a)*.07);parkDecor.add(blossom);}
-          const center=new THREE.Mesh(flowerGeo,flowerMats[1]);center.scale.set(.035,.035,.035);center.position.set(px,ground+.4,pz);parkDecor.add(center);
-        }
+        const [x,z]=gardenSpots[bed],ground=surfaceElevation(world,entity.x+x,entity.y+z);
+        const treeGeo=createBotanicalTreeGeometry(THREE,speciesList[bed%speciesList.length]);
+        const tree=new THREE.Mesh(treeGeo,treeMat);
+        const scale=.68+((Math.imul((Number(b.id)||0)+bed*17,2654435761)>>>0)%15)/100;
+        tree.position.set(x,ground,z);tree.scale.setScalar(scale);tree.rotation.y=(bed*1.57+parkVariant*.6);tree.castShadow=true;tree.receiveShadow=true;
+        parkDecor.add(tree);
+        const shrubAngle=bed*1.5+0.9,sx=x+Math.cos(shrubAngle)*.45,sz=z+Math.sin(shrubAngle)*.45,sg=surfaceElevation(world,entity.x+sx,entity.y+sz);
+        const shrubL=new THREE.Mesh(shrubLeafGeo,shrubLeafMat);shrubL.position.set(sx,sg,sz);shrubL.scale.setScalar(.72);shrubL.rotation.y=shrubAngle;shrubL.castShadow=true;parkDecor.add(shrubL);
+        const shrubF=new THREE.Mesh(shrubFlowerGeo,shrubFlowerMat);shrubF.position.set(sx,sg,sz);shrubF.scale.setScalar(.72);shrubF.rotation.y=shrubAngle;parkDecor.add(shrubF);
       }
       // A colonial garden pavilion varies between island thatch and tiled shade.
-      const shadeX=b.width/2,shadeZ=Math.min(b.depth-1.2,1.45),postMaterial=palmWood,thatch=new THREE.MeshLambertMaterial({color:0xb99255});
-      for(const x of [shadeX-.58,shadeX+.58])for(const z of [shadeZ-.42,shadeZ+.42]){const post=new THREE.Mesh(new THREE.CylinderGeometry(.055,.075,1.75,5),postMaterial);post.position.set(x,surfaceElevation(world,entity.x+x,entity.y+z)+.875,z);parkDecor.add(post);}
+      const shadeX=b.width/2,shadeZ=Math.min(b.depth-1.2,1.45),postMaterial=shackMaterial(renderer,THREE,'plywood',0x8b6847,0),thatch=new THREE.MeshLambertMaterial({color:0xb99255});
+      for(const x of [shadeX-.58,shadeX+.58])for(const z of [shadeZ-.42,shadeZ+.42]){const post=new THREE.Mesh(new THREE.CylinderGeometry(.055,.075,1.75,5),postMaterial);post.position.set(x,surfaceElevation(world,entity.x+x,entity.y+z)+.875,z);post.castShadow=true;parkDecor.add(post);}
       for(const z of [shadeZ-.42,shadeZ+.42]){const beam=new THREE.Mesh(new THREE.BoxGeometry(1.3,.1,.1),postMaterial);beam.position.set(shadeX,surfaceElevation(world,entity.x+shadeX,entity.y+z)+1.72,z);parkDecor.add(beam);}
-      for(let slat=0;slat<6;slat++){const roof=new THREE.Mesh(new THREE.BoxGeometry(.1,.07,1.02),parkVariant===0?thatch:new THREE.MeshLambertMaterial({color:parkStyle.roof}));roof.position.set(shadeX-.52+slat*.208,surfaceElevation(world,entity.x+shadeX,entity.y+shadeZ)+1.82,shadeZ);parkDecor.add(roof);}
+      for(let slat=0;slat<6;slat++){const roof=new THREE.Mesh(new THREE.BoxGeometry(.1,.07,1.02),parkVariant===0?thatch:new THREE.MeshLambertMaterial({color:parkStyle.roof}));roof.position.set(shadeX-.52+slat*.208,surfaceElevation(world,entity.x+shadeX,entity.y+shadeZ)+1.82,shadeZ);roof.castShadow=true;parkDecor.add(roof);}
       if(parkVariant!==0){const fascia=new THREE.Mesh(new THREE.BoxGeometry(1.42,.12,.08),new THREE.MeshLambertMaterial({color:parkStyle.trim}));fascia.position.set(shadeX,surfaceElevation(world,entity.x+shadeX,entity.y+shadeZ+.45)+1.76,shadeZ+.45);parkDecor.add(fascia);}
+      // Real street benches (same colonial furnitureModel used outside parks)
       for(let seat=0;seat<2;seat++){
-        const x=seat===0?.9:b.width-.9,z=seat===0?b.depth*.55:b.depth*.56,ground=surfaceElevation(world,entity.x+x,entity.y+z),seatColor=parkVariant===1?0x52695d:parkVariant===2?parkStyle.accent:0x79553d;
-        for(let slat=0;slat<4;slat++){const plank=new THREE.Mesh(new THREE.BoxGeometry(.78,.045,.055),new THREE.MeshLambertMaterial({color:seatColor}));plank.position.set(x,ground+.3,z+(slat-1.5)*.068);parkDecor.add(plank);}
-        for(const legX of [-.29,.29]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.08,.28,.34),parkVariant===1?new THREE.MeshLambertMaterial({color:parkStyle.trim}):wood);leg.position.set(x+legX,ground+.14,z);parkDecor.add(leg);}
-        for(const supportX of [-.29,.29]){const backPost=new THREE.Mesh(new THREE.BoxGeometry(.06,.58,.06),wood);backPost.position.set(x+supportX,ground+.57,z-.14);parkDecor.add(backPost);}
-        for(let slat=0;slat<3;slat++){const back=new THREE.Mesh(new THREE.BoxGeometry(.78,.06,.045),new THREE.MeshLambertMaterial({color:seatColor}));back.position.set(x,ground+.4+slat*.12,z-.14);parkDecor.add(back);}
-        for(const armX of [-.38,.38]){const arm=new THREE.Mesh(new THREE.BoxGeometry(.07,.22,.34),wood);arm.position.set(x+armX,ground+.4,z);parkDecor.add(arm);}
+        const x=seat===0?.92:b.width-.92,z=seat===0?b.depth*.55:b.depth*.56,ground=surfaceElevation(world,entity.x+x,entity.y+z);
+        const bench=furnitureModel(THREE,{type:'bench',colonialStyle:(parkVariant+seat)%4,variant:((Number(b.id)||0)+seat)%8});
+        bench.position.set(x,ground+.02,z);
+        bench.rotation.y=seat===0?Math.PI/2:-Math.PI/2;
+        parkDecor.add(bench);
       }
       mergeStaticMeshes(THREE,parkDecor);group.add(parkDecor);renderer.parkPalmWindDecorations.set(entity.id,palmCrowns);
     }

@@ -27,7 +27,7 @@ import { CityNature } from './city_nature.js?v=ff-growth-events-1';
 import { CityFauna } from './city_fauna.js?v=fauna-nest-2';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=game-approach-camera-9';
+import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=pathcache-fix-1';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=citizen-access-1';
 import { CityWelfare } from './city_welfare.js';
