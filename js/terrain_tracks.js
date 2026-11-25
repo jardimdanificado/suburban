@@ -291,6 +291,8 @@ export class TerrainTracks {
         void main(){
           if(abs(vContactKind)>1.5){if(abs(vContact.x)>sqrt(max(0.0,1.0-vContact.y*vContact.y)))discard;}
           else if(abs(vContactKind)>.5){vec2 p=vContact;float toe=length(vec2(p.x/.96,(p.y-.30)/.70)),heel=length(vec2(p.x/.73,(p.y+.66)/.34));if(min(toe,heel)>1.0||p.x*vContactKind>.55&&p.y>-.45&&p.y<-.05)discard;}
+          float grain=fract(sin(dot(floor(gl_FragCoord.xy),vec2(12.9898,78.233)))*43758.5453);
+          if(grain>vPaintRgba.a*1.15)discard;
           gl_FragColor=vPaintRgba;
         }`});
     this.material=new THREE.ShaderMaterial({depthTest:false,depthWrite:false,blending:THREE.NoBlending,blendEquation:THREE.MaxEquation,blendSrc:THREE.OneFactor,blendDst:THREE.OneFactor,toneMapped:false,
@@ -372,7 +374,8 @@ export class TerrainTracks {
       this.paintMesh=new T.Mesh(geometry,this.paintMaterial);this.paintMesh.frustumCulled=false;this.paintScene.add(this.paintMesh);
     }
     const shape=this.paintMesh.geometry.getAttribute('contactShape'),info=this.paintMesh.geometry.getAttribute('contactInfo'),rgba=this.paintMesh.geometry.getAttribute('paintRgba');
-    stamps.forEach((s,i)=>{shape.setXYZW(i,s.x,s.z,s.width,s.length);info.setXY(i,s.angle,s.kind);const c=s.paintColor??0xffffff;rgba.setXYZW(i,(c>>16&255)/255,(c>>8&255)/255,(c&255)/255,Math.max(.1,Math.min(.9,s.paintLoad??.7)));});
+    const toLinear=v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4;
+    stamps.forEach((s,i)=>{const scale=Math.abs(s.kind)===1?.55:.7;shape.setXYZW(i,s.x,s.z,s.width*scale,s.length*scale);info.setXY(i,s.angle,s.kind);const c=s.paintColor??0xffffff;rgba.setXYZW(i,toLinear((c>>16&255)/255),toLinear((c>>8&255)/255),toLinear((c&255)/255),Math.max(.12,Math.min(.85,s.paintLoad??.7)));});
     shape.needsUpdate=info.needsUpdate=rgba.needsUpdate=true;this.paintMesh.geometry.instanceCount=stamps.length;
     const old=renderer.getRenderTarget(),autoClear=renderer.autoClear,shadowUpdate=renderer.shadowMap.autoUpdate,shadowNeedsUpdate=renderer.shadowMap.needsUpdate;
     renderer.autoClear=false;renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=false;
@@ -423,6 +426,7 @@ export class TerrainTracks {
         this._groundArtCache={rev:artRev,items};
       }
       groundArt=this._groundArtCache.items;
+      for(let i=0;i<groundArt.length;i++){const item=groundArt[i];if(item.piece.renderedInkColor!=null)item.inkColor=item.piece.renderedInkColor;}
     }
     const stamps=[],paintStamps=[];
     const onStepGraffiti=(item,u,v,stamp)=>{

@@ -81,7 +81,7 @@ export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=nul
  if(!inside&&b.constructionKind!=='open-air'){
   const entry=buildingInteriorEntrance(entrance),approach=entrance.door||b.door;
   if(entry&&Math.hypot(c.entity.x-approach.x,c.entity.y-approach.y)>.75){const route=city.findPath(c.entity,approach);if(route!==null)c.path=route;c.action='Indo para a espera dentro do prédio';return false;}
-  if(entry){c.indoorLocation={buildingId:b.id,targetUnitId:null,unitId:null,targetRoomType:'waiting',roomType:'circulation',floor:0,position:{x:c.entity.x,y:c.entity.y,z:0},path:[],phase:'waiting',task:kind,layoutRevision:b.layoutRevision||0,enteredAt:city.minute};inside=true;}
+  if(entry){c.indoorLocation={buildingId:b.id,targetUnitId:null,unitId:null,targetRoomType:'waiting',roomType:'circulation',floor:0,position:{x:c.entity.x,y:c.entity.y,z:0},path:[entry],phase:'waiting',task:kind,layoutRevision:b.layoutRevision||0,enteredAt:city.minute};inside=true;}
  }
  c.lastProgressAt=city.minute;c.action=kind==='toilet'?'Aguardando na fila do banheiro':['food','workmeal','supplies'].includes(kind)?'Aguardando na fila de alimentação':'Aguardando na fila de atendimento';
  if(!c.facingTarget||c.facingTarget.x!==b.door.x||c.facingTarget.y!==b.door.y||Object.keys(c.facingTarget).length!==2)c.facingTarget={x:b.door.x,y:b.door.y};

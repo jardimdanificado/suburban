@@ -28,6 +28,7 @@ import {syncMovementDust} from './city_movement_dust.js?v=ground-dust-5';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-player-marker-5';
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import {streetSurfaceTextures} from './street_surface_textures.js?v=ground-realism-2';
+import {rockSurfaceTextures as buildRockSurfaceTextures} from './rock_surface_textures.js?v=realistic-rock-1';
 import {groundGrassSurface} from './ground_grass_geometry.js?v=natural-streets-2';
 import {terrainTransitionTriangles,sampleTerrainQuad} from './terrain_transition_geometry.js';
 import {addTerrainDitherToMaterial} from './terrain_transition_material.js';
@@ -319,6 +320,10 @@ function pushTerrainTileUvs(bucket, x, y, tileType, categoryOverride = null) {
     for(const [u,v]of corners)bucket.uvs.push(x+u,y+v);
     return;
   }
+  if(category==='rock'||category==='mountain'||category==='peak'){
+    for(const [u,v]of corners)bucket.uvs.push((x+u)*.5,(y+v)*.5);
+    return;
+  }
   const hash = terrainTextureHash(x, y, tileType), orientation = hash & 7;
   const scale = .76 + ((hash >>> 4) & 3) * .16, offsetU = ((hash >>> 9) & 3) * .19, offsetV = ((hash >>> 11) & 3) * .19;
   for (const [u, v] of corners) {
@@ -423,18 +428,8 @@ function createTerrainSurfaceTexture(style, variant) {
   return texture;
 }
 
-const rockSurfaceCache=new Map();
 function rockSurfaceTextures(style,variant){
- const key=`${style}:${variant}`;if(rockSurfaceCache.has(key))return rockSurfaceCache.get(key);
- const map=createTerrainSurfaceTexture(style,variant),canvas=map.image,{width,height}=canvas;
- const pixels=canvas.getContext('2d').getImageData(0,0,width,height).data;
- const normalMap=new THREE.DataTexture(terrainSurfaceNormals(pixels,width,height),width,height);
- normalMap.wrapS=normalMap.wrapT=THREE.RepeatWrapping;
- // CanvasTexture flips its source vertically. Match that orientation for the derived data.
- normalMap.flipY=map.flipY;
- normalMap.magFilter=THREE.LinearFilter;normalMap.minFilter=THREE.LinearMipmapLinearFilter;normalMap.generateMipmaps=true;
- applyTextureAnisotropy(normalMap);normalMap.needsUpdate=true;
- const surface={map,normalMap};rockSurfaceCache.set(key,surface);return surface;
+ return buildRockSurfaceTextures(THREE,style,variant);
 }
 
 function createCaribbeanWaterTexture() {
@@ -4104,9 +4099,9 @@ export class RCT3DRenderer {
       sandClean: makeMat(normalMapsEnabled, { color: 0xdec078, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.42, 0.90, 0.01),
       [TILE_SAND]: makeMat(normalMapsEnabled, { map: createTintedTexture("Feature_Pebbles.png", 0x6e5228, 0xdec078, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.46, 0.88, 0.02),
       [TILE_HILL]: makeMat(normalMapsEnabled, { map: caribbeanGrass, color: 0xc2d0a0, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.75, 0.82, 0.02),
-      [TILE_STONE]: makeMat(normalMapsEnabled, { map: createTintedTexture("Feature_Stone_B.png", 0xa5a5af, 0x3a3a44, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneB, 1.1, 0.70, 0.08),
-      [TILE_MOUNTAIN]: makeMat(normalMapsEnabled, { map: createTintedTexture("Feature_Stone_C.png", 0xb4afaa, 0x484242, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneC, 1.25, 0.65, 0.10),
-      [TILE_PEAK]: makeMat(normalMapsEnabled, { map: createTintedTexture("Feature_Stone_C.png", 0xd8d8de, 0x686874, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneC, 1.3, 0.60, 0.12),
+      [TILE_STONE]: makeMat(normalMapsEnabled, { map: rockSurfaceTextures('rock', 0).map, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, rockSurfaceTextures('rock', 0).normalMap, 0.65, 0.78, 0.05),
+      [TILE_MOUNTAIN]: makeMat(normalMapsEnabled, { map: rockSurfaceTextures('mountain', 0).map, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, rockSurfaceTextures('mountain', 0).normalMap, 0.65, 0.74, 0.06),
+      [TILE_PEAK]: makeMat(normalMapsEnabled, { map: rockSurfaceTextures('peak', 0).map, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, rockSurfaceTextures('peak', 0).normalMap, 0.65, 0.68, 0.08),
       [TILE_WATER]: makeWaterMaterial(),
       waterFoam: makeFoamMaterial(),
       [TILE_ROAD_GRASS]: makeMat(normalMapsEnabled, { map: createTintedTexture("Feature_Stone_B.png", 0xb6a98a, 0x5d5140, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneB, 1.0, 0.72, 0.05),
@@ -4115,7 +4110,7 @@ export class RCT3DRenderer {
       [TILE_ROAD_GRASS_STONE]: makeMat(normalMapsEnabled, { map: createTintedTexture("Feature_Brick_A.png", 0x909098, 0x383842, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normBrickA, 1.1, 0.65, 0.08),
       [TILE_ROAD_SAND_STONE]: makeMat(normalMapsEnabled, { map: createTintedTexture("Feature_Brick_A.png", 0x909098, 0x383842, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normBrickA, 1.1, 0.65, 0.08),
       [TILE_ROAD_HILL_STONE]: makeMat(normalMapsEnabled, { map: createTintedTexture("Feature_Brick_A.png", 0x909098, 0x383842, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normBrickA, 1.1, 0.65, 0.08),
-      cliff: makeMat(normalMapsEnabled, { map: createTintedTexture("Feature_Stone_C.png", 0x887a6a, 0x2b2218, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneC, 1.1, 0.72, 0.05),
+      cliff: makeMat(normalMapsEnabled, { map: rockSurfaceTextures('rock', 1).map, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, rockSurfaceTextures('rock', 1).normalMap, 0.65, 0.78, 0.05),
       grassFoliage: makeMat(normalMapsEnabled, { color: 0xffffff, vertexColors: true, dithering: true, transparent: false, depthWrite: true, depthTest: true, side: THREE.DoubleSide }, null, 0, 1, 0),
       treeTrunk: makeMat(normalMapsEnabled, { color: 0x583c1e, dithering: true }, normWood, 0.42, 0.92, 0),
       bananaStem: makeMat(normalMapsEnabled, { color: 0xffffff, dithering: true }, normWood, 0.24, 0.92, 0),
@@ -7357,13 +7352,48 @@ export class RCT3DRenderer {
             const cuts=diffA*diffB<0?[0,diffA/(diffA-diffB),1]:[0,1];
             const wall=tileMeshBuckets[`terrainRock${terrainTextureHash(tx,ty,TILE_STONE+edge.side)&3}`];
             const along=point=>edge.side===0||edge.side===2?point[0]:point[2];
+            const cornerMid=(lower,upper,gridPt)=>{
+              const gx=gridPt[0],gz=gridPt[1];
+              let ox=0,oz=0,nearStreet=false;
+              for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++){
+                const tx0=gx+dx,tz0=gz+dy,t=this.getTileTypeAt(map,tx0,tz0);
+                if(streetSurfaceCorners(world,tx0,tz0)||world.hasSidewalk?.(tx0,tz0))nearStreet=true;
+                if(t!==TILE_VOID&&baseTerrainTile(t)!==TILE_STONE){ox+=dx+.5;oz+=dy+.5;}
+              }
+              const len=Math.hypot(ox,oz)||1;
+              const h1=terrainTextureHash(gx,gz,TILE_STONE+0x1357);
+              const h2=terrainTextureHash(gx,gz,TILE_STONE+0x2468);
+              const t=.42+((h1&15)/15)*.18;
+              const drop=Math.max(0,upper[1]-lower[1]);
+              const jut=nearStreet?0:(.07+((h2&15)/15)*.12)*Math.min(1,drop*.6);
+              return [
+                lower[0]+(upper[0]-lower[0])*t+(ox/len)*jut,
+                lower[1]+(upper[1]-lower[1])*t,
+                lower[2]+(upper[2]-lower[2])*t+(oz/len)*jut,
+              ];
+            };
+            const pushCliffQuad=(qL0,qU0,qU1,qL1,shadeLo,shadeHi)=>{
+              const facePoints=edge.side===0||edge.side===1?[qL0,qU0,qU1,qL0,qU1,qL1]:[qL0,qU1,qU0,qL0,qL1,qU1];
+              const shades=edge.side===0||edge.side===1?[shadeLo,shadeHi,shadeHi,shadeLo,shadeHi,shadeLo]:[shadeLo,shadeHi,shadeHi,shadeLo,shadeLo,shadeHi];
+              for(let k=0;k<6;k++){const pt=facePoints[k],s=shades[k];wall.pos.push(...pt);wall.uvs.push(along(pt)*.5,pt[1]*.5);wall.colors.push(s,s,s);}
+            };
             for(let i=1;i<cuts.length;i++){
               const from=cuts[i-1],to=cuts[i],upperA0=lerpPoint(highA,highB,from),upperA1=lerpPoint(highA,highB,to),lowerA0=lerpPoint(lowA,lowB,from),lowerA1=lerpPoint(lowA,lowB,to);
               const currentIsHigher=diffA+(diffB-diffA)*(from+to)*.5>=0;
               const upper0=currentIsHigher?upperA0:lowerA0,upper1=currentIsHigher?upperA1:lowerA1,lower0=currentIsHigher?lowerA0:upperA0,lower1=currentIsHigher?lowerA1:upperA1;
-              if(Math.max(Math.hypot(upper0[0]-lower0[0],upper0[1]-lower0[1],upper0[2]-lower0[2]),Math.hypot(upper1[0]-lower1[0],upper1[1]-lower1[1],upper1[2]-lower1[2]))<.005)continue;
-              const facePoints=edge.side===0||edge.side===1?[lower0,upper0,upper1,lower0,upper1,lower1]:[lower0,upper1,upper0,lower0,lower1,upper1];
-              for(const point of facePoints){wall.pos.push(...point);wall.uvs.push(along(point),point[1]);wall.colors.push(zoneMult*.88,zoneMult*.88,zoneMult*.88);}
+              const drop0=Math.hypot(upper0[0]-lower0[0],upper0[1]-lower0[1],upper0[2]-lower0[2]);
+              const drop1=Math.hypot(upper1[0]-lower1[0],upper1[1]-lower1[1],upper1[2]-lower1[2]);
+              if(Math.max(drop0,drop1)<.005)continue;
+              if(Math.max(drop0,drop1)>.45){
+                const g0=from===0?edge.a:[Math.round(upper0[0]),Math.round(upper0[2])];
+                const g1=to===1?edge.b:[Math.round(upper1[0]),Math.round(upper1[2])];
+                const mid0=from===0?cornerMid(lower0,upper0,g0):lerpPoint(lower0,upper0,.5);
+                const mid1=to===1?cornerMid(lower1,upper1,g1):lerpPoint(lower1,upper1,.5);
+                pushCliffQuad(lower0,mid0,mid1,lower1,zoneMult*.76,zoneMult*.86);
+                pushCliffQuad(mid0,upper0,upper1,mid1,zoneMult*.86,zoneMult*.96);
+              }else{
+                pushCliffQuad(lower0,upper0,upper1,lower1,zoneMult*.80,zoneMult*.94);
+              }
             }
           }
         }
@@ -7399,7 +7429,7 @@ export class RCT3DRenderer {
             const tone=.97+(terrainTextureHash(tx,ty,TILE_STONE)%7)/100;
             // Clockwise winding keeps the coarse facets facing upward.
             for(const point of [center,ring[(face+1)%ring.length],ring[face]]){
-              bucket.pos.push(...point);bucket.uvs.push(point[0],point[2]);
+              bucket.pos.push(...point);bucket.uvs.push(point[0]*.5,point[2]*.5);
               const u=Math.max(0,Math.min(1,point[0]-tx)),v=Math.max(0,Math.min(1,point[2]-ty));
               const shade=zoneMult*tone*(ao00*(1-u)*(1-v)+ao10*u*(1-v)+ao11*u*v+ao01*(1-u)*v);
               bucket.colors.push(shade,shade,shade);
@@ -7418,7 +7448,7 @@ export class RCT3DRenderer {
           );
           pushTerrainTileUvs(bucket, tx, ty, surfaceType,isSidewalk?'sidewalk':null);
           const toneHash=terrainTextureHash(tx,ty,tType)>>>8;
-          const textureTone=isSidewalk?1:textureCategory==='pavedRoad'?(.96+(toneHash%9)/100):textureCategory?(.82+(toneHash%33)/100):1;
+          const textureTone=isSidewalk?1:textureCategory==='pavedRoad'?(.96+(toneHash%9)/100):(textureCategory==='mountain'||textureCategory==='peak')?(.93+(toneHash%13)/100):textureCategory?(.82+(toneHash%33)/100):1;
           // Triangle 1: (0,0), (0,1), (1,1)
           bucket.colors.push(zoneMult * ao00 * textureTone, zoneMult * ao00 * textureTone, zoneMult * ao00 * textureTone);
           bucket.colors.push(zoneMult * ao01 * textureTone, zoneMult * ao01 * textureTone, zoneMult * ao01 * textureTone);

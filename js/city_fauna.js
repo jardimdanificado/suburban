@@ -3,8 +3,10 @@ import { NATURAL_PLANTS } from './plant_catalog.js';
 import { BOTANICAL_TREE_MODELS } from './botanical_trees.js?v=species-colors-3';
 import { CITY_FLOOR_HEIGHT } from './city_building_geometry.js?v=banner-placement-2';
 import { buildingLeisureSpaces } from './city_balconies.js?v=sertanejo-house-styles-1';
-import { tileAt, ROAD_TILES } from './city_terrain.js?v=entrance-retaining-clearance-1';
+import { tileAt, ROAD_TILES, surfaceElevation } from './city_terrain.js?v=minimal-settlement-1';
 import { TILE_WATER } from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
+import { skybridgeLinks } from './city_skybridges.js?v=seeded-business-visual-v1';
+import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=colonial-colored-trim-1';
 
 export const FAUNA_RULES = Object.freeze({
   maxWildAnimals: 180,
@@ -80,9 +82,9 @@ export class CityFauna {
     this.nextNestId = 1;
   }
 
-  placeNest({ x, y, z = 1.8, surface = 'tree', buildingId = null, plantId = null, species = 'sabia', ownerId = null, eggs = 2 } = {}) {
+  placeNest({ x, y, z = 1.8, surface = 'tree', buildingId = null, plantId = null, lampId = null, skybridgeId = null, species = 'sabia', ownerId = null, eggs = 2 } = {}) {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-    if (!['tree', 'balcony', 'fence', 'roof'].includes(surface)) return null;
+    if (!['tree', 'balcony', 'fence', 'roof', 'lamp', 'balcony_rail', 'balcony_roof', 'skybridge'].includes(surface)) return null;
     const spec = ANIMAL_SPECIES[species] || {};
     const id = `nest:${this.nextNestId++}`;
     const entity = this.city.createEntity({
@@ -104,6 +106,8 @@ export class CityFauna {
       surface,
       buildingId,
       plantId,
+      lampId,
+      skybridgeId,
       species,
       ownerId,
       eggs,
@@ -151,6 +155,13 @@ export class CityFauna {
       if (nest.buildingId != null && this.city.building) {
         const b = this.city.building(nest.buildingId);
         if (!b || b.entity?.destroyed) {
+          this.removeNest(nest);
+          continue;
+        }
+      }
+      if (nest.lampId != null) {
+        const post = (this.city.world?.cityLampPosts || []).find(p => p.id === nest.lampId);
+        if (!post || !post.built) {
           this.removeNest(nest);
         }
       }
@@ -242,11 +253,44 @@ export class CityFauna {
         }
       } else if (b.constructionKind !== 'open-air') {
         const balconies = b.units?.length ? buildingLeisureSpaces(b).filter(s => s.kind === 'balcony') : [];
+        const style = HOUSE_STYLES[architectureFor(b.type, b.id, this.city.world?.seed ?? 0)] || HOUSE_STYLES.modern;
         for (const bal of balconies) {
-          candidates.push({ x: b.entity.x + bal.position.x, y: b.entity.y + bal.position.y, z: bal.position.z + 0.02, surface: 'balcony', buildingId: b.id });
+          const rot = (b.rotation || 0) % 4;
+          const baseNormals = { front: [0, 1], back: [0, -1], left: [-1, 0], right: [1, 0] };
+          const [bnx, bny] = baseNormals[bal.side] || [0, 1];
+          const [nx, ny] = rot === 1 ? [bny, -bnx] : rot === 2 ? [-bnx, -bny] : rot === 3 ? [-bny, bnx] : [bnx, bny];
+          const railDist = (bal.depth || 0.68) * 0.5 + 0.04;
+          const railZ = bal.floor * CITY_FLOOR_HEIGHT + (bal.balconyStyle === 'stone' ? 0.69 : 0.74);
+          candidates.push({ x: bal.position.x + nx * railDist, y: bal.position.y + ny * railDist, z: railZ, surface: 'balcony_rail', buildingId: b.id });
+          const hasBalconyRoof = bal.balconyStyle === 'wood' || style?.dutchForm === 'gallery' || style?.dutchForm === 'shed_gallery';
+          if (hasBalconyRoof) {
+            candidates.push({ x: bal.position.x, y: bal.position.y, z: bal.floor * CITY_FLOOR_HEIGHT + 1.50, surface: 'balcony_roof', buildingId: b.id });
+          }
+          candidates.push({ x: bal.position.x, y: bal.position.y, z: bal.position.z + 0.02, surface: 'balcony', buildingId: b.id });
         }
         // Roof eave/edge at exact CITY_FLOOR_HEIGHT so it sits on the roof, never inside a gable or floating
         candidates.push({ x: b.entity.x + 0.35, y: b.entity.y + 0.35, z: (b.floors || 1) * CITY_FLOOR_HEIGHT + 0.12, surface: 'roof', buildingId: b.id });
+      }
+    }
+    for (const post of this.city.world?.cityLampPosts || []) {
+      if (!post.built) continue;
+      if (Math.hypot(post.x - bx, post.y - by) > maxDist) continue;
+      let lampHash = 0;
+      for (const ch of String(post.id)) lampHash = Math.imul(lampHash ^ ch.charCodeAt(0), 16777619);
+      const variant = (lampHash >>> 0) % 3;
+      const lanternX = variant === 1 ? 0 : 0.34;
+      const lampTopY = (variant === 1 ? 2.2 : 2.14) + 0.31;
+      const nx = post.x + lanternX, ny = post.y;
+      const slopeDelta = this.city.world ? (surfaceElevation(this.city.world, post.x, post.y) - surfaceElevation(this.city.world, nx, ny)) : 0;
+      candidates.push({ x: nx, y: ny, z: (post.height || 0) + lampTopY + slopeDelta, surface: 'lamp', lampId: post.id });
+    }
+    if (this.city.buildings?.length && this.city.world) {
+      for (const link of skybridgeLinks(this.city.buildings, this.city.world)) {
+        const midX = (link.start.x + link.end.x) * 0.5, midY = (link.start.y + link.end.y) * 0.5;
+        if (Math.hypot(midX - bx, midY - by) > maxDist) continue;
+        const horizontal = link.axis === 'x', side = ((link.aId + link.bId) % 2 ? 1 : -1) * 0.32;
+        const sx = midX + (horizontal ? 0 : side), sy = midY + (horizontal ? side : 0);
+        candidates.push({ x: sx, y: sy, z: link.height + 0.67, surface: 'skybridge', buildingId: link.aId, skybridgeId: link.id });
       }
     }
     return candidates;

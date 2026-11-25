@@ -215,7 +215,7 @@ export function advanceRecruitment(city){
     if(!agency){a.resultDueAt=city.minute+30;continue;}
     if(a.agencyBuildingId!==agency.building.id){a.agencyBuildingId=agency.building.id;a.interviewAt=agencyAppointmentTime(city,c,agency);a.decideAt=a.interviewAt+RECRUITMENT_RULES.interviewDuration;}
     if(a.submittedAt==null){
-      const present=c.task==='job-interview'&&c.targetId===agency.building.id&&(agency.building.constructionKind==='open-air'?!c.indoorLocation&&!c.path.length&&Math.hypot(c.entity.x-agency.building.door.x,c.entity.y-agency.building.door.y)<=.8:c.indoorLocation?.buildingId===agency.building.id&&!c.indoorLocation.exiting);
+      const present=c.task==='job-interview'&&c.targetId===agency.building.id&&(agency.building.constructionKind==='open-air'?!c.indoorLocation&&!c.path.length&&Math.hypot(c.entity.x-agency.building.door.x,c.entity.y-agency.building.door.y)<=.8:c.indoorLocation?.buildingId===agency.building.id&&!c.indoorLocation.exiting&&!c.indoorLocation.path?.length);
       if(city.minute<a.interviewAt)continue;
       if(city.minute>=a.interviewAt&&!secretaryAvailable){a.agencyDeferrals=(a.agencyDeferrals||0)+1;a.interviewAt=agencyAppointmentTime(city,c,agency);a.decideAt=a.interviewAt+RECRUITMENT_RULES.interviewDuration;continue;}
       if(!present){if(city.minute>a.interviewAt+economicPolicy(city,'interviewGraceMinutes')){a.absentAt=city.minute;finishApplication(a,'reprovado','Não compareceu à entrevista na Secretaria do Trabalho',city.minute);releaseInterview(c,a);}continue;}

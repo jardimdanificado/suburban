@@ -76,6 +76,7 @@ OFENSAS_POR_PRECONCEITO.gordofobia.push(
 OFENSAS_POR_PRECONCEITO.magrofobia.push(
   {id: 'magrofobia-1', m: 'girafales', f: 'olivia palito'},
   {id: 'magrofobia-2', m: 'palito de dente', f: 'palito de fosforo'},
+  {id: 'magrofobia-2', m: 'sebito baleado', f: 'sebito baleado'},
 );
 
 export function categoriasDePreconceito() {

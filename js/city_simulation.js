@@ -46,7 +46,7 @@ import { CityOfficialJournal } from './city_official_journal.js';
 import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js?v=colonial-colored-trim-1';
 import { CityRelationships } from './city_relationships.js?v=wardrobe-expansion-1';
 import { CityNature } from './city_nature.js?v=ff-growth-events-1';
-import { CityFauna } from './city_fauna.js?v=fauna-nest-1';
+import { CityFauna } from './city_fauna.js?v=fauna-nest-2';
 import {skybridgeLinks} from './city_skybridges.js?v=seeded-business-visual-v1';
 import { CityGovernment as CityPolitics } from './city_government.js?v=party-number-random-1';
 import { CityReputation } from './city_reputation.js';

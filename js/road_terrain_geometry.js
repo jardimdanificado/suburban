@@ -21,19 +21,22 @@ function stoneVertexSeed(world,x,y,salt=0){
 // Broad, continuous relief crosses tile boundaries instead of placing a summit
 // at every tile center. Small grain keeps the silhouette from becoming uniform.
 function stoneRelief(world,x,y){
-  const scale=3.4,u=x/scale,v=y/scale,gx=Math.floor(u),gy=Math.floor(v);
-  const smooth=t=>t*t*(3-2*t),sx=smooth(u-gx),sy=smooth(v-gy);
-  const sample=(dx,dy)=>stoneVertexSeed(world,gx+dx,gy+dy,0x517cc1b7)/4294967295;
-  return ((sample(0,0)*(1-sx)+sample(1,0)*sx)*(1-sy)+(sample(0,1)*(1-sx)+sample(1,1)*sx)*sy-.5)*1.25;
+  const smooth=t=>t*t*(3-2*t);
+  const octave=(scale,salt)=>{
+    const u=x/scale,v=y/scale,gx=Math.floor(u),gy=Math.floor(v),sx=smooth(u-gx),sy=smooth(v-gy);
+    const sample=(dx,dy)=>stoneVertexSeed(world,gx+dx,gy+dy,salt)/4294967295;
+    return ((sample(0,0)*(1-sx)+sample(1,0)*sx)*(1-sy)+(sample(0,1)*(1-sx)+sample(1,1)*sx)*sy-.5);
+  };
+  return octave(3.4,0x517cc1b7)*1.15+octave(1.65,0x9e3779b9)*.34;
 }
 function stoneVertexHeight(world,x,y){
   let count=0;for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++)if(baseTerrainTile(at(world,x+dx,y+dy))===TILE_STONE)count++;
-  return terrainTileHeight(TILE_STONE)-(4-count)*.08+stoneRelief(world,x,y);
+  return terrainTileHeight(TILE_STONE)-(4-count)*.22+stoneRelief(world,x,y);
 }
 function stoneVertexOffset(world,x,y){
   let count=0,cx=0,cz=0;for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++)if(baseTerrainTile(at(world,x+dx,y+dy))===TILE_STONE){count++;cx+=dx+.5;cz+=dy+.5;}
-  const inset=count===1?.36:0;
-  return {x:cx*inset+(((stoneVertexSeed(world,x,y,0x6d2b79f5)/4294967295)*2)-1)*.11,z:cz*inset+(((stoneVertexSeed(world,x,y,0x1b873593)/4294967295)*2)-1)*.11};
+  const inset=count===1?.38:count===2?.16:0;
+  return {x:cx*inset+(((stoneVertexSeed(world,x,y,0x6d2b79f5)/4294967295)*2)-1)*.15,z:cz*inset+(((stoneVertexSeed(world,x,y,0x1b873593)/4294967295)*2)-1)*.15};
 }
 export function terrainVertexOffset(world,x,y){
   // Keep vertices shared with streets and sidewalks on the exact grid line.

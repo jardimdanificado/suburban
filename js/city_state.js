@@ -24,7 +24,7 @@ import { CityCouncil } from './city_council.js?v=council-mandate-snapshot-2';
 import { CityCampaigns } from './city_campaigns.js?v=planted-rally-flags-1';
 import { CityMandates } from './city_mandates.js?v=mandate-one-pass-1';
 import { CityNature } from './city_nature.js?v=ff-growth-events-1';
-import { CityFauna } from './city_fauna.js?v=fauna-nest-1';
+import { CityFauna } from './city_fauna.js?v=fauna-nest-2';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
 import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=game-approach-camera-9';

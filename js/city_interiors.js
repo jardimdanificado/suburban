@@ -113,10 +113,12 @@ export function activityRoomReady(city,c,b,room,kind=room?.roomType||'workspace'
  }else{
   if(c.path.length)return false;
   if(!previous&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)>.75){const path=city.findPath(c.entity,b.door);if(path!==null)c.path=path;return false;}
+  const shell=city.building(b.officeTenantOf)||b,entry=!previous?buildingInteriorEntrance(shell):null;
   const from=previous?.buildingId===b.id?previous.position:{x:c.entity.x,y:c.entity.y,z:0};release(city,c);if(earlyReservationChecks.get(c)===room){cleanActivityReservations(city,room);earlyReservationChecks.delete(c);}
   const usedSlots=new Set();for(const [index,id]of (room.activityReservedIds||[]).entries()){if(id===c.id)continue;const other=city.society.citizen(id),assigned=other?.indoorLocation?.furnitureSlot;if(Number.isInteger(assigned))usedSlots.add(assigned);else usedSlots.add(index);}
-  let slot=0;while(usedSlots.has(slot)&&slot<8)slot++;const interaction=furnitureInteraction(b,room,kind,slot,c.workMeal?'workmeal':c.task),target=interaction?.point||interiorUsePoint(b,room,kind,slot,c.task),path=interiorRoute(city.building(b.officeTenantOf)||b,from,target);
-  if(path===null){c.action=`Sem rota interna acessível até ${kind}`;return false;}
+  let slot=0;while(usedSlots.has(slot)&&slot<8)slot++;const interaction=furnitureInteraction(b,room,kind,slot,c.workMeal?'workmeal':c.task),target=interaction?.point||interiorUsePoint(b,room,kind,slot,c.task),rawPath=interiorRoute(shell,from,target);
+  if(rawPath===null){c.action=`Sem rota interna acessível até ${kind}`;return false;}
+  const path=!previous&&entry&&!rawPath.length?[entry]:rawPath;
   c.indoorLocation={buildingId:b.id,targetUnitId:room.id,unitId:path.length?null:room.id,targetRoomType:kind,roomType:path.length?'circulation':kind,floor:Math.floor(from.z/CITY_FLOOR_HEIGHT),position:{...from},path,trail:previous?.buildingId===b.id?previous.trail:[Object.freeze({...from})],phase:path.length?'walking':'using',task:c.workMeal?'workmeal':c.task,furnitureId:interaction?.item.id||null,furnitureSlot:slot,layoutRevision:b.layoutRevision||0,enteredAt:previous?.buildingId===b.id?previous.enteredAt:city.minute,toiletTargetId:c.toiletTargetId};
 
  }
