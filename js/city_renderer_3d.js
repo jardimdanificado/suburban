@@ -291,7 +291,7 @@ export function drawWallPainting(ctx,piece,onReady=null){
 }
 
 const GRAFFITI_STYLES=['pixo','tag','stencil','bubble','spray','irregular','stacked','bomb','rasurada'];
-const GRAFFITI_MIXED_FONTS=['sans-serif','Georgia, serif','"JetBrains Mono", monospace','Impact, "Arial Black", sans-serif'];
+const GRAFFITI_MIXED_FONTS=['"Permanent Marker", cursive','Georgia, serif','"JetBrains Mono", monospace','"Rubik Bubbles", fantasy','"Black Ops One", sans-serif'];
 const GRAFFITI_SYMBOL_TOKENS=['[flag]','[star]','[crown]','[bolt]','[heart]','[eye]','[arrow]','[anarchy]'];
 function srgbLuminance(color){
   const linear=v=>{const c=v/255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4;};
@@ -473,7 +473,7 @@ function truncateWords(text,maxChars){
   return out||clean.slice(0,maxChars);
 }
 
-function condenseGraffitiWallText(rawText,maxChars=28){
+function condenseGraffitiWallText(rawText,maxChars=42){
   const text=String(rawText||'').trim();
   if(!text)return '';
   const segments=text.split(/\s+·\s+/).map(s=>s.trim()).filter(Boolean);
@@ -488,47 +488,53 @@ function condenseGraffitiWallText(rawText,maxChars=28){
       const combined=`${shortWho}: ${insult}`;
       return combined.length<=maxChars?combined:truncateWords(`${whoWords[whoWords.length-1]} ${insult}`,maxChars);
     }
-    // Party support ("PVA · 23") or protest with target ("frase · Prefeitura")
     if(segments.length===2&&/^\d+$/.test(segments[1]))return truncateWords(`${segments[0]} ${segments[1]}`,maxChars);
     if(segments.length>=3&&/^\d+$/.test(segments[2]))return truncateWords(`${segments[1]} ${segments[2]}`,maxChars);
-    return truncateWords(`${targetSeg} ${segments[0]}`,maxChars);
+    return truncateWords(segments[0].length<=maxChars?segments[0]:`${targetSeg}: ${segments[0]}`,maxChars);
   }
-  return truncateWords(segments[0],maxChars);
+  const main=segments[0];
+  if(main.length<=maxChars)return main;
+  // Prefer a complete short clause over chopping into a meaningless noun fragment like "O RESTAURANTE".
+  const clauses=main.split(/[,;!?]+/).map(s=>s.trim()).filter(Boolean);
+  if(clauses[0]&&clauses[0].length<=maxChars)return clauses[0];
+  return truncateWords(main,maxChars);
 }
 
 function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
   const style=resolveGraffitiStyle(piece,face);
   const seed=((piece?.id||1)*2654435761+(face?.id||0)*977)>>>0;
   const inkHex=`#${inkColor.toString(16).padStart(6,'0')}`;
+  const shadowHex=srgbLuminance(inkColor)>.35?'#141418':'#e8e8ee';
   const support=piece?.support;
   const sw=support?.width||1,sh=support?.height||1;
   const physAspect=Math.max(.55,Math.min(3.2,sw/sh));
   const wideLow=physAspect>1.5;
-  const maxChars=wideLow?16:sw>1.2?30:22;
+  const maxChars=wideLow?26:sw>1.2?46:34;
   const wallText=condenseGraffitiWallText(face.message||'',maxChars);
   const tokens=wallText.split(/\s+/).filter(Boolean);
   const fontSpec=(size,idx=0)=>{
-    if(style==='pixo')return `900 ${size}px Impact, "Arial Black", sans-serif`;
-    if(style==='tag')return `italic 900 ${size}px "Arial Black", Impact, sans-serif`;
-    if(style==='stencil')return `900 ${size}px Impact, "Arial Black", sans-serif`;
-    if(style==='bomb')return `900 ${size}px "Arial Black", Impact, sans-serif`;
-    if(style==='bubble')return `900 ${size}px "Arial Black", "Press Start 2P", sans-serif`;
-    if(style==='spray')return `900 ${size}px "Arial Black", "JetBrains Mono", sans-serif`;
-    if(style==='rasurada')return `${idx%2?'italic ':''}900 ${size}px "Arial Black", sans-serif`;
+    if(style==='pixo')return `900 ${size}px "Sedgwick Ave Display", "VT323", "JetBrains Mono", cursive`;
+    if(style==='tag')return `italic 700 ${size}px "Permanent Marker", cursive`;
+    if(style==='stencil')return `900 ${size}px "Black Ops One", Impact, fantasy`;
+    if(style==='bomb')return `900 ${size}px "Rubik Bubbles", "Press Start 2P", fantasy`;
+    if(style==='bubble')return `900 ${size}px "Rubik Bubbles", "Press Start 2P", fantasy`;
+    if(style==='spray')return `700 ${size}px "JetBrains Mono", monospace`;
+    if(style==='rasurada')return `${idx%2?'italic ':''}900 ${size}px Georgia, serif`;
     if(style==='irregular')return `${idx%2?'italic ':''}900 ${size}px ${GRAFFITI_MIXED_FONTS[idx%GRAFFITI_MIXED_FONTS.length]}`;
-    return `900 ${size}px "Arial Black", sans-serif`;
+    if(style==='stacked')return idx%2===0?`900 ${size}px "Black Ops One", fantasy`:`700 ${size}px "JetBrains Mono", monospace`;
+    return `900 ${size}px sans-serif`;
   };
-  const styleScaleX=wideLow?1:(style==='pixo'?.92:style==='bomb'?1.06:1);
-  const styleScaleY=wideLow?Math.min(1.85,Math.sqrt(physAspect)):(style==='pixo'?1.18:1);
-  const maxLines=wideLow?1:3;
-  let lines=[],baseSize=48;
-  const maxW=242,maxH=232;
-  for(let size=104;size>=28;size-=4){
+  const styleScaleX=wideLow?1:(style==='pixo'?.72:style==='bomb'?1.08:1);
+  const styleScaleY=wideLow?Math.min(1.65,Math.sqrt(physAspect)):(style==='pixo'?1.52:1);
+  const maxLines=wideLow?2:3;
+  let lines=[],baseSize=38;
+  const maxW=238,maxH=228;
+  for(let size=92;size>=24;size-=4){
     ctx.font=fontSpec(size,0);lines=[];let cur=[];let curW=0;
     for(const tok of tokens){
-      const label=tok.toUpperCase();
+      const label=style==='irregular'||style==='tag'?tok:tok.toUpperCase();
       const w=ctx.measureText(label).width*styleScaleX;
-      const gap=cur.length?size*.18*styleScaleX:0;
+      const gap=cur.length?Math.max(10,size*.36*styleScaleX):0;
       if(cur.length&&curW+gap+w>maxW&&lines.length+1<maxLines){lines.push(cur);cur=[label];curW=w;}
       else{cur.push(label);curW+=gap+w;}
     }
@@ -536,49 +542,55 @@ function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
     baseSize=size;
     if(lines.length*size*styleScaleY<=maxH&&lines.length<=maxLines)break;
   }
-  const lineHeight=Math.min(228/Math.max(1,lines.length),Math.max(36,baseSize*styleScaleY*1.04));
+  const lineHeight=Math.min(224/Math.max(1,lines.length),Math.max(32,baseSize*styleScaleY*1.06));
   ctx.save();
   if(style==='tag'||style==='pixo'||style==='bomb'){
-    const tilt=(graffitiHash(seed,3)-.5)*(style==='tag'?.14:style==='bomb'?.1:.08);
+    const tilt=(graffitiHash(seed,3)-.5)*(style==='tag'?.18:style==='bomb'?.12:.12);
     ctx.translate(128,128);ctx.rotate(tilt);ctx.translate(-128,-128);
   }
   if(style==='spray'){
     ctx.fillStyle=inkHex;
-    for(let i=0;i<18;i++){
-      const sx=18+graffitiHash(seed,100+i)*220,sy=20+graffitiHash(seed,200+i)*216,sz=3+Math.floor(graffitiHash(seed,300+i)*3);
+    for(let i=0;i<36;i++){
+      const sx=18+graffitiHash(seed,100+i)*220,sy=20+graffitiHash(seed,200+i)*216,sz=1+Math.floor(graffitiHash(seed,300+i)*3);
       ctx.fillRect(Math.round(sx),Math.round(sy),sz,sz);
     }
   }
   const drawWordOrChar=(tok,gx,gy,size,idx,scaleX=1,scaleY=1,rot=0)=>{
     ctx.save();ctx.translate(gx,gy);if(rot)ctx.rotate(rot);if(scaleX!==1||scaleY!==1)ctx.scale?.(scaleX,scaleY);
     ctx.font=fontSpec(size,idx);ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle=inkHex;drawPixelText(ctx,tok,0,0,246);
+    if(style==='bomb'){
+      ctx.fillStyle=shadowHex;drawPixelText(ctx,tok,4,4,244);
+    }
+    ctx.fillStyle=inkHex;drawPixelText(ctx,tok,0,0,244);
     ctx.restore();
   };
   lines.forEach((lineTokens,lineIdx)=>{
     const cy=128+(lineIdx-(lines.length-1)/2)*lineHeight;
-    const lineSize=style==='stacked'?Math.max(44,Math.min(124,Math.round(baseSize*(lineIdx%2===0?1.12:.88)))):baseSize;
+    const lineSize=style==='stacked'?Math.max(22,Math.min(112,Math.round(baseSize*(lineIdx%2===0?1.32:.72)))):baseSize;
+    const wordGap=Math.max(10,lineSize*.36*styleScaleX);
     if(style==='irregular'||style==='pixo'||style==='rasurada'){
       const items=[];let totalW=0;
       for(let t=0;t<lineTokens.length;t++){
         const tok=lineTokens[t];
-        if(t>0){const sp=lineSize*.18;items.push({tok:' ',w:sp,size:lineSize,space:true});totalW+=sp;}
+        if(t>0){items.push({tok:' ',w:wordGap,size:lineSize,space:true});totalW+=wordGap;}
+        const wordScale=style==='irregular'?(.75+graffitiHash(seed,lineIdx*41+t*13)*.55):1;
         for(let c=0;c<tok.length;c++){
-          const scale=style==='irregular'?(.86+graffitiHash(seed,lineIdx*97+t*19+c)*.28):(.92+graffitiHash(seed,lineIdx*97+t*19+c)*.16);
-          const cs=Math.max(42,Math.min(132,Math.round(lineSize*scale)));
-          ctx.font=fontSpec(cs,c+lineIdx);
-          const cw=Math.max(cs*.5*styleScaleX,ctx.measureText(tok[c]).width*styleScaleX);
+          const charScale=style==='irregular'?wordScale*(.8+graffitiHash(seed,lineIdx*97+t*19+c)*.4):(.86+graffitiHash(seed,lineIdx*97+t*19+c)*.28);
+          const cs=Math.max(20,Math.min(116,Math.round(lineSize*charScale)));
+          ctx.font=fontSpec(cs,c+lineIdx+t);
+          const cw=Math.max(cs*.42*styleScaleX,ctx.measureText(tok[c]).width*styleScaleX);
           items.push({tok:tok[c],w:cw,size:cs,idx:c+lineIdx+t});totalW+=cw;
         }
       }
-      const fit=totalW>240?240/totalW:1;let cx=128-(totalW*fit)/2;
+      const fit=totalW>238?238/totalW:1;let cx=128-(totalW*fit)/2;
       for(let i=0;i<items.length;i++){
         const item=items[i],w=item.w*fit;
         if(!item.space){
-          const cs=Math.max(38,Math.round(item.size*fit));
-          const yJit=(graffitiHash(seed,500+lineIdx*64+i)-.5)*lineSize*(style==='irregular'?.14:.08);
-          const rot=(graffitiHash(seed,900+lineIdx*64+i)-.5)*(style==='irregular'?.18:.08);
-          drawWordOrChar(item.tok,cx+w/2,cy+yJit,cs,item.idx||0,styleScaleX,styleScaleY,rot);
+          const cs=Math.max(18,Math.round(item.size*fit));
+          const yJit=(graffitiHash(seed,500+lineIdx*64+i)-.5)*lineSize*(style==='irregular'?.28:.14);
+          const rot=(graffitiHash(seed,900+lineIdx*64+i)-.5)*(style==='irregular'?.34:.14);
+          const ch=style==='irregular'&&graffitiHash(seed,1300+i)>.45?item.tok.toUpperCase():item.tok;
+          drawWordOrChar(ch,cx+w/2,cy+yJit,cs,item.idx||0,styleScaleX,styleScaleY,rot);
         }
         cx+=w;
       }
@@ -588,27 +600,38 @@ function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
         const tok=lineTokens[t];
         ctx.font=fontSpec(lineSize,t+lineIdx);
         const w=ctx.measureText(tok).width*styleScaleX;
-        widths.push(w);totalW+=w+(t?lineSize*.18:0);
+        widths.push(w);totalW+=w+(t?wordGap:0);
       }
-      const fit=totalW>240?240/totalW:1;let cx=128-(totalW*fit)/2;
+      const fit=totalW>238?238/totalW:1;let cx=128-(totalW*fit)/2;
       for(let t=0;t<lineTokens.length;t++){
         const w=widths[t]*fit;
-        drawWordOrChar(lineTokens[t],cx+w/2,cy,Math.max(38,Math.round(lineSize*fit)),t+lineIdx,styleScaleX,styleScaleY,0);
-        cx+=w+lineSize*.18*fit;
+        drawWordOrChar(lineTokens[t],cx+w/2,cy,Math.max(20,Math.round(lineSize*fit)),t+lineIdx,styleScaleX,styleScaleY,0);
+        cx+=w+wordGap*fit;
       }
     }
   });
+  if(style==='pixo'){
+    // Sharp angular pixo end-strokes/hooks
+    ctx.strokeStyle=inkHex;ctx.lineWidth=3;
+    ctx.beginPath();ctx.moveTo(22,42);ctx.lineTo(44,24);ctx.moveTo(214,218);ctx.lineTo(234,196);ctx.stroke();
+  }
   if(style==='rasurada'){
-    ctx.strokeStyle=inkHex;ctx.lineWidth=6;
-    const y1=128+(graffitiHash(seed,700)-.5)*20,y2=y1+(graffitiHash(seed,710)-.5)*24;
-    ctx.beginPath();ctx.moveTo(16,y1);ctx.lineTo(240,y2);ctx.stroke();
+    ctx.strokeStyle=inkHex;ctx.lineWidth=5;
+    for(let s=0;s<3;s++){
+      const y1=64+s*60+(graffitiHash(seed,700+s)-.5)*18,y2=y1+(graffitiHash(seed,710+s)-.5)*28;
+      ctx.beginPath();ctx.moveTo(18,y1);ctx.lineTo(238,y2);ctx.stroke();
+    }
   }
   if(style==='stencil'){
-    ctx.clearRect(0,126,256,3);
+    ctx.clearRect(0,126,256,3);ctx.clearRect(126,18,3,220);
   }
-  if(style==='tag'&&lines.length){
-    const y=Math.min(242,128+((lines.length-1)/2)*lineHeight+baseSize*styleScaleY*.48);
-    ctx.strokeStyle=inkHex;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(28,y);ctx.quadraticCurveTo(128,y+12,228,y-4);ctx.stroke();
+  if(style==='tag'||style==='spray'){
+    ctx.fillStyle=inkHex;
+    for(let d=0;d<4;d++){const dx=52+graffitiHash(seed,800+d)*152,dy=164+graffitiHash(seed,810+d)*26,dh=12+graffitiHash(seed,820+d)*26;ctx.fillRect(Math.round(dx),Math.round(dy),2,Math.round(dh));}
+    if(style==='tag'&&lines.length){
+      const y=Math.min(242,128+((lines.length-1)/2)*lineHeight+baseSize*styleScaleY*.48);
+      ctx.strokeStyle=inkHex;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(26,y);ctx.quadraticCurveTo(128,y+14,230,y-6);ctx.stroke();
+    }
   }
   ctx.restore();
   if(piece?.groundSmudges?.length)applyFootSmudges(ctx,256,256,piece.groundSmudges,seed);
