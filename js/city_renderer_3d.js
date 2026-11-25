@@ -460,28 +460,40 @@ function applyFootSmudges(ctx,w,h,smudges,seed){
   ctx.putImageData(img,0,0);
 }
 
-const GRAFFITI_STOPWORDS=new Set(['a','o','as','os','um','uma','uns','umas','de','da','do','das','dos','em','na','no','nas','nos','para','pra','por','com','sem','que','e','é','se','ao','aos','à','às','mais','menos','muito','muita']);
-
-function condenseGraffitiWallText(rawText,maxChars=12){
-  const text=String(rawText||'').trim();
-  if(!text)return '';
-  const segments=text.split(/\s+·\s+/).map(s=>s.trim()).filter(Boolean);
-  let source=segments[0];
-  if(segments.length>=2){
-    const afterColon=segments[1].includes(':')?segments[1].split(':').pop().trim():segments[1];
-    source=afterColon.length<=maxChars?afterColon:segments[2]&&segments[2].length<=maxChars?segments[2]:afterColon;
-  }
-  if(source.length<=maxChars)return source;
-  const rawWords=source.replace(/[.,;:]+/g,' ').split(/\s+/).filter(Boolean);
-  const meaningful=rawWords.filter(w=>!GRAFFITI_STOPWORDS.has(w.toLowerCase()));
-  const pool=meaningful.length?meaningful:rawWords;
+function truncateWords(text,maxChars){
+  const clean=String(text||'').replace(/\s+/g,' ').trim();
+  if(clean.length<=maxChars)return clean;
+  const words=clean.split(' ');
   let out='';
-  for(const w of pool){
+  for(const w of words){
     const next=out?`${out} ${w}`:w;
     if(next.length>maxChars)break;
     out=next;
   }
-  return out||pool[0].slice(0,maxChars);
+  return out||clean.slice(0,maxChars);
+}
+
+function condenseGraffitiWallText(rawText,maxChars=28){
+  const text=String(rawText||'').trim();
+  if(!text)return '';
+  const segments=text.split(/\s+·\s+/).map(s=>s.trim()).filter(Boolean);
+  if(segments.length>=2){
+    const targetSeg=segments[1];
+    if(targetSeg.includes(':')){
+      // Accusation/insult: keep both who is being called out and the insult (never drop to party number).
+      const [whoRaw,insultRaw]=targetSeg.split(':');
+      const insult=insultRaw.trim();
+      const whoWords=whoRaw.trim().split(/\s+/);
+      const shortWho=whoWords.length>1&&whoRaw.trim().length+insult.length+2>maxChars?whoWords[whoWords.length-1]:whoRaw.trim();
+      const combined=`${shortWho}: ${insult}`;
+      return combined.length<=maxChars?combined:truncateWords(`${whoWords[whoWords.length-1]} ${insult}`,maxChars);
+    }
+    // Party support ("PVA · 23") or protest with target ("frase · Prefeitura")
+    if(segments.length===2&&/^\d+$/.test(segments[1]))return truncateWords(`${segments[0]} ${segments[1]}`,maxChars);
+    if(segments.length>=3&&/^\d+$/.test(segments[2]))return truncateWords(`${segments[1]} ${segments[2]}`,maxChars);
+    return truncateWords(`${targetSeg} ${segments[0]}`,maxChars);
+  }
+  return truncateWords(segments[0],maxChars);
 }
 
 function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
@@ -492,7 +504,7 @@ function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
   const sw=support?.width||1,sh=support?.height||1;
   const physAspect=Math.max(.55,Math.min(3.2,sw/sh));
   const wideLow=physAspect>1.5;
-  const maxChars=wideLow?8:sw>1.2?14:10;
+  const maxChars=wideLow?16:sw>1.2?30:22;
   const wallText=condenseGraffitiWallText(face.message||'',maxChars);
   const tokens=wallText.split(/\s+/).filter(Boolean);
   const fontSpec=(size,idx=0)=>{
@@ -508,10 +520,10 @@ function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
   };
   const styleScaleX=wideLow?1:(style==='pixo'?.92:style==='bomb'?1.06:1);
   const styleScaleY=wideLow?Math.min(1.85,Math.sqrt(physAspect)):(style==='pixo'?1.18:1);
-  const maxLines=wideLow?1:2;
-  let lines=[],baseSize=72;
-  const maxW=242,maxH=234;
-  for(let size=132;size>=44;size-=4){
+  const maxLines=wideLow?1:3;
+  let lines=[],baseSize=48;
+  const maxW=242,maxH=232;
+  for(let size=104;size>=28;size-=4){
     ctx.font=fontSpec(size,0);lines=[];let cur=[];let curW=0;
     for(const tok of tokens){
       const label=tok.toUpperCase();
@@ -524,7 +536,7 @@ function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
     baseSize=size;
     if(lines.length*size*styleScaleY<=maxH&&lines.length<=maxLines)break;
   }
-  const lineHeight=Math.min(228/Math.max(1,lines.length),Math.max(54,baseSize*styleScaleY*1.02));
+  const lineHeight=Math.min(228/Math.max(1,lines.length),Math.max(36,baseSize*styleScaleY*1.04));
   ctx.save();
   if(style==='tag'||style==='pixo'||style==='bomb'){
     const tilt=(graffitiHash(seed,3)-.5)*(style==='tag'?.14:style==='bomb'?.1:.08);

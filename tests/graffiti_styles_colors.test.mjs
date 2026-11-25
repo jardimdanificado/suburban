@@ -332,7 +332,9 @@ test('long street graffiti messages condense to large uppercase text legible at 
       assert.equal(text, text.toUpperCase(), `expected uppercase wall text, got "${text}"`);
     }
     const sizes = drawnFonts.map(f => Number.parseFloat(/([\d.]+)px/.exec(f)?.[1] || '0'));
-    assert.ok(sizes.every(s => s >= 38), `expected large font sizes >= 38px, got min ${Math.min(...sizes)}`);
+    assert.ok(sizes.every(s => s >= 24), `expected large font sizes >= 24px, got min ${Math.min(...sizes)}`);
+    assert.ok(drawnTexts.some(t => t.includes('FULANO') || t.includes('CORRUPTO')), 'political accusation must keep target/insult instead of just party number');
+    assert.ok(!drawnTexts.some(t => t === 'PTB 14'), 'must not replace accusation with bare party number');
   } finally {
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;

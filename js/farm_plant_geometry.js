@@ -38,9 +38,14 @@ export function farmPlantSurface(good){
    if(corn)b.ellipsoid([p[0]+.07,h*.62,p[2]],[.045,.13,.045],gold,2,7,4);
    else if(!cane)for(let i=0;i<8;i++){const angle=i*2.4,tip=[p[0]+Math.cos(angle)*.025,h+i*.012,p[2]+Math.sin(angle)*.025];b.ellipsoid(tip,[.012,.025,.012],gold,2,5,2);b.tube(tip,[tip[0]+Math.cos(angle)*.035,tip[1]+.07,tip[2]+Math.sin(angle)*.035],.0015,0,gold,3);}
   }
- }else if(good==='alface'||good==='cebola'){
-  for(let i=0;i<22;i++){const a=i*2.399,r=.13+.05*(i%3),h=.06+.025*(i%5);b.blade([0,.015,0],point(r,h,a),good==='alface'?.085:.009,i%3?leaf:light,{shape:'oval',segments:4,fold:.45});}
-  if(good==='cebola')b.ellipsoid([0,.025,0],[.07,.06,.07],vegetationColor(0xc9a06a),2,8,4);
+ }else if(good==='alface'){
+  for(let i=0;i<22;i++){const a=i*2.399,r=.13+.05*(i%3),h=.06+.025*(i%5);b.blade([0,.015,0],point(r,h,a),.085,i%3?leaf:light,{shape:'oval',segments:4,fold:.45});}
+ }else if(good==='cebola'){
+  const bulb=vegetationColor(0xc99658),bulbLight=vegetationColor(0xd8a86a);
+  b.ellipsoid([0,.09,0],[.13,.11,.13],bulb,2,10,5);
+  b.ellipsoid([.11,.065,.06],[.075,.065,.075],bulbLight,2,8,4);
+  for(let i=0;i<9;i++){const a=i*2.399,spread=.07+(i%3)*.045,h=.42+(i%4)*.06;b.tube([Math.cos(a)*.025,.16,Math.sin(a)*.025],point(spread,h,a),.022,.005,i%2?leaf:light,5);}
+  for(let i=0;i<4;i++){const a=i*1.57+.4,h=.26+(i%2)*.07;b.tube([.11,.11,.06],[.11+Math.cos(a)*.06,h,.06+Math.sin(a)*.06],.016,.004,i%2?light:stem,5);}
  }else if(good==='girassol'){
   b.tube([0,0,0],[.025,.85,0],.023,.012,stem);leaves(.7,7,.07,.23);
   for(let i=0;i<18;i++){const a=i*TAU/18;b.blade([.025,.85,0],[.025+Math.cos(a)*.16,.85+Math.sin(a)*.16,.015],.035,vegetationColor(0xf5c42b),{part:2,segments:3});}

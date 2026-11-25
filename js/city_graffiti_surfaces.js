@@ -1,5 +1,6 @@
 import {CITY_FLOOR_HEIGHT,buildingEntranceDoor} from './city_building_geometry.js?v=banner-placement-2';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
+import {buildingFacadeWindowMask} from './city_facade_patterns.js';
 import {surfaceElevation,tileAt,terrainWalkable,PAVED_ROAD_TILES} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {roadRetainingFaces} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
 
@@ -32,8 +33,8 @@ function wallUnitHasWindow(building,unit,side,floor=0){
   let safe=0;
   for(const [dx,dy,bit] of [[0,-1,1],[0,1,2],[-1,0,4],[1,0,8]])if(!occupied.has(`${unit.x+dx},${unit.y+dy},${unit.z}`))safe|=bit;
   for(const space of buildingLeisureSpaces(building))if(space.kind==='balcony'&&space.unitId===unit.id)safe&=~space.doorBit;
-  const opening=safe&3?(safe&2?2:1):safe&4?4:safe&8?8:0;
-  return opening===[1,8,2,4][side];
+  const opening=buildingFacadeWindowMask(building,unit,safe);
+  return !!(opening&[1,8,2,4][side]);
 }
 
 // Use the full wall unless its actual opening needs clearance.

@@ -1,6 +1,6 @@
 import {NormalMapControl} from './normal_map_control.js';
 import {terrainSurfaceNormals} from './terrain_surface_normals.js';
-import {createFarmPlantGeometry} from './farm_plant_geometry.js';
+import {createFarmPlantGeometry} from './farm_plant_geometry.js?v=onion-model-1';
 import {BOTANICAL_TREE_MODELS,botanicalTreeTextures,addBotanicalTreeWind,BotanicalTreeInstances} from './botanical_trees.js?v=species-colors-3';
 import {dirtRoadGround} from './dirt_road_visuals.js';
 import {scheduleTerrainIdleWork,stopTerrainIdleWork} from './terrain_idle_work.js';
@@ -23,7 +23,7 @@ import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMater
 import {cachedConstructionFootprint,grassExclusionCells,grassExclusionSignature,grassChunkSignatures} from './city_site_footprints.js?v=local-chunk-mask-3';
 import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=typed-roots-2';
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
-import {syncConstructionDust} from './city_construction_dust.js?v=grain-dust-7';
+import {syncConstructionDust} from './city_construction_dust.js?v=grain-dust-8';
 import {syncMovementDust} from './city_movement_dust.js?v=ground-dust-5';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-player-marker-5';
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
@@ -521,16 +521,22 @@ function getEntityBounds(e) {
   const isMaple = isPlantOrFlora && (e.properties?.species === "maple" || e.properties?.name?.toLowerCase().includes("bordo") || e.properties?.name?.toLowerCase().includes("maple"));
   const isBerryBush = isPlantOrFlora && (e.properties?.species === "berry" || e.properties?.name?.toLowerCase().includes("amora") || (e.properties?.species === "bush" && !e.properties?.name?.toLowerCase().includes("florido")));
   const isRoseBush = isPlantOrFlora && (['rose_bush','hibiscus','bougainvillea'].includes(e.properties?.species) || ['flowering','foliage'].includes(e.properties?.cityPlant?.form) || e.properties?.name?.toLowerCase().includes("florido") || e.properties?.name?.toLowerCase().includes("rose"));
+  const isCrop = isPlantOrFlora && e.properties?.cityPlant?.form === 'crop';
   const isShrub = isPlantOrFlora && (e.properties?.species === "shrub" || e.properties?.name?.toLowerCase().includes("shrub") || e.properties?.name?.toLowerCase().includes("arbusto"));
   const isWaterLily = isPlantOrFlora && (e.properties?.species === "waterlily" || e.properties?.species === "water_lily" || e.properties?.name?.toLowerCase().includes("lily") || e.properties?.name?.toLowerCase().includes("vitória-régia") || e.properties?.name?.toLowerCase().includes("vitoria"));
   const isSeaweed = isPlantOrFlora && (e.properties?.species === "seaweed" || e.properties?.name?.toLowerCase().includes("seaweed") || e.properties?.name?.toLowerCase().includes("alga"));
-  const isTree = !isCactus && !isBerryBush && !isRoseBush && !isShrub && !isWaterLily && !isSeaweed && (isCherry || isBirch || isMaple || e.properties?.species === "oak" || e.properties?.species === "pine" || e.properties?.species === "willow" || e.properties?.species === "tree" || !!e.properties?.tree || (r?.skin && r?.skin.toLowerCase().includes("tree")) || (e.properties?.photosynthesis && !e.properties?.life?.isDead));
+  const isTree = !isCactus && !isBerryBush && !isRoseBush && !isCrop && !isShrub && !isWaterLily && !isSeaweed && (isCherry || isBirch || isMaple || e.properties?.species === "oak" || e.properties?.species === "pine" || e.properties?.species === "willow" || e.properties?.species === "tree" || !!e.properties?.tree || (r?.skin && r?.skin.toLowerCase().includes("tree")) || (e.properties?.photosynthesis && !e.properties?.life?.isDead));
 
   // Tree crowns are visually broad, but letting the whole crown act as a
   // collider made it possible to select a tree from several tiles away.
   // Keep selection close to the trunk while retaining enough vertical span
   // for the visible model.
   if (isTree) return { radius: 0.48, h: 3.2, yBottom: 0.0 };
+  if (isCrop) {
+    const sp = e.properties?.cityPlant?.species || e.properties?.species;
+    const smallCrop = ['cebola', 'alface', 'coentro', 'peyote', 'cubensis', 'amanita'].includes(sp);
+    return smallCrop ? { radius: 0.28, h: 0.6, yBottom: 0.0 } : { radius: 0.35, h: 1.0, yBottom: 0.0 };
+  }
   if (isBerryBush || isRoseBush || isShrub) return { radius: 0.9, h: 1.8, yBottom: 0.0 };
   if (isWaterLily || isSeaweed) return { radius: 0.75, h: 0.6, yBottom: 0.0 };
   if (isHouse) {
@@ -6204,12 +6210,13 @@ export class RCT3DRenderer {
       const isTropicalFoliage = isPlantOrFlora && e.properties.cityPlant?.form === 'foliage';
       const isTropicalFlowering = isPlantOrFlora && e.properties.cityPlant?.form === 'flowering';
       const isBroadLeafPlant = isPlantOrFlora && e.properties.cityPlant?.form === 'broad_leaf';
+      const isCrop = isPlantOrFlora && e.properties.cityPlant?.form === 'crop';
       const isRoseBush = isPlantOrFlora && (['rose_bush','hibiscus','bougainvillea'].includes(e.properties.species) || e.properties.name?.toLowerCase().includes("florido") || e.properties.name?.toLowerCase().includes("rose"));
       const isShrub = isPlantOrFlora && (e.properties.species === "shrub" || e.properties.name?.toLowerCase().includes("shrub") || e.properties.name?.toLowerCase().includes("arbusto"));
       const isWaterLily = isPlantOrFlora && (e.properties.species === "waterlily" || e.properties.species === "water_lily" || e.properties.name?.toLowerCase().includes("lily") || e.properties.name?.toLowerCase().includes("vitória-régia") || e.properties.name?.toLowerCase().includes("vitoria"));
       const isSeaweed = isPlantOrFlora && (e.properties.species === "seaweed" || e.properties.name?.toLowerCase().includes("seaweed") || e.properties.name?.toLowerCase().includes("alga"));
-      const isTree = !isCactus && !isBerryBush && !isRoseBush && !isTropicalFoliage && !isTropicalFlowering && !isBroadLeafPlant && !isShrub && !isWaterLily && !isSeaweed && (isCherry || isBirch || isMaple || e.properties.species === "oak" || e.properties.species === "pine" || e.properties.species === "willow" || e.properties.species === "tree" || !!e.properties.tree || (r.skin && r.skin.toLowerCase().includes("tree")) || (e.properties.photosynthesis && !e.properties.life?.isDead));
-      const isFlora = isTree || isCactus || isBerryBush || isRoseBush || isTropicalFoliage || isTropicalFlowering || isBroadLeafPlant || isShrub || isWaterLily || isSeaweed;
+      const isTree = !isCactus && !isBerryBush && !isRoseBush && !isTropicalFoliage && !isTropicalFlowering && !isBroadLeafPlant && !isCrop && !isShrub && !isWaterLily && !isSeaweed && (isCherry || isBirch || isMaple || e.properties.species === "oak" || e.properties.species === "pine" || e.properties.species === "willow" || e.properties.species === "tree" || !!e.properties.tree || (r.skin && r.skin.toLowerCase().includes("tree")) || (e.properties.photosynthesis && !e.properties.life?.isDead));
+      const isFlora = isTree || isCactus || isBerryBush || isRoseBush || isTropicalFoliage || isTropicalFlowering || isBroadLeafPlant || isCrop || isShrub || isWaterLily || isSeaweed;
 
       const isWoodLog = !e.properties.brain && !isDoor && !isWarehouse && !isSlaughterhouse && !isKitchen && !isArtisanHut && !isTorch && !isCampfire && !isRoad && (e.properties.resourceType === "wood" || e.properties.name?.includes("Wood Log") || e.properties.name?.includes("Madeira") || r.skin === "Item_Wood.png");
       const isStoneItem = !e.properties.brain && !isDoor && !isWarehouse && !isSlaughterhouse && !isKitchen && !isArtisanHut && !isTorch && !isCampfire && !isRoad && (e.properties.resourceType === "stone" || e.properties.name?.includes("Stone Block") || e.properties.name?.includes("Pedra"));
