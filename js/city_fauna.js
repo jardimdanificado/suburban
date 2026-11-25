@@ -435,6 +435,53 @@ export class CityFauna {
     return best;
   }
 
+  markDead(animal, action = 'Abatido', minute = this.city.minute) {
+    if (!animal) return;
+    const spec = ANIMAL_SPECIES[animal.species] || {};
+    const food = Math.max(25, Math.round((spec.size || 0.8) * 100));
+    animal.dead = true;
+    animal.deadAt = animal.deadAt ?? minute;
+    animal.altitude = 0;
+    animal.targetAltitude = 0;
+    animal.inTreePlantId = null;
+    animal.targetX = null;
+    animal.targetY = null;
+    animal.state = 'sleep';
+    animal.action = action;
+    if (animal.carcassFood == null) {
+      animal.carcassFood = food;
+      animal.carcassMaxFood = food;
+    }
+  }
+
+  findCarcass(eater, maxDist = 16) {
+    let closest = null, bestDist = maxDist;
+    for (const a of this.animals.values()) {
+      if (a === eater || !a.dead || a.entity?.destroyed || (a.carcassFood ?? 0) <= 0) continue;
+      const d = Math.hypot(a.x - eater.x, a.y - eater.y);
+      if (d < bestDist) { bestDist = d; closest = a; }
+    }
+    return closest ? { animal: closest, dist: bestDist } : null;
+  }
+
+  feedOnCarcass(eater, carcass) {
+    if (!eater || !carcass || !carcass.dead || carcass.entity?.destroyed || (carcass.carcassFood ?? 0) <= 0) return false;
+    const bite = Math.min(carcass.carcassFood, 25);
+    carcass.carcassFood -= bite;
+    eater.hunger = Math.min(100, eater.hunger + bite * 1.4);
+    eater.state = 'eat';
+    eater.action = `Comendo carcaça de ${ANIMAL_SPECIES[carcass.species]?.label?.toLowerCase() || 'animal'}`;
+    eater.targetX = null;
+    eater.targetY = null;
+    eater.targetCarcassId = null;
+    eater.stateTimer = 2.5;
+    if (carcass.carcassFood <= 0) {
+      carcass.entity.destroyed = true;
+      this.animals.delete(carcass.id);
+    }
+    return true;
+  }
+
   findPrey(predator) {
     let closest = null, bestDist = 14;
     for (const a of this.animals.values()) {
@@ -496,23 +543,33 @@ export class CityFauna {
       return;
     }
 
+    // 1.9 Scavenge carcasses (carnivores and omnivores)
+    if ((spec.diet === 'carnivore' || spec.diet === 'omnivore') && animal.hunger < 85 && animal.stateTimer <= 0) {
+      const carcass = this.findCarcass(animal, 16);
+      if (carcass) {
+        if (carcass.dist < 1.2) {
+          this.feedOnCarcass(animal, carcass.animal);
+          return;
+        }
+        animal.inTreePlantId = null;
+        animal.state = 'walk';
+        animal.action = 'Indo comer carcaça';
+        animal.targetX = carcass.animal.x;
+        animal.targetY = carcass.animal.y;
+        animal.targetCarcassId = carcass.animal.id;
+        animal.stateTimer = 3.0;
+        return;
+      }
+    }
+
     // 2. Predator hunting wild prey
     if (spec.temperament === 'predator' && animal.hunger < 65) {
       const prey = this.findPrey(animal);
       if (prey) {
         if (prey.dist < 1.2) {
-          prey.animal.dead = true;
-          prey.animal.altitude = 0;
-          prey.animal.targetAltitude = 0;
-          prey.animal.inTreePlantId = null;
-          prey.animal.state = 'sleep';
-          prey.animal.action = 'Abatido';
-          animal.state = 'eat';
+          this.markDead(prey.animal, 'Abatido');
+          this.feedOnCarcass(animal, prey.animal);
           animal.action = `Devora ${ANIMAL_SPECIES[prey.animal.species]?.label?.toLowerCase() || 'presa'}`;
-          animal.targetX = null;
-          animal.targetY = null;
-          animal.hunger = Math.min(100, animal.hunger + 40);
-          animal.stateTimer = 3.0;
           return;
         }
         animal.state = 'walk';
@@ -766,6 +823,16 @@ export class CityFauna {
             animal.action = 'Empoleirado';
             animal.stateTimer = 3.0 + Math.random() * 4.0;
             animal.thinkTimer = 0.5;
+          } else if (animal.action === 'Indo comer carcaça' && animal.targetCarcassId != null) {
+            const carcass = this.animals.get(animal.targetCarcassId);
+            if (!this.feedOnCarcass(animal, carcass)) {
+              animal.targetCarcassId = null;
+              animal.state = 'idle';
+              animal.action = 'Observando';
+              animal.stateTimer = 1.0;
+            }
+            animal.targetAltitude = 0;
+            animal.thinkTimer = 0.5;
           } else if (animal.action === 'Indo para árvore' && spec?.arboreal) {
             const tree = animal.targetTreeId != null ? this.city.nature?.plants?.get?.(animal.targetTreeId) : this.findTreeSpot(animal.x, animal.y, 2);
             animal.inTreePlantId = tree?.id ?? null;
@@ -859,10 +926,7 @@ export class CityFauna {
     target.health -= FAUNA_RULES.huntDamage * weaponBoost;
     target.provokedUntil = this.city.minute + 10;
     if (target.health <= 0) {
-      target.dead = true;
-      target.deadAt = this.city.minute;
-      target.state = 'sleep';
-      target.action = 'Abatido';
+      this.markDead(target, 'Abatido', this.city.minute);
       const spec = ANIMAL_SPECIES[target.species];
       const bag = lodge?.inventory || (hunter.inventory ??= {});
       for (const [good, qty] of Object.entries(spec?.products || {})) {
@@ -964,7 +1028,7 @@ export class CityFauna {
     for (const [id, animal] of this.animals) {
       if (animal.entity?.destroyed) { this.animals.delete(id); continue; }
       if (animal.dead) {
-        if (animal.deadAt != null && minute - animal.deadAt >= 120) {
+        if ((animal.carcassFood != null && animal.carcassFood <= 0) || (animal.deadAt != null && minute - animal.deadAt >= 120)) {
           animal.entity.destroyed = true;
           this.animals.delete(id);
         }
@@ -978,12 +1042,7 @@ export class CityFauna {
       if (animal.hunger <= 0) {
         animal.health = Math.max(0, (animal.health ?? 100) - 2.5);
         if (animal.health <= 0) {
-          animal.dead = true;
-          animal.deadAt = minute;
-          animal.state = 'sleep';
-          animal.action = 'Morto por inanição';
-          animal.targetX = null;
-          animal.targetY = null;
+          this.markDead(animal, 'Morto por inanição', minute);
           continue;
         }
       } else if (animal.hunger > 50 && animal.health < 100) {

@@ -8128,7 +8128,7 @@ export class RCT3DRenderer {
     let profileCitizenClass = 0, profileCitizenSurface = 0, profileCitizenBody = 0;
     for (let i = 0; i < visibleEntities.length; i++) {
       const e = visibleEntities[i];
-      if (!e || e.destroyed || !e.properties?.render || e.properties.cityBuilding||e.properties.cityVehicle||e.properties.campaignDecoration) continue;
+      if (!e || e.destroyed || !e.properties?.render || e.properties.cityBuilding||e.properties.cityVehicle||e.properties.cityNest||e.properties.campaignDecoration) continue;
       const cachedClass=entityRenderClasses.get(e);
       if(!shouldUpdateStaticInstances&&cachedClass?.static&&cachedClass.properties===e.properties&&cachedClass.render===e.properties.render){
         if(e.x<this.renderedMinTx-entityCullMargin||e.x>this.renderedMaxTx+.99+entityCullMargin||e.y<this.renderedMinTy-entityCullMargin||e.y>this.renderedMaxTy+.99+entityCullMargin)continue;

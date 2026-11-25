@@ -401,4 +401,17 @@ test('circular grazing clears only a circle, arboreal animals climb trees, and 2
   assert.equal(sloth.targetAltitude, 0, 'arboreal targetAltitude must reset to 0');
   assert.equal(city.fauna.nests.has(treeNest.id), false, 'tree nest must be pruned when tree is destroyed');
   assert.equal(city.fauna.nests.has(roofNest.id), false, 'roof nest must be pruned when building is destroyed');
+
+  // Dead animal carcass feeds carnivores/omnivores until completely consumed
+  const deer = city.fauna.spawn(5, 5, 'veado');
+  city.fauna.markDead(deer, 'Abatido');
+  assert.ok(deer.carcassFood > 25);
+  const vulture = city.fauna.spawn(5.5, 5, 'urubu', { hunger: 20 });
+  while (deer.carcassFood > 0) {
+    vulture.hunger = 20;
+    vulture.stateTimer = 0;
+    city.fauna.decideBehavior(vulture, false);
+  }
+  assert.equal(deer.entity.destroyed, true, 'consumed carcass entity must be destroyed');
+  assert.equal(city.fauna.animals.has(deer.id), false, 'consumed carcass must be removed from fauna');
 });

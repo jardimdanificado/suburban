@@ -57,6 +57,7 @@ export class CityAnimalModels {
     this.fetchAsset = options.fetchAsset || (url => fetch(url));
     this.baseURL = options.baseURL || new URL('../data/animals/', import.meta.url);
     this.frames = new Map();
+    this.frameBounds = new Map();
     this.speciesMaterials = new Map();
     this.batches = new Map();
     this.activeBatches = new Set();
@@ -73,6 +74,7 @@ export class CityAnimalModels {
     this.matrix = new THREE.Matrix4();
     this.position = new THREE.Vector3();
     this.quaternion = new THREE.Quaternion();
+    this.rollQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
     this.scale = new THREE.Vector3();
     this.axis = new THREE.Vector3(0, 1, 0);
     this.color = new THREE.Color();
@@ -113,6 +115,7 @@ export class CityAnimalModels {
               }
               geometry.computeBoundingSphere();
               this.frames.set(`${species}:${clip}:${frame}`, geometry);
+              this.frameBounds.set(`${species}:${clip}:${frame}`, data.bounds);
             })());
           }
         }
@@ -205,9 +208,14 @@ export class CityAnimalModels {
       batch.capacity = capacity;
     }
 
-    const size = (entity.properties.render?.size ?? spec.size ?? 1) * (options.perspective ? 1.05 : 1);
-    this.position.set(motion.x, surfaceH, motion.y);
+    const baseSize = (entity.properties.render?.size ?? spec.size ?? 1) * (options.perspective ? 1.05 : 1);
+    const carcassScale = animal.dead && animal.carcassMaxFood ? Math.max(0.35, 0.35 + 0.65 * (Math.max(0, animal.carcassFood ?? animal.carcassMaxFood) / animal.carcassMaxFood)) : 1;
+    const size = baseSize * carcassScale;
+    const bounds = animal.dead ? (this.frameBounds.get(key) || this.frameBounds.get(`${species}:idle:0`)) : null;
+    const deadLift = bounds ? Math.max(0, -(bounds.min?.[0] ?? 0)) * size : 0;
+    this.position.set(motion.x, surfaceH + deadLift, motion.y);
     this.quaternion.setFromAxisAngle(this.axis, motion.angle);
+    if (animal.dead && this.quaternion.multiply) this.quaternion.multiply(this.rollQuat);
     this.scale.set(size, size, size);
     this.matrix.compose(this.position, this.quaternion, this.scale);
     batch.mesh.setMatrixAt(batch.count, this.matrix);
