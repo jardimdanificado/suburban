@@ -67,7 +67,7 @@ test('makeClothingPattern uses symbols and colors with no words',()=>{
     const pattern=makeClothingPattern({random:rng});
     assert.equal(pattern.textLayout,'sem-texto');
     assert.deepEqual(pattern.texts,[]);
-    assert(pattern.emblems.length>=1&&pattern.emblems.length<=4,'pattern should have 1-4 symbols');
+    assert(pattern.emblems.length>=1&&pattern.emblems.length<=16,'pattern should have 1-16 symbols');
     assert(pattern.colors.length>=2,'pattern should have background and foreground/accent colors');
     for(const emblem of pattern.emblems)assert(CITY_SYMBOLS.includes(emblem.skin));
   }
@@ -158,6 +158,50 @@ test('CityCitizenModels resolves patternFlag material and invalidates cache on p
   const a2=models.appearanceFor(c,c.entity);
   assert.notEqual(a2,a1);
   assert.equal(a2.patternFlagValue,p2);
+});
+
+test('makeClothingPattern produces both repeated textile motifs and emblem prints',()=>{
+  const rng=makeRng(888);
+  const repeated=makeClothingPattern({random:rng},{repeated:true,tileRepeat:2});
+  assert(repeated.emblems.length>=8,'repeated textile layout should place many repeated symbols');
+  assert.equal(repeated.tileRepeat,2);
+  assert.equal(repeated.texts.length,0);
+
+  const emblem=makeClothingPattern({random:rng},{repeated:false,tileRepeat:1});
+  assert(emblem.emblems.length>=1&&emblem.emblems.length<=4);
+  assert.equal(emblem.tileRepeat,1);
+
+  const previousDoc=globalThis.document;
+  const makeCtx=()=>({
+    save(){},restore(){},beginPath(){},rect(){},clip(){},
+    fillRect(){},strokeRect(){},drawImage(){},
+    arc(){},fill(){},moveTo(){},lineTo(){},closePath(){},translate(){},rotate(){},
+    set fillStyle(v){},set strokeStyle(v){},set lineWidth(v){},set imageSmoothingEnabled(v){}
+  });
+  globalThis.document={createElement:()=>({width:128,height:128,getContext:makeCtx})};
+  try{
+    let repeatedArgs=null;
+    const models=new CityCitizenModels({
+      MeshLambertMaterial:class{constructor(opts){Object.assign(this,opts);}},
+      CanvasTexture:class{constructor(canvas){this.image=canvas;this.repeat={set(x,y){repeatedArgs=[x,y];}};}},
+      RepeatWrapping:1000,
+      ClampToEdgeWrapping:1001,
+      NearestFilter:1003,
+      SRGBColorSpace:'srgb',
+      InstancedBufferAttribute:null,
+      Matrix4:class{},
+      Vector3:class{},
+      Quaternion:class{setFromAxisAngle(){return this;}},
+      Color:class{},
+      DoubleSide:2
+    },{},{fetchAsset:null});
+    const mat=models.clothingPatternMaterial(repeated,false,'rep-test');
+    assert.equal(mat.map.wrapS,1000);
+    assert.equal(mat.map.wrapT,1000);
+    assert.deepEqual(repeatedArgs,[2,2]);
+  }finally{
+    globalThis.document=previousDoc;
+  }
 });
 
 test('drawPartyFlag supports borderless mode for clothing patterns',()=>{

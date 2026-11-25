@@ -1,4 +1,5 @@
 import {gerarFraseTematica} from './gerador_frases.js';
+import {gerarXingamento, crimeDeOdio} from './xingamentos.js';
 
 function politicalGraffiti(city,c){
   const politics=city.politics;if(!politics)return null;
@@ -25,7 +26,28 @@ function politicalGraffiti(city,c){
   return null;
 }
 
-export function graffitiContent(city,c,{protest=false,targetName=null}={}){
+export function graffitiDeOdio({message, prejudiceType}) {
+  const crimeLabel = crimeDeOdio(prejudiceType);
+  if (!crimeLabel) throw new RangeError(`categoria de ódio desconhecida: ${prejudiceType}`);
+  const texto = String(message ?? '').replace(/\s+/gu, ' ').trim().slice(0, 180);
+  if (!texto) throw new Error('a pichação de ódio precisa de um texto');
+  return {message: texto, prejudiceType, crimeLabel};
+}
+
+export function xingamentoGraffiti(city, c, {targetName = null, genero = 'm', tipo = null, intensidade = 0.35, pixacao = false, modelo = null} = {}) {
+  const alvo = String(targetName || c?.entity?.properties?.name || 'fulano').trim().slice(0, 56) || 'fulano';
+  return {message: gerarXingamento({alvo, genero, tipo, intensidade, pixacao, modelo, random: () => city.random()})};
+}
+
+export function graffitiContent(city,c,{protest=false,targetName=null,xingamento=false,genero='m',tipo=null,intensidade=.35,pixacao=false,modelo=null,message=null,prejudiceType=null}={}){
+  if (prejudiceType) return graffitiDeOdio({message, prejudiceType});
+  if (message) {
+    const texto=String(message).replace(/\s+/gu,' ').trim().slice(0,180);
+    if (!texto) throw new Error('mensagem de pichação vazia');
+    return {message:texto};
+  }
+  if (xingamento || tipo) return xingamentoGraffiti(city,c,{targetName,genero,tipo,intensidade,pixacao,modelo});
+
   const political=politicalGraffiti(city,c);
   if(political){protest=true;targetName=political.targetName;}
 
@@ -36,8 +58,8 @@ export function graffitiContent(city,c,{protest=false,targetName=null}={}){
   if(protest)themes.push('politica');
   const sentence=gerarFraseTematica(themes,{random:()=>city.random(),complexidade:'simples'});
   const suffix=targetName?` · ${String(targetName).trim().slice(0,political?110:60)}`:'',limit=180-suffix.length;
-  const message=sentence.length<=limit?sentence:sentence.slice(0,limit-1).replace(/\s+\S*$/u,'').replace(/[.,;:!?]+$/u,'')+'.';
-  return {message:message+suffix,...(political?{subjectId:political.subjectId,partyId:political.partyId,politicalKind:political.politicalKind,corruptionCaseId:political.corruptionCaseId??null}:{})};
+  const base=sentence.length<=limit?sentence:sentence.slice(0,limit-1).replace(/\s+\S*$/u,'').replace(/[.,;:!?]+$/u,'')+'.';
+  return {message:base+suffix,...(political?{subjectId:political.subjectId,partyId:political.partyId,politicalKind:political.politicalKind,corruptionCaseId:political.corruptionCaseId??null}:{})};
 }
 
 export function graffitiMessage(city,c,options){return graffitiContent(city,c,options).message;}

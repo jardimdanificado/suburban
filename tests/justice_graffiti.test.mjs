@@ -203,6 +203,15 @@ test('political graffiti carries its named target, party and known scandal throu
  assert.equal(art.politicalKind,'corruption');assert.equal(art.layers[0].message,art.message);
 });
 
+test('hateful graffiti records the prejudice crime alongside the graffiti case',()=>{
+  const {city,justice}=fixture(),calls=[];
+  justice.crimeRecord=(type,offenderId,victimId,details)=>{calls.push({type,offenderId,victimId,details});return {id:100+calls.length};};
+  const layer=justice.defaceArtwork(1,1,'texto',{prejudiceType:'racismo'});
+  assert.equal(layer.caseId,101);assert.equal(layer.hateCaseId,102);
+  assert.equal(justice.art[0].prejudiceType,'racismo');assert.equal(justice.art[0].hateCaseId,102);
+  assert(calls.some(call=>call.type==='racismo'&&call.details.discriminatoryAct===true&&call.details.prejudiceType==='racismo'));
+});
+
 test('a blocked approach does not destroy paint while its physical wall remains',()=>{
  const {city,justice}=fixture();const support=nearbyGraffitiSurfaces(city,{entity:{x:4.5,y:3.5}}).find(s=>s.surface==='wall');
  const piece={entity:{destroyed:false},support};justice.art=[piece];

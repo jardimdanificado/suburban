@@ -296,6 +296,8 @@ export class CityCitizenModels {
     const repaint=()=>{drawPartyFlag(ctx,patternFlag,0,0,128,128,()=>{repaint();if(texture)texture.needsUpdate=true;},{border:false});};
     repaint();
     texture=new this.THREE.CanvasTexture(canvas);texture.magFilter=this.THREE.NearestFilter;texture.minFilter=this.THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=this.THREE.SRGBColorSpace;
+    const repeat=Math.max(1,Number(patternFlag.tileRepeat)||1);
+    if(repeat>1&&this.THREE.RepeatWrapping!=null){texture.wrapS=this.THREE.RepeatWrapping;texture.wrapT=this.THREE.RepeatWrapping;texture.repeat?.set?.(repeat,repeat);}
     const material=(dress?this.enableDressMorph.bind(this):this.enableWeightMorph.bind(this))(new this.THREE.MeshLambertMaterial({color:0xffffff,map:texture,side:this.THREE.DoubleSide}));
     this.decorateMaterial(material);this.printMaterials.set(key,material);return material;
   }

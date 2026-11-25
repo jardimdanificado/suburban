@@ -231,25 +231,43 @@ export function makeMunicipalFlag(city,identity={}){
  for(let attempt=0;attempt<48;attempt++){flag=makePartyFlag(city,-1,[],subject);if(flag.emblems.length&&flag.backgroundStyle!=='solid')return flag;}
  return flag;
 }
+const REPEATED_TEXTILE_ARRANGEMENTS=Object.freeze([
+ {name:'grade-3x3',slots:Array.from({length:9},(_,i)=>{const row=Math.floor(i/3),col=i%3;return {x:.04+col*.32,y:.04+row*.32,w:.26,h:.26,repeatGroup:'a',detailGroup:'a'};})},
+ {name:'intercalada-3x3',slots:Array.from({length:9},(_,i)=>{const row=Math.floor(i/3),col=i%3,shift=row%2?.12:0;return {x:.02+col*.31+shift,y:.04+row*.32,w:.24,h:.24,repeatGroup:'a',detailGroup:'a'};})},
+ {name:'grade-4x4',slots:Array.from({length:16},(_,i)=>{const row=Math.floor(i/4),col=i%4;return {x:.03+col*.24,y:.03+row*.24,w:.2,h:.2,repeatGroup:'a',detailGroup:'a'};})},
+ {name:'xadrez-simbolos-3x3',slots:Array.from({length:9},(_,i)=>{const row=Math.floor(i/3),col=i%3,g=(row+col)%2?'b':'a';return {x:.04+col*.32,y:.04+row*.32,w:.26,h:.26,repeatGroup:g,detailGroup:g};})},
+ {name:'listra-dupla-repetida',slots:Array.from({length:10},(_,i)=>{const row=Math.floor(i/5),col=i%5,g=row%2?'b':'a';return {x:.025+col*.19,y:row===0?.14:.58,w:.14,h:.28,repeatGroup:g,detailGroup:g};})},
+ {name:'diagonal-repetida-4',slots:Array.from({length:8},(_,i)=>{const row=Math.floor(i/4),col=i%4;return {x:.04+col*.24+(row%2?.1:0),y:.12+row*.44,w:.18,h:.32,repeatGroup:col%2?'b':'a',detailGroup:'a'};})}
+]);
 export function makeClothingPattern(city,options={}){
  const rng=typeof city?.random==='function'?city:{random:Math.random};
  const legacy=()=>{const hue=rng.random()*360,background=randomColor(hue,.22+rng.random()*.42,.68);let foreground=randomColor((hue+180)%360,.85,.62);if(flagContrast(foreground,background)<4.5)foreground=flagContrast('#ffffff',background)>=flagContrast('#111111',background)?'#ffffff':'#111111';return {background,foreground,colors:flagPalette(rng,hue,background,foreground),colorSource:'legacy'};};
  const palette=Array.isArray(options.colors)&&options.colors.length>=2?{background:options.colors[0],foreground:options.colors[1],colors:Object.freeze([...options.colors]),colorSource:'custom'}:choosePartyPalette(rng,legacy);
  const {background,foreground,colors}=palette;
- const count=1+Math.floor(rng.random()*4);
- const arrangements=ICON_LAYOUTS[count];
  const nonSolid=PARTY_FLAG_BACKGROUNDS.filter(style=>style!=='solid');
  const backgroundChoices=[...Array(14).fill('solid'),...nonSolid];
  const backgroundStyle=options.backgroundStyle&&PARTY_FLAG_BACKGROUNDS.includes(options.backgroundStyle)?options.backgroundStyle:backgroundChoices[Math.floor(rng.random()*backgroundChoices.length)];
- const arrangement=chooseFlagArrangement(rng,arrangements,backgroundStyle,count);
- const textLayout=TEXT_LAYOUTS[0];
- const layout=PARTY_FLAG_LAYOUTS.find(item=>item.id===`${count}-${arrangement.name}-${textLayout.id}`)||PARTY_FLAG_LAYOUTS.find(item=>item.count===count&&item.textLayout==='sem-texto');
+ const useRepeated=options.repeated!=null?!!options.repeated:rng.random()<.55;
+ let layout,arrangementName,tileRepeat;
+ if(useRepeated){
+  const arrangement=REPEATED_TEXTILE_ARRANGEMENTS[Math.floor(rng.random()*REPEATED_TEXTILE_ARRANGEMENTS.length)];
+  arrangementName=arrangement.name;
+  layout={slots:arrangement.slots,iconArea:{x:.02,y:.02,w:.96,h:.96}};
+  tileRepeat=Number.isInteger(options.tileRepeat)&&options.tileRepeat>=1?options.tileRepeat:rng.random()<.65?2:1;
+ }else{
+  const count=1+Math.floor(rng.random()*4);
+  const arrangements=ICON_LAYOUTS[count];
+  const arrangement=chooseFlagArrangement(rng,arrangements,backgroundStyle,count);
+  arrangementName=arrangement.name;
+  layout=PARTY_FLAG_LAYOUTS.find(item=>item.id===`${count}-${arrangement.name}-${TEXT_LAYOUTS[0].id}`)||PARTY_FLAG_LAYOUTS.find(item=>item.count===count&&item.textLayout==='sem-texto');
+  tileRepeat=Number.isInteger(options.tileRepeat)&&options.tileRepeat>=1?options.tileRepeat:rng.random()<.35?2:1;
+ }
  let emblems=layoutEmblems(rng,null,layout,colors);
  if(options.preferredSymbol&&emblems.length){
   const skin=Number.isInteger(options.preferredSymbol)?CITY_SYMBOLS[options.preferredSymbol]:CITY_SYMBOLS.includes(options.preferredSymbol)?options.preferredSymbol:null;
   if(skin)emblems=Object.freeze(emblems.map((emblem,i)=>i===0||emblem.skin===emblems[0].skin&&layout.slots[i]?.repeatGroup?Object.freeze({...emblem,skin}):emblem));
  }
- return Object.freeze({foreground,background,colors,paletteVersion:3,detailVersion:1,pattern:Math.floor(rng.random()*3),backgroundStyle,layoutId:layout.id,layoutName:arrangement.name,textLayout:'sem-texto',colorSource:palette.colorSource,emblems,texts:Object.freeze([])});
+ return Object.freeze({foreground,background,colors,paletteVersion:3,detailVersion:1,pattern:Math.floor(rng.random()*3),backgroundStyle,layoutId:layout.id||`repeated-${arrangementName}`,layoutName:arrangementName,textLayout:'sem-texto',tileRepeat,colorSource:palette.colorSource,emblems,texts:Object.freeze([])});
 }
 function remapMunicipalFlag(city,flag,emblems,texts,identity){
  const count=emblems.length,textCount=texts.length,oldTextLayout=flag.textLayout,layouts=PARTY_FLAG_LAYOUTS.filter(layout=>layout.count===count),matching=layouts.filter(layout=>layout.textLayout===oldTextLayout&&layout.textBoxes.length===textCount),pool=matching.length?matching:layouts.filter(layout=>layout.textBoxes.length===textCount),chosen=pool.length?pool[Math.floor(city.random()*pool.length)]:layouts[Math.floor(city.random()*layouts.length)];

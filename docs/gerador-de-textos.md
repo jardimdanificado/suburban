@@ -24,6 +24,10 @@ concordância.
 - `scripts/contar_vocabulario.mjs`: conta lemas e formas que o gerador alcança.
 - `tests/vocabulario_qualidade.test.mjs`: regressão de gramática, construções,
   escala do banco e variedade.
+- `js/xingamentos.js`: repertório curado de xingamentos, palavrões,
+  intensificadores e modelos de pichação. Não gera discurso de ódio.
+- `tests/xingamentos.test.mjs`: regressão de concordância, modelos,
+  determinismo e integração com pichação.
 
 ## Cena
 
@@ -151,6 +155,54 @@ Verbos exigem cuidado extra. Só entram na lista de variantes os que aceitam
 qualquer objeto já usado nas cenas, sem preposição fixa e sem forma pronominal.
 Uma variante que só funciona com parte dos objetos deve ser cortada, não
 tratada como exceção.
+
+## Xingamentos e pichações
+
+`js/xingamentos.js` monta xingamento com alvo, gênero, categoria, intensidade e
+modelo. O texto continua determinístico: a mesma semente e as mesmas opções
+produzem a mesma frase.
+
+```js
+gerarXingamento({
+  alvo: 'Fulana',
+  genero: 'f',
+  tipo: 'politica',
+  intensidade: 0.8,
+  pixacao: true,
+  random,
+});
+```
+
+- `gerarXingamento` devolve só o texto; `gerarXingamentoDetalhado` devolve
+  texto, modelo, insulto e intensificador usados.
+- `tipo` filtra o repertório: `conduta`, `politica`, `eleitoral`, `violencia`,
+  `carater`, `covardia`, `profano`, `estupidez` e `desprezo`.
+- `intensidade` é a chance de acrescentar um intensificador curado, como
+  `de merda`, `do caralho` ou `da porra`.
+- `modelo` escolhe o formato: frase com verbo, possessivo, seco, fora, abaixo,
+  ninguém aguenta, não presta, manchete, duplo, triplo, interrogação, sigla ou
+  predicado.
+- `genero` escolhe a forma masculina ou feminina. Substantivos de gênero fixo,
+  como `lixo`, `bosta` e `anta`, guardam o artigo original.
+- `pixacao` converte para maiúsculas e o texto respeita o limite de 180
+  caracteres usado pelas pichações.
+
+O banco atual tem 162 entradas, 16 intensificadores, 24 predicados e 13
+modelos. Cada entrada traz forma masculina, forma feminina e categorias.
+
+Discurso de ódio não é gerado. O módulo não tem slurs raciais, homofóbicos,
+transfóbicos, capacitistas, gordofóbicos ou de gênero. Uma pichação de ódio
+recebe o texto de quem chama e apenas a categoria:
+
+```js
+graffitiContent(city, citizen, {message, prejudiceType: 'racismo'});
+```
+
+`graffitiDeOdio` valida `prejudiceType` contra `PREJUDICE_CRIME_TYPES` e devolve
+o rótulo do crime. `CityJustice.recordHateGraffiti` registra o caso com
+`discriminatoryAct: true`; `defaceArtwork` e as missões de pichação aceitam
+`mission.prejudiceType` e guardam `hateCaseId` na obra. O crime de pichação
+continua separado do crime de discriminação.
 
 ## Determinismo
 
