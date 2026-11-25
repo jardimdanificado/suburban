@@ -125,7 +125,7 @@ test('fecal protest missions also generate their text through the vocabulary gra
 
 test('wall graffiti fills solid walls and clears only actual ground-floor windows',()=>{
  const {city,citizen,justice}=fixture();const building=city.buildings[0];building.terrain={base:1.16};building.door=null;building.type='townhall';
- building.units=[{id:1,x:0,y:0,z:0,hasWindow:true},{id:2,x:1,y:0,z:0,hasWindow:true},{id:3,x:0,y:1,z:0,hasWindow:true},{id:4,x:1,y:1,z:0,hasWindow:true}];
+ building.units=[{id:1,x:0,y:0,z:0,hasWindow:true},{id:2,x:1,y:0,z:0,hasWindow:true},{id:3,x:0,y:1,z:0,hasWindow:false},{id:4,x:1,y:1,z:0,hasWindow:false}];
  const wall=nearbyGraffitiSurfaces(city,{entity:{x:5,y:5}},8).filter(s=>s.surface==='wall');
  assert.deepEqual(new Set(wall.map(s=>s.side)),new Set([0,1,2,3]));
  for(const support of wall){

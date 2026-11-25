@@ -6,11 +6,10 @@ import {roadRetainingFaces} from './road_terrain_geometry.js?v=stone-road-edge-s
 
 export const graffitiCameraFocus=support=>support?.kind==='street-graffiti'?{zoom:8,...(support.surface!=='ground'?{yaw:support.rotation||0}:{})}:undefined;
 export const graffitiSurfaceLabel=support=>({wall:'Muro / parede externa',ground:'Chão',retaining:'Arrimo'})[support?.surface]||'Superfície urbana';
-// A wide piece covers two adjacent wall tiles. It only exists when both tiles
-// expose the same wall band (both solid or both below a window).
-const WIDE_GRAFFITI_TILES=2;
+// A wide piece can cover 2-4 adjacent wall tiles when all tiles
+// expose the same wall band (all solid or all below a window).
+const MAX_WIDE_GRAFFITI_TILES=4;
 const WALL_TILE_WIDTH=.86;
-const WIDE_WALL_WIDTH=WALL_TILE_WIDTH*WIDE_GRAFFITI_TILES;
 const WIDE_WALL_PREFERENCE=.75;
 const edges=[{dx:0,dy:-1,rotation:Math.PI},{dx:1,dy:0,rotation:Math.PI/2},{dx:0,dy:1,rotation:0},{dx:-1,dy:0,rotation:-Math.PI/2}];
 const inside=(b,x,y)=>!b.entity.destroyed&&x>=b.entity.x&&x<b.entity.x+b.width&&y>=b.entity.y&&y<b.entity.y+b.depth;
@@ -53,8 +52,8 @@ export function nearbyGraffitiSurfaces(city,c,radius=4){
   if(!world?.getTile||!Number.isFinite(world.width)||!Number.isFinite(world.height))return candidates;
   const add=(surface,key,position,approach,extra={})=>{
     if(Math.hypot(approach.x-c.entity.x,approach.y-c.entity.y)>radius||!city.walkable(Math.floor(approach.x),Math.floor(approach.y)))return false;
-    if(city.justice.art.some(piece=>!piece.entity.destroyed&&(piece.support?.key===key||Math.hypot(piece.entity.x-position.x,piece.entity.y-position.y)<1.1)))return false;
     const width=extra.width||.86;
+    if(city.justice.art.some(piece=>!piece.entity.destroyed&&(piece.support?.key===key||(piece.support?.surface===surface&&Math.hypot(piece.entity.x-position.x,piece.entity.y-position.y)<(width+(piece.support?.width||.86))/2-.01)||Math.hypot(piece.entity.x-position.x,piece.entity.y-position.y)<1.1)))return false;
     const overlaps=(other)=>
       other?.surface===surface&&(other.key===key||
         (width>WALL_TILE_WIDTH+.001||(other.width||.86)>WALL_TILE_WIDTH+.001)&&
@@ -99,23 +98,33 @@ export function nearbyGraffitiSurfaces(city,c,radius=4){
         const added=add('wall',key,segment.position,approach,{buildingId:b.id,side,rotation:edge.rotation,width:WALL_TILE_WIDTH,height:segment.height,...(Number.isInteger(segment.unitId)?{unitIds:[segment.unitId]}:{})});
         segment.added=added;
       }
-      // Only merge neighbours whose wall band is identical, so the wide piece
-      // never crosses a window line or a terrain step on one of the tiles.
-      for(let i=1;i<segments.length;i++){
-        const left=segments[i-1],right=segments[i];
-        if(!left.added||!right.added)continue;
-        if(Math.abs(right.offset-left.offset-1)>1e-6)continue;
-        if(Math.abs(right.position.z-left.position.z)>.001||Math.abs(right.height-left.height)>.001)continue;
-        const unitIds=[left.unitId,right.unitId].filter((id,index,list)=>Number.isInteger(id)&&list.indexOf(id)===index);
-        add('wall',`wall:${b.id}:${side}:${left.offset}+${right.offset}`,
-          {x:(left.position.x+right.position.x)/2,y:(left.position.y+right.position.y)/2,z:left.position.z},
-          {x:(left.approach.x+right.approach.x)/2,y:(left.approach.y+right.approach.y)/2},
-          {buildingId:b.id,side,rotation:edge.rotation,width:WIDE_WALL_WIDTH,height:left.height,...(unitIds.length?{unitIds}:{})});
+      // Merge 2..MAX_WIDE_GRAFFITI_TILES neighbours whose wall band is identical, so multi-tile
+      // pieces never cross a window line or a terrain step.
+      for(let span=2;span<=MAX_WIDE_GRAFFITI_TILES;span++){
+        for(let i=0;i+span<=segments.length;i++){
+          const slice=segments.slice(i,i+span);
+          if(slice.some(s=>!s.added))continue;
+          const first=slice[0];
+          let contiguous=true;
+          for(let k=1;k<slice.length;k++){
+            if(Math.abs(slice[k].offset-slice[k-1].offset-1)>1e-6||Math.abs(slice[k].position.z-first.position.z)>.001||Math.abs(slice[k].height-first.height)>.001){contiguous=false;break;}
+          }
+          if(!contiguous)continue;
+          const unitIds=slice.map(s=>s.unitId).filter((id,index,list)=>Number.isInteger(id)&&list.indexOf(id)===index);
+          const avg=fn=>slice.reduce((sum,s)=>sum+fn(s),0)/span;
+          add('wall',`wall:${b.id}:${side}:${slice.map(s=>s.offset).join('+')}`,
+            {x:avg(s=>s.position.x),y:avg(s=>s.position.y),z:first.position.z},
+            {x:avg(s=>s.approach.x),y:avg(s=>s.approach.y)},
+            {buildingId:b.id,side,rotation:edge.rotation,width:WALL_TILE_WIDTH*span,height:first.height,...(unitIds.length?{unitIds}:{})});
+        }
       }
     }
   }
-  // Prefer full-height wide walls; deprioritize low below-window strips and single tiles.
-  const rank=s=>Math.hypot(s.approach.x-c.entity.x,s.approach.y-c.entity.y)+(s.surface==='wall'&&(s.width||0)<=WALL_TILE_WIDTH+.001?WIDE_WALL_PREFERENCE:0)+(s.surface==='wall'&&(s.height||1)<1?2.5:0);
+  // Prefer full-height multi-tile walls (wider wins over single tiles); deprioritize low below-window strips.
+  const rank=s=>{
+    const tiles=Math.max(1,Math.round((s.width||WALL_TILE_WIDTH)/WALL_TILE_WIDTH));
+    return Math.hypot(s.approach.x-c.entity.x,s.approach.y-c.entity.y)-(s.surface==='wall'?(tiles-1)*WIDE_WALL_PREFERENCE:0)+(s.surface==='wall'&&(s.height||1)<1?2.5:0);
+  };
   return candidates.sort((a,b)=>Number(a.surface==='ground')-Number(b.surface==='ground')||rank(a)-rank(b));
 }
 

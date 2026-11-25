@@ -508,8 +508,8 @@ function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
   const support=piece?.support;
   const sw=support?.width||1,sh=support?.height||1;
   const physAspect=Math.max(.55,Math.min(3.2,sw/sh));
-  const wideLow=physAspect>1.5;
-  const maxChars=wideLow?26:sw>1.2?46:34;
+  const wideLow=sh<1&&physAspect>1.5;
+  const maxChars=wideLow?26:sw>2.1?58:sw>1.2?46:34;
   const wallText=condenseGraffitiWallText(face.message||'',maxChars);
   const tokens=wallText.split(/\s+/).filter(Boolean);
   const fontSpec=(size,idx=0)=>{
