@@ -133,12 +133,33 @@ export function drawPlayerActions(game,p,state){
     p.button('Abrir empreendimento',()=>act('found-business',{type,crop}));
     p.heading('Administrar empresa');const b=select(p,state,'business','Sua empresa',own);
     if(b){
-      if(form.managedBusinessId!==b.id){form.managedBusinessId=b.id;form.training=b.hiringPolicy?.allowTraining!==false;form.manualHiring=b.playerHiring===true;}
+      if(form.managedBusinessId!==b.id){form.managedBusinessId=b.id;form.training=b.hiringPolicy?.allowTraining!==false;form.manualHiring=b.playerHiring===true;form.interviewLocation=b.hiringPolicy?.interviewLocation||'auto';}
       p.kv('Caixa da empresa',money(b.balance));p.kv('Equipe',`${b.workers.length}/${b.jobs}`);
       const amount=number(p,state,'fundAmount','Aporte em centavos',10000);p.button(`Aportar ${money(amount)}`,()=>act('fund-business',{buildingId:b.id,amount}));
       const wage=number(p,state,`wage:${b.id}`,'Salário base em centavos por minuto',b.baseWage??b.wage,{max:1000}),skill=number(p,state,`minSkill:${b.id}`,'Habilidade mínima',b.hiringPolicy?.minSkill??0,{min:0,max:100});
-      p.buttons([{label:'Aceitar formação',selected:form.training!==false,click:()=>{form.training=form.training===false;}},{label:'Salvar condições das vagas',click:()=>act('employment',{buildingId:b.id,baseWage:wage,minSkill:skill,allowTraining:form.training!==false,manualHiring:form.manualHiring===true})}]);
+      if(b.constructionKind==='open-air'){
+        p.note('Local ao ar livre: entrevistas presenciais ocorrem na Secretaria do Trabalho.');
+      }else{
+        const loc=form.interviewLocation||'auto';
+        p.buttons([
+          {label:'Entrevista: automático',selected:loc==='auto',click:()=>{form.interviewLocation='auto';}},
+          {label:'Entrevista: Secretaria',selected:loc==='agency',click:()=>{form.interviewLocation='agency';}},
+          {label:'Entrevista: na empresa',selected:loc==='employer',click:()=>{form.interviewLocation='employer';}}
+        ]);
+      }
+      p.buttons([{label:'Aceitar formação',selected:form.training!==false,click:()=>{form.training=form.training===false;}},{label:'Salvar condições das vagas',click:()=>act('employment',{buildingId:b.id,baseWage:wage,minSkill:skill,allowTraining:form.training!==false,manualHiring:form.manualHiring===true,interviewLocation:form.interviewLocation})}]);
       p.button(form.manualHiring?'Seleção manual: ligada':'Seleção manual: desligada',()=>{form.manualHiring=!form.manualHiring;});
+      p.heading('Contratação direta (sem processo seletivo)');
+      const directCandidates=city.citizens.filter(person=>!person.entity.destroyed&&city.society.isAdult(person)&&!city.politics.officeHolder(person)&&!person.businessIds.length&&person.jobId!==b.id).sort((a,d)=>{
+        const va=city.relationships.view(c,a),vd=city.relationships.view(c,d);
+        const sa=(va?.trust||0)+(va?.affection||0)+(a.jobId?0:30),sd=(vd?.trust||0)+(vd?.affection||0)+(d.jobId?0:30);
+        return sd-sa||a.id-d.id;
+      });
+      const directTarget=select(p,state,`directHire:${b.id}`,'Pessoa de confiança ou interesse',directCandidates,person=>{
+        const v=city.relationships.view(c,person);
+        return `${label(person)} · conf. ${Math.round(v?.trust||0)} · afeto ${Math.round(v?.affection||0)}${person.jobId?' · empregado':' · disponível'}`;
+      });
+      if(directTarget)p.button(`Contratar ${label(directTarget)} sem seleção`,()=>act('direct-hire',{buildingId:b.id,citizenId:directTarget.id,reason:'Indicação direta do proprietário'}));
       p.heading('Candidaturas');
       const applicants=city.citizens.flatMap(person=>(person.career?.applications||[]).filter(a=>a.buildingId===b.id&&a.status==='análise').map(a=>({person,a})));
       if(!applicants.length)p.note('Nenhuma candidatura em análise. As vagas seguem o processo presencial de seleção.');

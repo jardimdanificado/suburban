@@ -8880,7 +8880,7 @@ export class RCT3DRenderer {
           const beach=sandShoreTileSurface(world,cx,cy,{profileOnly:true});
           waterGroundH=beach?beach.sample(sampleX,sampleY).groundHeight:WATER_LEVEL-0.30;
         }
-        const inDeepWater=citizenOnWater&&waterGroundH<WATER_LEVEL-0.22;
+        const inDeepWater=citizenOnWater&&waterGroundH<WATER_LEVEL-0.04;
         const waterTime=this.materials?.[TILE_WATER]?.userData?.caribbeanWaterTime?.value??0;
         const waveY=inDeepWater?waterWaveHeight(sampleX,sampleY,waterTime):0;
         const citizenSurfaceH=citizenOnWater?(inDeepWater?WATER_LEVEL+waveY-0.32:waterGroundH):surfaceH;

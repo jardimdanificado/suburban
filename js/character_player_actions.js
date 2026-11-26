@@ -1,5 +1,5 @@
 import {equipCarriedWeapon} from './city_economy.js';
-import {qualification,career} from './city_employment.js';
+import {qualification,career,directAppoint,openPositions} from './city_employment.js';
 import {carryCapacity} from './city_markets.js?v=market-one-pass-1';
 import {inventoryFree,inventoryUsed} from './city_inventory.js';
 import {INDUSTRIES} from './city_industries.js';
@@ -10,7 +10,7 @@ import {roomFurniture} from './city_furniture_catalog.js';
 import {samePlace} from './character_interactions.js';
 import {beginPlayerDemolition,playerPropertyAccount} from './city_player_property.js';
 
-export const PLAYER_ACTIONS=new Set(['buy-clothes','hire-applicant','marry','buy-good','sell-good','give-good','store-good','take-good','drop-good','pickup-good','equip','unequip','wear','craft','buy-plot','build','expand','repair','demolish','furnish','unfurnish','found-business','fund-business','employment','dismiss','price','buy-stock','buy-shares','offer-shares','buy-home','bank-deposit','bank-withdraw','bank-loan','bank-repay','buy-vehicle','ride-vehicle','leave-vehicle','flirt','propose','separate','plan-child','leave-job','political-ambition','join-party','bill','decree','secretary-veto','veto','public-work','works-transfer','work-project','attend-council','council-vote','sanction']);
+export const PLAYER_ACTIONS=new Set(['buy-clothes','hire-applicant','direct-hire','marry','buy-good','sell-good','give-good','store-good','take-good','drop-good','pickup-good','equip','unequip','wear','craft','buy-plot','build','expand','repair','demolish','furnish','unfurnish','found-business','fund-business','employment','dismiss','price','buy-stock','buy-shares','offer-shares','buy-home','bank-deposit','bank-withdraw','bank-loan','bank-repay','buy-vehicle','ride-vehicle','leave-vehicle','flirt','propose','separate','plan-child','leave-job','political-ambition','join-party','bill','decree','secretary-veto','veto','public-work','works-transfer','work-project','attend-council','council-vote','sanction']);
 export const PLAYER_FURNITURE={chair:{label:'Cadeira',seated:true},table:{label:'Mesa'},sofa:{label:'Sofá',seated:true},chest:{label:'Baú',storage:'clothes'},fridge:{label:'Geladeira',storage:'food'},bed:{label:'Cama',sleeping:true}};
 const live=b=>b&&!b.entity?.destroyed;
 const free=holder=>{if(holder.entity?.properties?.citizen)holder.inventoryCapacity??=carryCapacity(holder);return inventoryFree(holder);};
@@ -157,12 +157,18 @@ export function playerAction(city,c,action,o,{stop,route}){
     case 'employment':
       if(!ownsBusiness(c,b))return fail(city,'Você não administra esta empresa.');
       if(!Number.isFinite(o.baseWage)||o.baseWage<1||o.baseWage>1000)return fail(city,'Salário base inválido.');
-      if(!city.economy.configureEmployment(b.id,{baseWage:o.baseWage,minSkill:o.minSkill??0,allowTraining:o.allowTraining===true}))return false;
+      if(!city.economy.configureEmployment(b.id,{baseWage:o.baseWage,minSkill:o.minSkill??0,allowTraining:o.allowTraining===true,interviewLocation:o.interviewLocation}))return false;
       b.playerHiring=o.manualHiring===true;return true;
     case 'hire-applicant':{
       const person=city.society.citizen(o.citizenId),application=person&&career(person).applications.find(a=>a.buildingId===b?.id&&a.status==='análise');
       if(!ownsBusiness(c,b)||!application||!qualification(city,person,b).eligible)return fail(city,'Escolha um candidato inscrito que cumpra os requisitos da vaga.');
       b.playerHiring=true;application.employerApproved=true;return true;
+    }
+    case 'direct-hire':{
+      const person=city.society.citizen(o.citizenId);
+      if(!ownsBusiness(c,b)||!person)return fail(city,'Escolha sua empresa e uma pessoa válida.');
+      if(openPositions(city,b)<=0)return fail(city,'Não há vagas abertas nesta empresa.');
+      return directAppoint(city,c,person,b,{player:true,reason:o.reason||'Indicação direta do proprietário'})||fail(city,'Não foi possível contratar esta pessoa diretamente.');
     }
     case 'dismiss':{
       const worker=city.society.citizen(o.citizenId);if(!ownsBusiness(c,b)||!worker||worker.jobId!==b.id)return fail(city,'Escolha um funcionário da sua empresa.');

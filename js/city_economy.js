@@ -18,7 +18,7 @@ import {externalTradeHourly,orderImport,ensureImportDepot,importDepotClaim} from
 import {outdoorCellReady,workCellReady,activityRoomReady} from './city_interiors.js?v=citizen-access-1';
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
-import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=fast-speeds-1';
+import {career,requirements,qualification,reviewMarket,advanceRecruitment,appointTrustedCandidates,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=fast-speeds-1';
 import {productionPlan,investProductionPlan} from './city_production_planner.js?v=investment-founder-precompute-1';
 import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js?v=party-apparel-1';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
@@ -90,6 +90,7 @@ export class CityEconomy {
     for(const key of ['minSkill','minRating'])if(Number.isFinite(changes[key]))policy[key]=Math.max(0,Math.min(100,changes[key]));
     if(Number.isFinite(changes.minExperienceMinutes))policy.minExperienceMinutes=Math.max(0,Math.min(144000,Math.round(changes.minExperienceMinutes)));
     if(typeof changes.allowTraining==='boolean')policy.allowTraining=changes.allowTraining;
+    if(['auto','agency','employer'].includes(changes.interviewLocation))policy.interviewLocation=b.constructionKind==='open-air'?'agency':changes.interviewLocation;
     return true;
   }
   jobSkill(b) { return JOB_SKILL[b.type] || 'management'; }
@@ -242,6 +243,7 @@ export class CityEconomy {
     let offers;
     measure('activeOfferCollection',()=>{offers=city.buildings.filter(b=>b.active&&b.jobs>0&&!b.entity.destroyed);});
     measure('wageReview',()=>{for(const b of offers)reviewWages(city,b);});
+    measure('directAppointments',()=>appointTrustedCandidates(city,offers));
     measure('marketReview',()=>reviewMarket(city,offers));
     if(profile)profile.marketReviewDetail=city.lastReviewMarketProfile;
     measure('recruitment',()=>advanceRecruitment(city));

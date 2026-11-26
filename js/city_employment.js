@@ -13,7 +13,7 @@ export function contract(city,c,b){
   const cv=career(c);let row=cv.jobs.at(-1);
   if(row?.buildingId===b.id&&row.endedAt==null)return row;
   if(row&&row.endedAt==null){row.endedAt=city.minute;row.reason='Mudança de vínculo';}
-  row={buildingId:b.id,company:b.entity.properties.name,skill:city.economy.jobSkill(b),startedAt:city.minute,endedAt:null,workedMinutes:0,earned:0,rating:50,paidMinutes:0,unpaidMinutes:0,wageAtStart:b.wage};cv.jobs.push(row);return row;
+  row={buildingId:b.id,company:b.entity.properties.name,skill:city.economy.jobSkill(b),startedAt:city.minute,endedAt:null,workedMinutes:0,earned:0,rating:50,paidMinutes:0,unpaidMinutes:0,wageAtStart:b.wage,hiredDirectly:false,appointmentReason:null};cv.jobs.push(row);return row;
 }
 export function employmentEvent(city,c,b,action,reason){
   if(action==='contratação')contract(city,c,b);
@@ -36,8 +36,10 @@ export function recordWork(city,c,b,wage,paid){
   const performance=clamp(35+(c.skills[row.skill]||0)*.35+(c.traits?.diligence??.5)*25+cv.motivation*.15,0,100);
   row.rating+=(performance-row.rating)*.005;
 }
+export function isOpenAirWorkplace(b){return b?.constructionKind==='open-air';}
 export function requirements(city,b){
-  b.hiringPolicy??={minSkill:['clinic','mint','research_institute','cycle_workshop','bank'].includes(b.type)?15:0,minExperienceMinutes:0,minRating:0,allowTraining:true};
+  b.hiringPolicy??={minSkill:['clinic','mint','research_institute','cycle_workshop','bank'].includes(b.type)?15:0,minExperienceMinutes:0,minRating:0,allowTraining:true,interviewLocation:'auto'};
+  b.hiringPolicy.interviewLocation??='auto';
   return b.hiringPolicy;
 }
 export function qualification(city,c,b){
@@ -110,14 +112,34 @@ function vacancySearchIndexes(city){
   const demand=new Map();for(const {application} of queueApplications(city))if(application.status==='análise')demand.set(application.buildingId,(demand.get(application.buildingId)||0)+1);
   index={minute:city.minute,demand};vacancySearchDemandCache.set(city,index);return index;
 }
+function resolveInterviewChannel(city,c,b,publicAgency=laborAgency(city)){
+  if(isOpenAirWorkplace(b))return publicAgency?{direct:false,agency:publicAgency}:null;
+  const pref=requirements(city,b).interviewLocation||'auto',canDirect=economicPolicy(city,'directHiring');
+  if(pref==='agency'){
+    if(publicAgency)return {direct:false,agency:publicAgency};
+    return canDirect?{direct:true,agency:{building:b}}:null;
+  }
+  if(pref==='employer'){
+    if(canDirect)return {direct:true,agency:{building:b}};
+    return publicAgency?{direct:false,agency:publicAgency}:null;
+  }
+  if(!publicAgency)return canDirect?{direct:true,agency:{building:b}}:null;
+  if(!secretaryPresent(city,publicAgency)&&canDirect)return {direct:true,agency:{building:b}};
+  if(canDirect){
+    const owner=city.economy.workingOwner(b),ownerAtSite=owner&&(owner.indoorLocation?.buildingId===b.id||(!owner.indoorLocation&&Math.hypot(owner.entity.x-b.door.x,owner.entity.y-b.door.y)<=1.5));
+    if(b.playerHiring||ownerAtSite||((b.id+c.id)%2===1))return {direct:true,agency:{building:b}};
+  }
+  return {direct:false,agency:publicAgency};
+}
 export function apply(city,c,b){
   const cv=career(c),last=cv.applications.findLast(a=>a.buildingId===b.id);
   if(cv.pendingInterview&&!cv.applications.includes(cv.pendingInterview))cv.pendingInterview=null;
   if(last&&last.status==='análise')return last;
   if(last&&city.minute-last.appliedAt<360)return null;
   if(cv.pendingInterview?.status==='análise'||cv.applications.some(a=>a.status==='análise'))return null;
-  const publicAgency=laborAgency(city),direct=economicPolicy(city,'directHiring')&&!secretaryPresent(city,publicAgency),agency=direct?{building:b}:publicAgency;if(!agency)return null;
-  const q=qualification(city,c,b),interviewAt=agencyAppointmentTime(city,c,agency),row={appliedAt:city.minute,recruitmentChannel:direct?'employer':'agency',buildingId:b.id,company:b.entity.properties.name,agencyBuildingId:agency.building.id,interviewAt,decideAt:interviewAt+RECRUITMENT_RULES.interviewDuration,resultDueAt:interviewAt+RECRUITMENT_RULES.interviewDuration+RECRUITMENT_RULES.minimumNotice,status:q.eligible?'análise':'reprovado',reason:q.eligible?'Currículo recebido; entrevista na Secretaria do Trabalho agendada.':q.reason,trainee:q.trainee,score:city.economy.hiringScore(c,b),offeredWage:wageFor(city,c,b)};
+  const channel=resolveInterviewChannel(city,c,b);if(!channel)return null;
+  const {direct,agency}=channel;
+  const q=qualification(city,c,b),interviewAt=agencyAppointmentTime(city,c,agency),row={appliedAt:city.minute,recruitmentChannel:direct?'employer':'agency',buildingId:b.id,company:b.entity.properties.name,agencyBuildingId:agency.building.id,interviewAt,decideAt:interviewAt+RECRUITMENT_RULES.interviewDuration,resultDueAt:interviewAt+RECRUITMENT_RULES.interviewDuration+RECRUITMENT_RULES.minimumNotice,status:q.eligible?'análise':'reprovado',reason:q.eligible?(direct?'Currículo recebido; entrevista presencial agendada na empresa.':'Currículo recebido; entrevista na Secretaria do Trabalho agendada.'):q.reason,trainee:q.trainee,score:city.economy.hiringScore(c,b),offeredWage:wageFor(city,c,b)};
   const queue=queueApplications(city);cv.applications.push(row);
   if(row.status==='análise'){cv.pendingInterview=row;queue.push({citizenId:c.id,application:row});}
   else {row.decidedAt=city.minute;Object.freeze(row);}
@@ -201,7 +223,61 @@ export function routeToInterview(city,c){
 }
 function releaseInterview(c,a){
   if(c.career?.pendingInterview===a)c.career.pendingInterview=null;
-  if(c.task==='job-interview'&&c.targetId===a.agencyBuildingId){c.task=null;c.targetId=null;c.path=[];c.action=a.resultReceivedAt!=null?'Resultado do processo seletivo recebido':a.submittedAt!=null?'Currículo entregue; aguardando o resultado':`Entrevista encerrada: ${a.reason}`;}
+  if(c.task==='job-interview'&&c.targetId===a.agencyBuildingId){c.task=null;c.targetId=null;c.path=[];c.action=a.resultReceivedAt!=null?'Resultado do processo seletivo recebido':a.submittedAt!=null?(a.recruitmentChannel==='employer'?'Entrevista concluída; aguardando o resultado':'Currículo entregue; aguardando o resultado'):`Entrevista encerrada: ${a.reason}`;}
+}
+export function directAppoint(city,employer,candidate,b,options={}){
+  if(!b?.active||b.entity.destroyed||!candidate||candidate.entity.destroyed||!city.society.isAdult(candidate)||city.politics.officeHolder(candidate)||candidate.businessIds.length||candidate.jobId===b.id)return false;
+  if(b.type==='iml'&&candidate.forensicDisqualifiedAt!=null)return false;
+  if(b.type==='police_station'&&candidate.policeDisqualifiedAt!=null)return false;
+  if(openPositions(city,b)<=0)return false;
+  const minBalance=options.player?b.wage:b.wage*60;
+  if(b.balance<minBalance)return false;
+  const cv=career(candidate);
+  for(const app of cv.applications){
+    if(app.status==='análise'){
+      finishApplication(app,'retirado','Aceitou contratação direta sem processo seletivo',city.minute);
+      releaseInterview(candidate,app);
+    }
+  }
+  if(candidate.jobId)city.economy.leaveJob(candidate,'Aceitou convite direto de outro empregador');
+  candidate.jobId=b.id;
+  candidate.profession=city.economy.jobSkill(b);
+  if(!b.workers.includes(candidate.id))b.workers.push(candidate.id);
+  city.history.employment(candidate,b,'contratação');
+  const row=career(candidate).jobs.at(-1),reason=options.reason||'Indicação direta do patrão';
+  if(row&&row.buildingId===b.id&&row.endedAt==null){row.hiredDirectly=true;row.appointmentReason=reason;}
+  city.vacancyRevision=(city.vacancyRevision||0)+1;
+  city._statsCache=null;
+  const employerName=employer?.entity?.properties?.name||'A direção';
+  city.log(`${employerName} contratou diretamente ${candidate.entity.properties.name} (${reason.toLowerCase()}) para trabalhar em ${b.entity.properties.name}, sem processo seletivo.`,'work',[candidate.id,employer?.id].filter(id=>id!=null),{kind:'direct-employment',buildingId:b.id,employerId:employer?.id??null,reason});
+  return true;
+}
+export function appointTrustedCandidates(city,offers){
+  for(const b of offers){
+    if(!b?.active||b.entity.destroyed||b.playerHiring||openPositions(city,b)<=0||b.balance<b.wage*60)continue;
+    const owner=city.relationships.businessPerson(b);
+    if(!owner||owner.playerManaged||owner.entity.destroyed)continue;
+    const ranked=[];
+    for(const r of city.society.relationsFor(owner.id)){
+      const person=city.society.citizen(r.a===owner.id?r.b:r.a),v=r.views?.[owner.id];
+      if(!person||!v||person.entity.destroyed||person.playerManaged||!city.society.isAdult(person)||city.politics.officeHolder(person)||person.businessIds.length||person.jobId===b.id)continue;
+      if(career(person).jobs.some(j=>j.buildingId===b.id&&j.endedAt!=null&&city.minute-j.endedAt<360))continue;
+      if(!city.relationships.willingToWork(person,b))continue;
+      const highTrust=v.trust>=65,highAffection=v.affection>=65,closeBond=v.trust>=45&&v.affection>=45&&(v.kinship||owner.partnerId===person.id||['close','confidant','friend'].includes(v.status));
+      if(!(highTrust||highAffection||closeBond)||v.resentment>=30||v.fear>=40)continue;
+      const current=city.building(person.jobId);
+      if(current&&wageFor(city,person,b)<wageFor(city,person,current))continue;
+      const score=v.trust+v.affection+(v.kinship?20:0)+(owner.partnerId===person.id?25:0);
+      const reason=owner.partnerId===person.id?'Laço conjugal':v.kinship?'Parentesco e confiança':highTrust&&highAffection?'Confiança e afinidade':highTrust?'Pessoa de confiança':'Afinidade pessoal';
+      ranked.push({person,score,reason});
+    }
+    if(!ranked.length)continue;
+    ranked.sort((a,b)=>b.score-a.score||a.person.id-b.person.id);
+    for(const {person,reason} of ranked){
+      if(openPositions(city,b)<=0)break;
+      directAppoint(city,owner,person,b,{reason});
+    }
+  }
 }
 export function advanceRecruitment(city){
   const queue=queueApplications(city),sessions=new Map(),publicAgency=laborAgency(city);
@@ -210,15 +286,16 @@ export function advanceRecruitment(city){
     const c=city.society.citizen(citizenId),b=city.building(a.buildingId);
     if(c&&!c.career?.applications.includes(a)){finishApplication(a,'retirado','Inscrição retirada',city.minute);releaseInterview(c,a);continue;}
     if(!c||c.entity.destroyed||!b?.active||b.entity.destroyed||city.politics.officeHolder(c)||c.businessIds.length){finishApplication(a,'retirado','Candidato ou empresa indisponível',city.minute);if(c)releaseInterview(c,a);continue;}
-    if(economicPolicy(city,'directHiring')&&a.recruitmentChannel!=='employer'&&(!publicAgency||(a.agencyDeferrals||0)>=2||city.minute-(a.appliedAt??a.interviewAt??city.minute)>1440)){a.recruitmentChannel='employer';a.agencyBuildingId=b.id;a.interviewAt=agencyAppointmentTime(city,c,{building:b});a.decideAt=a.interviewAt+RECRUITMENT_RULES.interviewDuration;}
-    const direct=a.recruitmentChannel==='employer',agency=direct?{building:b}:publicAgency,secretaryAvailable=direct?city.hour>=8&&city.hour<17:secretaryPresent(city,agency);
+    if(isOpenAirWorkplace(b)&&a.recruitmentChannel==='employer'&&publicAgency){a.recruitmentChannel='agency';a.agencyBuildingId=publicAgency.building.id;a.interviewAt=agencyAppointmentTime(city,c,publicAgency);a.decideAt=a.interviewAt+RECRUITMENT_RULES.interviewDuration;}
+    if(!isOpenAirWorkplace(b)&&economicPolicy(city,'directHiring')&&a.recruitmentChannel!=='employer'&&(!publicAgency||(a.agencyDeferrals||0)>=2||city.minute-(a.appliedAt??a.interviewAt??city.minute)>1440)){a.recruitmentChannel='employer';a.agencyBuildingId=b.id;a.interviewAt=agencyAppointmentTime(city,c,{building:b});a.decideAt=a.interviewAt+RECRUITMENT_RULES.interviewDuration;}
+    const direct=a.recruitmentChannel==='employer'&&!isOpenAirWorkplace(b),agency=direct?{building:b}:publicAgency,secretaryAvailable=direct?city.hour>=8&&city.hour<17:secretaryPresent(city,agency);
     if(!agency){a.resultDueAt=city.minute+30;continue;}
     if(a.agencyBuildingId!==agency.building.id){a.agencyBuildingId=agency.building.id;a.interviewAt=agencyAppointmentTime(city,c,agency);a.decideAt=a.interviewAt+RECRUITMENT_RULES.interviewDuration;}
     if(a.submittedAt==null){
       const present=c.task==='job-interview'&&c.targetId===agency.building.id&&(agency.building.constructionKind==='open-air'?!c.indoorLocation&&!c.path.length&&Math.hypot(c.entity.x-agency.building.door.x,c.entity.y-agency.building.door.y)<=.8:c.indoorLocation?.buildingId===agency.building.id&&!c.indoorLocation.exiting&&!c.indoorLocation.path?.length);
       if(city.minute<a.interviewAt)continue;
       if(city.minute>=a.interviewAt&&!secretaryAvailable){a.agencyDeferrals=(a.agencyDeferrals||0)+1;a.interviewAt=agencyAppointmentTime(city,c,agency);a.decideAt=a.interviewAt+RECRUITMENT_RULES.interviewDuration;continue;}
-      if(!present){if(city.minute>a.interviewAt+economicPolicy(city,'interviewGraceMinutes')){a.absentAt=city.minute;finishApplication(a,'reprovado','Não compareceu à entrevista na Secretaria do Trabalho',city.minute);releaseInterview(c,a);}continue;}
+      if(!present){if(city.minute>a.interviewAt+economicPolicy(city,'interviewGraceMinutes')){a.absentAt=city.minute;finishApplication(a,'reprovado',direct?'Não compareceu à entrevista na empresa':'Não compareceu à entrevista na Secretaria do Trabalho',city.minute);releaseInterview(c,a);}continue;}
       a.arrivedAt??=city.minute;a.interviewStartedAt??=city.minute;c.action=direct?'Entrevista presencial no empregador':'Entrevista na Secretaria do Trabalho';
       if(city.minute<a.interviewStartedAt+RECRUITMENT_RULES.interviewDuration)continue;
       a.submittedAt=city.minute;a.resultDueAt=city.minute+RECRUITMENT_RULES.minimumNotice;releaseInterview(c,a);
@@ -238,8 +315,8 @@ export function advanceRecruitment(city){
         finishApplication(a,'aprovado',a.recruitmentChannel==='employer'?(a.trainee?'Contratação direta com formação no trabalho':'Contratação direta após entrevista presencial'):a.trainee?'Currículo aprovado pela Secretaria do Trabalho; selecionado para formação no trabalho':'Currículo aprovado pela Secretaria do Trabalho por habilidade, experiência e referências',city.minute);
         if(c.jobId)city.economy.leaveJob(c,'Aceitou proposta salarial melhor');
         c.jobId=b.id;c.profession=city.economy.jobSkill(b);b.workers.push(c.id);hired++;
-        city.history.employment(c,b,'contratação');city.log(`${c.entity.properties.name} recebeu da Secretaria do Trabalho a aprovação para trabalhar em ${b.entity.properties.name}.`,'work',[c.id],{kind:'employment',buildingId:b.id,interviewAt:a.interviewAt,agencyBuildingId:a.agencyBuildingId});
-      }else{const reason=!q.eligible?q.reason:!better?'A proposta deixou de compensar a troca de emprego':hired>=slots?'Outro candidato foi escolhido ou a vaga foi preenchida':'Empresa sem recursos para contratar';finishApplication(a,'reprovado',reason,city.minute);city.log(`${c.entity.properties.name} recebeu da Secretaria do Trabalho a resposta negativa da vaga em ${b.entity.properties.name}: ${reason}.`,'work',[c.id],{kind:'employment-result',status:'reprovado',buildingId:b.id,agencyBuildingId:a.agencyBuildingId,interviewAt:a.interviewAt});}
+        city.history.employment(c,b,'contratação');city.log(a.recruitmentChannel==='employer'?`${c.entity.properties.name} foi aprovado na entrevista presencial em ${b.entity.properties.name}.`:`${c.entity.properties.name} recebeu da Secretaria do Trabalho a aprovação para trabalhar em ${b.entity.properties.name}.`,'work',[c.id],{kind:'employment',buildingId:b.id,interviewAt:a.interviewAt,agencyBuildingId:a.agencyBuildingId});
+      }else{const reason=!q.eligible?q.reason:!better?'A proposta deixou de compensar a troca de emprego':hired>=slots?'Outro candidato foi escolhido ou a vaga foi preenchida':'Empresa sem recursos para contratar';finishApplication(a,'reprovado',reason,city.minute);city.log(a.recruitmentChannel==='employer'?`${c.entity.properties.name} recebeu de ${b.entity.properties.name} a resposta negativa da vaga: ${reason}.`:`${c.entity.properties.name} recebeu da Secretaria do Trabalho a resposta negativa da vaga em ${b.entity.properties.name}: ${reason}.`,'work',[c.id],{kind:'employment-result',status:'reprovado',buildingId:b.id,agencyBuildingId:a.agencyBuildingId,interviewAt:a.interviewAt});}
       releaseInterview(c,a);
     }
   }
@@ -254,9 +331,10 @@ export function renderResume(ui,p,c,money){
   if(!cv.jobs.length)p.note('Sem experiência profissional registrada.');
   for(const row of [...cv.jobs].reverse()){
     const end=row.endedAt??city.minute;
-    p.record(row.company,`${row.endedAt==null?'Vínculo atual':'Encerrado'} · dia ${Math.floor(row.startedAt/1440)+1} até ${row.endedAt==null?'hoje':`dia ${Math.floor(end/1440)+1}`}`,()=>ui.openBuilding(row.buildingId));
+    p.record(row.company,`${row.endedAt==null?'Vínculo atual':'Encerrado'}${row.hiredDirectly?' · contratação direta':''} · dia ${Math.floor(row.startedAt/1440)+1} até ${row.endedAt==null?'hoje':`dia ${Math.floor(end/1440)+1}`}`,()=>ui.openBuilding(row.buildingId));
     p.kv('Tempo na empresa',`${((end-row.startedAt)/1440).toFixed(1)} dias`);p.kv('Experiência comprovada',`${(row.workedMinutes/60).toFixed(1)} horas`);
     p.kv('Avaliação da empresa',row.workedMinutes?`${row.rating.toFixed(1)}/100`:'Ainda sem trabalho avaliado');p.kv('Remuneração bruta acumulada',money(row.earned));
+    if(row.hiredDirectly&&row.appointmentReason)p.kv('Forma de ingresso',`Sem processo seletivo (${row.appointmentReason})`);
     if(row.unpaidMinutes)p.kv('Tentativas sem pagamento',row.unpaidMinutes);
     if(row.reason)p.note(row.reason);
   }
@@ -264,7 +342,7 @@ export function renderResume(ui,p,c,money){
   p.note('Os anúncios são descobertos ao passar perto das empresas; esta lista registra o que a pessoa viu, sem revelar todas as vagas da cidade.');
   for(const entry of (cv.knownVacancies||[]).slice(-12).reverse()){const firm=city.building(entry.buildingId);p.record(firm?.entity.properties.name||'Empresa encerrada',`${entry.positions} vagas anunciadas · ${money(entry.wage*60)}/h · ${entry.source} · dia ${Math.floor(entry.discoveredAt/1440)+1}`,()=>ui.openBuilding(entry.buildingId));}
   p.heading('PROCESSOS SELETIVOS');
-  for(const a of [...cv.applications].reverse().slice(0,12)){p.record(a.company,`${a.status}${a.trainee?' · formação no trabalho':''} · ${a.reason} · oferta ${money(a.offeredWage*60)}/h`,()=>ui.openBuilding(a.buildingId));if(a.interviewAt!=null)p.kv('Entrevista na Secretaria do Trabalho',`Dia ${Math.floor(a.interviewAt/1440)+1} · ${String(Math.floor(a.interviewAt%1440/60)).padStart(2,'0')}:${String(a.interviewAt%60).padStart(2,'0')}`);if(a.submittedAt!=null)p.kv('Currículo entregue',`Dia ${Math.floor(a.submittedAt/1440)+1} · ${String(Math.floor(a.submittedAt%1440/60)).padStart(2,'0')}:${String(a.submittedAt%60).padStart(2,'0')}`);if(a.resultDueAt!=null)p.kv('Resultado previsto',`Dia ${Math.floor((a.resultReceivedAt??a.resultDueAt)/1440)+1} · ${String(Math.floor((a.resultReceivedAt??a.resultDueAt)%1440/60)).padStart(2,'0')}:${String((a.resultReceivedAt??a.resultDueAt)%60).padStart(2,'0')}`);if(a.absentAt!=null)p.note('Dispensado por ausência à entrevista.');}
+  for(const a of [...cv.applications].reverse().slice(0,12)){p.record(a.company,`${a.status}${a.trainee?' · formação no trabalho':''} · ${a.reason} · oferta ${money(a.offeredWage*60)}/h`,()=>ui.openBuilding(a.buildingId));if(a.interviewAt!=null)p.kv(a.recruitmentChannel==='employer'?'Entrevista na empresa':'Entrevista na Secretaria do Trabalho',`Dia ${Math.floor(a.interviewAt/1440)+1} · ${String(Math.floor(a.interviewAt%1440/60)).padStart(2,'0')}:${String(a.interviewAt%60).padStart(2,'0')}`);if(a.submittedAt!=null)p.kv('Currículo entregue',`Dia ${Math.floor(a.submittedAt/1440)+1} · ${String(Math.floor(a.submittedAt%1440/60)).padStart(2,'0')}:${String(a.submittedAt%60).padStart(2,'0')}`);if(a.resultDueAt!=null)p.kv('Resultado previsto',`Dia ${Math.floor((a.resultReceivedAt??a.resultDueAt)/1440)+1} · ${String(Math.floor((a.resultReceivedAt??a.resultDueAt)%1440/60)).padStart(2,'0')}:${String((a.resultReceivedAt??a.resultDueAt)%60).padStart(2,'0')}`);if(a.absentAt!=null)p.note('Dispensado por ausência à entrevista.');}
   if(!cv.applications.length)p.note('Nenhuma candidatura registrada.');
 }
 

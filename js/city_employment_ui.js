@@ -30,10 +30,16 @@ function pages(ui,p,rows,key,draw,size=8){
   if(count>1)p.buttons([{label:'ANTERIOR',click:()=>ui.openPanel({[key]:Math.max(0,index-1)})},{label:'PRÓXIMA',click:()=>ui.openPanel({[key]:Math.min(count-1,index+1)})}]);
 }
 function filters(ui,p,rows){p.links(rows.map(([id,label])=>({label,selected:(ui.employmentStatus||'all')===id,click:()=>ui.openPanel({employmentStatus:id,employmentPage:0})})));}
+function interviewLocationLabel(b){
+  if(b?.constructionKind==='open-air')return 'Secretaria do Trabalho (local ao ar livre)';
+  const loc=policyFor(b).interviewLocation||'auto';
+  return loc==='employer'?'Edifício da empresa':loc==='agency'?'Secretaria do Trabalho':'Secretaria do Trabalho ou edifício da empresa';
+}
 function showPolicy(p,b){
   const policy=policyFor(b);
   p.kv('Habilidade mínima',`${policy.minSkill}/100`);p.kv('Experiência comprovada mínima',hours(policy.minExperienceMinutes));p.kv('Referências mínimas',`${policy.minRating}/100`);
   p.kv('Formação no trabalho',policy.allowTraining&&policy.minExperienceMinutes===0&&policy.minRating===0?'Aceita iniciantes com habilidade abaixo do requisito':'Exige os requisitos informados');
+  p.kv('Local das entrevistas',interviewLocationLabel(b));
 }
 function openPersonResume(ui,c){
   if(ui.host){const state=ui.host.create(`person:${c.id}`,'people',{title:c.entity.properties.name,entity:c.entity,kind:'dossier'});state.detailTab='resume';state.resetScroll();return state;}
@@ -52,7 +58,7 @@ function applicationRows(ui,p,rows,key='employmentPage'){
 }
 function candidateDetail(ui,p,row){
   const city=ui.city,{citizen:c,application:a}=row,b=city.building(a.buildingId);
-  p.heading(`CANDIDATURA · ${label(c)}`);p.kv('Empresa',a.company);p.kv('Resultado / etapa',a.status);
+  p.heading(`CANDIDATURA · ${label(c)}`);p.kv('Empresa',a.company);p.kv('Resultado / etapa',a.status);p.kv('Local da entrevista',a.recruitmentChannel==='employer'?'Edifício da empresa':'Secretaria do Trabalho');
   p.kv('Inscrição',stamp(a.appliedAt));p.kv('Comparecimento obrigatório',stamp(a.interviewAt));p.kv('Resultado no local',stamp(a.decideAt));p.kv('Chegada registrada',stamp(a.arrivedAt));p.kv('Resultado recebido',stamp(a.resultReceivedAt));p.kv('Decisão registrada',stamp(a.decidedAt));p.note(a.reason);
   p.kv('Oferta na candidatura',`${money(a.offeredWage*60)}/h`);p.kv('Pontuação na inscrição',Number(a.score||0).toFixed(1));
   p.button('VER VAGA E DEMAIS CANDIDATOS',()=>route(ui,'vacancies',{employmentCompanyId:a.buildingId,employmentCandidatesPage:0}));

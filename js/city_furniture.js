@@ -107,7 +107,7 @@ export class CityFurniture{
  seatPoint(b,slot){const point=this.seatPosePoint(b,slot);return {x:point.x+Math.sin(b.angle)*.72,y:point.y+Math.cos(b.angle)*.72};}
  queueSeat(c,b){const seat=this.claimBench(c,b.door,10);if(!seat)return false;const distance=Math.hypot(c.entity.x-seat.point.x,c.entity.y-seat.point.y);if(distance>.15&&!c.path.length)c.path=seat.path||this.city.findPath(c.entity,seat.point)||[];return true;}
  waitForInputs(c,b,reason='Aguardando matéria-prima'){
-  const city=this.city,resume=c.task,seat=this.claimBench(c,c.entity,14);c.workWait={employerId:b.id,resume,retryAt:city.minute+12,reason};c.task='work-wait';c.targetId=b.id;
+  const city=this.city,resume=c.task,seat=this.claimBench(c,c.entity,14);c.workWait={employerId:b.id,resume,retryAt:city.minute+30,reason};c.task='work-wait';c.targetId=b.id;
   if(seat){c.path=seat.path||city.findPath(c.entity,seat.point)||[];c.action='Indo aguardar no banco mais próximo';return true;}
   if(b.constructionKind!=='open-air'){const path=city.findPath(c.entity,b.door);if(path!==null){c.path=path;c.action='Indo aguardar dentro da empresa';return true;}}
   c.task=null;c.workWait=null;return false;
