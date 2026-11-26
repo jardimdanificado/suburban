@@ -214,7 +214,7 @@ export class CityStateGraph {
     };
     // Reference tokens are stable strings internally, avoiding one object allocation per edge.
     const reference = value => {
-      if(value!==null&&typeof value==='object'){const id=visit(value);return id<262144?(this.referenceTokens[id]??=`@${id}`):`@${id}`;}
+      if(value!==null&&typeof value==='object'){const id=visit(value);return id<65536?(this.referenceTokens[id]??=`@${id}`):`@${id}`;}
       return typeof value==='string'&&value.startsWith('@')?`@s${value}`:value;
     };
     const rootId = visit(root);
@@ -225,7 +225,7 @@ export class CityStateGraph {
     // and batching keeps the worker's hot snapshot path from paying that scan
     // at 10+ Hz in large cities.
     this.encodeCount=(this.encodeCount||0)+1;
-    if(this.encodeCount%4===0)for(const [id,object] of this.objects)if(!wasVisited(id,object)) { removed.push(id); this.objects.delete(id); this.previous.delete(id); this.relationNodes.delete(id); this.ledgerCursors.delete(id); }
+    if(this.encodeCount%4===0)for(const [id,object] of this.objects)if(!wasVisited(id,object)) { removed.push(id); this.objects.delete(id); this.previous.delete(id); this.relationNodes.delete(id); this.ledgerCursors.delete(id); this.historyCursors.delete(id); }
     return { rootId, nodes, removed, histories, nextId: this.nextId, ...(packedNeeds?{packedNeeds}:{}),...(omitCitizenPaths?{omittedCitizenPaths:true}:{}) };
   }
   apply(packet) {

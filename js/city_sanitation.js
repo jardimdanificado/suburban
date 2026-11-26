@@ -742,6 +742,19 @@ export class CitySanitation {
       }
     }
     const pressure=this.environmentalReport().pressure;if(pressure>65){const healthLoss=(pressure-65)*.001;for(const citizen of city.citizens)if(!citizen.entity.destroyed)citizen.needs.health=Math.max(0,citizen.needs.health-healthLoss);}
+    if(this.jobs.length>200){
+      let done=0;for(const j of this.jobs)if(j.status==='completed'||j.status==='cancelled')done++;
+      let drop=done-100;
+      if(drop>0){
+        let write=0;
+        for(let i=0;i<this.jobs.length;i++){
+          const j=this.jobs[i];
+          if(drop>0&&(j.status==='completed'||j.status==='cancelled')){drop--;if(j.accountId&&!city.accounts.get(j.accountId)?.balance)city.accounts.delete(j.accountId);continue;}
+          this.jobs[write++]=j;
+        }
+        this.jobs.length=write;
+      }
+    }
   }
 
   recycle(b, c) {

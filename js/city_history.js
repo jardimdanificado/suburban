@@ -1,8 +1,8 @@
 import {employmentEvent} from './city_employment.js?v=fast-speeds-1';
 /** Structured event journal, inspired by Brutopolis/event_log.js.
  * Stable IDs, subject/type indices and bounded retention; no entity references in exports. */
-export const HISTORY_LIMIT = 16000;
-export const FINANCE_HISTORY_LIMIT = 100000;
+export const HISTORY_LIMIT = 4000;
+export const FINANCE_HISTORY_LIMIT = 12000;
 const categories = { employment: 'work', ownership: 'housing', sale: 'economy', service: 'economy', finance: 'finance', credit: 'credit', reputation: 'reputation' };
 const unique = values => [...new Set(values.filter(value => value !== null && value !== undefined && value !== ''))];
 const partyIdsFor=details=>unique([...(details.partyIds||[]),...['partyId','partyAId','partyBId','fromPartyId','toPartyId','parentPartyId','destinationPartyId','mergedPartyId','candidatePartyId','targetPartyId'].map(key=>details[key])]);
@@ -94,7 +94,7 @@ export class CityHistory {
       if (!journal) { journal = { byKind: {}, total: 0, totals: {} }; this.journals.set(id, journal); }
       journal.total++; journal.totals[entry.kind] = (journal.totals[entry.kind] || 0) + 1;
       const rows = journal.byKind[entry.kind] ??= []; rows.push(entry);
-      if (rows.length > 2000) rows.shift();
+      if (rows.length > 400) rows.shift();
     }
   }
   prune() { this.pruneBefore(this.entries[this.entries.length - HISTORY_LIMIT]?.id || this.nextId); }

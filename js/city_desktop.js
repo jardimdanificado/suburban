@@ -399,7 +399,7 @@ export class CityDesktop {
     state.drawFloating=(ui,w)=>{
       state.city=this.city;state.visible=true;state.zones=[];state.rightClickRegions=[];state.beginInputs();
       const now=performance.now(),tracker=this.simNoticeTracker??=createSimulationNoticeTracker();
-      if(this.notifications)pollSimulationNotices(this.city,tracker,now);
+      if(this.notifications&&(this._lastNoticePollMin!==this.city?.minute||now-(this._lastNoticePollAt||0)>=250)){this._lastNoticePollMin=this.city?.minute;this._lastNoticePollAt=now;pollSimulationNotices(this.city,tracker,now);}
       const ctx=ui.ctx,x=w.x+6,topY=w.y+25,bodyW=w.w-12,bodyH=w.h-47;
       ui.text(`${tracker.queue.length} aviso(s) · clique abre · dir. descarta`,x,topY+2,T.muted);
       ui.button(x+bodyW-132,topY,62,16,'LIMPAR',()=>{tracker.queue.length=0;});
@@ -417,9 +417,10 @@ export class CityDesktop {
           if(cy+cardH>=listY&&cy<=listY+listH){
             bevel(ctx,x,cy,cardW,cardH,{fill:T.paper});
             ctx.fillStyle=accents[item.category]||T.blue;ctx.fillRect(x+2,cy+2,4,cardH-4);
+            if(item._fitW!==cardW){item._fitW=cardW;item._fitTitle=ui.fitText(item.title,cardW-34);item._fitText=ui.fitText(item.text,cardW-28);}
             ctx.save();ctx.font=ui.font(1,true);ctx.textBaseline='top';ctx.fillStyle=T.ink;
-            ctx.fillText(ui.fitText(item.title,cardW-34),x+10,cy+5);ctx.restore();
-            ui.text(ui.fitText(item.text,cardW-28),x+10,cy+20,T.muted);
+            ctx.fillText(item._fitTitle,x+10,cy+5);ctx.restore();
+            ui.text(item._fitText,x+10,cy+20,T.muted);
             const ratio=Math.max(0,Math.min(1,1-(now-(item.receivedAt??now))/(item.durationMs||12000)));
             ctx.fillStyle=T.track;ctx.fillRect(x+8,cy+cardH-5,cardW-16,2);
             ctx.fillStyle=accents[item.category]||T.blue;ctx.fillRect(x+8,cy+cardH-5,Math.round((cardW-16)*ratio),2);
@@ -440,6 +441,8 @@ export class CityDesktop {
   syncSimulationInbox(){
     if(mayorPlaying(this.city)||this.menuOpen)return;
     const now=performance.now(),tracker=this.simNoticeTracker??=createSimulationNoticeTracker();
+    if(this._lastNoticePollMin===this.city?.minute&&now-(this._lastNoticePollAt||0)<250)return;
+    this._lastNoticePollMin=this.city?.minute;this._lastNoticePollAt=now;
     const prevTopId=tracker.queue.at(-1)?.id??null;
     pollSimulationNotices(this.city,tracker,now);
     const nextTopId=tracker.queue.at(-1)?.id??null;
@@ -451,8 +454,9 @@ export class CityDesktop {
     const state=w.state,world=this.city.world;state.zones=[];for(const input of state.inputs || [])input.hidden=true;
     this.mapCanvas??=document.createElement('canvas');
     if(this.mapRevision!==world.revision||this.mapCanvas.width!==world.width){
-      this.mapCanvas.width=world.width;this.mapCanvas.height=world.height;const ctx=this.mapCanvas.getContext('2d'),colors=['#7b9748','#4776a3','#66786a','#baad76','#adaba1','#263f49','#797965','#92905d','#797b65','#8caa61','#ae9c73','#5d705c','#a6a88a','#67805d'];
-      for(let y=0;y<world.height;y++)for(let x=0;x<world.width;x++){ctx.fillStyle=colors[world.getTile(x,y)]||'#748d51';ctx.fillRect(x,y,1,1);}this.mapRevision=world.revision;
+      this.mapCanvas.width=world.width;this.mapCanvas.height=world.height;const ctx=this.mapCanvas.getContext('2d'),img=ctx.createImageData(world.width,world.height),px=new Uint32Array(img.data.buffer),abgr=[0xff48977b,0xffa37647,0xff6a7866,0xff76adba,0xffa1abad,0xff493f26,0xff657979,0xff5d9092,0xff657b79,0xff61aa8c,0xff739cae,0xff5c705d,0xff8aa8a6,0xff5d8067];
+      for(let y=0,i=0;y<world.height;y++)for(let x=0;x<world.width;x++,i++)px[i]=abgr[world.getTile(x,y)]||0xff518d74;
+      ctx.putImageData(img,0,0);this.mapRevision=world.revision;
     }
     const size=Math.min(w.w-20,w.h-85),x=w.x+(w.w-size)/2,y=w.y+34;bevel(ui.ctx,x-2,y-2,size+4,size+4,{inset:true});ui.ctx.save();ui.ctx.imageSmoothingEnabled=false;ui.ctx.drawImage(this.mapCanvas,x,y,size,size);ui.ctx.restore();
     for(const b of this.city.buildings){ui.ctx.fillStyle=b.type==='residential'?'#f6e8aa':'#e47f56';ui.ctx.fillRect(x+b.entity.x/world.width*size,y+b.entity.y/world.height*size,Math.max(2,b.width/world.width*size),Math.max(2,b.depth/world.height*size));}

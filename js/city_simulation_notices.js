@@ -249,74 +249,86 @@ export function pollSimulationNotices(city, tracker, now = Date.now(), { ttlMs =
     for (const bill of city.politics?.council?.bills || []) {
       tracker.billStates.set(bill.id, bill.status);
     }
+    tracker.lastBillsMinute = city.minute;
+    tracker.lastBillsLen = city.politics?.council?.bills?.length || 0;
     return [];
   }
 
-  for (const entry of entries) {
-    if (entry.id <= tracker.lastEventId) continue;
-    tracker.lastEventId = entry.id;
-    const kind = entry.data?.kind;
-    const rule = kind && EVENT_RULES[kind];
-    if (!rule) continue;
-    if (rule.cooldownKey) {
-      const cKey = rule.cooldownKey(entry);
-      const lastAt = tracker.cooldowns.get(cKey) ?? -Infinity;
-      if (city.minute - lastAt < (rule.cooldownMinutes || 30)) continue;
-      tracker.cooldowns.set(cKey, city.minute);
+  if (entries.length && entries[entries.length - 1].id > tracker.lastEventId) {
+    let start = entries.length - 1;
+    while (start > 0 && entries[start - 1].id > tracker.lastEventId) start--;
+    for (let i = start; i < entries.length; i++) {
+      const entry = entries[i];
+      if (entry.id <= tracker.lastEventId) continue;
+      tracker.lastEventId = entry.id;
+      const kind = entry.data?.kind;
+      const rule = kind && EVENT_RULES[kind];
+      if (!rule) continue;
+      if (rule.cooldownKey) {
+        const cKey = rule.cooldownKey(entry);
+        const lastAt = tracker.cooldowns.get(cKey) ?? -Infinity;
+        if (city.minute - lastAt < (rule.cooldownMinutes || 30)) continue;
+        tracker.cooldowns.set(cKey, city.minute);
+      }
+      const record = kind === 'crime-recorded' && entry.data?.caseId != null ? city.justice?.cases?.find(c => c.id === entry.data.caseId) : null;
+      const crimeInfo = crimeDetailsSummary(city, record);
+      tracker.queue.push({
+        id: `event:${entry.id}`,
+        title: crimeInfo?.title || rule.title,
+        category: rule.category,
+        text: crimeInfo?.text || entry.text,
+        minute: entry.minute ?? city.minute,
+        receivedAt: now,
+        durationMs: ttlMs,
+        eventId: entry.id,
+        billId: entry.data?.billId ?? null,
+        justiceCaseId: kind === 'crime-recorded' ? (entry.data?.caseId ?? null) : null,
+        citizenIds: entry.citizenIds || [],
+        position: crimeInfo?.position || null,
+        corruptionCaseId: kind !== 'crime-recorded' ? (entry.data?.caseId ?? null) : null,
+      });
     }
-    const record = kind === 'crime-recorded' && entry.data?.caseId != null ? city.justice?.cases?.find(c => c.id === entry.data.caseId) : null;
-    const crimeInfo = crimeDetailsSummary(city, record);
-    tracker.queue.push({
-      id: `event:${entry.id}`,
-      title: crimeInfo?.title || rule.title,
-      category: rule.category,
-      text: crimeInfo?.text || entry.text,
-      minute: entry.minute ?? city.minute,
-      receivedAt: now,
-      durationMs: ttlMs,
-      eventId: entry.id,
-      billId: entry.data?.billId ?? null,
-      justiceCaseId: kind === 'crime-recorded' ? (entry.data?.caseId ?? null) : null,
-      citizenIds: entry.citizenIds || [],
-      position: crimeInfo?.position || null,
-      corruptionCaseId: kind !== 'crime-recorded' ? (entry.data?.caseId ?? null) : null,
-    });
   }
 
-  for (const bill of city.politics?.council?.bills || []) {
-    const prev = tracker.billStates.get(bill.id);
-    if (prev === bill.status) continue;
-    tracker.billStates.set(bill.id, bill.status);
-    if (bill.decree && DECREE_STATUS_LABELS[bill.status]) {
-      tracker.queue.push({
-        id: `decree:${bill.id}:${bill.status}`,
-        title: 'Decreto do Prefeito',
-        category: 'decree',
-        text: `${bill.title} — ${DECREE_STATUS_LABELS[bill.status]}.`,
-        minute: city.minute,
-        receivedAt: now,
-        durationMs: ttlMs,
-        eventId: bill.eventId ?? null,
-        billId: bill.id,
-        citizenIds: [],
-      });
-    } else if (prev !== undefined && ['awaiting-sanction', 'approved', 'rejected', 'vetoed'].includes(bill.status)) {
-      const label = bill.status === 'awaiting-sanction' ? 'aprovado na Câmara, aguardando sanção'
-        : bill.status === 'approved' ? 'aprovado'
-        : bill.status === 'rejected' ? 'rejeitado na Câmara'
-        : 'vetado pelo prefeito';
-      tracker.queue.push({
-        id: `bill:${bill.id}:${bill.status}`,
-        title: 'Decisão na Câmara',
-        category: 'council',
-        text: `${bill.title} — ${label}.`,
-        minute: city.minute,
-        receivedAt: now,
-        durationMs: ttlMs,
-        eventId: bill.eventId ?? null,
-        billId: bill.id,
-        citizenIds: [],
-      });
+  const bills = city.politics?.council?.bills || [];
+  if (tracker.lastBillsMinute !== city.minute || tracker.lastBillsLen !== bills.length) {
+    tracker.lastBillsMinute = city.minute;
+    tracker.lastBillsLen = bills.length;
+    for (const bill of bills) {
+      const prev = tracker.billStates.get(bill.id);
+      if (prev === bill.status) continue;
+      tracker.billStates.set(bill.id, bill.status);
+      if (bill.decree && DECREE_STATUS_LABELS[bill.status]) {
+        tracker.queue.push({
+          id: `decree:${bill.id}:${bill.status}`,
+          title: 'Decreto do Prefeito',
+          category: 'decree',
+          text: `${bill.title} — ${DECREE_STATUS_LABELS[bill.status]}.`,
+          minute: city.minute,
+          receivedAt: now,
+          durationMs: ttlMs,
+          eventId: bill.eventId ?? null,
+          billId: bill.id,
+          citizenIds: [],
+        });
+      } else if (prev !== undefined && ['awaiting-sanction', 'approved', 'rejected', 'vetoed'].includes(bill.status)) {
+        const label = bill.status === 'awaiting-sanction' ? 'aprovado na Câmara, aguardando sanção'
+          : bill.status === 'approved' ? 'aprovado'
+          : bill.status === 'rejected' ? 'rejeitado na Câmara'
+          : 'vetado pelo prefeito';
+        tracker.queue.push({
+          id: `bill:${bill.id}:${bill.status}`,
+          title: 'Decisão na Câmara',
+          category: 'council',
+          text: `${bill.title} — ${label}.`,
+          minute: city.minute,
+          receivedAt: now,
+          durationMs: ttlMs,
+          eventId: bill.eventId ?? null,
+          billId: bill.id,
+          citizenIds: [],
+        });
+      }
     }
   }
 
