@@ -45,7 +45,7 @@ function positions() {
 }
 function interiorPositions(){
   const people=state.city.citizens,result=new Float64Array(people.length*4);
-  for(let i=0;i<people.length;i++){const c=people[i],location=c.indoorLocation,bridge=c.skybridgeZ>0,at=i*4;result[at]=c.id;result[at+1]=bridge?c.entity.x:location?.position?.x??NaN;result[at+2]=bridge?c.entity.y:location?.position?.y??NaN;result[at+3]=bridge?c.skybridgeZ:location?.position?.z??NaN;}
+  for(let i=0;i<people.length;i++){const c=people[i],location=c.indoorLocation,climb=!location&&c.climbing?.z>0,bridge=!location&&c.skybridgeZ>0,at=i*4;result[at]=c.id;result[at+1]=climb?c.climbing.x:bridge?c.entity.x:location?.position?.x??NaN;result[at+2]=climb?c.climbing.y:bridge?c.entity.y:location?.position?.y??NaN;result[at+3]=climb?c.climbing.z:bridge?c.skybridgeZ:location?.position?.z??NaN;}
   return result;
 }
 function vehiclePositions() {

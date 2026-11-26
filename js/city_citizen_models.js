@@ -48,8 +48,9 @@ export function citizenAnimation(c,moving=false,inWater=undefined){
     return GLIDE_KINDS.has(c.ridingVehicleKind)?'glide':'passenger';
   }
   if(c.climbing){
-    if(c.climbing.phase==='painting')return 'escalar_parado';
-    if(c.climbing.phase!=='down'||c.climbing.z>.05)return 'escalar';
+    if(c._renderIndoorPosition===null&&c.climbing.phase==='down'){}
+    else if(c.climbing.phase==='painting')return 'escalar_parado';
+    else if(c.climbing.phase!=='down'||(c._renderIndoorPosition?.z??c.climbing.z)>.05)return 'escalar';
   }
   const substance=activeSubstanceEffect(c);
   if(inWater!==undefined?inWater:c.swimming)return moving?'nadar':'boiar';
@@ -630,12 +631,14 @@ if (vCitizenDirt.a > 0.05) {
       motion.renderAngle+=angleDelta*alpha;
       renderX=motion.renderX;renderY=motion.renderY;renderAngle=motion.renderAngle;
     }else{motion.renderX=x;motion.renderY=y;motion.renderAngle=motion.angle;}
-    if(c.dead||c.unconsciousUntil||!c.climbing){motion.renderClimbZ=0;}
+    const workerClimb=!c.indoorLocation&&c._renderIndoorPosition!==undefined?(c._renderIndoorPosition?.z||0):null;
+    const simClimbZ=workerClimb!==null?workerClimb:(c.climbing?.z||0);
+    if(c.dead||c.unconsciousUntil||simClimbZ<=0&&(!c.climbing||c.climbing.phase==='down')){motion.renderClimbZ=0;}
     else if(this.frameDelta>0&&!this.animationPaused){
-      const goal=c.climbing.phase==='down'?0:c.climbing.targetZ;
-      const cur=motion.renderClimbZ??c.climbing.z,diff=goal-cur,speed=c.climbing.phase==='down'?.62:.48,maxStep=this.frameDelta*speed;
+      const goal=c.climbing?.phase==='down'?0:Math.max(simClimbZ,c.climbing?.targetZ||simClimbZ);
+      const cur=motion.renderClimbZ??simClimbZ,diff=goal-cur,speed=c.climbing?.phase==='down'?.62:.48,maxStep=this.frameDelta*speed;
       motion.renderClimbZ=Math.abs(diff)<=maxStep?goal:cur+Math.sign(diff)*maxStep;
-    }else{motion.renderClimbZ=c.climbing.z;}
+    }else{motion.renderClimbZ=simClimbZ;}
     if(visualOffset){renderX+=visualOffset.x;renderY+=visualOffset.y;}
     if((c.furnitureUse?.type==='bench'||c.furnitureUse?.type==='beach_chair')&&c.furnitureUse.seated){renderX+=Math.sin(renderAngle)*.16;renderY+=Math.cos(renderAngle)*.16;}
     // Match gait to the distance displayed, including high-speed interpolation.
@@ -646,7 +649,7 @@ if (vCitizenDirt.a > 0.05) {
     // the seated body back into the walking one at the seat anchor.
     const settledFurniture=!!c.furnitureUse?.seated||c.furnitureUse?.pose==='lying';
     const traveling=citizenHasPath(c)||!!c.indoorLocation?.path?.length||!settledFurniture&&(moved||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding');
-    const sleeping=citizenIsSleeping(c),lying=!sleeping&&!traveling&&c.furnitureUse?.pose==='lying',rawClip=citizenAnimation(c,traveling,inWater),clip=(rawClip==='escalar'&&c.climbing?.phase==='down'&&(motion.renderClimbZ??c.climbing.z)<=.05)?citizenAnimation({...c,climbing:null},traveling,inWater):rawClip,actionState=clip==='murro'||clip==='chute'||clip==='derrotado',actionToken=c.combatAnimation?.sequence??c.combatReaction?.sequence??c.unconsciousUntil??null;
+    const sleeping=citizenIsSleeping(c),lying=!sleeping&&!traveling&&c.furnitureUse?.pose==='lying',rawClip=citizenAnimation(c,traveling,inWater),clip=(rawClip==='escalar'&&c.climbing?.phase==='down'&&(motion.renderClimbZ??0)<=.05)?citizenAnimation({...c,climbing:null},traveling,inWater):rawClip,actionState=clip==='murro'||clip==='chute'||clip==='derrotado',actionToken=c.combatAnimation?.sequence??c.combatReaction?.sequence??c.unconsciousUntil??null;
     // The seated OBJ pose puts the legs in the same vertical bands used by
     // the standing-body fat mask. Cap its morph so those vertices do not
     // balloon sideways while sitting; standing citizens retain the full shape.
@@ -674,7 +677,7 @@ if (vCitizenDirt.a > 0.05) {
       }batch.capacity=capacity;
     }
     const bikeRider=c.ridingVehicleId&&BIKE_KINDS.has(c.ridingVehicleKind),riderLift=bikeRider?(c.ridingAsPassenger?0.23:0.38):c.ridingVehicleId?0.18:0;
-    const size=(entity.properties.render.size||1)*(perspective?1.05:1),heightScale=(c.bodyHeightCm||170)/170,baseSurfaceH=waterSurfaceY!=null&&(clip==='nadar'||clip==='boiar')?(clip==='boiar'?waterSurfaceY-0.77*size*heightScale:waterSurfaceY-0.32*size):surfaceH,positionY=baseSurfaceH+(posePoint?.z??inside?.z??0)+(motion.renderClimbZ||0)+riderLift,bodyIndex=batch.count;
+    const size=(entity.properties.render.size||1)*(perspective?1.05:1),heightScale=(c.bodyHeightCm||170)/170,baseSurfaceH=waterSurfaceY!=null&&(clip==='nadar'||clip==='boiar')?(clip==='boiar'?waterSurfaceY-0.77*size*heightScale:waterSurfaceY-0.32*size):surfaceH,insideZ=c.indoorLocation?(inside?.z??0):0,positionY=baseSurfaceH+(posePoint?.z??insideZ)+(motion.renderClimbZ||0)+riderLift,bodyIndex=batch.count;
     const transformUnchanged=motion.bodyBatch===batch&&motion.bodyMesh===batch.mesh&&motion.clothingMesh===batch.clothingMesh&&motion.bodyIndex===bodyIndex&&motion.bodyFrame===this.frameToken-1&&motion.bodyX===renderX&&motion.bodyY===positionY&&motion.bodyZ===renderY&&motion.bodyAngle===renderAngle&&motion.bodySize===size&&motion.bodyHeightScale===heightScale&&motion.bodyLying===lying;
     this.position.set(renderX,positionY,renderY);
     // Accessory meshes can change batch/index even while the body keeps its

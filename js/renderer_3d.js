@@ -9016,7 +9016,7 @@ export class RCT3DRenderer {
             waterGroundH=bedY(cx,cy)*(1-u)*(1-v)+bedY(cx+1,cy)*u*(1-v)+bedY(cx+1,cy+1)*u*v+bedY(cx,cy+1)*(1-u)*v;
           }
         }
-        const inDeepWater=citizenOnWater&&waterGroundH<WATER_LEVEL-0.30;
+        const inDeepWater=citizenOnWater&&waterGroundH<WATER_LEVEL-0.62;
         const waterTime=this.materials?.[TILE_WATER]?.userData?.caribbeanWaterTime?.value??0;
         const waveY=inDeepWater?waterWaveHeight(sampleX,sampleY,waterTime):0;
         const citizenSkyZ=cityCitizen&&!cityCitizen.indoorLocation&&(cityCitizen.skybridgeZ>0)?cityCitizen.skybridgeZ:0;
