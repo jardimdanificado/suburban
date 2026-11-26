@@ -131,6 +131,28 @@ export function reserveService(city,c,b,kind,resource){
  if(!ticket){ticket={citizenId:c.id,buildingId:b.id,kind,resource,joinedAt:city.minute,sequence:entrance.nextServiceTicket=(entrance.nextServiceTicket||0)+1,slot:`ficha:${entrance.nextServiceTicket}`,status:'waiting'};Object.defineProperties(ticket,{person:{value:c},queueKind:{value:queueKind(kind)}});entrance.serviceQueue.push(ticket);if(state?.queue===entrance.serviceQueue){state.initialized=true;trackTicket(city,entrance,ticket);queueChanged(entrance);}c.serviceQueue={buildingId:b.id,kind,resource,sequence:ticket.sequence};c.serviceTicket={buildingId:b.id,entranceId:entrance.id,kind,resource,sequence:ticket.sequence,joinedAt:city.minute,status:'waiting'};}
  return ticket;
 }
+export function roamAwayFromDoor(city,c,door,maxRadius=10,ahead=1,taskName='walk'){
+ if(!door||!c||c.playerControlled||c.indoorLocation||c.path?.length)return false;
+ const dist=Math.hypot(c.entity.x-door.x,c.entity.y-door.y);
+ if(dist>2.5)return false;
+ const r=Math.max(3,Math.min(10,Math.floor(maxRadius||10)));
+ const offsets=[[r,0],[-r,0],[0,r],[0,-r],[3,2],[-3,2],[3,-2],[-3,-2],[2,3],[-2,3],[2,-3],[-2,-3],[4,0],[-4,0],[0,4],[0,-4]];
+ const start=(c.id*7+(city.minute|0))%offsets.length;
+ for(let i=0,tries=0;i<offsets.length&&tries<6;i++){
+  const [dx,dy]=offsets[(start+i)%offsets.length];
+  const tx=Math.floor(door.x+dx),ty=Math.floor(door.y+dy);
+  if(!city.walkable(tx,ty))continue;
+  tries++;
+  const dest={x:tx+0.5,y:ty+0.5};
+  const path=city.findPath(c.entity,dest);
+  if(path?.length){
+   c.path=path;c.task=taskName;c.targetId=null;c.toiletTargetId=null;c.serviceQueue=null;c.facingTarget=null;
+   c.action=`Com ficha na mão (${ahead} na frente)`;
+   return true;
+  }
+ }
+ return false;
+}
 export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=null){
  const entrance=b.officeTenantOf?city.building(b.officeTenantOf)||b:b;entrance.serviceQueue??=[];
  activeEntrances(city).add(entrance);
@@ -184,8 +206,9 @@ export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=nul
  // Virtual ficha: count how many active tickets are ahead of this citizen.
  const budget=ticketRoamBudget(city,c),ahead=budget?.ahead??0;
  if(ahead>=1&&kind!=='work'&&kind!=='manage'){
-  // Far enough in line: free the citizen to work or do proportional nearby activities!
+  // Far enough in line: free the citizen and move them away from the door!
   c.task=null;c.targetId=null;c.toiletTargetId=null;c.serviceQueue=null;c.facingTarget=null;
+  roamAwayFromDoor(city,c,entrance.door||b.door,budget?.maxRadius??10,ahead,null);
   c.action=`Com ficha na mão (${ahead} na frente)`;
   return false;
  }

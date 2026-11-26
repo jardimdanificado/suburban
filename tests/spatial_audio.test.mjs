@@ -566,3 +566,39 @@ test('swimming, talking, grazing and grass rustling emit individual positional s
   for (let i = 0; i < 6; i++) await Promise.resolve();
   assert.equal(audio.playing.size, 6, '2 swimmers + 2 talkers + 2 grazing animals each emit their own positional sound');
 });
+
+test('cyclists emit individual bike sounds and grass/dirt variations resolve cleanly', async () => {
+  const context = fakeContext();
+  const citizens = [
+    { id: 1, entity: { x: 1, y: 0, destroyed: false }, ridingVehicleId: 99, ridingVehicleKind: 'bicicleta', indoorLocation: null },
+  ];
+  const audio = new SpatialAudio({
+    contextFactory: () => context,
+    random: () => 0,
+    renderer: { camX: 1, camY: 0, zoom: 4, isPerspectiveActive: () => false, camera: { position: { x: 5, y: 5, z: 5 } } },
+    getCity: () => ({ citizens, world: { map: new Uint8Array(32 * 32), width: 32, height: 32 }, buildings: [] }),
+    groundYAt: () => 0,
+    fetchImpl: async url => url.endsWith('.json')
+      ? {
+          ok: true,
+          async json() {
+            return {
+              animals: {},
+              world: {
+                bike: { local_file: 'data/audio/world/bike.ogg' },
+                footsteps_grass: { local_file: 'data/audio/world/footsteps_grass.ogg' },
+                footsteps_grass_2: { local_file: 'data/audio/world/footsteps_grass_2.ogg' },
+              },
+            };
+          },
+        }
+      : { ok: true, async arrayBuffer() { return new ArrayBuffer(8); } },
+  });
+  await audio.load();
+  audio.update(0.3);
+  citizens[0].entity.x += 0.5;
+  audio.update(0.3);
+  for (let i = 0; i < 6; i++) await Promise.resolve();
+  assert.equal(audio.playing.size, 1, 'cyclist emits bike sound');
+  assert.equal(audio.pickWorldKey(['footsteps_grass', 'footsteps_grass_2']), 'footsteps_grass');
+});
