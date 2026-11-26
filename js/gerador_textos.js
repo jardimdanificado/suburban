@@ -1,15 +1,9 @@
-// Gerador de textos em português com léxico curado e concordância explícita.
-// Cada cena nasce de uma combinação semanticamente plausível de sujeito, verbo
-// e objeto. Isso evita os verbos inventados e as concordâncias quebradas do
-// gerador antigo, que derivava palavras do catálogo geral sem validação.
-import { conjugarVerbo } from './vocabulario.js';
+// Gerador de textos em português com concordância explícita.
+// As cenas são montadas a partir do catálogo de vocabulário do jogo; este
+// arquivo guarda só a estrutura gramatical (tempo, voz, conectores, adjuntos).
+import { conjugarVerbo, classificarTemas } from './vocabulario.js';
 import { SUBSTANTIVOS, VERBOS_TRANSITIVOS } from './lexico_sinonimos.js';
-import { CENAS_EXTRA } from './cenas_extra.js';
-import { CENAS_AMPLAS_A } from './cenas_amplas_a.js';
-import { CENAS_AMPLAS_B } from './cenas_amplas_b.js';
-import { CENAS_AMPLAS_C } from './cenas_amplas_c.js';
-import { CENAS_AMPLAS_D } from './cenas_amplas_d.js';
-import { CENAS_PIXO } from './cenas_pixo.js';
+import { construirBancoDeCenas } from './cenas_do_vocabulario.js';
 
 const TEMAS = [
   'politica', 'cidade', 'trabalho', 'economia', 'moradia', 'familia',
@@ -82,319 +76,28 @@ const capitalizar = text =>
 const minusculaInicial = text =>
   text.charAt(0).toLocaleLowerCase('pt-BR') + text.slice(1);
 
-// Cena: sujeito, verbo no infinitivo, objeto direto com artigo, gênero do
-// objeto e complemento opcional (lugar, modo, finalidade).
-const C = (s, v, o, g, c = '') => {
-  if (!o) return { s, v, o: null, c };
-  const corte = o.indexOf(' ');
-  return { s, v, o: { d: o.slice(0, corte), n: o.slice(corte + 1), g }, c };
-};
+// Nome próprio no começo da oração mantém a maiúscula; artigo e pronome
+// inicial continuam sendo rebaixados quando a oração entra depois de vírgula.
+const minusculaInicialSegura = text =>
+  /^[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+$/u.test(text.split(/\s+/u)[0])
+    ? text
+    : minusculaInicial(text);
 
-export const CENAS = {
-  politica: [
-    C('A prefeitura', 'aprovar', 'o orçamento do bairro', 'm', 'no conselho municipal'),
-    C('A câmara municipal', 'debater', 'a reforma da praça', 'f', 'na sessão ordinária'),
-    C('O governo', 'ampliar', 'os programas sociais', 'm', 'para as famílias'),
-    C('A oposição', 'questionar', 'o corte de investimentos', 'm', 'na saúde'),
-    C('Os partidos', 'organizar', 'a campanha eleitoral', 'f', 'no centro da cidade'),
-    C('Os eleitores', 'cobrar', 'as propostas claras', 'f', 'dos candidatos'),
-    C('A candidatura', 'apresentar', 'um plano de moradia popular', 'm', 'para a cidade'),
-    C('O conselho popular', 'fiscalizar', 'as obras da prefeitura', 'f', 'no bairro'),
-    C('A comissão de justiça', 'analisar', 'o projeto de lei', 'm', 'na reunião'),
-    C('O prefeito', 'assinar', 'o decreto de emergência', 'm'),
-    C('Os vereadores', 'votar', 'o novo plano diretor', 'm', 'na câmara'),
-    C('A população', 'participar', '', '', 'da audiência pública'),
-    C('O tribunal eleitoral', 'julgar', 'os recursos da campanha', 'm'),
-    C('A gestão municipal', 'reduzir', 'as despesas administrativas', 'f'),
-    C('O sindicato dos servidores', 'negociar', 'o reajuste salarial', 'm', 'com o governo'),
-    C('O movimento social', 'ocupar', 'a praça central', 'f', 'em protesto'),
-    C('A imprensa', 'acompanhar', 'a apuração dos votos', 'f'),
-    C('O secretário de governo', 'explicar', 'as metas do mandato', 'f', 'à população'),
-    C('A coalizão partidária', 'dividir', 'os cargos da administração', 'm'),
-  ],
-  cidade: [
-    C('A prefeitura', 'reformar', 'a praça do bairro', 'f'),
-    C('Os moradores', 'cobrar', 'a iluminação da rua', 'f'),
-    C('A equipe municipal', 'recuperar', 'a calçada central', 'f'),
-    C('O bairro', 'ganhar', 'uma área de lazer', 'f'),
-    C('A cidade', 'enfrentar', 'o crescimento do trânsito', 'm'),
-    C('O conselho de bairro', 'acompanhar', 'as obras municipais', 'f'),
-    C('Os comerciantes', 'reclamar', '', '', 'da falta de segurança'),
-    C('A secretaria de obras', 'ampliar', 'a ciclovia', 'f'),
-    C('O centro', 'receber', 'um projeto de revitalização', 'm'),
-    C('A população', 'sugerir', 'as melhorias no transporte', 'f'),
-    C('Os vizinhos', 'organizar', 'um mutirão de limpeza', 'm'),
-    C('A prefeitura', 'investir', '', '', 'na drenagem das ruas'),
-    C('O trânsito', 'mudar', '', '', 'com a nova rotatória'),
-    C('A praça central', 'receber', 'uma feira de artesanato', 'f'),
-    C('Os moradores', 'aprovar', 'a reforma da escola local', 'f'),
-  ],
-  trabalho: [
-    C('A empresa', 'abrir', 'as novas vagas no comércio', 'f'),
-    C('Os trabalhadores', 'negociar', 'o reajuste salarial', 'm', 'com a direção'),
-    C('O sindicato', 'defender', 'os direitos dos empregados', 'm'),
-    C('A prefeitura', 'criar', 'um programa de qualificação', 'm'),
-    C('Os jovens', 'buscar', 'o primeiro emprego', 'm'),
-    C('A cooperativa', 'organizar', 'a produção local', 'f'),
-    C('Os funcionários', 'cobrar', 'as melhores condições de trabalho', 'f'),
-    C('O mercado', 'contratar', 'os técnicos de manutenção', 'm'),
-    C('A renda média', 'crescer', '', '', 'no bairro'),
-    C('Os desempregados', 'procurar', 'os cursos profissionalizantes', 'm'),
-    C('A fábrica', 'ampliar', 'o turno da noite', 'm'),
-    C('O contrato', 'garantir', 'o pagamento das horas extras', 'm'),
-    C('Os servidores públicos', 'exigir', 'a revisão do plano de carreira', 'f'),
-    C('A loja', 'oferecer', 'o treinamento aos novos atendentes', 'm'),
-  ],
-  economia: [
-    C('O comércio local', 'sentir', 'a queda das vendas', 'f'),
-    C('Os preços', 'aumentar', '', '', 'no mercado do bairro'),
-    C('O banco', 'reduzir', 'a taxa de juros', 'f'),
-    C('A prefeitura', 'arrecadar', 'os impostos', 'm'),
-    C('Os pequenos negócios', 'buscar', 'o crédito', 'm'),
-    C('A inflação', 'afetar', 'o orçamento das famílias', 'm'),
-    C('O investimento', 'crescer', '', '', 'no setor de serviços'),
-    C('A dívida pública', 'preocupar', 'os economistas', 'm'),
-    C('O mercado', 'abrir', 'as novas oportunidades de trabalho', 'f'),
-    C('Os consumidores', 'comparar', 'os preços', 'm'),
-    C('A moeda', 'cair', '', '', 'diante do dólar'),
-    C('O governo', 'anunciar', 'um pacote de incentivos', 'm'),
-    C('A cooperativa de crédito', 'atender', 'os produtores rurais', 'm'),
-    C('O lucro das empresas', 'cair', '', '', 'no trimestre'),
-    C('A feira', 'movimentar', 'a economia do bairro', 'f'),
-  ],
-  moradia: [
-    C('A prefeitura', 'entregar', 'as novas moradias populares', 'f'),
-    C('Os moradores', 'cobrar', 'a regularização dos imóveis', 'f'),
-    C('O aluguel', 'aumentar', '', '', 'no centro da cidade'),
-    C('A construtora', 'iniciar', 'as obras do condomínio', 'f'),
-    C('As famílias', 'ocupar', 'o prédio abandonado', 'm'),
-    C('O programa habitacional', 'atender', 'as famílias mais pobres', 'f'),
-    C('Os inquilinos', 'reclamar', '', '', 'das condições do imóvel'),
-    C('A comunidade', 'lutar', '', '', 'contra a remoção'),
-    C('O proprietário', 'reformar', 'a casa antiga', 'f'),
-    C('A prefeitura', 'vistoriar', 'os imóveis vazios', 'm'),
-    C('O bairro', 'receber', 'o saneamento básico', 'm'),
-    C('Os sem-teto', 'pedir', 'uma solução para a moradia', 'f'),
-    C('A imobiliária', 'anunciar', 'os novos apartamentos', 'm'),
-    C('O condomínio', 'aprovar', 'as regras de convivência', 'f'),
-    C('As famílias', 'construir', 'as casas na periferia', 'f'),
-  ],
-  familia: [
-    C('As famílias', 'compartilhar', 'o almoço de domingo', 'm'),
-    C('Os pais', 'acompanhar', 'a educação dos filhos', 'f'),
-    C('A creche', 'atender', 'as crianças do bairro', 'f'),
-    C('Os vizinhos', 'ajudar', 'as famílias mais vulneráveis', 'f'),
-    C('O casal', 'adiar', 'o casamento', 'm'),
-    C('Os jovens', 'cuidar', '', '', 'dos avós'),
-    C('A comunidade', 'celebrar', 'a festa das mães', 'f'),
-    C('Os filhos', 'herdar', 'a casa da família', 'f'),
-    C('A escola', 'chamar', 'os responsáveis', 'm', 'para uma reunião'),
-    C('As mães', 'cobrar', 'a segurança para as crianças', 'f'),
-    C('O pai', 'assumir', 'o cuidado dos filhos', 'm'),
-    C('Os irmãos', 'dividir', 'as tarefas da casa', 'f'),
-    C('A família', 'receber', 'o apoio do centro comunitário', 'm'),
-    C('Os adolescentes', 'participar', '', '', 'do projeto social'),
-    C('A vizinhança', 'organizar', 'uma festa para as crianças', 'f'),
-  ],
-  alimentacao: [
-    C('A feira', 'vender', 'as frutas e verduras frescas', 'f'),
-    C('As famílias', 'comprar', 'os alimentos', 'm', 'no mercado local'),
-    C('O restaurante popular', 'oferecer', 'as refeições baratas', 'f'),
-    C('Os agricultores', 'colher', 'a safra de milho', 'f'),
-    C('A cozinha comunitária', 'distribuir', 'os alimentos', 'm'),
-    C('Os preços dos alimentos', 'preocupar', 'os moradores', 'm'),
-    C('O banco de alimentos', 'receber', 'as doações', 'f'),
-    C('A escola', 'oferecer', 'a merenda', 'f', 'aos alunos'),
-    C('Os produtores', 'vender', 'os produtos', 'm', 'diretamente ao consumidor'),
-    C('A horta comunitária', 'produzir', 'os legumes', 'm'),
-    C('O caminhão', 'entregar', 'a comida', 'f', 'nas lojas'),
-    C('As crianças', 'aprender', '', '', 'sobre alimentação saudável'),
-    C('O açougue', 'fechar', '', '', 'por falta de carne'),
-    C('A padaria', 'ampliar', 'a produção de pães', 'f'),
-    C('Os restaurantes', 'reclamar', '', '', 'do custo dos insumos'),
-  ],
-  saude: [
-    C('O posto de saúde', 'atender', 'os moradores', 'm'),
-    C('Os médicos', 'alertar', '', '', 'sobre a dengue'),
-    C('A prefeitura', 'ampliar', 'o atendimento nas clínicas', 'm'),
-    C('Os enfermeiros', 'cobrar', 'os melhores salários', 'm'),
-    C('A farmácia popular', 'distribuir', 'os remédios', 'm'),
-    C('O hospital', 'receber', 'os novos equipamentos', 'm'),
-    C('As famílias', 'buscar', 'a vacinação para as crianças', 'f'),
-    C('O agente de saúde', 'visitar', 'as casas', 'f'),
-    C('A fila do SUS', 'preocupar', 'os pacientes', 'm'),
-    C('Os dentistas', 'atender', 'as escolas', 'f'),
-    C('A campanha', 'combater', 'a desnutrição infantil', 'f'),
-    C('Os idosos', 'receber', 'o acompanhamento médico', 'm'),
-    C('A secretaria de saúde', 'promover', 'uma campanha de vacinação', 'f'),
-    C('O pronto-socorro', 'atender', 'os casos graves', 'm'),
-    C('Os profissionais', 'denunciar', 'a falta de leitos', 'f'),
-  ],
-  mobilidade: [
-    C('Os ônibus', 'aumentar', 'a frequência', 'f', 'no horário de pico'),
-    C('A prefeitura', 'construir', 'uma nova ciclovia', 'f'),
-    C('Os passageiros', 'reclamar', '', '', 'da lotação'),
-    C('O trânsito', 'parar', '', '', 'no centro'),
-    C('A empresa de transporte', 'renovar', 'a frota', 'f'),
-    C('Os moradores', 'pedir', 'as linhas de ônibus', 'f'),
-    C('A calçada', 'receber', 'a adaptação para cadeirantes', 'f'),
-    C('O metrô', 'ampliar', 'o horário de funcionamento', 'm'),
-    C('Os motoristas', 'enfrentar', 'o congestionamento', 'm'),
-    C('A ponte', 'receber', 'a manutenção preventiva', 'f'),
-    C('As bicicletas', 'conquistar', 'o espaço nas ruas', 'm'),
-    C('A sinalização', 'melhorar', '', '', 'nos cruzamentos'),
-    C('Os pedestres', 'cobrar', 'as travessias seguras', 'f'),
-    C('A estação de trem', 'receber', 'uma reforma', 'f'),
-  ],
-  educacao_cultura: [
-    C('A escola pública', 'receber', 'os novos livros', 'm'),
-    C('Os professores', 'cobrar', 'as melhores condições de trabalho', 'f'),
-    C('A biblioteca do bairro', 'ampliar', 'o acervo', 'm'),
-    C('Os alunos', 'participar', '', '', 'do projeto de leitura'),
-    C('O teatro municipal', 'apresentar', 'uma peça gratuita', 'f'),
-    C('Os artistas locais', 'expor', 'as obras', 'f', 'no centro cultural'),
-    C('A prefeitura', 'investir', '', '', 'na educação infantil'),
-    C('Os estudantes', 'protestar', '', '', 'contra os cortes'),
-    C('O museu', 'abrir', 'uma exposição sobre a cidade', 'f'),
-    C('A banda da escola', 'ensaiar', '', '', 'no ginásio'),
-    C('Os cursos técnicos', 'formar', 'os novos profissionais', 'm'),
-    C('A feira do livro', 'movimentar', 'a praça', 'f'),
-    C('Os jovens', 'aprender', 'a música', 'f', 'no projeto social'),
-    C('A universidade', 'oferecer', 'os cursos comunitários', 'm'),
-    C('O cinema de rua', 'exibir', 'os filmes nacionais', 'm'),
-  ],
-  seguranca_justica: [
-    C('A polícia', 'reforçar', 'o patrulhamento', 'm', 'no bairro'),
-    C('Os moradores', 'cobrar', 'a segurança', 'f'),
-    C('O tribunal', 'julgar', 'o caso do assalto', 'm'),
-    C('A guarda municipal', 'orientar', 'os comerciantes', 'm'),
-    C('O crime', 'cair', '', '', 'após a instalação das câmeras'),
-    C('Os juízes', 'condenar', 'os responsáveis pela fraude', 'm'),
-    C('A defensoria pública', 'atender', 'os mais pobres', 'm'),
-    C('Os agentes', 'apreender', 'as armas', 'f'),
-    C('O sistema prisional', 'enfrentar', 'a superlotação', 'f'),
-    C('As vítimas', 'receber', 'o apoio jurídico', 'm'),
-    C('O conselho de segurança', 'debater', 'as ações da polícia', 'f', 'com a comunidade'),
-    C('O Ministério Público', 'investigar', 'o desvio de recursos', 'm'),
-    C('A justiça', 'determinar', 'a prisão dos suspeitos', 'f'),
-    C('Os policiais', 'recuperar', 'os bens roubados', 'm'),
-    C('A cidade', 'debater', 'o combate à violência', 'm'),
-  ],
-  meio_ambiente: [
-    C('A prefeitura', 'recuperar', 'a mata ciliar do rio', 'f'),
-    C('Os moradores', 'separar', 'o lixo reciclável', 'm'),
-    C('A poluição do ar', 'piorar', '', '', 'no inverno'),
-    C('O projeto de arborização', 'plantar', 'as novas árvores', 'f'),
-    C('A enchente', 'atingir', 'as casas da várzea', 'f'),
-    C('Os ambientalistas', 'defender', 'a preservação da floresta', 'f'),
-    C('A usina solar', 'gerar', 'a energia limpa', 'f'),
-    C('Os pescadores', 'reclamar', '', '', 'da água contaminada'),
-    C('A coleta seletiva', 'chegar', '', '', 'ao bairro'),
-    C('O desmatamento', 'ameaçar', 'a biodiversidade', 'f'),
-    C('A cidade', 'ampliar', 'a rede de saneamento', 'f'),
-    C('Os voluntários', 'limpar', 'a praia', 'f', 'no domingo'),
-    C('O calor extremo', 'preocupar', 'os moradores', 'm'),
-    C('A horta comunitária', 'reduzir', 'os resíduos', 'm'),
-    C('O rio', 'receber', 'um projeto de despoluição', 'm'),
-  ],
-  substancias: [
-    C('A campanha', 'alertar', '', '', 'sobre o uso de álcool'),
-    C('Os jovens', 'experimentar', 'as bebidas', 'f', 'na festa'),
-    C('O posto de saúde', 'tratar', 'a dependência química', 'f'),
-    C('A prefeitura', 'fiscalizar', 'a venda de cigarros', 'f'),
-    C('Os moradores', 'reclamar', '', '', 'do consumo de drogas na praça'),
-    C('O álcool', 'causar', 'os acidentes', 'm', 'no trânsito'),
-    C('A clínica', 'oferecer', 'o tratamento para fumantes', 'm'),
-    C('As famílias', 'buscar', 'o apoio contra o crack', 'm'),
-    C('A escola', 'promover', 'uma conversa sobre drogas', 'f'),
-    C('O comércio', 'vender', 'as bebidas', 'f', 'até tarde'),
-    C('A polícia', 'apreender', 'as drogas', 'f', 'no bairro'),
-    C('Os dependentes', 'receber', 'a ajuda', 'f', 'no centro de acolhimento'),
-    C('A lei', 'proibir', 'o fumo em locais fechados', 'm'),
-    C('Os bares', 'receber', 'a orientação sobre o consumo responsável', 'f'),
-    C('A comunidade', 'discutir', 'a redução de danos', 'f'),
-  ],
-  moda: [
-    C('Os jovens', 'adotar', 'as tendências da moda', 'f'),
-    C('A costureira', 'produzir', 'as roupas sob medida', 'f'),
-    C('A feira', 'vender', 'os tecidos e acessórios', 'm'),
-    C('Os brechós', 'conquistar', 'o espaço no bairro', 'm'),
-    C('A escola de moda', 'formar', 'os novos estilistas', 'm'),
-    C('Os artesãos', 'criar', 'as bolsas de couro', 'f'),
-    C('A loja', 'lançar', 'a coleção de verão', 'f'),
-    C('Os consumidores', 'escolher', 'as roupas sustentáveis', 'f'),
-    C('O desfile', 'apresentar', 'os trabalhos dos alunos', 'm'),
-    C('A alfaiataria', 'reformar', 'os ternos antigos', 'm'),
-    C('Os moradores', 'trocar', 'as roupas', 'f', 'na feira'),
-    C('A indústria têxtil', 'empregar', 'a comunidade', 'f'),
-    C('O sapateiro', 'consertar', 'os calçados dos vizinhos', 'm'),
-    C('A boutique', 'vender', 'as peças de designers locais', 'f'),
-    C('Os acessórios coloridos', 'atrair', 'os turistas', 'm'),
-  ],
-  esportes_lazer: [
-    C('O time do bairro', 'vencer', 'o campeonato', 'm'),
-    C('Os jovens', 'jogar', 'uma partida de futebol', 'f', 'na praça'),
-    C('A prefeitura', 'reformar', 'a quadra esportiva', 'f'),
-    C('Os moradores', 'caminhar', '', '', 'no parque'),
-    C('A piscina pública', 'receber', 'uma reforma', 'f'),
-    C('Os atletas', 'treinar', '', '', 'para a corrida'),
-    C('As crianças', 'brincar', '', '', 'no parque infantil'),
-    C('O clube', 'oferecer', 'as aulas de natação', 'f'),
-    C('A festa junina', 'reunir', 'a comunidade', 'f'),
-    C('Os ciclistas', 'percorrer', 'a orla', 'f'),
-    C('O campeonato de futebol', 'movimentar', 'a cidade', 'f'),
-    C('Os idosos', 'praticar', 'a ginástica', 'f', 'no centro'),
-    C('A praia', 'receber', 'um torneio de vôlei', 'm'),
-    C('Os moradores', 'pedir', 'as áreas de lazer', 'f'),
-    C('O ginásio', 'sediar', 'o jogo da final', 'm'),
-  ],
-  cotidiano: [
-    C('Os moradores', 'conversar', '', '', 'na calçada'),
-    C('A padaria', 'abrir', '', '', 'cedo no bairro'),
-    C('As crianças', 'voltar', '', '', 'da escola'),
-    C('Os vizinhos', 'organizar', 'a festa da rua', 'f'),
-    C('O ônibus', 'passar', '', '', 'cheio pela manhã'),
-    C('A feira', 'ocupar', 'a praça', 'f', 'no domingo'),
-    C('Os comerciantes', 'abrir', 'as lojas', 'f'),
-    C('As famílias', 'almoçar', '', '', 'juntas'),
-    C('O carteiro', 'entregar', 'as cartas', 'f'),
-    C('Os jovens', 'encontrar', 'os amigos', 'm', 'na praça'),
-    C('A cidade', 'acordar', '', '', 'com o barulho dos carros'),
-    C('Os idosos', 'descansar', '', '', 'na sombra'),
-    C('A chuva', 'alagar', 'a rua principal', 'f'),
-    C('Os moradores', 'reclamar', '', '', 'do barulho'),
-    C('O bairro', 'receber', 'a visita dos parentes', 'f'),
-  ],
-};
-
-// As cenas extras completam os pares de mesmo ator usados pela elipse e
-// ampliam o repertório sem tocar nas cenas base.
-for (const [tema, extras] of Object.entries(CENAS_EXTRA)) {
-  if (CENAS[tema]) CENAS[tema].push(...extras);
-}
-
-// Cenas amplas entram sem repetir uma cena que já exista no tema. A checagem
-// por JSON compara sujeito, verbo, objeto e complemento ao mesmo tempo.
-// A fusão é por tema, somando as cenas de cada arquivo. Espalhar os objetos
-// direto faria o último sobrescrever o tema inteiro dos anteriores.
-const CENAS_AMPLAS = {};
-for (const fonte of [CENAS_AMPLAS_A, CENAS_AMPLAS_B, CENAS_AMPLAS_C, CENAS_AMPLAS_D, CENAS_PIXO]) {
-  for (const [tema, cenas] of Object.entries(fonte)) {
-    if (!CENAS_AMPLAS[tema]) CENAS_AMPLAS[tema] = [...cenas];
-    else CENAS_AMPLAS[tema].push(...cenas);
-  }
-}
-for (const [tema, cenas] of Object.entries(CENAS_AMPLAS)) {
-  if (!CENAS[tema]) continue;
-  const existentes = new Set(CENAS[tema].map(cena => JSON.stringify(cena)));
-  for (const cena of cenas) {
-    const chave = JSON.stringify(cena);
-    if (existentes.has(chave)) continue;
-    existentes.add(chave);
-    CENAS[tema].push(cena);
-  }
-}
-
+// O banco de cenas é montado a partir do catálogo de js/vocabulario.js.
+// Não há frase pronta: só estrutura gramatical e palavras do vocabulário.
+// A montagem é preguiçosa porque js/vocabulario.js importa este módulo: com o
+// catálogo ainda em inicialização, ler `vocabulario` agora falharia.
+let bancoDeCenas = null;
+const bancoAtual = () => (bancoDeCenas ||= construirBancoDeCenas());
+export const CENAS = new Proxy({}, {
+  get: (_, chave) => bancoAtual()[chave],
+  has: (_, chave) => chave in bancoAtual(),
+  ownKeys: () => Reflect.ownKeys(bancoAtual()),
+  getOwnPropertyDescriptor: (_, chave) => {
+    const descritor = Object.getOwnPropertyDescriptor(bancoAtual(), chave);
+    return descritor ? {...descritor, configurable: true} : undefined;
+  },
+});
 const ADVERBIOS = [
   'de fato', 'aos poucos', 'em geral', 'muitas vezes',
   'cada vez mais', 'quase sempre', 'na prática', 'de imediato',
@@ -426,15 +129,16 @@ const PARTICIPIOS = {
   proteger: 'protegido', envolver: 'envolvido', resolver: 'resolvido',
 };
 
-const PASSIVAVEIS = new Set([
-  'aprovar', 'debater', 'analisar', 'fiscalizar', 'julgar', 'assinar',
-  'votar', 'reformar', 'recuperar', 'ampliar', 'construir', 'entregar',
-  'regularizar', 'iniciar', 'vistoriar', 'criar', 'organizar', 'contratar',
-  'garantir', 'arrecadar', 'anunciar', 'atender', 'investigar', 'condenar',
-  'determinar', 'instalar', 'plantar', 'limpar', 'tratar', 'distribuir',
-  'produzir', 'renovar', 'adaptar', 'melhorar', 'exibir', 'apresentar',
-  'atingir', 'ameaçar', 'preservar', 'reduzir', 'empregar', 'consertar',
-  'formar', 'sediar', 'ocupar', 'alagar', 'reforçar', 'apreender',
+// Um verbo aceita passiva quando é transitivo direto no léxico curado. A
+// regência vem do léxico, não de uma frase pronta.
+const TRANSITIVOS = new Set(Object.keys(VERBOS_TRANSITIVOS));
+const PASSIVAVEIS = TRANSITIVOS;
+
+// "Se" pronominal muda o sentido de alguns transitivos. Esta é a única lista
+// de exceção da passiva sintética; o resto dos transitivos aceita a forma.
+const NAO_PASSIVA_SE = new Set([
+  'formar', 'ocupar', 'empregar', 'tratar', 'apresentar', 'reunir', 'sentir',
+  'lembrar', 'esquecer', 'mudar', 'tornar', 'chamar', 'manter', 'dedicar',
 ]);
 
 // Relações de discurso. Cada uma tem conectores próprios e, quando precisa,
@@ -472,32 +176,13 @@ const PERFIS = {
   oficial: { passiva: 0.30, clivada: 0.04, passivaSe: 0.22, atribuicao: 0.08, frente: 0.10, inversao: 0, negacao: 0.04, adverbio: 0.10, adjunto: 0.22 },
 };
 
-// Verbos que aceitam a passiva sintética sem mudar de sentido. Ficam de fora
-// os que, com "se", viram outra coisa: formar-se (diplomar-se), ocupar-se de,
-// empregar-se, tratar-se de, apresentar-se, reunir-se.
-const PASSIVA_SE = new Set([
-  'aprovar', 'debater', 'analisar', 'fiscalizar', 'julgar', 'assinar',
-  'votar', 'reformar', 'recuperar', 'ampliar', 'construir', 'entregar',
-  'regularizar', 'iniciar', 'vistoriar', 'criar', 'organizar', 'contratar',
-  'garantir', 'arrecadar', 'anunciar', 'atender', 'investigar', 'condenar',
-  'determinar', 'instalar', 'plantar', 'limpar', 'distribuir', 'produzir',
-  'renovar', 'adaptar', 'melhorar', 'exibir', 'atingir', 'preservar',
-  'reduzir', 'consertar', 'sediar', 'alagar', 'reforçar', 'apreender',
-]);
+// Passiva sintética: todo transitivo direto, menos as exceções pronominais.
+const PASSIVA_SE = new Set([...TRANSITIVOS].filter(verbo => !NAO_PASSIVA_SE.has(verbo)));
 
 const DIZER = {
   singular: ['anunciou', 'informou', 'afirmou', 'confirmou', 'prometeu'],
   plural: ['anunciaram', 'informaram', 'afirmaram', 'confirmaram', 'prometeram'],
 };
-
-// A inversão só soa natural com verbo de movimento ou estado e adjunto
-// locativo. Com complemento preposicional ("investir na drenagem") ela vira
-// frase artificial, então esses casos ficam na ordem direta.
-const INVERSIVEIS = new Set([
-  'caminhar', 'conversar', 'descansar', 'brincar', 'passar', 'acordar',
-  'almoçar', 'voltar', 'chegar', 'treinar', 'ensaiar', 'cair', 'crescer',
-  'parar', 'protestar', 'lutar',
-]);
 
 // Complemento iniciado por "de" quase sempre completa o objeto ("a meta do
 // mês"), por isso não abre a oração. Só o adjunto locativo e temporal entra.
@@ -691,9 +376,23 @@ function emFrase(frase) {
   return `${{ a: 'na', o: 'no', as: 'nas', os: 'nos' }[partes[1]]} ${partes[2]}`;
 }
 
-// Atribuição de fala só combina com ator que pode falar. Uma praça ou um
-// índice econômico não anunciam nada; instituições e pessoas anunciam.
-const FALANTES = /^(?:A prefeitura|O governo|A câmara|A oposição|Os partidos|Os eleitores|A candidatura|O conselho|A comissão|O prefeito|Os vereadores|A população|O tribunal|A gestão|O sindicato|O movimento|A imprensa|O secretário|A coalizão|A empresa|Os trabalhadores|A cooperativa|Os funcionários|O mercado|Os desempregados|A fábrica|A loja|Os servidores|O banco|Os pequenos|Os consumidores|Os moradores|Os comerciantes|Os vizinhos|A secretaria|A equipe|A polícia|A guarda|Os juízes|A defensoria|Os agentes|As vítimas|O Ministério|A justiça|Os enfermeiros|Os médicos|Os dentistas|Os profissionais|Os professores|Os alunos|Os estudantes|Os artistas|Os atletas|Os idosos|As crianças|Os pais|As famílias|Os feirantes|Os agricultores|Os ambientalistas|Os pescadores|Os voluntários|A clínica|A escola|A universidade|A biblioteca|O teatro|O museu|A banda|O time|O clube|A padaria|O restaurante|O açougue|O hospital|O posto|A farmácia|Os jovens|As mães|O pai|Os filhos|Os irmãos|O casal|A creche|A vizinhança|O agente|O pronto-socorro)\b/iu;
+// Atribuição de fala só combina com ator que pode falar. Em vez de uma lista
+// fixa de sujeitos, a decisão usa o próprio vocabulário: nome próprio sempre
+// fala; substantivo de assunto político, trabalhista ou de justiça pode falar
+// como instituição ("a prefeitura anunciou"). Os demais ficam na voz direta.
+const CACHE_FALANTE = new Map();
+function podeFalar(sujeito) {
+  if (CACHE_FALANTE.has(sujeito)) return CACHE_FALANTE.get(sujeito);
+  let resposta = /^[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+$/u.test(sujeito);
+  if (!resposta) {
+    const nucleo = sujeito.replace(/^(?:A|O|As|Os|Um|Uma|Uns|Umas)\s+/u, '').split(/\s+/u)[0];
+    const temas = classificarTemas(nucleo);
+    resposta = temas.includes('politica') || temas.includes('trabalho')
+      || temas.includes('seguranca_justica');
+  }
+  CACHE_FALANTE.set(sujeito, resposta);
+  return resposta;
+}
 
 // Evita repetir no adjunto uma palavra já usada no objeto ou no complemento:
 // "investir mais recursos ... com mais recursos".
@@ -747,7 +446,7 @@ function montarOracao(cena, random, {
     oracao = `${cena.s} ${adverbio}${negacao}${verbo}${objeto}${complemento}${adjunto}`;
   }
 
-  if (frente) oracao = `${minusculaInicial(cena.c)}, ${minusculaInicial(oracao)}`;
+  if (frente) oracao = `${minusculaInicial(cena.c)}, ${minusculaInicialSegura(oracao)}`;
   if (meta) Object.assign(meta, {
     tipo: passiva ? 'passiva' : 'ativa',
     tempo,
@@ -821,11 +520,18 @@ function realizarOracao(cena, random, opts = {}) {
     if (opts.meta) opts.meta.tipo = 'passiva-se';
     return montarPassivaSe(cena, random);
   }
-  if (rolagem < limiteAtribuicao && cena.o && FALANTES.test(cena.s)) {
-    if (opts.meta) opts.meta.tipo = 'atribuicao';
-    return montarAtribuicao(cena, random);
+  if (rolagem < limiteAtribuicao && cena.o) {
+    // A atribuição exige ator que possa falar. Quando a cena sorteada não
+    // serve, procura outra do mesmo tema em vez de perder a construção.
+    const falante = podeFalar(cena.s)
+      ? cena
+      : (opts.cenas || []).find(outra => outra.o && podeFalar(outra.s));
+    if (falante) {
+      if (opts.meta) opts.meta.tipo = 'atribuicao';
+      return montarAtribuicao(falante, random);
+    }
   }
-  if (rolagem < limiteInversao && !cena.o && cena.c && INVERSIVEIS.has(cena.v) && ADJUNTO_INVERSIVEL.test(cena.c)) {
+  if (rolagem < limiteInversao && !cena.o && cena.c && ADJUNTO_INVERSIVEL.test(cena.c)) {
     if (opts.meta) opts.meta.tipo = 'inversao';
     return montarInversao(cena, random, opts);
   }
@@ -866,8 +572,10 @@ const PREPOSICOES_DO_SINTAGMA = new Set([
 
 function trocarCabeca(tokens, inicio, random, limite = tokens.length) {
   for (let i = inicio; i < limite; i++) {
-    if (PREPOSICOES_DO_SINTAGMA.has(tokens[i].toLocaleLowerCase('pt-BR'))) break;
-    const opcoes = SUBSTANTIVOS[tokens[i].toLocaleLowerCase('pt-BR')];
+    const token = tokens[i];
+    if (typeof token !== 'string') continue;
+    if (PREPOSICOES_DO_SINTAGMA.has(token.toLocaleLowerCase('pt-BR'))) break;
+    const opcoes = SUBSTANTIVOS[token.toLocaleLowerCase('pt-BR')];
     if (!opcoes) continue;
     const copia = tokens.slice();
     copia[i] = escolhe(opcoes, random);
@@ -948,7 +656,7 @@ function escolherCenaParaRelacao(cenas, usadas, relacao, baseAtual, random) {
   return escolhe(pool, random);
 }
 
-export function gerarFrase({ tema = null, random = Math.random, complexidade = 'variada', estilo = 'auto' } = {}) {
+export function gerarFrase({ tema = null, random = Math.random, complexidade = 'variada', estilo = 'auto', alvo = null } = {}) {
   if (typeof random !== 'function') throw new TypeError('random precisa ser uma função');
   if (!PERFIS[estilo]) throw new RangeError(`Estilo desconhecido: ${estilo}`);
   const temas = temasResolvidos(tema);
@@ -958,12 +666,17 @@ export function gerarFrase({ tema = null, random = Math.random, complexidade = '
   const usadas = new Set();
   const relacoesUsadas = new Set();
 
-  const primeiraBase = escolhe(cenas, random);
+  const alvoLimpo = typeof alvo === 'string' ? alvo.trim().replace(/\s+/gu, ' ').slice(0, 56) : '';
+  let primeiraBase = escolhe(cenas, random);
+  // O alvo entra como sujeito da primeira oração, sem artigo: nome de pessoa,
+  // partido ou apelido. O resto da cena (verbo, objeto, complemento) continua
+  // vindo do vocabulário.
+  if (alvoLimpo) primeiraBase = {...primeiraBase, s: alvoLimpo};
   usadas.add(primeiraBase);
   const primeira = aplicarVariantes(primeiraBase, random);
   const meta = {};
   let frase = realizarOracao(primeira, random, {
-    level, estilo, meta,
+    level, estilo, meta, cenas,
     intro: level !== 'simples' && random() < 0.08,
   });
   let baseAtual = primeiraBase;
@@ -1046,10 +759,10 @@ export function gerarFrase({ tema = null, random = Math.random, complexidade = '
   return `${capitalizar(frase)}.`;
 }
 
-export function gerarFraseTematica(tema, { random = Math.random, complexidade = 'variada', estilo = 'auto' } = {}) {
+export function gerarFraseTematica(tema, { random = Math.random, complexidade = 'variada', estilo = 'auto', alvo = null } = {}) {
   if (!tema) throw new RangeError(`Tema desconhecido: ${tema}`);
   temasResolvidos(tema);
-  return gerarFrase({ tema, random, complexidade, estilo });
+  return gerarFrase({ tema, random, complexidade, estilo, alvo });
 }
 
 export function gerarTituloTematico(tema = 'arte', { random = Math.random } = {}) {

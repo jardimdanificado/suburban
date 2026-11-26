@@ -36,7 +36,7 @@ test('core nouns keep gender agreement across themes',()=>{
   const wrong=['o cidade','a prefeito','um cidade','uma bairro','o família','a governo','o escola','a hospital','o casa','a projeto','o reunião','a partido','o lei','a mercado','o água','a dinheiro','o saúde','a remédio','a aluno'];
   for(const theme of TEMAS_DO_JOGO)for(let seed=0;seed<12;seed++){
     const sentence=gerarFrase({tema:theme,random:seeded(seed),complexidade:'variada'});
-    for(const phrase of wrong)assert.doesNotMatch(sentence,new RegExp(`\\b${phrase}\\b`,'iu'));
+    for(const phrase of wrong)assert.doesNotMatch(sentence,new RegExp(`(?<![\\p{L}])${phrase}(?![\\p{L}])`,'iu'));
   }
 });
 

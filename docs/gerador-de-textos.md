@@ -6,12 +6,20 @@ concordância.
 
 ## Arquivos
 
-- `js/gerador_textos.js`: motor. Guarda as cenas base e monta o discurso
-  (relações, coesão, tempo verbal, voz, negação, advérbio, adjunto).
-- `js/cenas_extra.js`: cenas adicionais, agrupadas por ator para permitir
-  elipse de sujeito.
-- `js/cenas_amplas_a.js` a `js/cenas_amplas_d.js`: banco amplo de cenas
-  curadas, separado por tema para revisão.
+- `js/gerador_textos.js`: motor. Monta o discurso (relações, coesão, tempo
+  verbal, voz, negação, advérbio, adjunto) sobre as cenas do banco.
+- `js/cenas_do_vocabulario.js`: monta o banco de cenas em tempo de execução.
+  Toda palavra de conteúdo vem do catálogo; o arquivo só guarda as regras de
+  montagem.
+- `js/cenas_padroes.js`: estruturas gramaticais extraídas das cenas antigas.
+  Artigo, substantivo, adjetivo, preposição e adjunto, sem palavra de conteúdo.
+- `js/adjetivos_frequentes.js`: recurso de vocabulário com formas de adjetivo
+  separadas por gênero e número, conferidas contra o catálogo.
+- `js/generos_frequentes.js`: recurso de vocabulário com o gênero do substantivo
+  conferido pelo spaCy. O gerador escolhe o artigo por este mapa.
+- `js/vocabulario_frequente.js`: interseção do catálogo com uma lista de
+  frequência. Também exporta `VERBOS_FREQUENTES`, conferido contra a lista de
+  verbos de fserb/pt-br.
 - `js/lexico_sinonimos.js`: variantes curadas de substantivos e verbos. Importa
   as listas amplas e funde todas sem repetir variante.
 - `js/lexico_amplo_substantivos.js`, `js/lexico_amplo_substantivos_b.js`,
@@ -21,6 +29,12 @@ concordância.
   pública (`gerarFrase`, `gerarFraseTematica`, `gerarTituloTematico`,
   `gerarSloganPartidario`, `gerarDialogoTematico`, `aquecerCatalogos`).
 - `scripts/validar_lexico_sinonimos.mjs`: confere o léxico de variantes.
+- `scripts/extrair_padroes_cenas.py`: extrai as estruturas das cenas antigas e
+  grava `js/cenas_padroes.js` e `js/adjetivos_frequentes.js`.
+- `scripts/gerar_vocabulario_frequente.py`: gera
+  `js/vocabulario_frequente.js` a partir do catálogo e da lista de verbos.
+- `scripts/gerar_generos_frequentes.py`: gera `js/generos_frequentes.js` com o
+  gênero que o spaCy atribui às palavras que o gerador pode escolher.
 - `scripts/contar_vocabulario.mjs`: conta lemas e formas que o gerador alcança.
 - `tests/vocabulario_qualidade.test.mjs`: regressão de gramática, construções,
   escala do banco e variedade.
@@ -35,15 +49,22 @@ concordância.
 
 ## Cena
 
-Cada cena é uma combinação plausível de sujeito, verbo no infinitivo, objeto
-direto e complemento opcional:
+Cada cena é uma combinação de sujeito, verbo no infinitivo, objeto direto
+opcional e complemento opcional. Não há frase pronta: o banco é montado a
+partir do catálogo de `js/vocabulario.js`.
 
 ```js
-C('A prefeitura', 'reformar', 'a praça do bairro', 'f')
+{s: 'A prefeitura', v: 'reformar', o: {d: 'a', n: 'praça do bairro', g: 'f'}, c: ''}
 ```
 
 O objeto guarda artigo e gênero para a concordância do particípio na voz
 passiva. O complemento é usado como está (lugar, modo, finalidade).
+
+As 934 estruturas de `js/cenas_padroes.js` preservam os padrões das cenas
+antigas: artigo definido ou indefinido, singular ou plural, adjetivo antes ou
+depois do substantivo, sintagma com `de`/`em`/`por`, e complemento com
+infinitivo. O preenchimento usa substantivos do tema, adjetivos concordados e
+verbos conferidos.
 
 ## Discurso
 
@@ -68,7 +89,8 @@ O motor acompanha o ator da oração anterior:
   `A prefeitura ... A administração ...`;
 - oposição e concessão preferem outro ator, para não opor alguém a si mesmo.
 
-`js/cenas_extra.js` existe para garantir pares de mesmo ator em todos os temas.
+`js/cenas_do_vocabulario.js` cria pares de mesmo ator em todos os temas para
+garantir a elipse.
 
 ## Construções
 
@@ -114,11 +136,11 @@ primeira preposição, para não trocar o núcleo de um sintagma preposicionado.
 
 ## Escala atual
 
-O banco tem 1.300 cenas: 657 sujeitos, 894 objetos e 413 verbos de cena
-distintos. O léxico curado tem 470 chaves de substantivo com 1.431 variantes e
-323 chaves de verbo com 1.424 variantes. Somando cenas e léxico, o gerador
-alcança 1.758 lemas de substantivo e 909 lemas de verbo, que viram cerca de
-2.600 e 13.600 formas flexionadas.
+O banco tem 8.207 cenas, 3.222 sujeitos, 2.089 objetos e 1.049 verbos de cena
+distintos. O léxico curado tem 484 chaves de substantivo com 1.502 variantes e
+327 chaves de verbo com 1.441 variantes. Somando cenas e léxico, o gerador
+alcança 3.781 lemas de substantivo e 1.332 lemas de verbo, que viram cerca de
+6.504 e 19.956 formas flexionadas.
 
 Os números contam lemas, não flexões: `praça` e `praças` são um lema. Para ver
 os totais atuais, rode `node scripts/contar_vocabulario.mjs`.
@@ -150,9 +172,13 @@ Para vocabulário:
 
 Para cenas:
 
-1. Prefira criar um par com ator já existente no tema, em `js/cenas_extra.js`.
-2. Mantenha verbo no infinitivo e objeto direto com artigo e gênero.
-3. Use `js/cenas_amplas_a.js` a `js/cenas_amplas_d.js` para cenas novas.
+1. Não acrescente frase pronta. Ajuste as regras de
+   `js/cenas_do_vocabulario.js` ou o vocabulário que elas consomem.
+2. Para preservar uma estrutura nova, acrescente o padrão em
+   `js/cenas_padroes.js` usando só artigo, `n`/`N` (substantivo singular ou
+   plural), `j` (adjetivo), `p:preposição`, `f:palavra funcional` e `V`
+   (infinitivo).
+3. Mantenha verbo no infinitivo e objeto direto com artigo e gênero.
 4. Rode a suíte de qualidade e confira amostras com sementes baixas.
 
 Verbos exigem cuidado extra. Só entram na lista de variantes os que aceitam

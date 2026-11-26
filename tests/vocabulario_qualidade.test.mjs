@@ -203,16 +203,33 @@ test('discourse engine reaches every advanced construction', () => {
       frases.push(gerarFrase({ tema, random: seeded(seed * 53 + 17), complexidade: 'complexa' }));
     }
   }
+  // Formas conjugadas dos verbos transitivos curados. A elipse de sujeito é
+  // reconhecida quando a oração depois de "e" começa por uma delas, sem artigo.
+  const formasElipse = new Set();
+  for (const verbo of Object.keys(VERBOS_TRANSITIVOS)) {
+    for (const tempo of ['presente', 'pretérito-perfeito', 'pretérito-imperfeito', 'futuro', 'condicional', 'subjuntivo-presente']) {
+      for (const numero of ['singular', 'plural']) {
+        const forma = conjugarVerbo(verbo, { tempo, pessoa: 3, numero });
+        if (forma) formasElipse.add(forma);
+      }
+    }
+  }
   const padroes = {
     clivada: /^(?:Foi|Foram) .+ que /u,
     passivaSintetica: /(?:^|[;,])\s*\p{L}+-se (?:a|o|as|os)\b/iu,
     atribuicao: /\b(?:anunciou|informou|afirmou|confirmou|prometeu|anunciaram|informaram|afirmaram|confirmaram|prometeram) que (?:vai|vão)\b/u,
     adjuntoFronteado: /^(?:No|Na|Nos|Nas|Em|Com|Sem|Sob|Entre|Durante|Desde|Após|Antes|Até) [^,]+,/u,
-    elipseDeSujeito: /,? e (?:\p{L}+ ){0,3}(?:reform|ampli|pint|cobr|contrat|acompanh|oferec|orient|visit|plant|limp|organiz|vend|entreg|discut|fiscaliz|aprov|invest|regulariz|ilumin|ajud|aument|propor|esper|abr)/iu,
+    elipseDeSujeito: frase => {
+      for (const achado of frase.matchAll(/(?:^|\s)e\s+(\p{L}+)/gu)) {
+        if (formasElipse.has(achado[1])) return true;
+      }
+      return false;
+    },
     retomada: /\b(?:A administração|A gestão|O executivo|O poder público|O distrito|A metrópole|Os habitantes|Os residentes|A instituição|As instituições|O colegiado|A pasta|A mídia|A companhia|A firma|A indústria|A empreiteira|A associação|Os estudantes|Os docentes|Os agentes|Os ecologistas|Os locatários|Os usuários|Os condutores)\b/u,
   };
   for (const [nome, padrao] of Object.entries(padroes)) {
-    assert(frases.some(frase => padrao.test(frase)), `construção ausente: ${nome}`);
+    const achou = frases.some(frase => (typeof padrao === 'function' ? padrao(frase) : padrao.test(frase)));
+    assert(achou, `construção ausente: ${nome}`);
   }
 });
 
