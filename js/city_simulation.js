@@ -1244,7 +1244,8 @@ export class CitySimulation {
     else if (this.substances?.routeBar(c))return;
     else if (n.social < 60) { task = 'social'; type = 'leisure'; }
     if(ficha&&!urgent&&ficha.ahead>=1&&ficha.ticket.status!=='called'&&(task===ficha.ticket.kind||(task==='food'&&['food','workmeal','supplies'].includes(ficha.ticket.kind)))){
-      if(company&&this.hour>=8&&this.hour<17&&withinFichaRadius(company.door)){task='manage';type='company';}
+      if(wantsSleep(this,c)&&(!home||withinFichaRadius(home.door))){task='energy';type='home';}
+      else if(company&&this.hour>=8&&this.hour<17&&withinFichaRadius(company.door)){task='manage';type='company';}
       else if(job&&c.role!=='councilor'&&this.hour>=8&&this.hour<17&&withinFichaRadius(job.door)){task='work';type='job';}
       else{task='leisure';type='leisure';}
     }
@@ -1773,7 +1774,7 @@ export class CitySimulation {
       if(c.sharedBoatRide){if(this.urgentNeed(c)&&c.sharedBoatRide.state==='approaching')releaseSharedPassenger(this,c,{cancel:true});else continue;}
       if(c.mobilityTrip||c.ridingVehicleId)continue;
       let mealAdvanced=false;if(c.workMeal){if(citizenDetail)measureCitizen('workMealAdvance',()=>{mealAdvanced=this.workMeals.advance(c);});else mealAdvanced=this.workMeals.advance(c);}if(mealAdvanced)continue;
-      if(c.task!=='energy'&&!(c.task==='vote'&&n.energy>=25)&&wantsSleep(this,c)&&!c.deliveryId&&!c.cleaningJobId&&!c.conversation&&!NO_SLEEP_INTERRUPT_TASKS.has(c.task)){c.task=null;c.path=[];}
+      if(c.task!=='energy'&&!(c.task==='vote'&&n.energy>=25)&&wantsSleep(this,c)&&!c.swimming&&!(c.serviceTicket&&c.serviceTicket.status!=='called')&&!c.deliveryId&&!c.cleaningJobId&&!c.conversation&&!NO_SLEEP_INTERRUPT_TASKS.has(c.task)){c.task=null;c.path=[];}
       const urgent = this.urgentNeed(c);
       if(c.task==='energy'&&c.sleep?.active&&!c.path.length&&(!urgent||urgent==='energy')){this.performTask(c);continue;}
       if (urgent && c.conversation) { const other = this.society.citizen(c.conversation.a === c.id ? c.conversation.b : c.conversation.a); if (other) other.conversation = null; c.conversation = null; }
