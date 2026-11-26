@@ -91,7 +91,7 @@ const SERTANEJO_STYLES=Object.fromEntries(SERTANEJO_FORMS.flatMap(form=>SERTANEJ
 ])));
 // Adapted from Brutopolis' inherited surnames, individual traits and house-style catalogue.
 // Pure data/helpers keep these features usable both in the worker and the UI.
-export const TRAIT_LABELS = { diligence: 'Dedicação', empathy: 'Empatia', honesty: 'Honestidade', skepticism: 'Ceticismo', riskTolerance: 'Tolerância a risco', frugality: 'Frugalidade', ambition: 'Ambição' };
+export const TRAIT_LABELS = { diligence: 'Dedicação', empathy: 'Empatia', honesty: 'Honestidade', skepticism: 'Ceticismo', riskTolerance: 'Tolerância a risco', frugality: 'Frugalidade', ambition: 'Ambição', cleanliness: 'Limpeza', patience: 'Paciência', vitality: 'Disposição', openness: 'Abertura' };
 export const HOUSE_STYLES = {
   adobe: { label: 'Alvenaria de barro', wall: 0xd2965a, roof: 0x945c42, roofKind: 'gable' },
   cottage: { label: 'Casa de pedra', wall: 0xc8c8c8, roof: 0x626d70, roofKind: 'hip' },

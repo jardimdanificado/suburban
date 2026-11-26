@@ -545,8 +545,8 @@ export class TerrainTracks {
       }
       if(citizen&&contacts.length){
         const tx=Math.floor(x),tz=Math.floor(z),tile=world.getTile?world.getTile(tx,tz):world.map?.[tz*world.width+tx];
-        if(dirtDeposits.length)city?.sanitation?.soilCitizen?.(citizen,'barro',.06,null,'feet');
-        else if(tile===TILE_ROAD_GRASS||tile===TILE_ROAD_HILL||tile===TILE_HILL)city?.sanitation?.soilCitizen?.(citizen,'terra',.025,null,'feet');
+        if(dirtDeposits.length&&(citizen.dirtSources?.barro||0)<40)city?.sanitation?.soilCitizen?.(citizen,'barro',.025,null,'feet');
+        else if((tile===TILE_ROAD_GRASS||tile===TILE_ROAD_HILL||tile===TILE_HILL)&&(citizen.dirtSources?.terra||0)<35)city?.sanitation?.soilCitizen?.(citizen,'terra',.01,null,'feet');
       }
       if(groundSources.size||this.paintCarry.history.has(entity)){
         paintStamps.push(...this.paintCarry.contacts(entity,contacts,world,groundSources,(item,u,v,stamp)=>onStepGroundSource(item,u,v,stamp,citizen)));

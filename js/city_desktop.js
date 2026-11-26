@@ -9,6 +9,7 @@ import {WindowManager} from './window_manager.js';
 import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js?v=favorite-window-icons-3';
 import {clipCanvasRegion} from './canvas_widgets.js';
+import {createSimulationNoticeTracker,pollSimulationNotices} from './city_simulation_notices.js';
 
 export const CITY_WINDOWS=[['mayor','Modo Partidário'],['city','Cidade'],['government','Governo'],['people','Cidadãos'],['land','Terrenos e obras'],['buildings','Imóveis'],['economy','Empresas'],['market','Mercado e riquezas'],['production','Produção'],['transport','Transportes'],['world','Mundo e rotas'],['urban-art','Arte urbana'],['safety','Segurança'],['forensics','IML e corpos'],['justice','Justiça'],['custody','Prisões'],['sanitation','Saneamento'],['publications','Jornais e livros'],['corruption','Corrupção'],['log','Histórico'],['favorites','Favoritos'],['custom-history','Histórico personalizado'],['map','Mapa da cidade']];
 const sizes={mayor:[660,640],family:[650,640],market:[700,500],party:[560,570],contract:[530,500],'poll-response':[560,560],'party-organization':[560,500],election:[610,510],publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],world:[570,540],'urban-art':[650,500],safety:[670,520],forensics:[650,520],justice:[700,540],custody:[640,520],sanitation:[570,450],log:[530,450],favorites:[460,420],'custom-history':[370,270],newgame:[400,470]};
@@ -305,7 +306,7 @@ export class CityDesktop {
     else {w.state.element.hidden=true;w.state.zones=[];}
   }
   draw(ui){
-    if(this.notifications)this.syncElectionNotices();
+    if(this.notifications){this.syncElectionNotices();this.syncSimulationNotices();}
     const point=ui.pointer,hover=point&&this.manager.at(point.x,point.y),resize=hover&&this.manager.resizeAt(hover,point.x,point.y);if(ui.canvas.style)ui.canvas.style.cursor=this.manager.gesture?.kind==='resize'||resize?'nwse-resize':this.manager.gesture?.kind==='move'||hover&&this.manager.caption(hover,point.x,point.y)?'move':'default';
     if(this.element.hidden===this.visible)this.element.hidden=!this.visible;if(this.visible){for(const [i,w] of this.manager.windows.entries()){const rect=this.manager.rect(w),covered=this.manager.windows.slice(i+1).some(above=>{const r=this.manager.rect(above);return r.x<=rect.x&&r.y<=rect.y&&r.x+r.w>=rect.x+rect.w&&r.y+r.h>=rect.y+rect.h;});if(covered){w.state.element.hidden=true;w.state.zones=[];continue;}if(w.state.element.hidden)w.state.element.hidden=false;this.frame(ui,w);}this.occludeInputs();const hit=point&&ui.hitTest(point.x,point.y);if(hit?.label){const key=hit.label;if(this.hoverHint?.key!==key)this.hoverHint={key,since:performance.now()};if(/^(Fechar|Fixar|Recolher|Ampliar|Redimensionar):/.test(key)||performance.now()-this.hoverHint.since>600)this.tooltip={text:key,x:point.x,y:point.y+24};}else this.hoverHint=null;}
     ui.regions.push(...(this.menuBarRegions||[]));
@@ -349,6 +350,28 @@ export class CityDesktop {
       p.button('DISPENSAR AVISO',()=>this.close('page:mayor-notice'));
     }});
     state.mayorNoticeId=task.id;state.onClose=()=>this.mayorReadNotices.add(task.id);
+  }
+  syncSimulationNotices(){
+    if(mayorPlaying(this.city)||this.menuOpen)return;
+    const tracker=this.simNoticeTracker??=createSimulationNoticeTracker();
+    pollSimulationNotices(this.city,tracker);
+    if(this.manager.find('page:sim-notice')||!tracker.queue.length)return;
+    const notice=tracker.queue.shift();
+    const state=this.openPage('sim-notice',{title:notice.title,width:400,height:240,draw:p=>{
+      const remaining=tracker.queue.length;
+      p.heading(remaining?`${notice.title} (+${remaining} na fila)`:notice.title);
+      p.note(notice.text||'');
+      if(notice.billId!=null)p.button('VER PROJETO',()=>{this.close('page:sim-notice');const panel=this.openModule('government');if(panel){panel.section='council';panel.billId=notice.billId;}});
+      else if(notice.justiceCaseId!=null)p.button('VER OCORRÊNCIA',()=>{this.close('page:sim-notice');const panel=this.openModule('justice');if(panel){panel.section='cases';panel.justiceCaseId=notice.justiceCaseId;}});
+      else if(notice.corruptionCaseId!=null)p.button('VER CORRUPÇÃO',()=>{this.close('page:sim-notice');this.openCorruption(notice.corruptionCaseId);});
+      else if(notice.eventId!=null)p.button('VER EVENTO',()=>{this.close('page:sim-notice');this.openEvent(notice.eventId);});
+      const targetCitizen=notice.citizenIds?.map(id=>this.city.society.citizen(id)).find(c=>c&&!c.entity.destroyed);
+      if(targetCitizen)p.button('IR AO LOCAL',()=>{this.camera?.(targetCitizen.entity.x,targetCitizen.entity.y);this.select?.(targetCitizen.entity);});
+      else if(notice.position)p.button('IR AO LOCAL',()=>{this.camera?.(notice.position.x,notice.position.y);});
+      p.button(remaining?'PRÓXIMO AVISO':'DISPENSAR',()=>this.close('page:sim-notice'));
+      p.button('SILENCIAR AVISOS',()=>{this.notifications=false;tracker.queue.length=0;this.close('page:sim-notice');});
+    }});
+    state.simNoticeId=notice.id;
   }
   drawMap(ui,w){
     const state=w.state,world=this.city.world;state.zones=[];for(const input of state.inputs || [])input.hidden=true;

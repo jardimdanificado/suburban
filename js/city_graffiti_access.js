@@ -130,7 +130,7 @@ export function reachUpperGraffiti(city,c,mission){
   mission.accessFailed=true;return false;
  }
  if(c.climbing.phase==='up'&&c.climbing.z>=c.climbing.targetZ){c.climbing.phase='painting';return true;}
- if(c.climbing.phase==='down'&&c.climbing.z<=0){c.climbing=null;c.skybridgeZ=0;c.facingTarget=null;return true;}
+ if(c.climbing.phase==='down'&&c.climbing.z<=.02){c.climbing=null;c.skybridgeZ=0;c.facingTarget=null;return true;}
  c.action=c.climbing.phase==='down'?'Descendo da parede após pichar':`Escalando o ${currentFloor}º andar para pichar`;
  return false;
 }

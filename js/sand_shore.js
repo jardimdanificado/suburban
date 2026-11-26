@@ -2,8 +2,8 @@ import {cachedWaterGeometry} from './water_geometry_cache.js?v=terrain-revision-
 import {WATER_LEVEL} from './water_surface.js?v=shore-runup-2';
 import {TILE_SAND,TILE_WATER} from './world_gen.js';
 import {terrainCornerHeight,terrainTileTouchesStone,terrainSurfaceElevation} from './road_terrain_geometry.js?v=low-water-shore-4';
-export const BEACH_RAMP_WIDTH=3.20;
-export const BEACH_BED_HEIGHT=-.30;
+export const BEACH_RAMP_WIDTH=1.65;
+export const BEACH_BED_HEIGHT=WATER_LEVEL-.36;
 
 export function isSlopingBeachTile(world,x,z){
   return x>=0&&z>=0&&x<world.width&&z<world.height&&world.getTile(x,z)===TILE_SAND&&!world.hasSidewalk?.(x,z)&&!terrainTileTouchesStone(world,x,z);

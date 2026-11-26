@@ -7189,7 +7189,7 @@ export class RCT3DRenderer {
         }
       }
       const depthFactor = Math.max(0, Math.min(1, (minLandDist - 0.8) / 3.2));
-      const y = WATER_LEVEL - 0.24 - depthFactor * 0.64 + Math.sin(px * 0.65) * Math.cos(pz * 0.55) * 0.03;
+      const y = WATER_LEVEL - 0.32 - depthFactor * 0.58 + Math.sin(px * 0.65) * Math.cos(pz * 0.55) * 0.03;
       return { y, depthFactor };
     };
     const waterBedSample = (px, pz, localProfile = null) => {
@@ -9016,7 +9016,7 @@ export class RCT3DRenderer {
             waterGroundH=bedY(cx,cy)*(1-u)*(1-v)+bedY(cx+1,cy)*u*(1-v)+bedY(cx+1,cy+1)*u*v+bedY(cx,cy+1)*(1-u)*v;
           }
         }
-        const inDeepWater=citizenOnWater&&(waterGroundH<WATER_LEVEL-0.22||(cityCitizen.swimming&&waterGroundH<WATER_LEVEL-0.12));
+        const inDeepWater=citizenOnWater&&waterGroundH<WATER_LEVEL-0.30;
         const waterTime=this.materials?.[TILE_WATER]?.userData?.caribbeanWaterTime?.value??0;
         const waveY=inDeepWater?waterWaveHeight(sampleX,sampleY,waterTime):0;
         const citizenSkyZ=cityCitizen&&!cityCitizen.indoorLocation&&(cityCitizen.skybridgeZ>0)?cityCitizen.skybridgeZ:0;

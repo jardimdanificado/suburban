@@ -226,7 +226,7 @@ export class CitySanitation {
   }
   disgustNearby(place,offender){
     const city=this.city,amount=place.scope==='building'?city.building(place.buildingId)?.feces?.get(place.cellKey)?.amount:this.streetFeces.get(place.cellKey)?.amount;
-    for(const person of city.citizens){if(person===offender||person.entity.destroyed)continue;const inside=person.indoorLocation,near=place.scope==='street'?!inside&&Math.hypot(person.entity.x-place.x,person.entity.y-place.y)<=3:inside?.buildingId===place.buildingId&&Math.hypot((inside.position?.x||0)-place.x,(inside.position?.y||0)-place.y)<=3;if(!near)continue;const disgust=Math.min(7,1+(amount||1)*.5);person.mood=Math.max(-25,(person.mood||0)-disgust);person.needs.hygiene=clamp(person.needs.hygiene-disgust*.35);person.lastFecesDisgustAt=city.minute;}
+    for(const person of city.citizens){if(person===offender||person.entity.destroyed)continue;const inside=person.indoorLocation,near=place.scope==='street'?!inside&&Math.hypot(person.entity.x-place.x,person.entity.y-place.y)<=3:inside?.buildingId===place.buildingId&&Math.hypot((inside.position?.x||0)-place.x,(inside.position?.y||0)-place.y)<=3;if(!near)continue;const cleanliness=person.traits?.cleanliness??.5,disgust=Math.min(7,1+(amount||1)*.5)*(.5+cleanliness);person.mood=Math.max(-25,(person.mood||0)-disgust);person.needs.hygiene=clamp(person.needs.hygiene-disgust*.35);person.lastFecesDisgustAt=city.minute;}
   }
   exposeNearby(){
     const city=this.city,expose=(x,y,amount,buildingId=null)=>{if(amount<2)return;for(const person of city.citizens){if(person.entity.destroyed||city.minute-(person.lastFecesExposureAt||-Infinity)<60)continue;const location=person.indoorLocation,near=buildingId!=null?location?.buildingId===buildingId&&Math.hypot((location.position?.x||0)-x,(location.position?.y||0)-y)<=2.2:!location&&Math.hypot(person.entity.x-x,person.entity.y-y)<=2.2;if(!near)continue;const dose=Math.min(3,amount*.18);person.needs.hygiene=clamp(person.needs.hygiene-dose);this.soilCitizen(person,'bosta',Math.max(2,dose*3));person.mood=Math.max(-25,(person.mood||0)-dose*.45);person.lastFecesExposureAt=city.minute;}};
@@ -254,7 +254,8 @@ export class CitySanitation {
      if (!trespass&&!this.city.transfer(this.city.payerFor(c), b.accountId, f.price, 'Serviço: Banheiro')) { c.task = null; return false; }
       b.lastToiletUseAt = this.city.minute; f.occupantId = c.id; f.busyUntil = this.city.minute + 20; f.uses++;
       const quality = f.cleanliness;
-      c.mood = Math.max(-25, Math.min(25, (c.mood || 0) + (quality >= 95 ? 6 : quality < 25 ? -9 : quality < 60 ? -4 : 0)));
+      const cleanlinessScale = 0.5 + (c.traits?.cleanliness ?? 0.5);
+      c.mood = Math.max(-25, Math.min(25, (c.mood || 0) + (quality >= 95 ? 6 : quality < 25 ? -9 * cleanlinessScale : quality < 60 ? -4 * cleanlinessScale : 0)));
       if (quality < 25) { c.needs.hygiene = clamp(c.needs.hygiene - 5); c.needs.health = clamp(c.needs.health - 1);c.healthDepletionSource='insalubridade e falta de higiene'; }
       f.cleanliness = clamp(f.cleanliness - SANITATION_RULES.dirtPerUse);
       this.addWaste(b, SANITATION_RULES.wastePerUse);if('fezes' in b.inventory&&inventoryFree(b)>=1){b.inventory.fezes++;this.city.economy.produced.fezes++;this.city.economy.recordGoods('feces-collected','fezes',1,null,b.id);} c.servicePaid = f.id;

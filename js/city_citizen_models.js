@@ -47,7 +47,10 @@ export function citizenAnimation(c,moving=false,inWater=undefined){
     if(BIKE_KINDS.has(c.ridingVehicleKind))return c.ridingAsPassenger?'sentado_no_banco':'seated';
     return GLIDE_KINDS.has(c.ridingVehicleKind)?'glide':'passenger';
   }
-  if(c.climbing&&(c.climbing.phase!=='down'||c.climbing.z>.02))return c.climbing.phase==='painting'?'pichar':'escalar';
+  if(c.climbing){
+    if(c.climbing.phase==='painting')return 'escalar_parado';
+    if(c.climbing.phase!=='down'||c.climbing.z>.05)return 'escalar';
+  }
   const substance=activeSubstanceEffect(c);
   if(inWater!==undefined?inWater:c.swimming)return moving?'nadar':'boiar';
   if(moving){
@@ -91,6 +94,7 @@ export function citizenFrame(clip,time,phase=0,oneShot=false){
   if(clip==='mount'||clip==='passenger')return FRAME_POSES.use[0];
   if(clip==='seated')return FRAME_POSES.use[2];
   if(clip==='glide')return FRAME_POSES.use[1];
+  if(clip==='escalar_parado')return FRAME_POSES.escalar[0];
   const sequence=clip==='pedal'?[0,2,4]:clip==='use'?[0,1]:CITIZEN_MODEL_FRAMES[clip]||CITIZEN_MODEL_FRAMES.idle,poseClip=clip==='pedal'?'run':clip in CITIZEN_MODEL_FRAMES?clip:'idle';
   if(sequence.length===1)return FRAME_POSES[poseClip][sequence[0]];
   const fps=clip==='caminhar'?6.5:clip.endsWith('_andar')?6:ACTION_CLIPS.has(clip)?8:clip.startsWith('dancar_')?5:clip==='conversar'?2.5:4,index=Math.floor(Math.max(0,time)*fps+phase),frame=sequence[oneShot?Math.min(index,sequence.length-1):index%sequence.length];
@@ -642,7 +646,7 @@ if (vCitizenDirt.a > 0.05) {
     // the seated body back into the walking one at the seat anchor.
     const settledFurniture=!!c.furnitureUse?.seated||c.furnitureUse?.pose==='lying';
     const traveling=citizenHasPath(c)||!!c.indoorLocation?.path?.length||!settledFurniture&&(moved||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding');
-    const sleeping=citizenIsSleeping(c),lying=!sleeping&&!traveling&&c.furnitureUse?.pose==='lying',clip=citizenAnimation(c,traveling,inWater),actionState=clip==='murro'||clip==='chute'||clip==='derrotado',actionToken=c.combatAnimation?.sequence??c.combatReaction?.sequence??c.unconsciousUntil??null;
+    const sleeping=citizenIsSleeping(c),lying=!sleeping&&!traveling&&c.furnitureUse?.pose==='lying',rawClip=citizenAnimation(c,traveling,inWater),clip=(rawClip==='escalar'&&c.climbing?.phase==='down'&&(motion.renderClimbZ??c.climbing.z)<=.05)?citizenAnimation({...c,climbing:null},traveling,inWater):rawClip,actionState=clip==='murro'||clip==='chute'||clip==='derrotado',actionToken=c.combatAnimation?.sequence??c.combatReaction?.sequence??c.unconsciousUntil??null;
     // The seated OBJ pose puts the legs in the same vertical bands used by
     // the standing-body fat mask. Cap its morph so those vertices do not
     // balloon sideways while sitting; standing citizens retain the full shape.
@@ -777,8 +781,8 @@ if (vCitizenDirt.a > 0.05) {
       this.setInstanceColor(toolBatch.mesh,toolBatch.count,this.color);
       toolBatch.count++;
     }
-    if((c.dead||dirtVisual.level>=82)&&!dimmed&&this.THREE.BoxGeometry&&this.THREE.MeshBasicMaterial){
-      const fliesPerCitizen=c.dead?6:Math.min(6,3+Math.floor((dirtVisual.level-82)/6));
+    if((c.dead||(dirtVisual.level>=90&&!c.swimming))&&!dimmed&&this.THREE.BoxGeometry&&this.THREE.MeshBasicMaterial){
+      const fliesPerCitizen=c.dead?6:Math.min(6,3+Math.floor((dirtVisual.level-90)/4));
       if(this.flyCount+fliesPerCitizen>this.flyCapacity){
         const cap=Math.max(64,(this.flyCapacity||32)*2),geo=new this.THREE.BoxGeometry(.025,.016,.025),mat=new this.THREE.MeshBasicMaterial({color:0x16181c}),mesh=new this.THREE.InstancedMesh(geo,mat,cap);
         mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);mesh.frustumCulled=false;

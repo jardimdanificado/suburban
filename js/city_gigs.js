@@ -32,7 +32,7 @@ function artworkFacadeSides(building,unit){
 function solidArtworkWallSide(building,unit){const {facade,blocked,windowBit}=artworkFacadeSides(building,unit);return facade.find(([,, ,bit])=>!blocked.has(bit)&&bit!==windowBit)?.[0]||null;}
 function artworkWindowSide(building,unit){const {facade,windowBit}=artworkFacadeSides(building,unit);return unit.hasWindow?facade.find(([, , ,bit])=>bit===windowBit)?.[0]||null:null;}
 export class CityGigs{
- constructor(city){this.city=city;this.jobs=[];this.nextId=1;this.completed=0;this.lastSpontaneousArtworkDay=null;this.lastSpontaneousArtworkAt=-Infinity;this.artworkTitleMigrationVersion=0;}
+ constructor(city){this.city=city;this.jobs=[];this.nextId=1;this.completed=0;this.lastSpontaneousArtworkDay=null;this.lastSpontaneousArtworkAt=-Infinity;this.artworkTitleMigrationVersion=0;this.lastCleanupProgramAt=-Infinity;this.cleanupProgram=null;}
  migrateLegacyArtworkTitles(){if(this.artworkTitleMigrationVersion>=1)return;const city=this.city,spontaneous=new Set((city.history?.entries||[]).filter(entry=>entry.artId!=null&&entry.data?.kind==='spontaneous-artwork').map(entry=>entry.artId));for(const piece of city.justice?.art||[]){const legacyFixed=piece.kind==='flags'&&piece.creatorId!=null&&piece.sponsorId===piece.creatorId&&/^Nossa janela, nossa voz(?: · .+)?$/u.test(piece.message||''),loggedSpontaneous=spontaneous.has(piece.id);if(!loggedSpontaneous&&!legacyFixed)continue;piece.message=spontaneousArtworkTitle(city);if(piece.entity?.properties)piece.entity.properties.name=`${city.justice.labelArt(piece.kind)}: ${piece.message.slice(0,42)}`;}this.artworkTitleMigrationVersion=1;}
  get(id){return this.jobs.find(j=>j.id===id);}
  quote(buildingId,scope='interior',payerAccountId=null){const b=this.city.building(buildingId);if(!b)return 0;const city=this.city;if(scope==='repair')return Math.ceil(city.currency.price(1400+Math.max(0,75-(b.condition||100))*45)*(payerAccountId==='treasury'?1.5:1));if(scope==='garden')return Math.ceil(city.currency.price(1800)*(payerAccountId==='treasury'?1.5:1));return cleanFee(city,b,scope,payerAccountId);}
@@ -109,7 +109,7 @@ export class CityGigs{
  gardenPoint(b){const city=this.city,x=Math.floor(b.entity.x),y=Math.floor(b.entity.y),points=[];for(let px=x-1;px<=x+b.width;px++){points.push([px,y-1],[px,y+b.depth]);}for(let py=y;py<y+b.depth;py++)points.push([x-1,py],[x+b.width,py]);for(const [gx,gy]of points)if(city.walkable(gx,gy)&&city.nature.available(gx,gy,'berry',b.id))return {x:gx+.5,y:gy+.5,tileX:gx,tileY:gy};return null;}
  createRepairOrder(payerAccountId,buildingId,{fee=null}={}){const city=this.city,b=city.building(buildingId);if(!b||b.constructionKind==='open-air'||!b.units.length||!city.accounts.has(payerAccountId)||!(b.repairNeeded||b.condition<85)||this.jobs.some(j=>j.kind==='repair'&&j.buildingId===b.id&&ACTIVE.has(j.status)))return false;const amount=fee??this.quote(b.id,'repair',payerAccountId),unit=b.units.find(u=>['workspace','office','service'].includes(u.roomType))||b.units[0];return this.reserveOrder(payerAccountId,b,{kind:'repair',scope:'interior',fee:amount,unitId:unit.id,required:24});}
  createGardenOrder(payerAccountId,buildingId,{fee=null}={}){const city=this.city,b=city.building(buildingId),point=b&&this.gardenPoint(b);if(!b||!point||!city.accounts.has(payerAccountId)||this.jobs.some(j=>j.kind==='gardening'&&j.buildingId===b.id&&ACTIVE.has(j.status)))return false;const amount=fee??this.quote(b.id,'garden',payerAccountId);return this.reserveOrder(payerAccountId,b,{kind:'gardening',scope:'outdoor',fee:amount,point,required:18});}
- reserveOrder(payerAccountId,b,{kind,scope,fee,unitId=null,point=null,required=20}){const city=this.city;if(!Number.isSafeInteger(fee)||fee<1||(city.accounts.get(payerAccountId)?.balance||0)<fee)return false;const id=this.nextId++,accountId=`gig:${id}`,account={name:`Serviço autônomo ${id}`,balance:0};city.accounts.set(accountId,account);if(!city.transfer(payerAccountId,accountId,fee,`Reserva de bico de ${kind}`,{gigId:id,buildingId:b.id})){city.accounts.delete(accountId);return false;}const job={id,accountId,payerAccountId,buildingId:b.id,unitId,point,kind,scope,fee,status:'open',workerId:null,progress:0,required,createdAt:city.minute,completedAt:null};this.jobs.push(job);const label=kind==='art-removal'?'retirada de obra de arte':kind==='art-cleaning'?'limpeza de pichação':kind==='art-installation'?'instalação de arte urbana':kind==='repair'?'pequeno reparo':'jardinagem';city.history.record('service',`Bico de ${label} anunciado para ${b.entity.properties.name}.`,[payerAccountId,b.accountId],{kind:'gig-posted',gigId:id,buildingId:b.id,service:kind,amount:fee,createdAt:city.minute});city.log(`Bico de ${label} #${id} anunciado.`,'work',[],{kind:'gig-posted',gigId:id,buildingId:b.id,service:kind,accounts:[payerAccountId],amount:fee});return job;}
+ reserveOrder(payerAccountId,b,{kind,scope,fee,unitId=null,point=null,required=20}){const city=this.city;if(!Number.isSafeInteger(fee)||fee<1||(city.accounts.get(payerAccountId)?.balance||0)<fee)return false;const id=this.nextId++,accountId=`gig:${id}`,account={name:`Serviço autônomo ${id}`,balance:0};city.accounts.set(accountId,account);if(!city.transfer(payerAccountId,accountId,fee,`Reserva de bico de ${kind}`,{gigId:id,buildingId:b.id})){city.accounts.delete(accountId);return false;}const job={id,accountId,payerAccountId,buildingId:b.id,unitId,point,kind,scope,fee,status:'open',workerId:null,progress:0,required,createdAt:city.minute,completedAt:null};this.jobs.push(job);const label=kind==='art-removal'?'retirada de obra de arte':kind==='art-cleaning'?'limpeza de pichação':kind==='art-installation'?'instalação de arte urbana':kind==='repair'?'pequeno reparo':kind==='public-cleaning'?'limpeza pública':'jardinagem';city.history.record('service',`Bico de ${label} anunciado para ${b.entity.properties.name}.`,[payerAccountId,b.accountId],{kind:'gig-posted',gigId:id,buildingId:b.id,service:kind,amount:fee,createdAt:city.minute});city.log(`Bico de ${label} #${id} anunciado.`,'work',[],{kind:'gig-posted',gigId:id,buildingId:b.id,service:kind,accounts:[payerAccountId],amount:fee});return job;}
  createCleaningOrder(payerAccountId,buildingId,{scope='interior',fee=null}={}){
   const city=this.city,b=city.building(buildingId);
   if(!b||!['interior','frontage'].includes(scope)||!city.accounts.has(payerAccountId)||this.jobs.some(j=>j.buildingId===b.id&&j.scope===scope&&ACTIVE.has(j.status)))return false;
@@ -124,7 +124,7 @@ export class CityGigs{
   const city=this.city,b=city.building(job.buildingId);if(!b)return [];
   if(job.kind==='art-installation'&&!this.artworkSupplier(job.artwork?.kind,job.artwork?.materialUsed)){job.waitingReason=`Aguardando ${job.artworkMaterial?.good||'material'} em estoque`;return [];}
   if(job.kind==='art-installation')job.waitingReason=null;
-  const point=job.artworkSupport?b.door:['gardening','art-cleaning','art-installation','art-removal'].includes(job.kind)?job.point:job.scope==='frontage'?this.frontagePoint(b):b.door;if(!point)return [];
+  const point=job.artworkSupport?b.door:['gardening','art-cleaning','art-installation','art-removal','public-cleaning'].includes(job.kind)?job.point:job.scope==='frontage'?this.frontagePoint(b):b.door;if(!point)return [];
   const eligible=city.citizens.filter(c=>!c.playerControlled&&!c.entity.destroyed&&city.society.isAdult(c)&&(!job.preferredArtistId||c.id===job.preferredArtistId)&&(!job.artworkSupport||!c.indoorLocation||c.indoorLocation.buildingId===b.id)&&!c.role?.includes('councilor')&&(job.preferredArtistId===c.id||!c.jobId)&&(job.preferredArtistId===c.id||!(c.businessIds?.length))&&(!c.task||INTERRUPTIBLE.has(c.task))&&!c.path?.length&&!c.deliveryId&&!c.cleaningJobId&&!c.informalJobId&&!c.conversation&&!c.workMeal&&!c.mobilityTrip&&!c.ridingVehicleId&&!city.urgentNeed(c)&&c.needs.energy>25&&(job.kind!=='art-installation'||(c.skills?.artistic||0)>0))
    .sort((a,z)=>job.kind==='art-installation'?((z.skills?.artistic||0)-(a.skills?.artistic||0)||Math.hypot(a.entity.x-point.x,a.entity.y-point.y)-Math.hypot(z.entity.x-point.x,z.entity.y-point.y)||a.id-z.id):Math.hypot(a.entity.x-point.x,a.entity.y-point.y)-Math.hypot(z.entity.x-point.x,z.entity.y-point.y)||a.id-z.id);
   job.availableCandidatePool=eligible.length;if(!eligible.length)return [];
@@ -165,6 +165,100 @@ export class CityGigs{
    b.frontageCleanliness=Math.min(100,(b.frontageCleanliness??55)+35);
   }
  }
+ cleanPublic(job,b){
+  const sanitation=this.city.sanitation,pt=job.point;if(!sanitation||!pt)return;
+  let removedFeces=0;
+  for(const [key,pile]of [...sanitation.streetFeces]){
+   const [x,y]=key.split(',').map(Number);
+   if(Math.hypot(x+.5-pt.x,y+.5-pt.y)<=3.2){removedFeces+=pile.amount||1;sanitation.streetFeces.delete(key);}
+  }
+  if(removedFeces>0){sanitation.fecesRevision++;sanitation.cleanedFeces+=removedFeces;if(b?.inventory&&'fezes'in b.inventory){b.inventory.fezes=(b.inventory.fezes||0)+removedFeces;this.city.economy.produced.fezes+=removedFeces;}}
+  let removedStains=0;
+  for(const [id,stain]of [...sanitation.stains]){
+   if(stain.scope==='street'&&Math.hypot(stain.x-pt.x,stain.y-pt.y)<=3.2){
+    sanitation.stains.delete(id);sanitation.cleanedStains++;removedStains++;
+    sanitation.pendingTerrainErases.push({x:stain.x,y:stain.y,radius:stain.radius,kind:stain.kind});
+   }
+  }
+  if(removedStains>0)sanitation.stainRevision++;
+ }
+ environmentCleanupConditions(){
+  const city=this.city,reserve=city.fiscal?.reserve?.()??0,cashAvailable=Math.max(0,city.treasury-reserve),minCash=city.currency.price(15000);
+  const clean=city.sanitation?.cleanliness?.()||{score:100,streetFeces:0,indoorFeces:0,spilled:0};
+  const stainsCount=city.sanitation?.stains?.size||0;
+  const dirtyBuildings=city.buildings.filter(b=>!b.entity.destroyed&&b.active&&b.constructionKind!=='open-air'&&((b.feces?.size||0)>0||(b.litter||0)>0||(b.cleanliness??100)<60||(b.frontageCleanliness??100)<60)).length;
+  const adults=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!c.custody&&!c.role?.includes('councilor'));
+  const unemployed=adults.filter(c=>!c.jobId&&!(c.businessIds?.length));
+  const unemploymentRate=adults.length?unemployed.length/adults.length:0;
+  const hasCash=cashAvailable>=minCash;
+  const highDirt=clean.score<70||(clean.streetFeces+clean.indoorFeces+clean.spilled)>=12||stainsCount>=15||dirtyBuildings>=Math.max(4,Math.ceil(city.buildings.length*.25));
+  const highUnemployment=unemployed.length>=4&&unemploymentRate>=.25;
+  return {eligible:hasCash&&highDirt&&highUnemployment,hasCash,highDirt,highUnemployment,cashAvailable,clean,stainsCount,dirtyBuildings,unemployedCount:unemployed.length,unemploymentRate};
+ }
+ runEnvironmentCleanupProgram(){
+  const city=this.city;
+  if(city.minute-(this.lastCleanupProgramAt??-Infinity)<1440)return null;
+  const cond=this.environmentCleanupConditions();
+  if(!cond.eligible)return null;
+  const envOffice=city.politics?.secretaries?.find(row=>row.officeId==='environment');
+  const secretary=city.society.citizen(envOffice?.citizenId);
+  if(city.politics?.secretaries?.length&&(!secretary||secretary.entity.destroyed))return null;
+  const hall=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed)||city.buildings.find(b=>!b.entity.destroyed&&b.active);
+  if(!hall)return null;
+  const activeProgramGigs=this.jobs.filter(j=>j.program==='environment-cleanup'&&ACTIVE.has(j.status)).length;
+  const targetTotal=Math.min(48,Math.max(20,cond.unemployedCount*2));
+  if(activeProgramGigs>=targetTotal)return null;
+  let budgetLeft=Math.min(Math.floor(cond.cashAvailable*.5),city.currency.price(60000));
+  let opened=0,spent=0;
+  const canAfford=fee=>fee>0&&budgetLeft>=fee&&(city.accounts.get('treasury')?.balance||0)>=fee;
+  for(const b of city.buildings){
+   if(opened+activeProgramGigs>=targetTotal)break;
+   if(b.entity.destroyed||!b.active||b.constructionKind==='open-air')continue;
+   const dirtyInterior=(b.feces?.size||0)>0||(b.litter||0)>0||(b.cleanliness??100)<80;
+   if(dirtyInterior){
+    const fee=this.quote(b.id,'interior','treasury');
+    if(canAfford(fee)){const job=this.createCleaningOrder('treasury',b.id,{scope:'interior',fee});if(job){job.program='environment-cleanup';budgetLeft-=fee;spent+=fee;opened++;}}
+   }
+   if(opened+activeProgramGigs>=targetTotal)break;
+   const x=Math.floor(b.door.x),y=Math.floor(b.door.y);let nearFeces=false;
+   for(let dy=-3;dy<=3&&!nearFeces;dy++)for(let dx=-3;dx<=3;dx++){const pile=city.sanitation?.streetFeces?.get(`${x+dx},${y+dy}`);if(pile?.amount&&Math.hypot(dx,dy)<=3){nearFeces=true;break;}}
+   if((b.frontageCleanliness??100)<80||nearFeces){
+    const fee=this.quote(b.id,'frontage','treasury');
+    if(canAfford(fee)){const job=this.createCleaningOrder('treasury',b.id,{scope:'frontage',fee});if(job){job.program='environment-cleanup';budgetLeft-=fee;spent+=fee;opened++;}}
+   }
+  }
+  const publicSpots=[];
+  const covered=p=>publicSpots.some(s=>Math.hypot(s.x-p.x,s.y-p.y)<3.2)||this.jobs.some(j=>j.kind==='public-cleaning'&&ACTIVE.has(j.status)&&j.point&&Math.hypot(j.point.x-p.x,j.point.y-p.y)<3.2);
+  for(const [key,pile]of city.sanitation?.streetFeces||[]){
+   if(!pile?.amount)continue;
+   const [tx,ty]=key.split(',').map(Number),pt={x:tx+.5,y:ty+.5};
+   if(!covered(pt)&&city.walkable(tx,ty))publicSpots.push(pt);
+  }
+  for(const stain of city.sanitation?.stains?.values()||[]){
+   if(stain.scope!=='street')continue;
+   const tx=Math.floor(stain.x),ty=Math.floor(stain.y),pt={x:tx+.5,y:ty+.5};
+   if(!covered(pt)&&city.walkable(tx,ty))publicSpots.push(pt);
+  }
+  const publicFee=Math.ceil(city.currency.price(1100)*1.5);
+  for(const pt of publicSpots){
+   if(opened+activeProgramGigs>=targetTotal||!canAfford(publicFee))break;
+   const job=this.reserveOrder('treasury',hall,{kind:'public-cleaning',scope:'street',fee:publicFee,point:pt,required:14});
+   if(job){job.program='environment-cleanup';budgetLeft-=publicFee;spent+=publicFee;opened++;}
+  }
+  for(const piece of city.justice?.art||[]){
+   if(opened+activeProgramGigs>=targetTotal)break;
+   if(piece.entity.destroyed||!piece.layers.length)continue;
+   const job=city.justice.requestArtworkCleaning(piece.id);
+   if(job){job.program='environment-cleanup';opened++;}
+  }
+  if(!opened)return null;
+  this.lastCleanupProgramAt=city.minute;
+  const secretaryName=secretary?.entity?.properties?.name||'Secretaria de Agricultura e Meio Ambiente';
+  this.cleanupProgram={startedAt:city.minute,secretaryId:secretary?.id??null,secretaryName,opened,spent,unemploymentRate:Math.round(cond.unemploymentRate*100),cleanlinessScore:cond.clean.score};
+  city.history.record('politics',`${secretaryName} lançou programa emergencial de faxina urbana com ${opened} bicos pagos pelo tesouro.`,[...(secretary?.accountId?[secretary.accountId]:[]),'treasury'],{kind:'environment-cleanup-program',opened,spent,unemploymentRate:cond.unemploymentRate,cleanlinessScore:cond.clean.score,minute:city.minute});
+  city.log(`${secretaryName} (Meio Ambiente) lançou programa de faxina urbana: ${opened} bicos abertos para limpeza da cidade e renda temporária.`,'politics',secretary?[secretary.id]:[],{kind:'environment-cleanup-program',opened,spent});
+  return this.cleanupProgram;
+ }
  postNeededWork(){
   const city=this.city;if(!city.citizens.some(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!c.jobId&&!c.businessIds.length&&!city.politics.officeHolder(c)))return;
   let posted=0;
@@ -183,13 +277,13 @@ export class CityGigs{
  updateMinute(){
   const city=this.city;for(const job of this.jobs)if(job.artwork?.kind==='flags')job.artwork.kind='banner';if(city.profileDiagnostics)this.lastSpontaneousArtworkProfile=null;
   this.postSpontaneousArtwork();
-  if(city.minute%60===0&&city.hour>=7&&city.hour<20)this.postNeededWork();
+  if(city.minute%60===0&&city.hour>=7&&city.hour<20){this.postNeededWork();this.runEnvironmentCleanupProgram();}
   for(const job of this.jobs){if(!ACTIVE.has(job.status))continue;if(job.artworkFacadeSupport?.kind==='street-graffiti'&&!graffitiSurfaceExists(city,job.artworkFacadeSupport)){this.cancel(job,'parede removida antes de concluir a pintura');continue;}const b=city.building(job.buildingId);if(!b){this.cancel(job,'imóvel removido');continue;}if(job.artworkSupport?.kind==='skybridge'&&(!(city.skybridgeLinksForRevision?.()||[]).some(link=>link.id===job.artworkSupport.linkId)||!b.units.some(unit=>unit.id===job.artworkSupport.unitId))){this.cancel(job,'passarela ou acesso ao prédio removido');continue;}
    let worker=city.society.citizen(job.workerId);
    if(worker&&(worker.entity.destroyed||city.urgentNeed(worker)&&!(job.artworkSupport?.kind==='skybridge'&&job.artworkSupport.phase==='returning'))){this.release(job,worker);worker=null;}
    if(!worker){if(city.hour<7||city.hour>=20||city.minute%3!==job.id%3)continue;const candidates=this.candidates(job);job.availableCandidates=job.availableCandidatePool??candidates.length;worker=candidates[0];if(!worker)continue;
-    const goal=job.artworkSupport?b.door:['gardening','art-cleaning','art-installation','art-removal'].includes(job.kind)?job.point:job.scope==='frontage'?this.frontagePoint(b):b.door;if(!goal)continue;const path=job.artworkSupport&&worker.indoorLocation?.buildingId===b.id?[]:city.findPath(worker.entity,goal);if(path===null)continue;
-    job.workerId=worker.id;job.status='working';job.startedAt=city.minute;worker.informalJobId=job.id;city.furniture?.release(worker);worker.task=job.kind==='gardening'?'informal-gardening':job.artworkSupport?'informal-service':job.kind==='art-installation'?'informal-art-installation':job.scope==='interior'?'informal-service':'informal-frontage';worker.targetId=job.artworkSupport||job.scope==='interior'?b.id:null;worker.path=path;worker.servicePaid=null;const label=job.kind==='repair'?'um reparo':job.kind==='gardening'?'um serviço de jardinagem':job.kind==='art-installation'?'uma instalação artística':job.kind==='art-removal'?'uma retirada de obra de arte':job.kind==='art-cleaning'?'uma limpeza de arte':'uma faxina';city.history.record('service',`${worker.entity.properties.name} aceitou ${label} em ${b.entity.properties.name}.`,[job.payerAccountId,worker.accountId,b.accountId],{kind:'gig-accepted',gigId:job.id,buildingId:b.id,citizenIds:[worker.id],scope:job.scope,service:job.kind,amount:job.fee,minute:city.minute});city.log(`${worker.entity.properties.name} aceitou o bico #${job.id}.`,'work',[worker.id],{kind:'gig-accepted',gigId:job.id,buildingId:b.id,service:job.kind,amount:job.fee});
+    const goal=job.artworkSupport?b.door:['gardening','art-cleaning','art-installation','art-removal','public-cleaning'].includes(job.kind)?job.point:job.scope==='frontage'?this.frontagePoint(b):b.door;if(!goal)continue;const path=job.artworkSupport&&worker.indoorLocation?.buildingId===b.id?[]:city.findPath(worker.entity,goal);if(path===null)continue;
+    job.workerId=worker.id;job.status='working';job.startedAt=city.minute;worker.informalJobId=job.id;city.furniture?.release(worker);worker.task=job.kind==='gardening'?'informal-gardening':job.artworkSupport?'informal-service':job.kind==='art-installation'?'informal-art-installation':job.scope==='interior'?'informal-service':'informal-frontage';worker.targetId=job.artworkSupport||job.scope==='interior'?b.id:null;worker.path=path;worker.servicePaid=null;const label=job.kind==='repair'?'um reparo':job.kind==='gardening'?'um serviço de jardinagem':job.kind==='art-installation'?'uma instalação artística':job.kind==='art-removal'?'uma retirada de obra de arte':job.kind==='art-cleaning'?'uma limpeza de arte':job.kind==='public-cleaning'?'uma faxina pública':'uma faxina';city.history.record('service',`${worker.entity.properties.name} aceitou ${label} em ${b.entity.properties.name}.`,[job.payerAccountId,worker.accountId,b.accountId],{kind:'gig-accepted',gigId:job.id,buildingId:b.id,citizenIds:[worker.id],scope:job.scope,service:job.kind,amount:job.fee,minute:city.minute});city.log(`${worker.entity.properties.name} aceitou o bico #${job.id}.`,'work',[worker.id],{kind:'gig-accepted',gigId:job.id,buildingId:b.id,service:job.kind,amount:job.fee});
    }
    if(job.artworkSupport?.kind==='skybridge'){
     const support=job.artworkSupport,link=(city.skybridgeLinksForRevision?.()||[]).find(item=>item.id===support.linkId);if(!link){this.cancel(job,'passarela removida antes de concluir o trabalho');continue;}
@@ -199,7 +293,7 @@ export class CityGigs{
      if(worker.skybridgeTransit||worker.indoorLocation||worker.skybridgeZ<=0||worker.skybridgeId!==link.id||worker.path.length||Math.hypot(worker.entity.x-job.point.x,worker.entity.y-job.point.y,(worker.skybridgeZ||0)-link.height)>.2)continue;
     }
    }else if(job.artworkSupport){const location=worker.indoorLocation;if(!location||location.buildingId!==b.id||location.path?.length)continue;if(job.artworkSupport.kind==='roof-terrace'?location.targetRoomType!=='roof_terrace':location.unitId!==job.unitId)continue;if(!job.artworkSupport.cleaning&&Math.hypot(location.position.x-job.point.x,location.position.y-job.point.y,(location.position.z||0)-job.point.z)>.2)continue;
-   }else if(['gardening','art-cleaning','art-installation','art-removal'].includes(job.kind)){
+   }else if(['gardening','art-cleaning','art-installation','art-removal','public-cleaning'].includes(job.kind)){
     if(Math.hypot(worker.entity.x-job.point.x,worker.entity.y-job.point.y)>.4||worker.path.length)continue;
    }else if(job.scope==='interior'){
     const room=city.units.get(job.unitId);if(!room){this.cancel(job,'cômodo removido');continue;}
@@ -209,7 +303,7 @@ export class CityGigs{
    }
    if(job.artworkSupport?.phase!=='returning')job.progress+=job.kind==='art-installation'?Math.max(.5,1+(worker.skills?.artistic||0)/80):1;
    if(job.kind==='art-cleaning'){const art=city.justice.art.find(a=>a.id===job.artId),layer=art?.layers?.find(l=>l.id===job.layerId);if(layer)layer.cleaningProgress=Math.min(1,job.progress/Math.max(1,job.required||18));}
-   worker.action=job.artworkSupport?.phase==='returning'?'Voltando pela passarela após o serviço':job.kind==='repair'?'Fazendo pequeno reparo':job.kind==='gardening'?'Plantando no jardim':job.kind==='art-installation'?'Criando arte urbana':job.kind==='art-removal'?'Retirando obra de arte':job.kind==='art-cleaning'?'Limpando obra urbana':job.scope==='frontage'?'Limpando a frente do imóvel':'Fazendo faxina informal';city.economy.practice(worker,job.kind==='repair'?'construction':job.kind==='gardening'?'agriculture':job.kind==='art-installation'?'artistic':'cleaning');
+   worker.action=job.artworkSupport?.phase==='returning'?'Voltando pela passarela após o serviço':job.kind==='repair'?'Fazendo pequeno reparo':job.kind==='gardening'?'Plantando no jardim':job.kind==='art-installation'?'Criando arte urbana':job.kind==='art-removal'?'Retirando obra de arte':job.kind==='art-cleaning'?'Limpando obra urbana':job.kind==='public-cleaning'?'Limpando via pública (programa ambiental)':job.scope==='frontage'?'Limpando a frente do imóvel':'Fazendo faxina informal';city.economy.practice(worker,job.kind==='repair'?'construction':job.kind==='gardening'?'agriculture':job.kind==='art-installation'?'artistic':'cleaning');
    if(job.progress<job.required)continue;
    if(job.kind==='art-installation'&&!job.artworkId){
     if(!this.consumeArtworkMaterial(job)){this.release(job,worker);job.waitingReason=`Aguardando material ou verba para ${job.artworkMaterial.good}`;continue;}
@@ -222,7 +316,7 @@ export class CityGigs{
    }
    if(job.kind==='art-removal'&&!city.justice.art.some(a=>a.id===job.artId&&!a.entity.destroyed)){this.cancel(job,'obra já retirada ou destruída');continue;}
    if(job.kind==='art-cleaning'&&!city.justice.canCompleteArtworkCleaning(job)){this.cancel(job,'a camada ou a obra mudou antes da limpeza');continue;}
-   if(job.kind==='cleaning'||!job.kind)this.clean(job,b);else if(job.kind==='repair'){b.condition=Math.min(100,(b.condition||0)+35);b.repairNeeded=b.condition<70;}else if(job.kind==='gardening'){const planted=city.nature.spawn(job.point.tileX,job.point.tileY,'berry',{buildingId:b.id});if(!planted){this.cancel(job,'canteiro ocupado antes do plantio');continue;}}
+   if(job.kind==='cleaning'||!job.kind)this.clean(job,b);else if(job.kind==='public-cleaning')this.cleanPublic(job,b);else if(job.kind==='repair'){b.condition=Math.min(100,(b.condition||0)+35);b.repairNeeded=b.condition<70;}else if(job.kind==='gardening'){const planted=city.nature.spawn(job.point.tileX,job.point.tileY,'berry',{buildingId:b.id});if(!planted){this.cancel(job,'canteiro ocupado antes do plantio');continue;}}
    const paid=city.transfer(job.accountId,worker.accountId,city.accounts.get(job.accountId)?.balance||0,`Pagamento por bico de ${job.kind||'faxina'}`,{gigId:job.id,buildingId:b.id,scope:job.scope});
    if(['art-cleaning','art-removal'].includes(job.kind)&&!paid){this.cancel(job,'pagamento da limpeza não concluído');continue;}
    if(job.kind==='art-removal'){const piece=city.justice.art.find(a=>a.id===job.artId);if(piece&&!piece.entity.destroyed){piece.entity.destroyed=true;piece.removedAt=city.minute;piece.removalJobId=job.id;city.justice.artRevision++;city.log(`Obra #${piece.id} retirada por equipe contratada.`, 'justice',[worker.id],{kind:'art-removed',artId:piece.id,gigId:job.id});}}

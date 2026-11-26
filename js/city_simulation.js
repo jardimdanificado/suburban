@@ -162,6 +162,24 @@ export const BUILDING_TYPES = {
   utility: { label: 'Água e saneamento', color: 0x83b9ce, rent: 70, price: 30000, jobs: 3 },
 };
 export const NEED_LABELS = { food: 'Alimentação', water: 'Água', energy: 'Descanso', hygiene: 'Higiene', toilet: 'Banheiro', social: 'Convívio', leisure: 'Lazer', health: 'Saúde', shelter: 'Moradia', safety: 'Segurança' };
+export function hygieneThresholds(c) {
+  const cleanliness = c?.traits?.cleanliness ?? 0.5;
+  return {
+    highHygiene: 15 + cleanliness * 20,
+    highDirt: 65 - cleanliness * 30,
+    normalHygiene: 30 + cleanliness * 50,
+    normalDirt: 44 - cleanliness * 38,
+  };
+}
+export function cleanlinessMood(c) {
+  const cleanliness = c?.traits?.cleanliness ?? 0.5;
+  const hygiene = c?.needs?.hygiene ?? 100;
+  const dirtSources = c?.dirtSources ? Object.values(c.dirtSources).reduce((s, v) => s + (v || 0), 0) : 0;
+  const garmentDirt = (c?.wardrobe?.[c?.wearingIndex]?.dirt || 0) * 0.5;
+  const dirtTotal = dirtSources + garmentDirt;
+  const stress = Math.max(0, (dirtTotal - 15) / 15, (45 - hygiene) / 15);
+  return stress > 0 ? -Math.min(8, stress * (0.4 + cleanliness * 1.2)) : 0;
+}
 const NO_CHILDREN=Object.freeze([]);
 const URGENT_NEEDS=[['water',18,0],['food',18,0],['health',20,5],['energy',12,0],['toilet',10,0],['hygiene',10,0]];
 const SERVICE_PRICES={food:180,water:35,health:240,leisure:25,social:0,energy:0,hygiene:0,toilet:0};
@@ -1224,18 +1242,19 @@ export class CitySimulation {
     }
     const withinFichaRadius=pt=>!ficha||!ficha.door||!pt||Math.hypot(pt.x-ficha.door.x,pt.y-ficha.door.y)<=ficha.maxRadius;
     const dirtTotal=(c.dirtSources?Object.values(c.dirtSources).reduce((s,v)=>s+(v||0),0):0)+(c.wardrobe?.[c.wearingIndex]?.dirt||0)*.5;
+    const {highHygiene,highDirt,normalHygiene,normalDirt}=hygieneThresholds(c);
     if (urgent) { task = urgent; type = ({ water: 'utility', food: 'market', health: 'clinic', energy: 'home', hygiene: home ? 'home' : 'utility', toilet: 'toilet' })[urgent]; }
     else if (child && this.society.isAdult(c) && Math.min(n.food, n.water, n.energy, n.hygiene) >= 25 && n.health >= 40 && n.toilet >= 15) { task = 'caregiving'; type = 'child'; c.careChildId = child.id; }
     else if (n.food < 18) { task = 'food'; type = 'market'; }
     else if (n.health < 45) { task = 'health'; type = 'clinic'; }
     else if (n.water < 45) { task = 'water'; type = 'utility'; }
-    else if (n.hygiene < 25 || dirtTotal >= 50) { task = 'hygiene'; type = home ? 'home' : 'utility'; }
+    else if (n.hygiene < highHygiene || dirtTotal >= highDirt) { task = 'hygiene'; type = home ? 'home' : 'utility'; }
     else if (n.food < 72 && !this.welfare.mealAssistanceEligible(c)) { task = 'food'; type = 'market'; }
     else if (n.food < 45) { task = 'food'; type = 'market'; }
     else if (n.toilet < 45) { task = 'toilet'; type = 'toilet'; }
     else if (this.substances?.consider(c))return;
     else if (wantsSleep(this,c)) { task = 'energy'; type = 'home'; }
-    else if (n.hygiene < 55 || dirtTotal >= 25) { task = 'hygiene'; type = home ? 'home' : 'utility'; }
+    else if (n.hygiene < normalHygiene || dirtTotal >= normalDirt) { task = 'hygiene'; type = home ? 'home' : 'utility'; }
     else if(c.secretaryOffice==='labor'&&this.hour>=8&&this.hour<17){task='work';type='job';}
     else if (this.society.age(c) < 6) { task = 'care'; type = 'home'; }
     else if (child && this.society.isAdult(c)) { task = 'caregiving'; type = 'child'; c.careChildId = child.id; }
@@ -1273,10 +1292,8 @@ export class CitySimulation {
     if(task==='leisure'&&!urgent&&n.leisure<85&&this.hour>=6&&this.hour<22&&(c.id+this.hour)%3===0){swimLeisureTried=true;const swim=this.findSwimSpot(c,16);if(swim){c.path=[...swim.path,swim.water];c.task='swim-leisure';c.swimSpot=swim;c.swimUntil=this.minute+35;c.action='Indo nadar para se divertir';return;}}
     if(task==='leisure'&&!urgent&&(measure?measure('taskFurnitureRoute',()=>this.furniture.routeLeisure(c)):this.furniture.routeLeisure(c)))return;
     if(!swimLeisureTried&&task==='leisure'&&!urgent&&n.leisure<85&&this.hour>=6&&this.hour<22){const swim=this.findSwimSpot(c,18);if(swim){c.path=[...swim.path,swim.water];c.task='swim-leisure';c.swimSpot=swim;c.swimUntil=this.minute+35;c.action='Indo nadar para se divertir';return;}}
-    let swimHygieneTried=false;
-    if(task==='hygiene'&&(!home||!c.indoorLocation)){swimHygieneTried=true;const swim=this.findSwimSpot(c,home?14:36);if(swim){c.path=[...swim.path,swim.water];c.task='swim-hygiene';c.swimSpot=swim;c.swimUntil=this.minute+20;c.action='Indo se lavar na água';return;}}
     if(task==='hygiene'&&(measure?measure('taskHygieneSearch',()=>this.sanitation.choose(c,'hygiene')):this.sanitation.choose(c,'hygiene')))return;
-    if(!swimHygieneTried&&task==='hygiene'){const swim=this.findSwimSpot(c,40);if(swim){c.path=[...swim.path,swim.water];c.task='swim-hygiene';c.swimSpot=swim;c.swimUntil=this.minute+20;c.action='Indo se lavar na água';return;}}
+    if(task==='hygiene'){const swim=this.findSwimSpot(c,home?18:40);if(swim){c.path=[...swim.path,swim.water];c.task='swim-hygiene';c.swimSpot=swim;c.swimUntil=this.minute+20;c.action='Indo se lavar na água';return;}}
     if (task === 'toilet') {
       // Optional toilet visits used to route nearly everyone who crossed the
       // same need threshold during one hourly decision pass. Phase those
@@ -1732,16 +1749,17 @@ export class CitySimulation {
       // These fixed fields are the hottest loop; direct access avoids temporary
       // iterators and dynamic property lookups for every resident and city minute.
       const sleeping=c.task==='energy'&&c.sleep?.active&&!c.path.length;const restMetabolism=sleeping?.4:1;
-      n.food=clamp(n.food-.065*elapsed*restMetabolism);n.water=clamp(n.water-.09*elapsed*restMetabolism);n.energy=clamp(n.energy-.055*elapsed);
+      const vitalityScale=1.25-(c.traits?.vitality??.5)*.5;
+      n.food=clamp(n.food-.065*elapsed*restMetabolism);n.water=clamp(n.water-.09*elapsed*restMetabolism);n.energy=clamp(n.energy-.055*elapsed*vitalityScale);
       this.substances?.minute(c,elapsed);if(c.sleep?.active&&c.task!=='energy')interruptSleep(this,c);
-      n.hygiene=clamp(n.hygiene-.045*elapsed);n.toilet=clamp(n.toilet-(.085+(c.substanceModifiers?.toiletDrain||0))*elapsed*restMetabolism);n.energy=clamp(n.energy-(c.substanceModifiers?.energyDrain||0)*elapsed);n.social=clamp(n.social-.035*elapsed);n.leisure=clamp(n.leisure-.035*elapsed);
+      n.hygiene=clamp(n.hygiene-.032*elapsed);n.toilet=clamp(n.toilet-(.085+(c.substanceModifiers?.toiletDrain||0))*elapsed*restMetabolism);n.energy=clamp(n.energy-(c.substanceModifiers?.energyDrain||0)*elapsed);n.social=clamp(n.social-.035*elapsed);n.leisure=clamp(n.leisure-.035*elapsed);
       n.shelter = clamp(n.shelter + (c.homeUnitId ? 0.5 : -0.2)*elapsed);
       n.safety = clamp(n.safety + (hasTownhall ? 0.08 : -0.1)*elapsed);
       n.health = clamp(n.health + (Math.min(n.food, n.water, n.energy, n.hygiene) < 10 ? -.12 : .025)*elapsed);
       c.mood = (c.mood || 0) * (elapsed===1?.998:Math.pow(.998,elapsed));
       const totalNeeds=n.food+n.water+n.energy+n.hygiene+n.toilet+n.social+n.leisure+n.health+n.shelter+n.safety;
       let comfort=0;if(c.homeUnitId&&c.homeComfort)for(const key in c.homeComfort)if(c.homeComfort[key]>this.minute)comfort++;
-      c.happiness = clamp(totalNeeds / 10 + (c.jobId&&c.career?(c.career.motivation-50)*.08:0) + c.mood + (c.substanceModifiers?.mood||0) + clothingMood(c) + this.relationships.moodEffect(c) + Math.min(6,comfort)*2);
+      c.happiness = clamp(totalNeeds / 10 + (c.jobId&&c.career?(c.career.motivation-50)*.08:0) + c.mood + (c.substanceModifiers?.mood||0) + clothingMood(c) + cleanlinessMood(c) + this.relationships.moodEffect(c) + Math.min(6,comfort)*2);
       if(!sleeping&&!c.playerControlled)this.supplies.useCarried(c);
       // Custody rations must be issued before the mortality check. Otherwise a
       // prisoner who reaches zero food on this minute can die before the jail
@@ -1933,7 +1951,7 @@ export class CitySimulation {
             c.needs.hygiene=clamp(c.needs.hygiene+travelled*35);
           }
           if(!elevated&&!boatWaypoint&&!swimTile){wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
-          if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);this.sanitation?.soilCitizen?.(c,'barro',travelled*.15,null,'feet');c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}}
+          if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell*.6);if((c.dirtSources?.barro||0)<40)this.sanitation?.soilCitizen?.(c,'barro',travelled*.08,null,'feet');c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}}
         }
       }
       if(movedAny){

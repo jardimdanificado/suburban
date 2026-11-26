@@ -33,18 +33,7 @@ function stoneVertexHeight(world,x,y){
   let count=0;for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++)if(baseTerrainTile(at(world,x+dx,y+dy))===TILE_STONE)count++;
   return terrainTileHeight(TILE_STONE)-(4-count)*.22+stoneRelief(world,x,y);
 }
-function stoneVertexOffset(world,x,y){
-  let count=0,cx=0,cz=0;for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++)if(baseTerrainTile(at(world,x+dx,y+dy))===TILE_STONE){count++;cx+=dx+.5;cz+=dy+.5;}
-  const inset=count===1?.38:count===2?.16:0;
-  return {x:cx*inset+(((stoneVertexSeed(world,x,y,0x6d2b79f5)/4294967295)*2)-1)*.15,z:cz*inset+(((stoneVertexSeed(world,x,y,0x1b873593)/4294967295)*2)-1)*.15};
-}
-export function terrainVertexOffset(world,x,y){
-  // Keep vertices shared with streets and sidewalks on the exact grid line.
-  // Rocky terrain offsets neighboring vertices for a broken-stone silhouette;
-  // carrying that offset through a road edge separates the bank mesh from its
-  // retaining face and exposes triangular gaps at the seam.
-  for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++)if(ROADS.has(at(world,x+dx,y+dy))||sidewalkAt(world,x+dx,y+dy))return {x:0,z:0};
-  for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++)if(baseTerrainTile(at(world,x+dx,y+dy))===TILE_STONE)return stoneVertexOffset(world,x,y);
+export function terrainVertexOffset(){
   return {x:0,z:0};
 }
 export function terrainTileTouchesStone(world,x,y){
@@ -98,7 +87,7 @@ export function terrainCornerHeight(world,x,y){
 // a visible stone face.
 export function terrainTileSurfaceCorners(world,x,y){
   if(baseTerrainTile(at(world,x,y))!==TILE_STONE)return null;
-  return [stoneVertexHeight(world,x,y),stoneVertexHeight(world,x+1,y),stoneVertexHeight(world,x+1,y+1),stoneVertexHeight(world,x,y+1)];
+  return [terrainCornerHeight(world,x,y),terrainCornerHeight(world,x+1,y),terrainCornerHeight(world,x+1,y+1),terrainCornerHeight(world,x,y+1)];
 }
 export function terrainTileSurfaceVertices(world,x,y){
   const heights=terrainTileSurfaceCorners(world,x,y);if(!heights)return null;
@@ -125,7 +114,7 @@ export function terrainStoneSurface(world,x,y){
   const u=.34+(stoneVertexSeed(world,x,y,0x165667b1)/4294967295)*.32;
   const v=.34+(stoneVertexSeed(world,x,y,0x85ebca6b)/4294967295)*.32;
   const weights=[(1-u)*(1-v),u*(1-v),u*v,(1-u)*v];
-  const centerHeight=corners.reduce((sum,p,i)=>sum+weights[i]*(p[1]-stoneRelief(world,x+CORNERS[i][0],y+CORNERS[i][1])),0)+stoneRelief(world,x+u,y+v);
+  const centerHeight=corners.reduce((sum,p,i)=>sum+weights[i]*p[1],0)+stoneRelief(world,x+u,y+v)*.14;
   const center=[x+u,centerHeight,y+v];
   const surface={ring,center};cache?.stones.set(key,surface);return surface;
 }
