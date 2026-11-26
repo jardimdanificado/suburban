@@ -96,14 +96,21 @@ export function externalTradeHourly(city){
 /** Municipal exports sell actual uncommitted inventory, never emergency food or contract materials. */
 export function municipalSurplusExportsHourly(city){
  if(!economicPolicy(city,'exportMunicipal'))return 0;
- const economy=city.economy,population=city.citizens.filter(c=>!c.entity.destroyed).length,days=economicPolicy(city,'exportReserveDays'),foods=new Set(city.workMeals.foodGoods()),goods=new Set([...EXPORTABLE,'pedra',...foods]),totals=new Map();
+ const economy=city.economy,firms=city.buildings.filter(b=>b.active&&!b.entity.destroyed&&(b.accountId==='treasury'||b.municipal)&&!b.officeTenantOf);
+ if(!firms.length)return 0;
+ const foods=new Set(city.workMeals.foodGoods()),goods=new Set([...EXPORTABLE,'pedra',...foods]);
+ const candidateGoods=new Set();
+ for(const b of firms)for(const good of goods){const stock=b.inventory?.[good]||0;if(stock>12&&!b.importedUnitPrice?.[good])candidateGoods.add(good);}
+ if(!candidateGoods.size)return 0;
+ const totals=new Map();
+ for(const good of candidateGoods)totals.set(good,city.goodsStock(good));
+ const population=city.citizens.filter(c=>!c.entity.destroyed).length,days=economicPolicy(city,'exportReserveDays');
+ const stoneContracts=candidateGoods.has('pedra')?city.development.projects.reduce((n,p)=>(!p.cancelled&&p.status!=='completed'?n+Math.max(0,(p.stone||0)-(p.inventory?.pedra||0)-(p.incoming?.pedra||0)):n),0):0;
  ensureExternalAccount(city,'municipal-export-buyers','Compradores externos de excedentes municipais');
- for(const good of goods)totals.set(good,city.goodsStock(good));
  let sales=0;economy.municipalExports??={revenue:0,remitted:0,units:0};
- const firms=city.buildings.filter(b=>b.active&&!b.entity.destroyed&&(b.accountId==='treasury'||b.municipal)&&!b.officeTenantOf);
- for(const b of firms)for(const good of goods){
-  if(sales>=4)return sales;const stock=b.inventory?.[good]||0;if(!stock||b.importedUnitPrice?.[good])continue;
-  const demand=economy.market?.[good]?.demand||0,contracts=city.development.projects.filter(p=>!p.cancelled&&p.status!=='completed').reduce((n,p)=>n+Math.max(0,(good==='pedra'?p.stone||0:0)-(p.inventory?.[good]||0)-(p.incoming?.[good]||0)),0),reserve=Math.max(foods.has(good)?population*6*days:24,demand*days,contracts),surplus=Math.max(0,(totals.get(good)||0)-reserve),quantity=Math.floor(Math.min(stock-12,surplus,economicPolicy(city,'exportLotLimit')));
+ for(const b of firms)for(const good of candidateGoods){
+  if(sales>=4)return sales;const stock=b.inventory?.[good]||0;if(stock<=12||b.importedUnitPrice?.[good])continue;
+  const demand=economy.market?.[good]?.demand||0,contracts=good==='pedra'?stoneContracts:0,reserve=Math.max(foods.has(good)?population*6*days:24,demand*days,contracts),surplus=Math.max(0,(totals.get(good)||0)-reserve),quantity=Math.floor(Math.min(stock-12,surplus,economicPolicy(city,'exportLotLimit')));
   if(quantity<=0)continue;const amount=Math.max(1,Math.floor(economy.goods[good].price*quantity*1.1));
   if(!city.transfer('municipal-export-buyers',b.accountId,amount,`Exportação: excedente municipal de ${economy.goods[good].label}`,{buildingId:b.id,good,quantity,municipalExport:true}))continue;
   b.inventory[good]-=quantity;totals.set(good,(totals.get(good)||0)-quantity);economy.consumed[good]=(economy.consumed[good]||0)+quantity;economy.recordGoods('export',good,quantity,b.id,null,{municipalExport:true,amount});

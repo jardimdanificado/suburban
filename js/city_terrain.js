@@ -304,11 +304,27 @@ export function settlementConnected(city, a, b) {
   return ac===bc?true:cache.sealed[ac]||cache.sealed[bc]?false:null;
 }
 
-export function findTerrainPath(world, start, goal, blocked = new Set(), { limit = 30000, extraBlocked = null,preferRoads=true,roadOnly=false,blockedGrid=null,allowDiagonal=true,allowWater=false,waterCost=5.5 } = {}) {
+export function findTerrainPath(world, start, goal, blocked = new Set(), { limit = 15000, extraBlocked = null,preferRoads=true,roadOnly=false,blockedGrid=null,allowDiagonal=true,allowWater=false,waterCost=5.5 } = {}) {
   const sx = Math.floor(start.x), sy = Math.floor(start.y), gx = Math.floor(goal.x), gy = Math.floor(goal.y);
   if(sx<0||sy<0||gx<0||gy<0||sx>=world.width||gx>=world.width||sy>=world.height||gy>=world.height)return null;
-  const terrain=terrainPathGrid(world),startKey=sy*world.width+sx,goalKey=gy*world.width+gx;
-  if ((!terrain.walkable[startKey]&&!(allowWater&&terrain.tiles[startKey]===TILE_WATER)) || !terrain.walkable[goalKey] || blocked.has(tileKey(gx, gy))) return null;
+  const terrain=terrainPathGrid(world),width=world.width,startKey=sy*width+sx,goalKey=gy*width+gx;
+  const isGoalBlocked = blockedGrid ? blockedGrid[goalKey] !== 0 : blocked.has(tileKey(gx, gy));
+  if ((!terrain.walkable[startKey]&&!(allowWater&&terrain.tiles[startKey]===TILE_WATER)) || !terrain.walkable[goalKey] || isGoalBlocked || extraBlocked?.(gx, gy)) return null;
+  if (startKey === goalKey) return [];
+  const hasExit = (cx, cy, key) => {
+    const h = terrain.elevations[key], curW = terrain.tiles[key] === TILE_WATER;
+    for (let d = 0; d < (allowDiagonal ? 8 : 4); d++) {
+      const nx = cx + pathDx[d], ny = cy + pathDy[d];
+      if (nx < 0 || ny < 0 || nx >= width || ny >= world.height) continue;
+      const nk = ny * width + nx, isW = terrain.tiles[nk] === TILE_WATER;
+      if (!terrain.walkable[nk] && !(allowWater && isW)) continue;
+      if (!(curW || isW) && Math.abs(h - terrain.elevations[nk]) > 1.25) continue;
+      if ((blockedGrid ? blockedGrid[nk] !== 0 : blocked.has(tileKey(nx, ny))) || extraBlocked?.(nx, ny)) continue;
+      return true;
+    }
+    return false;
+  };
+  if (!hasExit(gx, gy, goalKey) || !hasExit(sx, sy, startKey)) return null;
   // Search the much smaller street network first. Keep off-road shortcuts when
   // following the streets would cost more than a near-direct walk on flat land.
   if(preferRoads&&!extraBlocked&&terrain.roads[startKey]&&terrain.roads[goalKey]){
@@ -317,7 +333,7 @@ export function findTerrainPath(world, start, goal, blocked = new Set(), { limit
       if(cost<=direct*1.05)return roadPath;
     }
   }
-  const width = world.width, size = width * world.height;
+  const size = width * world.height;
   const isBlocked=index=>(blockedGrid?blockedGrid[index]!==0:blocked.has(tileKey(index%width,Math.floor(index/width))))||extraBlocked?.(index%width,Math.floor(index/width));
   let workspace = pathWorkspaces.get(world);
   if (!workspace || workspace.costs.length !== size) {
