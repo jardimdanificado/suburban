@@ -63,6 +63,142 @@ function crimeDetailsSummary(city, record) {
 
 export const DEFAULT_INBOX_TTL_MS = 12000;
 
+function formatSimTime(minute) {
+  if (!Number.isFinite(minute)) return '—';
+  const day = Math.floor(minute / 1440) + 1;
+  const rem = ((Math.floor(minute) % 1440) + 1440) % 1440;
+  const hh = String(Math.floor(rem / 60)).padStart(2, '0');
+  const mm = String(rem % 60).padStart(2, '0');
+  return `Dia ${day}, ${hh}:${mm}`;
+}
+
+export function describeSimulationNotice(city, notice) {
+  if (!city || !notice) return null;
+  const details = [['Horário', formatSimTime(notice.minute)]];
+  const people = [];
+  const seenPeople = new Set();
+  const addPerson = (id, role = 'Envolvido(a)') => {
+    if (id == null || seenPeople.has(id)) return;
+    const c = city.society?.citizen?.(id);
+    if (!c) return;
+    seenPeople.add(id);
+    const alive = !c.dead && !c.entity?.destroyed;
+    const health = Math.round(c.needs?.health ?? 100);
+    people.push({
+      id: c.id,
+      name: c.entity?.properties?.name || `Morador #${c.id}`,
+      role,
+      alive,
+      detail: alive ? `${role} · saúde ${health}%` : `${role} · falecido(a)`,
+      position: c.entity ? { x: c.entity.x, y: c.entity.y } : null,
+    });
+  };
+  const buildings = [];
+  const seenBuildings = new Set();
+  const addBuilding = (id, role = 'Local') => {
+    if (id == null || seenBuildings.has(id)) return;
+    const b = city.building?.(id);
+    if (!b || b.entity?.destroyed) return;
+    seenBuildings.add(id);
+    buildings.push({
+      id: b.id,
+      name: b.entity?.properties?.name || `Imóvel #${b.id}`,
+      detail: role,
+      position: b.door ? { x: b.door.x, y: b.door.y } : { x: b.entity.x, y: b.entity.y },
+    });
+  };
+  const parties = [];
+  const seenParties = new Set();
+  const addParty = (id, role = 'Partido') => {
+    if (id == null || seenParties.has(id)) return;
+    const party = city.politics?.party?.(id);
+    if (!party) return;
+    seenParties.add(id);
+    parties.push({ id: party.id, name: `${party.short} · ${party.name}`, detail: role });
+  };
+
+  let location = notice.position ? { ...notice.position, label: `${Math.floor(notice.position.x)}, ${Math.floor(notice.position.y)}` } : null;
+  const entry = notice.eventId != null ? city.history?.get?.(notice.eventId) : null;
+  const data = entry?.data || {};
+
+  if (notice.justiceCaseId != null) {
+    const record = city.justice?.cases?.find(c => c.id === notice.justiceCaseId);
+    if (record) {
+      const label = city.justice?.labelCrime?.(record.type) || record.type;
+      details.push(['Tipo', label]);
+      details.push(['Severidade', `${Math.round(record.severity || 0)}/100`]);
+      details.push(['Situação', record.status || 'registrado']);
+      details.push(['Testemunhas', `${record.witnesses?.length || 0}`]);
+      const d = record.details || {};
+      if (d.weapon) details.push(['Arma / meio', String(d.weapon)]);
+      if (d.stolenGood) details.push(['Item envolvido', String(d.stolenGood)]);
+      if (d.purpose) details.push(['Circunstância', d.purpose === 'unauthorized-bathroom-use' ? 'uso não autorizado de banheiro' : String(d.purpose)]);
+      if (d.reason) details.push(['Motivo / ação', String(d.reason)]);
+      if (d.message) details.push(['Mensagem', `“${String(d.message)}”`]);
+      if (Number.isFinite(d.amount) && d.amount > 0) details.push(['Valor', `${d.amount}`]);
+      addPerson(record.offenderId, 'Autor(a)');
+      addPerson(record.victimId, 'Vítima');
+      for (const w of (record.witnesses || []).slice(0, 4)) addPerson(w.citizenId, 'Testemunha');
+      const bId = record.scene?.buildingId ?? d.buildingId;
+      addBuilding(bId, Number.isInteger(record.scene?.floor) ? `Local da ocorrência (${record.scene.floor + 1}º andar)` : 'Local da ocorrência');
+      if (!location && record.position) location = { ...record.position, label: `${Math.floor(record.position.x)}, ${Math.floor(record.position.y)}` };
+    }
+  }
+
+  if (notice.category === 'death') {
+    for (const cid of notice.citizenIds || []) {
+      addPerson(cid, 'Falecido(a)');
+      const body = city.justice?.bodies?.find(b => b.citizenId === cid);
+      if (body) {
+        if (body.cause) details.push(['Causa', String(body.cause)]);
+        if (body.status) details.push(['Situação do corpo', String(body.status)]);
+        if (!location && body.position) location = { ...body.position, label: `${Math.floor(body.position.x)}, ${Math.floor(body.position.y)}` };
+      }
+    }
+  }
+
+  if (notice.billId != null) {
+    const bill = city.politics?.council?.bills?.find(b => b.id === notice.billId);
+    if (bill) {
+      details.push(['Proposição', bill.title]);
+      details.push(['Tipo', bill.decree ? 'Decreto do Executivo' : 'Projeto de Lei']);
+      details.push(['Autor', bill.authorName || 'Câmara Municipal']);
+      details.push(['Situação', bill.status]);
+      if (bill.votes?.length) {
+        const yes = bill.votes.filter(v => v.yes).reduce((s, v) => s + (v.weight || 1), 0);
+        const no = bill.votes.filter(v => !v.yes).reduce((s, v) => s + (v.weight || 1), 0);
+        details.push(['Placar', `${yes} sim · ${no} não`]);
+      }
+      if (bill.partyId != null) addParty(bill.partyId, 'Partido autor');
+      if (bill.payload?.buildingId != null) addBuilding(bill.payload.buildingId, 'Imóvel vinculado');
+    }
+  }
+
+  if (data.kind === 'environment-cleanup-program') {
+    if (data.opened != null) details.push(['Bicos abertos', `${data.opened}`]);
+    if (data.spent != null) details.push(['Verba empenhada', `R$ ${Math.round(data.spent)}`]);
+    if (Number.isFinite(data.unemploymentRate)) details.push(['Desemprego', `${Math.round(data.unemploymentRate * 100)}%`]);
+    if (Number.isFinite(data.cleanlinessScore)) details.push(['Limpeza urbana', `${data.cleanlinessScore}%`]);
+  }
+
+  if (data.buildingId != null) addBuilding(data.buildingId, 'Local citado');
+  for (const cid of notice.citizenIds || []) addPerson(cid, 'Envolvido(a)');
+  for (const pid of data.partyIds || []) addParty(pid, 'Partido envolvido');
+  if (data.partyId != null) addParty(data.partyId, 'Partido');
+  if (!location && people[0]?.position) location = { ...people[0].position, label: people[0].name };
+  if (!location && buildings[0]?.position) location = { ...buildings[0].position, label: buildings[0].name };
+
+  return {
+    title: notice.title,
+    summary: notice.text || '',
+    details,
+    people,
+    buildings,
+    parties,
+    location,
+  };
+}
+
 export function createSimulationNoticeTracker() {
   return {
     lastEventId: null,

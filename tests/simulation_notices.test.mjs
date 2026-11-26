@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup } from './helpers/city.mjs';
-import { createSimulationNoticeTracker, pollSimulationNotices, dismissSimulationNotice, takeSimulationNotice } from '../js/city_simulation_notices.js';
+import { createSimulationNoticeTracker, pollSimulationNotices, dismissSimulationNotice, takeSimulationNotice, describeSimulationNotice } from '../js/city_simulation_notices.js';
 
 test('simulation notices collect deaths, combat, council votes, decrees, and cleanup programs', () => {
   const city = setup({ starter: true, population: 24 });
@@ -66,6 +66,12 @@ test('simulation notices collect deaths, combat, council votes, decrees, and cle
   assert.equal(tracker.queue.length, 5);
   const opened = takeSimulationNotice(tracker, crimeNotice.id);
   assert.equal(opened?.id, crimeNotice.id);
+  const dossier = describeSimulationNotice(city, opened);
+  assert(dossier.details.some(([k]) => k === 'Severidade'));
+  assert(dossier.people.some(p => p.id === offender.id && p.role === 'Autor(a)'));
+  assert(dossier.people.some(p => p.id === targetVictim.id && p.role === 'Vítima'));
+  assert(dossier.buildings.some(b => b.id === building.id));
+  assert(dossier.location);
   assert.equal(tracker.queue.length, 4);
   assert.equal(pollSimulationNotices(city, tracker, 6500, { ttlMs: 5000 }).length, 0);
 });

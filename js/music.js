@@ -1,4 +1,5 @@
-export const MUSIC_TRACKS = ["data/music/kayoa - suburban.mp3", 
+export const MUSIC_TRACKS = [
+  //"data/music/kayoa - suburban.mp3", // preciso encontrar outro contexto que combine
   "data/music/672432__maximebedot__cuba-havana-music-salsa-bodeguita.ogg",
   "data/music/405031__kyles__cumbia-band-playing-on-stopped-parade-float-in-street-for-40th-anniversary-party-great-song-saravena-colombia-2016.ogg",
   "data/music/219317__felixblume__mexican-mariachis-playing-las-mananitas-on-the-square-garibaldi-in-mexico-city.ogg",

@@ -9,7 +9,7 @@ import {WindowManager} from './window_manager.js';
 import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js?v=favorite-window-icons-3';
 import {clipCanvasRegion} from './canvas_widgets.js';
-import {createSimulationNoticeTracker,pollSimulationNotices,dismissSimulationNotice,takeSimulationNotice} from './city_simulation_notices.js';
+import {createSimulationNoticeTracker,pollSimulationNotices,dismissSimulationNotice,takeSimulationNotice,describeSimulationNotice} from './city_simulation_notices.js';
 
 export const CITY_WINDOWS=[['mayor','Modo Partidário'],['city','Cidade'],['government','Governo'],['people','Cidadãos'],['land','Terrenos e obras'],['buildings','Imóveis'],['economy','Empresas'],['market','Mercado e riquezas'],['production','Produção'],['transport','Transportes'],['world','Mundo e rotas'],['urban-art','Arte urbana'],['safety','Segurança'],['forensics','IML e corpos'],['justice','Justiça'],['custody','Prisões'],['sanitation','Saneamento'],['publications','Jornais e livros'],['corruption','Corrupção'],['log','Histórico'],['favorites','Favoritos'],['custom-history','Histórico personalizado'],['map','Mapa da cidade']];
 const sizes={mayor:[660,640],family:[650,640],market:[700,500],party:[560,570],contract:[530,500],'poll-response':[560,560],'party-organization':[560,500],election:[610,510],publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],world:[570,540],'urban-art':[650,500],safety:[670,520],forensics:[650,520],justice:[700,540],custody:[640,520],sanitation:[570,450],log:[530,450],favorites:[460,420],'custom-history':[370,270],newgame:[400,470]};
@@ -233,6 +233,8 @@ export class CityDesktop {
   rightClick(x,y){
     if(this.menuOpen){this.closeMenu();return true;}
     if(!this.visible)return false;const window=this.manager.at(x,y);if(!window)return false;
+    const rc=window.state?.rightClickRegions?.findLast(r=>x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h);
+    if(rc?.onRightClick){rc.onRightClick();return true;}
     this.close(window.id);return true;
   }
   doubleClick(x,y){const w=this.manager.at(x,y);if(w&&this.manager.caption(w,x,y)){this.manager.shade(w.id);return true;}return false;}
@@ -306,10 +308,9 @@ export class CityDesktop {
     else {w.state.element.hidden=true;w.state.zones=[];}
   }
   draw(ui){
-    if(this.notifications)this.syncElectionNotices();
+    if(this.notifications){this.syncElectionNotices();this.syncSimulationInbox();}
     const point=ui.pointer,hover=point&&this.manager.at(point.x,point.y),resize=hover&&this.manager.resizeAt(hover,point.x,point.y);if(ui.canvas.style)ui.canvas.style.cursor=this.manager.gesture?.kind==='resize'||resize?'nwse-resize':this.manager.gesture?.kind==='move'||hover&&this.manager.caption(hover,point.x,point.y)?'move':'default';
     if(this.element.hidden===this.visible)this.element.hidden=!this.visible;if(this.visible){for(const [i,w] of this.manager.windows.entries()){const rect=this.manager.rect(w),covered=this.manager.windows.slice(i+1).some(above=>{const r=this.manager.rect(above);return r.x<=rect.x&&r.y<=rect.y&&r.x+r.w>=rect.x+rect.w&&r.y+r.h>=rect.y+rect.h;});if(covered){w.state.element.hidden=true;w.state.zones=[];continue;}if(w.state.element.hidden)w.state.element.hidden=false;this.frame(ui,w);}this.occludeInputs();const hit=point&&ui.hitTest(point.x,point.y);if(hit?.label){const key=hit.label;if(this.hoverHint?.key!==key)this.hoverHint={key,since:performance.now()};if(/^(Fechar|Fixar|Recolher|Ampliar|Redimensionar):/.test(key)||performance.now()-this.hoverHint.since>600)this.tooltip={text:key,x:point.x,y:point.y+24};}else this.hoverHint=null;}
-    if(this.notifications)this.drawSimulationInbox(ui);
     ui.regions.push(...(this.menuBarRegions||[]));
     if(this.menuOpen){for(const w of this.manager.windows)for(const input of w.state.inputs || [])input.hidden=true;this.drawMenu(ui);}
     this.tooltipElement.hidden=!this.tooltip||this.menuOpen||!!this.manager.gesture;
@@ -356,55 +357,95 @@ export class CityDesktop {
     if(!notice)return;
     takeSimulationNotice(this.simNoticeTracker,notice.id);
     if(this.manager.find('page:sim-notice'))this.close('page:sim-notice');
-    const state=this.openPage('sim-notice',{title:notice.title,width:400,height:240,draw:p=>{
-      p.heading(notice.title);
-      p.note(notice.text||'');
-      if(notice.billId!=null)p.button('VER PROJETO',()=>{this.close('page:sim-notice');const panel=this.openModule('government');if(panel){panel.section='council';panel.billId=notice.billId;}});
-      else if(notice.justiceCaseId!=null)p.button('VER OCORRÊNCIA',()=>{this.close('page:sim-notice');const panel=this.openModule('justice');if(panel){panel.section='cases';panel.justiceCaseId=notice.justiceCaseId;}});
-      else if(notice.corruptionCaseId!=null)p.button('VER CORRUPÇÃO',()=>{this.close('page:sim-notice');this.openCorruption(notice.corruptionCaseId);});
-      else if(notice.eventId!=null)p.button('VER EVENTO',()=>{this.close('page:sim-notice');this.openEvent(notice.eventId);});
-      const targetCitizen=notice.citizenIds?.map(id=>this.city.society.citizen(id)).find(c=>c&&!c.entity.destroyed);
-      if(targetCitizen)p.button('IR AO LOCAL',()=>{this.camera?.(targetCitizen.entity.x,targetCitizen.entity.y);this.select?.(targetCitizen.entity);});
-      else if(notice.position)p.button('IR AO LOCAL',()=>{this.camera?.(notice.position.x,notice.position.y);});
-      p.button('DISPENSAR',()=>this.close('page:sim-notice'));
+    const info=describeSimulationNotice(this.city,notice)||{title:notice.title,summary:notice.text||'',details:[],people:[],buildings:[],parties:[],location:null};
+    const state=this.openPage('sim-notice',{title:info.title,width:450,height:390,draw:p=>{
+      p.heading(info.title);
+      p.note(info.summary);
+      if(info.details.length){p.heading('DETALHES');for(const [k,v]of info.details)p.kv(k,v);}
+      if(info.people.length){
+        p.heading('ENVOLVIDOS');
+        for(const person of info.people)p.record(person.name,person.detail,()=>{const c=this.city.society.citizen(person.id);if(c){this.camera?.(c.entity.x,c.entity.y);this.select?.(c.entity);}});
+      }
+      if(info.buildings.length){
+        p.heading('LOCAIS');
+        for(const b of info.buildings)p.record(b.name,b.detail,()=>{const site=this.city.building(b.id);if(site){this.camera?.(site.door?.x??site.entity.x,site.door?.y??site.entity.y);this.select?.(site.entity);}});
+      }
+      if(info.parties.length){
+        p.heading('PARTIDOS');
+        for(const party of info.parties)p.record(party.name,party.detail,()=>this.openParty(party.id));
+      }
+      p.heading('AÇÕES');
+      if(notice.billId!=null)p.button('VER PROJETO NA CÂMARA',()=>{this.close('page:sim-notice');const panel=this.openModule('government');if(panel){panel.section='council';panel.billId=notice.billId;}});
+      else if(notice.justiceCaseId!=null)p.button('VER OCORRÊNCIA NA JUSTIÇA',()=>{this.close('page:sim-notice');const panel=this.openModule('justice');if(panel){panel.section='cases';panel.justiceCaseId=notice.justiceCaseId;}});
+      else if(notice.corruptionCaseId!=null)p.button('VER CASO DE CORRUPÇÃO',()=>{this.close('page:sim-notice');this.openCorruption(notice.corruptionCaseId);});
+      else if(notice.eventId!=null)p.button('ABRIR INSPETOR DO EVENTO',()=>{this.close('page:sim-notice');this.openEvent(notice.eventId);});
+      if(info.location)p.button(`IR AO LOCAL (${info.location.label})`,()=>{this.camera?.(info.location.x,info.location.y);});
+      p.button('DISPENSAR AVISO',()=>this.close('page:sim-notice'));
       p.button('SILENCIAR AVISOS',()=>{this.notifications=false;if(this.simNoticeTracker)this.simNoticeTracker.queue.length=0;this.close('page:sim-notice');});
     }});
     state.simNoticeId=notice.id;
   }
-  drawSimulationInbox(ui){
+  openSimulationInbox({manual=false}={}){
+    const windowId='page:sim-inbox',existing=this.manager.find(windowId);
+    if(existing){if(manual){existing.state.manualOpen=true;this.manager.raise(windowId);if(existing.shaded)this.manager.shade(windowId);}return existing.state;}
+    const state=this.create(windowId,'sim-inbox',{title:'Caixa de Avisos',kind:'page'}),win=this.manager.find(windowId);
+    if(!this.manager.saved.has(windowId)){
+      win.w=340;win.h=270;
+      win.x=Math.max(4,this.manager.width-win.w-8);
+      win.y=Math.max(this.manager.top+4,this.manager.height-30-win.h);
+    }
+    this.manager.constrain(win);
+    state.visible=true;state.manualOpen=manual;state.openCurrentInWindow=null;state.rightClickRegions=[];
+    state.drawFloating=(ui,w)=>{
+      state.city=this.city;state.visible=true;state.zones=[];state.rightClickRegions=[];state.beginInputs();
+      const now=performance.now(),tracker=this.simNoticeTracker??=createSimulationNoticeTracker();
+      if(this.notifications)pollSimulationNotices(this.city,tracker,now);
+      const ctx=ui.ctx,x=w.x+6,topY=w.y+25,bodyW=w.w-12,bodyH=w.h-47;
+      ui.text(`${tracker.queue.length} aviso(s) · clique abre · dir. descarta`,x,topY+2,T.muted);
+      ui.button(x+bodyW-132,topY,62,16,'LIMPAR',()=>{tracker.queue.length=0;});
+      ui.button(x+bodyW-66,topY,66,16,this.notifications?'SILENCIAR':'ATIVAR',()=>{this.notifications=!this.notifications;if(!this.notifications)tracker.queue.length=0;});
+      const listY=topY+21,listH=Math.max(24,bodyH-22),cardH=44,gap=4,items=[...tracker.queue].reverse();
+      const contentH=items.length?items.length*(cardH+gap)-gap:24,maxScroll=Math.max(0,contentH-listH);
+      const scroll=Math.max(0,Math.min(maxScroll,state.scrolls.inbox||0));state.scrolls.inbox=scroll;
+      state.zones.push({key:'inbox',x,y:listY,w:bodyW,h:listH,max:maxScroll});
+      const cardW=bodyW-(maxScroll>0?12:0);
+      const accents={death:T.red,combat:T.red,council:T.gold,decree:T.gold,environment:T.green,corruption:'#7d3c98',protest:T.gold,justice:T.blue,politics:T.blue};
+      clipCanvasRegion(ui,x,listY,cardW,listH,()=>{
+        if(!items.length){ui.text('Nenhum aviso ativo no momento.',x+4,listY+6,T.muted);return;}
+        let cy=listY-scroll;
+        for(const item of items){
+          if(cy+cardH>=listY&&cy<=listY+listH){
+            bevel(ctx,x,cy,cardW,cardH,{fill:T.paper});
+            ctx.fillStyle=accents[item.category]||T.blue;ctx.fillRect(x+2,cy+2,4,cardH-4);
+            ctx.save();ctx.font=ui.font(1,true);ctx.textBaseline='top';ctx.fillStyle=T.ink;
+            ctx.fillText(ui.fitText(item.title,cardW-34),x+10,cy+5);ctx.restore();
+            ui.text(ui.fitText(item.text,cardW-28),x+10,cy+20,T.muted);
+            const ratio=Math.max(0,Math.min(1,1-(now-(item.receivedAt??now))/(item.durationMs||12000)));
+            ctx.fillStyle=T.track;ctx.fillRect(x+8,cy+cardH-5,cardW-16,2);
+            ctx.fillStyle=accents[item.category]||T.blue;ctx.fillRect(x+8,cy+cardH-5,Math.round((cardW-16)*ratio),2);
+            const hitY=Math.max(listY,cy),hitH=Math.min(cy+cardH,listY+listH)-hitY;
+            if(hitH>0){
+              ui.regions.push({x,y:hitY,w:cardW-22,h:hitH,label:`Abrir: ${item.title} (botão dir. descarta)`,onClick:()=>this.openSimulationNotice(item)});
+              state.rightClickRegions.push({x,y:hitY,w:cardW,h:hitH,onRightClick:()=>dismissSimulationNotice(tracker,item.id)});
+              if(cy+4>=listY&&cy+19<=listY+listH){ui.button(x+cardW-20,cy+4,16,15,'×',()=>dismissSimulationNotice(tracker,item.id));ui.regions.at(-1).label=`Descartar: ${item.title}`;}
+            }
+          }
+          cy+=cardH+gap;
+        }
+      });
+      if(maxScroll>0){const trackX=x+bodyW-9,thumbH=Math.max(16,listH*listH/contentH),thumbY=listY+(listH-thumbH)*(scroll/maxScroll);ctx.fillStyle=T.track;ctx.fillRect(trackX,listY,6,listH);ctx.fillStyle=T.muted;ctx.fillRect(trackX+1,thumbY,4,thumbH);}
+    };
+    return state;
+  }
+  syncSimulationInbox(){
     if(mayorPlaying(this.city)||this.menuOpen)return;
     const now=performance.now(),tracker=this.simNoticeTracker??=createSimulationNoticeTracker();
+    const prevTopId=tracker.queue.at(-1)?.id??null;
     pollSimulationNotices(this.city,tracker,now);
-    if(!tracker.queue.length)return;
-    const visible=tracker.queue.slice(-5).reverse();
-    const cardW=Math.min(315,ui.width-16),cardH=44,gap=4,ctx=ui.ctx;
-    const accents={death:T.red,combat:T.red,council:T.gold,decree:T.gold,environment:T.green,corruption:'#7d3c98',protest:T.gold,justice:T.blue,politics:T.blue};
-    let y=ui.height-32-cardH;
-    const x=ui.width-cardW-8;
-    for(const item of visible){
-      if(y<this.manager.top+4)break;
-      ctx.save();ctx.fillStyle='rgba(0,0,0,.28)';ctx.fillRect(x+2,y+2,cardW,cardH);ctx.restore();
-      bevel(ctx,x,y,cardW,cardH,{fill:T.paper});
-      ctx.fillStyle=accents[item.category]||T.blue;ctx.fillRect(x+2,y+2,4,cardH-4);
-      ctx.save();ctx.font=ui.font(1,true);ctx.textBaseline='top';ctx.fillStyle=T.ink;
-      ctx.fillText(ui.fitText(item.title,cardW-34),x+10,y+5);ctx.restore();
-      ui.text(ui.fitText(item.text,cardW-28),x+10,y+20,T.muted);
-      const ratio=Math.max(0,Math.min(1,1-(now-(item.receivedAt??now))/(item.durationMs||12000)));
-      ctx.fillStyle=T.track;ctx.fillRect(x+8,y+cardH-5,cardW-16,2);
-      ctx.fillStyle=accents[item.category]||T.blue;ctx.fillRect(x+8,y+cardH-5,Math.round((cardW-16)*ratio),2);
-      ui.regions.push({x,y,w:cardW-22,h:cardH,label:`Abrir aviso: ${item.title}`,onClick:()=>this.openSimulationNotice(item)});
-      ui.button(x+cardW-20,y+4,16,15,'×',()=>dismissSimulationNotice(tracker,item.id));
-      ui.regions.at(-1).label=`Descartar: ${item.title}`;
-      y-=cardH+gap;
-    }
-    if(tracker.queue.length>visible.length){
-      const pillH=20;
-      if(y>=this.manager.top+4){
-        bevel(ctx,x,y+cardH-pillH,cardW,pillH,{fill:T.face});
-        ui.text(`+${tracker.queue.length-visible.length} aviso(s) na caixa`,x+8,y+cardH-pillH+4,T.ink);
-        ui.button(x+cardW-92,y+cardH-pillH+2,88,16,'LIMPAR TUDO',()=>{tracker.queue.length=0;});
-      }
-    }
+    const nextTopId=tracker.queue.at(-1)?.id??null;
+    const win=this.manager.find('page:sim-inbox');
+    if(nextTopId&&nextTopId!==prevTopId&&!win)this.openSimulationInbox({manual:false});
+    else if(win&&!tracker.queue.length&&!win.pinned&&!win.state.manualOpen)this.close('page:sim-inbox');
   }
   drawMap(ui,w){
     const state=w.state,world=this.city.world;state.zones=[];for(const input of state.inputs || [])input.hidden=true;

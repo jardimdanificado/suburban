@@ -34,6 +34,7 @@ import {narrativeSceneType,narrativeRoleForParticipant} from './city_art_narrati
 import {shackSurfaceTextures} from './shack_surface_textures.js';
 import {createBotanicalTreeGeometry,acquireBotanicalTreeTextures} from './botanical_trees.js?v=species-colors-3';
 import {floweringShrubSurfaceTextures,floweringShrubLeavesGeometry,floweringShrubFlowersGeometry} from './flowering_shrub_surface.js?v=leaf-bract-detail-2';
+import {TILE_WATER} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 const OPEN_PIT_MINES=new Set(['iron_mine','bauxite_mine']);
 const EMPTY_FLOORS=new Set();
 function buildingMaterial(renderer,THREE,kind,color,variant=0){
@@ -1275,20 +1276,52 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
     }
     if(['farm','park'].includes(b.type)||pasture)addFarmFence(THREE,group,b,world,HOUSE_STYLES[architectureFor(b.type,b.id,world.seed??0)]||HOUSE_STYLES.modern);
     if(pasture){
-      const woodMat=new THREE.MeshLambertMaterial({color:0x6d4c32}),hayMat=new THREE.MeshLambertMaterial({color:0xd9b85b}),stoneMat=new THREE.MeshLambertMaterial({color:0x7e837e}),waterMat=new THREE.MeshLambertMaterial({color:0x3d8fb8});
+      const woodMat=new THREE.MeshLambertMaterial({color:0x6d4c32}),darkWoodMat=new THREE.MeshLambertMaterial({color:0x4f3522}),hayMat=new THREE.MeshLambertMaterial({color:0xd9b85b}),hayShadeMat=new THREE.MeshLambertMaterial({color:0xc29e42}),stoneMat=new THREE.MeshLambertMaterial({color:0x7c807a}),ironMat=new THREE.MeshLambertMaterial({color:0x343a38}),seaWaterMat=renderer.materials?.[TILE_WATER]||new THREE.MeshLambertMaterial({color:0x2f88b5});
       const fx=Math.min(b.width*.28,1.8),fz=Math.min(b.depth*.28,1.8),fh=surfaceElevation(world,entity.x+fx,entity.y+fz);
-      // Comedouro (feed trough with hay/feed)
+      // Comedouro (open wooden feed rack with X-trestles & layered hay)
       const feeder=new THREE.Group();
-      for(const dx of [-.55,.55]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.1,.42,.56),woodMat);leg.position.set(dx,.21,0);feeder.add(leg);}
-      const trough=new THREE.Mesh(new THREE.BoxGeometry(1.35,.26,.54),woodMat);trough.position.set(0,.42,0);feeder.add(trough);
-      const hay=new THREE.Mesh(new THREE.BoxGeometry(1.2,.16,.42),hayMat);hay.position.set(0,.53,0);feeder.add(hay);
+      for(const dx of [-.56,.56]){
+        for(const tilt of [-.36,.36]){
+          const leg=new THREE.Mesh(new THREE.BoxGeometry(.075,.56,.075),darkWoodMat);
+          leg.position.set(dx,.25,0);leg.rotation.x=tilt;feeder.add(leg);
+        }
+        const endCap=new THREE.Mesh(new THREE.BoxGeometry(.06,.24,.46),woodMat);endCap.position.set(dx,.42,0);feeder.add(endCap);
+      }
+      const crossBrace=new THREE.Mesh(new THREE.BoxGeometry(1.18,.06,.06),darkWoodMat);crossBrace.position.set(0,.16,0);feeder.add(crossBrace);
+      const rackFloor=new THREE.Mesh(new THREE.BoxGeometry(1.24,.05,.24),darkWoodMat);rackFloor.position.set(0,.30,0);feeder.add(rackFloor);
+      for(const side of [-1,1]){
+        const wall=new THREE.Mesh(new THREE.BoxGeometry(1.26,.24,.055),woodMat);
+        wall.position.set(0,.41,side*.18);wall.rotation.x=side*.34;feeder.add(wall);
+        const rail=new THREE.Mesh(new THREE.BoxGeometry(1.28,.045,.045),darkWoodMat);
+        rail.position.set(0,.52,side*.24);feeder.add(rail);
+      }
+      const hayBase=new THREE.Mesh(new THREE.BoxGeometry(1.10,.12,.30),hayShadeMat);hayBase.position.set(0,.38,0);feeder.add(hayBase);
+      for(const [hx,hy,hz,rx,ry,rz,sx,sy,sz] of [[-.32,.46,.02,.08,.18,-.06,.38,.12,.28],[0,.48,-.01,-.05,-.12,.04,.44,.14,.30],[.33,.45,.01,.06,.22,.05,.36,.12,.27]]){
+        const tuft=new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),hayMat);
+        tuft.position.set(hx,hy,hz);tuft.rotation.set(rx,ry,rz);feeder.add(tuft);
+      }
       feeder.position.set(fx,fh,fz);feeder.traverse(o=>{o.castShadow=true;o.receiveShadow=true;});group.add(feeder);
-      // Bebedouro / cocho (water trough)
+      // Bebedouro / cocho (hollow trough with real water surface)
       const wx=Math.max(fx+2.0,b.width-1.8),wz=Math.min(b.depth*.28,1.8),wh=surfaceElevation(world,entity.x+wx,entity.y+wz);
       const drinker=new THREE.Group();
-      const basin=new THREE.Mesh(new THREE.BoxGeometry(1.25,.38,.62),stoneMat);basin.position.set(0,.19,0);drinker.add(basin);
-      const water=new THREE.Mesh(new THREE.BoxGeometry(1.06,.08,.44),waterMat);water.position.set(0,.36,0);drinker.add(water);
-      drinker.position.set(wx,wh,wz);drinker.traverse(o=>{o.castShadow=true;o.receiveShadow=true;});group.add(drinker);
+      for(const dx of [-.48,.48]){
+        const support=new THREE.Mesh(new THREE.BoxGeometry(.14,.18,.52),stoneMat);support.position.set(dx,.09,0);drinker.add(support);
+        const strap=new THREE.Mesh(new THREE.BoxGeometry(.04,.30,.60),ironMat);strap.position.set(dx,.31,0);drinker.add(strap);
+      }
+      const bottom=new THREE.Mesh(new THREE.BoxGeometry(1.30,.06,.56),darkWoodMat);bottom.position.set(0,.19,0);drinker.add(bottom);
+      for(const sz of [-.25,.25]){const sideWall=new THREE.Mesh(new THREE.BoxGeometry(1.30,.28,.06),woodMat);sideWall.position.set(0,.33,sz);drinker.add(sideWall);}
+      for(const sx of [-.62,.62]){const endWall=new THREE.Mesh(new THREE.BoxGeometry(.06,.28,.56),woodMat);endWall.position.set(sx,.33,0);drinker.add(endWall);}
+      const waterGeo=new THREE.PlaneGeometry(1.16,.44,6,3);
+      waterGeo.rotateX(-Math.PI/2);
+      const uvAttr=waterGeo.attributes.uv;
+      if(uvAttr)for(let i=0;i<uvAttr.count;i++)uvAttr.setXY(i,uvAttr.getX(i)*.28,uvAttr.getY(i)*.14);
+      const vCount=waterGeo.attributes.position.count,wColors=new Float32Array(vCount*3);
+      for(let i=0;i<vCount;i++){wColors[i*3]=.72;wColors[i*3+1]=.94;wColors[i*3+2]=.88;}
+      waterGeo.setAttribute('color',new THREE.BufferAttribute(wColors,3));
+      const water=new THREE.Mesh(waterGeo,seaWaterMat);
+      water.position.set(0,.37,0);
+      drinker.add(water);
+      drinker.position.set(wx,wh,wz);drinker.traverse(o=>{o.castShadow=o!==water;o.receiveShadow=true;});group.add(drinker);
     }
     if(['market','greengrocer'].includes(b.type)){const fixtures=marketFixtures(THREE,b);group.add(fixtures);group.userData.retailFixtures=fixtures;}
     if(b.type==='bike_rack'){

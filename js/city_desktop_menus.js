@@ -9,6 +9,7 @@ export function desktopMenus(d){
       item('Jogar como personagem',()=>d.controls.play?.()),
       item('Favoritos',()=>d.openModule('favorites')),
       item('Histórico personalizado',()=>d.openModule('custom-history')),
+      item('Caixa de avisos',()=>d.openSimulationInbox({manual:true})),
       item('Mundo, comércio e migração',()=>d.openModule('world')),
       item('Opções',()=>d.controls.options?.()),
       item('Editor de mapa',()=>d.controls.editor?.()),
