@@ -7145,6 +7145,32 @@ export class RCT3DRenderer {
       if (tx < 0 || tx >= this.mapWidth || ty < 0 || ty >= this.mapHeight) return true;
       return map[ty * this.mapWidth + tx] === TILE_WATER;
     };
+    const waterTopoRev = `${world.waterTopologyRevision || 0}:${this.mapWidth}:${this.mapHeight}`;
+    if (!this._waterLandDistCache || this._waterLandDistCache.rev !== waterTopoRev) {
+      const mw = this.mapWidth, mh = this.mapHeight, dist = new Uint8Array(mw * mh);
+      dist.fill(255);
+      const q = [];
+      for (let y = 0; y < mh; y++) {
+        for (let x = 0; x < mw; x++) {
+          const idx = y * mw + x;
+          if (map[idx] !== TILE_WATER) { dist[idx] = 0; continue; }
+          if ((x > 0 && map[idx - 1] !== TILE_WATER) || (x + 1 < mw && map[idx + 1] !== TILE_WATER) || (y > 0 && map[idx - mw] !== TILE_WATER) || (y + 1 < mh && map[idx + mw] !== TILE_WATER)) {
+            dist[idx] = 1; q.push(idx);
+          }
+        }
+      }
+      for (let head = 0; head < q.length; head++) {
+        const cur = q[head], d = dist[cur];
+        if (d >= 5) continue;
+        const cx = cur % mw, cy = (cur - cx) / mw, nd = d + 1;
+        if (cx > 0 && dist[cur - 1] > nd) { dist[cur - 1] = nd; q.push(cur - 1); }
+        if (cx + 1 < mw && dist[cur + 1] > nd) { dist[cur + 1] = nd; q.push(cur + 1); }
+        if (cy > 0 && dist[cur - mw] > nd) { dist[cur - mw] = nd; q.push(cur - mw); }
+        if (cy + 1 < mh && dist[cur + mw] > nd) { dist[cur + mw] = nd; q.push(cur + mw); }
+      }
+      this._waterLandDistCache = { rev: waterTopoRev, dist };
+    }
+    const waterLandDist = this._waterLandDistCache.dist;
     const isDropAt = (tx,ty) => {
       if(tx<0||tx>=this.mapWidth||ty<0||ty>=this.mapHeight)return true;
       const tile=map[ty*this.mapWidth+tx];return tile===TILE_WATER||tile===TILE_VOID;
@@ -7169,17 +7195,23 @@ export class RCT3DRenderer {
             bucket.pos.push(px,WATER_LEVEL,pz);bucket.uvs.push(px/8,pz/8);bucket.colors.push(...color);
             bucket.waterCells.push(ty*this.mapWidth+tx);bucket.waterLights.push(zoneMult);bucket.waterShoreMix.push(mix);
           };
-          const steps=zoomDetail.coastSteps;
+          const steps=coastal?zoomDetail.coastSteps:zoomDetail.waterSteps;
           for (let gy=0;gy<steps;gy++) for(let gx=0;gx<steps;gx++) {
             const x0=gx/steps,x1=(gx+1)/steps,y0=gy/steps,y1=(gy+1)/steps;
             for(const [fx,fy] of [[x0,y0],[x0,y1],[x1,y1],[x0,y0],[x1,y1],[x1,y0]]) waterVertex(tx+fx,ty+fy,fx,fy);
           }
     };
     const deepBedSample = (px, pz) => {
-      let minLandDist = 4.2;
       const cx = Math.floor(px), cz = Math.floor(pz);
-      for (let dy = -4; dy <= 4; dy++) {
-        for (let dx = -4; dx <= 4; dx++) {
+      const cellDist = (cx >= 0 && cx < this.mapWidth && cz >= 0 && cz < this.mapHeight) ? waterLandDist[cz * this.mapWidth + cx] : 5;
+      if (cellDist >= 5) {
+        const y = WATER_LEVEL - 0.90 + Math.sin(px * 0.65) * Math.cos(pz * 0.55) * 0.03;
+        return { y, depthFactor: 1 };
+      }
+      let minLandDist = 4.2;
+      const r = Math.min(4, cellDist);
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
           if (!isWaterAt(cx + dx, cz + dy)) {
             const clampedX = Math.max(cx + dx, Math.min(cx + dx + 1, px));
             const clampedZ = Math.max(cz + dy, Math.min(cz + dy + 1, pz));
@@ -7207,7 +7239,8 @@ export class RCT3DRenderer {
     const addWaterBedTile = (tx, ty, zoneMult) => {
       const bed = tileMeshBuckets.shoreSand;
       const localProfile = sandShoreTileSurface(world, tx, ty, { profileOnly: true });
-      const steps = zoomDetail.beachSteps;
+      const cellDist = waterLandDist[ty * this.mapWidth + tx];
+      const steps = (localProfile || cellDist < 5) ? zoomDetail.beachSteps : 1;
       const grid = [];
       for (let gz = 0; gz <= steps; gz++) {
         for (let gx = 0; gx <= steps; gx++) {

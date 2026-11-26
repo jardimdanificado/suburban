@@ -1292,8 +1292,12 @@ export class CitySimulation {
     if(task==='leisure'&&!urgent&&n.leisure<85&&this.hour>=6&&this.hour<22&&(c.id+this.hour)%3===0){swimLeisureTried=true;const swim=this.findSwimSpot(c,16);if(swim){c.path=[...swim.path,swim.water];c.task='swim-leisure';c.swimSpot=swim;c.swimUntil=this.minute+35;c.action='Indo nadar para se divertir';return;}}
     if(task==='leisure'&&!urgent&&(measure?measure('taskFurnitureRoute',()=>this.furniture.routeLeisure(c)):this.furniture.routeLeisure(c)))return;
     if(!swimLeisureTried&&task==='leisure'&&!urgent&&n.leisure<85&&this.hour>=6&&this.hour<22){const swim=this.findSwimSpot(c,18);if(swim){c.path=[...swim.path,swim.water];c.task='swim-leisure';c.swimSpot=swim;c.swimUntil=this.minute+35;c.action='Indo nadar para se divertir';return;}}
-    if(task==='hygiene'&&(measure?measure('taskHygieneSearch',()=>this.sanitation.choose(c,'hygiene')):this.sanitation.choose(c,'hygiene')))return;
-    if(task==='hygiene'){const swim=this.findSwimSpot(c,home?18:40);if(swim){c.path=[...swim.path,swim.water];c.task='swim-hygiene';c.swimSpot=swim;c.swimUntil=this.minute+20;c.action='Indo se lavar na água';return;}}
+    if(task==='hygiene'){
+      if(!urgent){c._hygieneRouteAfter??=this.minute+(c.id%SIMULATION_LOD.unstableDecisionMinutes);if(this.minute<c._hygieneRouteAfter)return;}
+      if(measure?measure('taskHygieneSearch',()=>this.sanitation.choose(c,'hygiene')):this.sanitation.choose(c,'hygiene')){c._hygieneRouteAfter=null;return;}
+      const swim=this.findSwimSpot(c,home?18:40);if(swim){c._hygieneRouteAfter=null;c.path=[...swim.path,swim.water];c.task='swim-hygiene';c.swimSpot=swim;c.swimUntil=this.minute+20;c.action='Indo se lavar na água';return;}
+    }
+    c._hygieneRouteAfter=null;
     if (task === 'toilet') {
       // Optional toilet visits used to route nearly everyone who crossed the
       // same need threshold during one hourly decision pass. Phase those
@@ -1832,9 +1836,16 @@ export class CitySimulation {
     }
     this._citizenLoopProfile=null;citizenMs=performance.now()-profileMark;profileMark=performance.now();
     tickServiceTickets(this);
-    for(const c of this.citizens)if(!c.worldBoatCrew&&!c.skybridgeTransit&&(c._lastNeedsAt===this.minute||c.task||c.path.length||c.indoorLocation))syncCitizenInterior(this,c);
+    for(const c of this.citizens){
+      if(c.worldBoatCrew||c.skybridgeTransit)continue;
+      if(c.task==='energy'&&c.sleep?.active&&!c.path.length&&c.indoorLocation&&!c.indoorLocation.exiting&&!c.indoorLocation.path?.length&&c.indoorLocation.task==='energy'&&c.furnitureUse&&(this.minute%10!==(c.id%10)))continue;
+      if(c._lastNeedsAt===this.minute||c.task||c.path.length||c.indoorLocation)syncCitizenInterior(this,c);
+    }
     }finally{endActivitySearch(this);this._citizenLoopProfile=null;}
-    for(const c of this.citizens)if(c.seatId||c.seated||c.furnitureUse||c.indoorLocation||c.workWait||c.task==='beach_leisure'||c.beachLeisure)this.furniture.syncCitizen(c);
+    for(const c of this.citizens){
+      if(c.task==='energy'&&c.sleep?.active&&!c.path.length&&c.indoorLocation&&!c.indoorLocation.exiting&&!c.indoorLocation.path?.length&&c.indoorLocation.task==='energy'&&c.furnitureUse&&(this.minute%10!==(c.id%10)))continue;
+      if(c.seatId||c.seated||c.furnitureUse||c.indoorLocation||c.workWait||c.task==='beach_leisure'||c.beachLeisure)this.furniture.syncCitizen(c);
+    }
     if(this.minute%60===0){this.furniture.reconcile();this.substances?.hourly();}
     const interiorMs=performance.now()-profileMark;profileMark=performance.now();
     const societyParts=this.profileDiagnostics?{}:null;let societyPartStart=this.profileDiagnostics?performance.now():0;

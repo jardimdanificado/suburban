@@ -739,14 +739,16 @@ export class CityEconomy {
     // before any factory can reserve six batches and starve the other chains.
     const offset=(this.tradeCursor||0)%Math.max(1,buyers.length);this.tradeCursor=offset+1;
     const totalBuyers=buyers.length,tradeStart=performance.now();
-    for (let bi=0;bi<totalBuyers;bi++) {
-      if(totalBuyers>30&&bi>0&&performance.now()-tradeStart>18){this.tradeCursor=(bi+offset)%totalBuyers;break;}
+    let tradeTimedOut=false;
+    for (let bi=0;bi<totalBuyers&&!tradeTimedOut;bi++) {
+      if(totalBuyers>30&&bi>0&&performance.now()-tradeStart>16){this.tradeCursor=(bi+offset)%totalBuyers;break;}
       const buyer=buyers[(bi+offset)%totalBuyers];
       const buyerPerson=this.city.relationships.businessPerson(buyer);
       const buyerInputs=this.city.vehicles.recipeFor(buyer)?.inputs||(buyer.type==='library'?{livros:1}:(civicSpec(buyer)||justiceServiceSpec(buyer))?.inputs)||(buyer.type==='paper_mill'?paperMillInputs(this.city,buyer):INDUSTRIES[buyer.type]?.inputs);
       const isRetail=['market','greengrocer','bakery','restaurant'].includes(buyer.type);
       const retailAssort=(buyer.type==='market'||buyer.type==='greengrocer')?this.retailAssortment(buyer):null;
       for (const good of goodKeys) {
+        if(totalBuyers>30&&performance.now()-tradeStart>16){this.tradeCursor=(bi+offset)%totalBuyers;tradeTimedOut=true;break;}
         if(!this.accepts(buyer, good))continue;
         if(good==='lixo' && buyer.type==='composting')continue;
         const batch=buyerInputs?.[good];
@@ -1155,8 +1157,8 @@ export class CityEconomy {
       case 0: this.city.currency.hourly(); this.city.welfare.hourly(); break;
       case 1: this.city.lighting.hourly(); break;
       case 2:
-        if(!this.city.profileDiagnostics){this.city.politics.hourly();this.municipalPolicy();break;}
-        {const started=performance.now();this.city.politics.hourly();const politicsMs=performance.now()-started;const policyStarted=performance.now();this.municipalPolicy();return {politicsMs,municipalPolicyMs:performance.now()-policyStarted};}
+        if(!this.city.profileDiagnostics){this.city.politics.hourly();break;}
+        {const started=performance.now();this.city.politics.hourly();return {politicsMs:performance.now()-started};}
       case 3: this.assignHomes(); break;
       case 4:
         if(!this.city.profileDiagnostics){this.hire();break;}
@@ -1164,11 +1166,11 @@ export class CityEconomy {
       case 5:
         if(!this.city.profileDiagnostics){this.city.development.updateHourly();break;}
         {const started=performance.now();this.city.development.updateHourly();return {developmentMs:performance.now()-started};}
-      case 6: this.city.development.balanceContracts(); this.city.nature.hourly(); break;
+      case 6: this.city.development.balanceContracts(); this.city.nature.hourly(); this.municipalPolicy(); break;
       case 7: if(reducedCadence(this.city,this,'freight-rebalance',120,120,this.city.buildings.length))this.city.logistics.rebalanceWaiting(); break;
-      case 8: this.trade(); externalTradeHourly(this.city); break;
+      case 8: this.trade(); break;
       case 9: this.city.paint.hourly();updateClothes(this.city); updateCompanyUniforms(this.city); this.householdPurchases(); this.city.publications.hourly(); break;
-      case 10: this.city.sanitation.hourly(); this.city.workMeals.purchase(); break;
+      case 10: this.city.sanitation.hourly(); this.city.workMeals.purchase(); externalTradeHourly(this.city); break;
       case 11:
         {const city=this.city,businesses=this.businesses,marketScarce=Object.values(this.market||{}).some(row=>row.demand>10&&row.stock<2),economySignature=`${city.buildings.length}:${businesses.length}:${city.citizens.length}:${city.development.projects.length}`,demandDue=reducedCadence(city,this,'economic-demand',120,180,economySignature),marketDue=reducedCadence(city,this,'market-prices',marketScarce?30:120,120,`${city.buildings.length}:${marketScarce}`),supplyDue=reducedCadence(city,this,'supply-chain-planning',120,240,`${city.buildings.length}:${city.development.projects.length}`);
         if(!city.profileDiagnostics){if(demandDue)this.updateDemand(true);if(marketDue)updateMarket(this);if(supplyDue)planSupplyChains(this);tradeSharesHourly(city);break;}
