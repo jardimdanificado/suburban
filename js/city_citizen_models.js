@@ -294,10 +294,10 @@ if (vCitizenDirt.a > 0.05) {
     vec3 pCell = floor(vCitizenLocalPos * 32.0);
     float h = fract(sin(dot(pCell, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
     float h2 = fract(sin(dot(floor(vCitizenLocalPos * 14.0), vec3(41.13, 19.7, 73.9))) * 29431.7);
-    float threshold = clamp(zoneWeight * (0.28 + vCitizenDirt.a * 0.48), 0.0, 0.78);
+    float threshold = clamp(zoneWeight * (0.34 + vCitizenDirt.a * 0.56), 0.0, 0.90);
     float speck = step(1.0 - threshold, h * 0.72 + h2 * 0.28);
-    diffuseColor.rgb = mix(diffuseColor.rgb, vCitizenDirt.rgb, zoneWeight * vCitizenDirt.a * 0.18);
-    diffuseColor.rgb = mix(diffuseColor.rgb, vCitizenDirt.rgb * (0.72 + 0.35 * h2), speck * 0.94);
+    diffuseColor.rgb = mix(diffuseColor.rgb, vCitizenDirt.rgb, zoneWeight * vCitizenDirt.a * 0.42);
+    diffuseColor.rgb = mix(diffuseColor.rgb, vCitizenDirt.rgb * (0.68 + 0.35 * h2), speck * 0.96);
   }
 }`);
   }
@@ -368,8 +368,7 @@ if (vCitizenDirt.a > 0.05) {
     const f=zones?Math.min(1,((zones.feet||0)+(zones.legs||0)*1.3)/150):0;
     const ar=zones?Math.min(1,(zones.arms||0)/60):0,hd=zones?Math.min(1,(zones.head||0)/60):0,st=zones?Math.min(1,(zones.seat||0)/60):0;
     const bk=zones?Math.min(1,(zones.back||0)/60):0,sd=zones?Math.min(1,(zones.side||0)/60):0,tr=zones?Math.min(1,(zones.torso||0)/70):0;
-    const hasSpecific=f>0||ar>0||hd>0||st>0||bk>0||sd>0||tr>0;
-    const gn=hasSpecific?0:level01*.55;
+    const gn=level01>.15?Math.min(1,(level01-.15)*1.05):0;
     a[o]=color.r;a[o+1]=color.g;a[o+2]=color.b;a[o+3]=level01;mesh.userData.instanceDirtDirty=true;
     if(za){za[o]=f;za[o+1]=ar;za[o+2]=hd;za[o+3]=st;}
     if(zb){zb[o]=bk;zb[o+1]=sd;zb[o+2]=tr;zb[o+3]=gn;}
@@ -772,8 +771,8 @@ if (vCitizenDirt.a > 0.05) {
       this.setInstanceColor(toolBatch.mesh,toolBatch.count,this.color);
       toolBatch.count++;
     }
-    if((c.dead||dirtVisual.level>=78)&&!dimmed&&this.THREE.BoxGeometry&&this.THREE.MeshBasicMaterial){
-      const fliesPerCitizen=c.dead?6:Math.min(6,3+Math.floor((dirtVisual.level-78)/8));
+    if((c.dead||dirtVisual.level>=82)&&!dimmed&&this.THREE.BoxGeometry&&this.THREE.MeshBasicMaterial){
+      const fliesPerCitizen=c.dead?6:Math.min(6,3+Math.floor((dirtVisual.level-82)/6));
       if(this.flyCount+fliesPerCitizen>this.flyCapacity){
         const cap=Math.max(64,(this.flyCapacity||32)*2),geo=new this.THREE.BoxGeometry(.025,.016,.025),mat=new this.THREE.MeshBasicMaterial({color:0x16181c}),mesh=new this.THREE.InstancedMesh(geo,mat,cap);
         mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);mesh.frustumCulled=false;
