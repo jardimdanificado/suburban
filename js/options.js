@@ -142,7 +142,7 @@ export class OptionsPanel {
       const headingHeight = this.tab === "VISUAL" ? 0 : 22;
       this.maxScroll = Math.max(0, rows.length * 30 + headingHeight - (bottom - contentY));
       this.scroll = Math.min(this.scroll, this.maxScroll);
-      if (headingHeight) ui.text(this.tab === "AUDIO" ? "MUSICA" : "AJUSTES DO RENDERIZADOR 3D", x + 12, contentY + 4 - this.scroll, "#3cbcfc");
+      if (headingHeight) ui.text(this.tab === "AUDIO" ? "MUSICA E EFEITOS" : "AJUSTES DO RENDERIZADOR 3D", x + 12, contentY + 4 - this.scroll, "#3cbcfc");
       rows.forEach((row, i) => {
         const ry = contentY + headingHeight + i * 30 - this.scroll;
         if (ry + 30 < contentY || ry > bottom) return;

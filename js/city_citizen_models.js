@@ -47,7 +47,7 @@ export function citizenAnimation(c,moving=false,inWater=undefined){
     if(BIKE_KINDS.has(c.ridingVehicleKind))return c.ridingAsPassenger?'sentado_no_banco':'seated';
     return GLIDE_KINDS.has(c.ridingVehicleKind)?'glide':'passenger';
   }
-  if(c.climbing)return 'escalar';
+  if(c.climbing)return c.climbing.phase==='painting'?'use_alt':'escalar';
   const substance=activeSubstanceEffect(c);
   if(inWater!==undefined?inWater:c.swimming)return moving?'nadar':'boiar';
   if(moving){
@@ -641,7 +641,8 @@ if (vCitizenDirt.a > 0.05) {
     if(actionState){const token=`${clip}:${actionToken??''}`;if(motion.actionToken!==token){motion.actionToken=token;motion.actionStartedAt=this.clock;}}
     else motion.actionToken=null;
     const animationTime=(clip==='run'||clip==='caminhar'||clip==='andar_lento'||clip==='pedal'||clip.endsWith('_andar'))?motion.walkFrame/8:actionState?this.clock-(motion.actionStartedAt??this.clock):this.clock,pose=citizenFrame(clip,animationTime,actionState?0:(entity.id*13)%17,actionState),key=`${pose.clip}:${pose.frame}`;
-    if(!traveling&&!sleeping&&c.facingTarget)motion.angle=Math.atan2(c.facingTarget.x-x,c.facingTarget.y-y);
+    if(c.climbing){motion.angle=Math.atan2(c.climbing.facingX-x,c.climbing.facingY-y);renderAngle=motion.angle;}
+    else if(!traveling&&!sleeping&&c.facingTarget)motion.angle=Math.atan2(c.facingTarget.x-x,c.facingTarget.y-y);
     const appearance=this.appearanceFor(c,entity),{piece,printed,patterned,garment,garmentHex,garmentColorHex,printId,garmentMaterial,lower,lowerSkirt,itemColorHexes}=appearance;
     let poseBatch=motion.poseBatches?.get(key);if(!poseBatch){poseBatch=new Map();motion.poseBatches??=new Map();motion.poseBatches.set(key,poseBatch);}
     let resolved=poseBatch.get(appearance);if(!resolved){const outfitKey=piece?`${key}:${piece}`:null,outfit=outfitKey?this.outfits.get(outfitKey):null,skirtOutfit=lowerSkirt?this.outfits.get(`${key}:${lowerSkirt}`):null,bodyWithSkirt=lowerSkirt?outfit?.[lowerSkirt==='saia'?'bodyWithSaia':'bodyWithSaiaLonga']:null,bodySource=bodyWithSkirt||skirtOutfit?.body||outfit?.body||this.frames.get(key),clothingSource=(lowerSkirt?outfit?.[lowerSkirt==='saia'?'clothesWithSaia':'clothesWithSaiaLonga']:null)||outfit?.clothes,combine=!!(outfit&&COMBINABLE_GARMENTS.has(piece)&&!printed&&!lowerSkirt&&this.THREE.InstancedBufferAttribute),combinedSource=combine?this.combinedCitizenSurface(bodySource,clothingSource):null,batchKey=`${piece?`${key}:${piece}:${garmentMaterial?.uuid||'shared'}${lowerSkirt?`+${lowerSkirt}`:''}`:lowerSkirt?`${key}:lower:${lowerSkirt}`:key}${combine?':combined':''}`;resolved={batchKey,outfit,bodySource,clothingSource,combinedSource};poseBatch.set(appearance,resolved);}

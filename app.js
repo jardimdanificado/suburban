@@ -841,7 +841,7 @@ export const gameAudio = new SpatialAudio({
 options.audio = gameAudio;
 gameAudio.setMuted(options.values.sfxMuted === true);
 gameAudio.setVolume(options.values.sfxVolume ?? 0.8);
-gameAudio.load().catch(() => {});
+gameAudio.load().catch(error => console.warn('[audio]', error?.message || error));
 for (const type of ["pointerdown", "keydown"]) {
   window.addEventListener(type, () => gameAudio.unlock(), { capture: true });
 }

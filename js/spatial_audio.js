@@ -11,6 +11,21 @@ const WATER_TILE = 2;
 const MARKET_TYPES = new Set(['market', 'greengrocer', 'restaurant', 'bakery']);
 const MAX_BUFFER_BYTES = 24 * 1024 * 1024;
 const FAUNA_VOICE_LIMIT = 3;
+const CITIZEN_VOICE_LIMIT = 3;
+// The crowd chatter reuses the crowded-market recording: real voices, CC0.
+const CHANNEL_FILES = { crowd: 'market' };
+// Event kind to positional one-shot. `duration` trims long recordings such as
+// the 27 s door latch down to one open.
+const EVENT_SOUNDS = {
+  construction: { key: 'hammer', gain: 0.5, duration: 2 },
+  'project-started': { key: 'hammer', gain: 0.45, duration: 2 },
+  'service-contracted': { key: 'hammer', gain: 0.45, duration: 2 },
+  'business-founded': { key: 'cash_register', gain: 0.4, duration: 2.2 },
+  purchase: { key: 'coins', gain: 0.35, duration: 1.1 },
+  'home-lease': { key: 'coins', gain: 0.3, duration: 1.1 },
+  'bill-voted': { key: 'gavel', gain: 0.5, duration: 2.5 },
+  'council-elected': { key: 'gavel', gain: 0.4, duration: 2.5 },
+};
 
 // Same curve as the PannerNode 'inverse' distance model, kept pure so the
 // selection code and the tests can reason about loudness without Web Audio.
@@ -22,12 +37,27 @@ export function distanceAttenuation(distance, { refDistance = 4, maxDistance = 4
 }
 
 export function isNightHour(hour) {
-  return !Number.isFinite(hour) || hour < 6 || hour >= 19;
+  if (!Number.isFinite(hour)) return false;
+  return hour < 6 || hour >= 19;
+}
+
+// The orthographic camera never moves vertically: zoom shrinks the frustum.
+// Translate that frustum height into a listening altitude, so zoomed out means
+// high above the city (wind, music) and zoomed in means ears on the street.
+export function isometricAltitude(zoom) {
+  const value = Number.isFinite(zoom) ? Math.max(0.3, Math.min(12, zoom)) : 1.2;
+  return (28 / value) * 0.5;
+}
+
+// High above the city the wind takes over; at street level it is inaudible.
+export function windGain(altitude) {
+  if (!Number.isFinite(altitude)) return 0;
+  return Math.max(0, Math.min(1, (altitude - 6) / 34)) * 0.7;
 }
 
 // Listener pose in world units. Isometric views listen from the camera focus
-// (ground level), not from the orthographic eye 100+ units up in the air, so
-// distance attenuation stays meaningful. Perspective views use the real eye.
+// plus the altitude implied by the zoom: zoomed out is high above the city,
+// zoomed in drops the ears to street level. Perspective views use the eye.
 export function listenerPose(renderer, groundY = 1) {
   if (!renderer) return null;
   const perspective = typeof renderer.isPerspectiveActive === 'function' && renderer.isPerspectiveActive();
@@ -41,14 +71,22 @@ export function listenerPose(renderer, groundY = 1) {
   }
   if (perspective) {
     const p = camera.position;
-    return { x: p.x, y: p.y, z: p.z, fx, fy, fz };
+    return { x: p.x, y: p.y, z: p.z, fx, fy, fz, altitude: Math.max(0, p.y - groundY) };
   }
   const x = Number(renderer.camX), z = Number(renderer.camY);
   if (!Number.isFinite(x) || !Number.isFinite(z)) return null;
+  const altitude = isometricAltitude(renderer.zoom);
   let dx = x - camera.position.x, dz = z - camera.position.z;
   const length = Math.hypot(dx, dz);
   if (length > 1e-6) { dx /= length; dz /= length; } else { dx = 0; dz = -1; }
-  return { x, y: groundY, z, fx: dx, fy: 0, fz: dz };
+  return { x, y: groundY + altitude, z, fx: dx, fy: 0, fz: dz, altitude };
+}
+
+// Square root of horizontal plus vertical separation. Sources sit near the
+// ground, so the listener altitude alone can silence the whole city.
+function sourceDistance(listener, x, z, sourceY = 1) {
+  const vertical = (listener.y ?? sourceY) - sourceY;
+  return Math.hypot(x - listener.x, z - listener.z, vertical);
 }
 
 // Weighted pick of one animal that is allowed to call right now.
@@ -60,8 +98,7 @@ export function chooseFaunaCall({ animals, listener, species = ANIMAL_SPECIES, r
     const spec = species[animal.species];
     if (!spec) continue;
     if (animal.state === 'sleep') continue;
-    const dx = animal.x - listener.x, dz = animal.y - listener.z;
-    const distance = Math.hypot(dx, dz);
+    const distance = sourceDistance(listener, animal.x, animal.y, (animal.altitude || 0) + 1);
     if (distance > radius) continue;
     if (now - (lastCallAt.get(animal.species) ?? -Infinity) < cooldown) continue;
     const attenuation = distanceAttenuation(distance, { refDistance: 4, maxDistance: radius, rolloffFactor: 1.1 });
@@ -90,7 +127,7 @@ export function ambiencePlan({ listener, features = {}, night = false } = {}) {
   const zones = [];
   const add = (key, feature, volume, radius) => {
     if (!feature || !Number.isFinite(feature.x) || !Number.isFinite(feature.z)) return;
-    const distance = Math.hypot(feature.x - listener.x, feature.z - listener.z);
+    const distance = sourceDistance(listener, feature.x, feature.z);
     if (distance > radius) return;
     const gain = volume * distanceAttenuation(distance, { refDistance: 6, maxDistance: radius, rolloffFactor: 0.8 });
     if (gain >= 0.03) zones.push({ key, x: feature.x, z: feature.z, distance, gain });
@@ -100,8 +137,47 @@ export function ambiencePlan({ listener, features = {}, night = false } = {}) {
   add('market', features.market, 0.55, 22);
   add('construction', features.construction, 0.5, 24);
   add('city_street', features.buildings, night ? 0.22 : 0.32, 26);
+  if (features.crowd) {
+    const crowd = features.crowd;
+    const boost = Math.min(1, (crowd.count || 0) / 14);
+    const gain = (0.28 + 0.32 * boost) * (night ? 0.6 : 1);
+    add('crowd', crowd, gain, 24);
+  }
   zones.sort((a, b) => b.gain - a.gain);
   return zones.slice(0, 3);
+}
+
+// Dirt and stone roads take the dry footstep loop; everything else takes the
+// grass loop. Water tiles get no footsteps at all.
+const DIRT_TILES = new Set([6, 7, 8, 11, 12, 13]);
+export function footstepSurface(tile) {
+  if (!Number.isFinite(tile) || tile === WATER_TILE) return null;
+  return DIRT_TILES.has(tile) ? 'footsteps_dirt' : 'footsteps_grass';
+}
+
+// Densest 4x4 tile cell of citizens around the listener. The crowd emitter
+// sits on the real group, so walking past a square raises its chatter.
+export function crowdCluster(citizens, listener, { radius = 20, cell = 4, limit = 900 } = {}) {
+  if (!citizens || !listener) return null;
+  const buckets = new Map();
+  let scanned = 0;
+  for (const citizen of citizens) {
+    if (++scanned > limit) break;
+    const entity = citizen?.entity;
+    if (!entity || entity.destroyed) continue;
+    const distance = sourceDistance(listener, entity.x, entity.y);
+    if (distance > radius) continue;
+    const key = `${Math.floor(entity.x / cell)},${Math.floor(entity.y / cell)}`;
+    const bucket = buckets.get(key);
+    if (bucket) { bucket.count++; bucket.sx += entity.x; bucket.sz += entity.y; }
+    else buckets.set(key, { count: 1, sx: entity.x, sz: entity.y });
+  }
+  let best = null;
+  for (const bucket of buckets.values()) {
+    if (!best || bucket.count > best.count) best = bucket;
+  }
+  if (!best) return null;
+  return { x: best.sx / best.count, z: best.sz / best.count, count: best.count };
 }
 
 function defaultContextFactory() {
@@ -171,12 +247,17 @@ export class SpatialAudio {
     this.bufferBytes = 0;
     this.playing = new Set();
     this.channels = new Map();
+    this.voices = new Map();
+    this.wind = null;
+    this.citizenPositions = new Map();
+    this.indoorTrack = new Map();
     this.lastCallAt = new Map();
     this.activeFauna = 0;
     this.faunaTimer = 1.4;
     this.ambienceTimer = 0;
+    this.voiceTimer = 0;
+    this.doorTimer = 0;
     this.lastEventId = null;
-    this.eventCursor = -1;
   }
 
   async load() {
@@ -216,6 +297,11 @@ export class SpatialAudio {
       if (!channel.element.paused) continue;
       channel.element.play().catch(() => {});
     }
+    for (const voice of this.voices.values()) {
+      if (!voice.element.paused) continue;
+      voice.element.play().catch(() => {});
+    }
+    if (this.wind?.element.paused) this.wind.element.play().catch(() => {});
   }
 
   setMuted(value) {
@@ -247,6 +333,7 @@ export class SpatialAudio {
   // paused. Nothing decays through a fade, so pause is truly silent.
   silenceSources() {
     for (const handle of this.playing) {
+      handle.silenced = true;
       try { handle.source.stop(0); } catch {}
     }
     this.playing.clear();
@@ -260,8 +347,24 @@ export class SpatialAudio {
       try { channel.element.pause(); } catch {}
       channel.stopAt = Infinity;
     }
+    for (const voice of this.voices.values()) {
+      try {
+        voice.gain.gain.cancelScheduledValues(now);
+        voice.gain.gain.setValueAtTime(0, now);
+      } catch {}
+      try { voice.element.pause(); } catch {}
+    }
+    if (this.wind) {
+      try {
+        this.wind.gain.gain.cancelScheduledValues(now);
+        this.wind.gain.gain.setValueAtTime(0, now);
+      } catch {}
+      try { this.wind.element.pause(); } catch {}
+    }
     this.faunaTimer = 0.8;
     this.ambienceTimer = 0;
+    this.voiceTimer = 0;
+    this.doorTimer = 0;
   }
 
   update(dt = 0) {
@@ -276,8 +379,10 @@ export class SpatialAudio {
     const pose = listenerPose(renderer, ground);
     if (!pose) return;
     this.updateListener(pose);
+    this.updateWind(pose);
     this.updateAmbience(dt, pose);
     this.updateFauna(dt, pose);
+    this.updateCitizenVoices(dt, pose);
     this.pollCityEvents(pose);
   }
 
@@ -302,6 +407,34 @@ export class SpatialAudio {
       listener.setPosition(pose.x, pose.y, pose.z);
       listener.setOrientation(pose.fx, pose.fy, pose.fz, 0, 1, 0);
     }
+  }
+
+  // Wind is the altitude layer: not positional, because above the city it
+  // comes from everywhere. Zooming in fades it out to nothing.
+  updateWind(pose) {
+    if (!this.ready) return;
+    const gain = windGain(pose.altitude);
+    if (gain <= 0.005 && !this.wind) return;
+    const wind = this.ensureWind();
+    if (!wind) return;
+    wind.gain.gain.setTargetAtTime(gain, this.ctx.currentTime, 0.5);
+    if (wind.element.paused && gain > 0.02) wind.element.play().catch(() => {});
+  }
+
+  ensureWind() {
+    if (this.wind) return this.wind;
+    const url = this.worldFiles.wind_forest;
+    if (!url || !this.ctx) return null;
+    let element;
+    try { element = this.mediaFactory(url); } catch { return null; }
+    element.loop = true;
+    const source = this.ctx.createMediaElementSource(element);
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0;
+    source.connect(gain);
+    gain.connect(this.master);
+    this.wind = { element, source, gain };
+    return this.wind;
   }
 
   updateFauna(dt, pose) {
@@ -338,6 +471,109 @@ export class SpatialAudio {
     const gain = (spec?.category === 'livestock' ? 0.45 : 0.55) * (call.animal?.state === 'flee' ? 1.2 : 1);
     const y = this.groundYAt(call.x, call.z) + (call.y || 0) + 0.45;
     this.playBuffer(buffer, { x: call.x, y, z: call.z, gain, kind: 'fauna' });
+  }
+
+  // Citizens wear the street: up to three footsteps loops follow the nearest
+  // walkers, and a door opens when someone steps into a building.
+  updateCitizenVoices(dt, pose) {
+    const now = this.ctx.currentTime;
+    this.doorTimer = Math.max(0, this.doorTimer - dt);
+    this.voiceTimer -= dt;
+    if (this.voiceTimer > 0) return;
+    this.voiceTimer = 0.35;
+    const city = this.getCity();
+    const citizens = city?.citizens;
+    if (!Array.isArray(citizens) || !citizens.length) return;
+    const world = city.world;
+    const limit = 1200;
+    const walkers = [];
+    let scanned = 0;
+    for (const citizen of citizens) {
+      if (++scanned > limit) break;
+      const entity = citizen?.entity;
+      if (!entity || entity.destroyed) continue;
+      const id = citizen.id ?? entity.id;
+      const previous = this.citizenPositions.get(id);
+      const indoor = citizen.indoorLocation?.buildingId ?? citizen.indoorLocation?.id ?? null;
+      this.citizenPositions.set(id, { x: entity.x, y: entity.y, indoor });
+      if (!previous) continue;
+      if (indoor !== previous.indoor && indoor != null && previous.indoor == null && this.doorTimer <= 0) {
+        const distance = Math.hypot(entity.x - pose.x, entity.y - pose.z);
+        if (distance <= 20) {
+          this.doorTimer = 0.9;
+          this.playWorldOneShot('door', entity.x, entity.y, 0.3, 1.8);
+        }
+      }
+      if (indoor != null) continue;
+      if (!previous || Math.hypot(entity.x - previous.x, entity.y - previous.y) < 0.05) continue;
+      const distance = Math.hypot(entity.x - pose.x, entity.y - pose.z);
+      if (distance > 16) continue;
+      let tile = null;
+      if (world?.map && Number.isFinite(world.width)) {
+        tile = world.map[Math.floor(entity.y) * world.width + Math.floor(entity.x)];
+      }
+      const file = footstepSurface(tile);
+      if (!file) continue;
+      walkers.push({ id, x: entity.x, z: entity.y, distance, file });
+    }
+    walkers.sort((a, b) => a.distance - b.distance);
+    const active = walkers.slice(0, CITIZEN_VOICE_LIMIT);
+    const wanted = new Set(active.map(walker => walker.id));
+    for (const walker of active) {
+      const voice = this.ensureVoice(walker.id, walker.file);
+      if (!voice) continue;
+      const y = this.groundYAt(walker.x, walker.z) + 0.12;
+      setNodePosition(voice.panner, walker.x, y, walker.z);
+      const gain = 0.34 * distanceAttenuation(walker.distance, { refDistance: 3, maxDistance: 16, rolloffFactor: 1.4 });
+      voice.gain.gain.setTargetAtTime(gain, now, 0.15);
+      if (voice.pausedAt) { voice.pausedAt = 0; }
+      if (voice.element.paused) voice.element.play().catch(() => {});
+    }
+    for (const [id, voice] of this.voices) {
+      if (wanted.has(id)) continue;
+      voice.gain.gain.setTargetAtTime(0, now, 0.12);
+      if (!voice.pausedAt) voice.pausedAt = now + 0.5;
+      if (voice.pausedAt <= now) {
+        try { voice.element.pause(); } catch {}
+        voice.pausedAt = 0;
+      }
+    }
+    if (this.citizenPositions.size > 4096) {
+      for (const id of this.citizenPositions.keys()) {
+        if (!citizens.some(citizen => (citizen.id ?? citizen.entity?.id) === id)) this.citizenPositions.delete(id);
+      }
+    }
+  }
+
+  ensureVoice(id, file) {
+    const key = `${id}:${file}`;
+    const existing = this.voices.get(id);
+    if (existing?.key === key) return existing;
+    if (existing) {
+      try { existing.element.pause(); } catch {}
+      try { existing.source.disconnect(); existing.panner.disconnect(); existing.gain.disconnect(); } catch {}
+      this.voices.delete(id);
+    }
+    const url = this.worldFiles[file];
+    if (!url || !this.ctx) return null;
+    let element;
+    try { element = this.mediaFactory(url); } catch { return null; }
+    element.loop = true;
+    const source = this.ctx.createMediaElementSource(element);
+    const panner = this.ctx.createPanner();
+    panner.panningModel = 'equalpower';
+    panner.distanceModel = 'inverse';
+    panner.refDistance = 3;
+    panner.maxDistance = 16;
+    panner.rolloffFactor = 1.4;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0;
+    source.connect(panner);
+    panner.connect(gain);
+    gain.connect(this.master);
+    const voice = { id, key, file, element, source, panner, gain, pausedAt: 0 };
+    this.voices.set(id, voice);
+    return voice;
   }
 
   updateAmbience(dt, pose) {
@@ -377,7 +613,7 @@ export class SpatialAudio {
   ensureChannel(key) {
     const existing = this.channels.get(key);
     if (existing) return existing;
-    const url = this.worldFiles[key];
+    const url = this.worldFiles[CHANNEL_FILES[key] || key];
     if (!url || !this.ctx) return null;
     let element;
     try { element = this.mediaFactory(url); } catch { return null; }
@@ -448,6 +684,9 @@ export class SpatialAudio {
       if (market) features.market = market;
     }
 
+    const crowd = crowdCluster(city?.citizens, pose);
+    if (crowd) features.crowd = crowd;
+
     const projects = city?.development?.projects;
     if (Array.isArray(projects)) {
       let nearest = null, nearestDistance = Infinity;
@@ -479,51 +718,70 @@ export class SpatialAudio {
   }
 
   // Gameplay one-shots: construction starts hammer, a business opening rings
-  // the register. Historical events are skipped on the first poll.
+  // the register, a purchase clinks coins, a plenary vote hits the gavel.
+  // Historical events are skipped on the first poll; the id window survives
+  // trims of the event feed.
   pollCityEvents(pose) {
     const events = this.getCity()?.events;
     if (!Array.isArray(events) || !events.length) return;
+    const newest = events[events.length - 1];
     if (this.lastEventId === null) {
-      this.lastEventId = events[events.length - 1].id ?? 0;
-      this.eventCursor = events.length - 1;
+      this.lastEventId = newest?.id ?? 0;
       return;
     }
     const played = [];
-    for (let index = events.length - 1; index > this.eventCursor && played.length < 2; index--) {
+    for (let index = events.length - 1; index >= 0 && played.length < 3; index--) {
       const event = events[index];
-      if (!event || (event.id ?? 0) <= this.lastEventId) break;
-      const position = this.eventPosition(event);
-      if (position) played.push({ event, position });
-    }
-    this.eventCursor = events.length - 1;
-    this.lastEventId = events[this.eventCursor].id ?? this.lastEventId;
-    for (const { event, position } of played.reverse()) {
+      const id = event?.id ?? 0;
+      if (id <= this.lastEventId) break;
       const kind = event.kind || event.data?.kind;
-      if (kind === 'construction' || kind === 'service-contracted') {
-        this.playWorldOneShot('hammer', position.x, position.z, 0.5);
-      } else if (kind === 'business-founded') {
-        this.playWorldOneShot('cash_register', position.x, position.z, 0.4);
-      }
+      if (!EVENT_SOUNDS[kind]) continue;
+      const position = this.eventPosition(event);
+      if (!position) continue;
+      if (Math.hypot(position.x - pose.x, position.z - pose.z) > 30) continue;
+      played.push({ kind, position });
+    }
+    this.lastEventId = newest?.id ?? this.lastEventId;
+    for (const { kind, position } of played.reverse()) {
+      const sound = EVENT_SOUNDS[kind];
+      this.playWorldOneShot(sound.key, position.x, position.z, sound.gain, sound.duration);
     }
   }
 
   eventPosition(event) {
     const data = event.data || event;
+    const city = this.getCity();
+    if (data.projectId != null) {
+      const project = city?.development?.projects?.find(row => row.id === data.projectId);
+      if (project) {
+        const position = this.projectPosition(city, project);
+        if (position) return position;
+      }
+    }
     const buildingId = data.buildingId ?? (Array.isArray(data.buildingIds) ? data.buildingIds[0] : null);
-    if (buildingId == null) return null;
-    const building = this.getCity()?.building?.(buildingId);
-    if (!building?.entity || building.entity.destroyed) return null;
-    return { x: building.entity.x, z: building.entity.y };
+    if (buildingId != null) {
+      const building = city?.building?.(buildingId);
+      if (building?.entity && !building.entity.destroyed) return { x: building.entity.x, z: building.entity.y };
+    }
+    if (data.unitId != null && Array.isArray(city?.buildings)) {
+      for (const building of city.buildings) {
+        if (!building?.entity || building.entity.destroyed) continue;
+        if (building.units?.some(unit => unit.id === data.unitId)) {
+          return { x: building.entity.x, z: building.entity.y };
+        }
+      }
+    }
+    return null;
   }
 
-  playWorldOneShot(key, x, z, gain = 0.5) {
+  playWorldOneShot(key, x, z, gain = 0.5, duration = 0) {
     const file = this.worldFiles[key];
     if (!file || this.paused) return;
     const y = this.groundYAt(x, z) + 0.7;
     this.loadBuffer(file)
       .then(buffer => {
         if (this.paused || this.disposed) return;
-        this.playBuffer(buffer, { x, y, z, gain, kind: 'world' });
+        this.playBuffer(buffer, { x, y, z, gain, kind: 'world', duration });
       })
       .catch(() => {});
   }
@@ -551,7 +809,7 @@ export class SpatialAudio {
     return buffer;
   }
 
-  playBuffer(buffer, { x, y, z, gain = 1, kind = 'world' } = {}) {
+  playBuffer(buffer, { x, y, z, gain = 1, kind = 'world', duration = 0 } = {}) {
     const context = this.ctx;
     if (!context || this.paused) return null;
     const source = context.createBufferSource();
@@ -578,10 +836,10 @@ export class SpatialAudio {
     this.playing.add(handle);
     source.onended = () => {
       this.playing.delete(handle);
-      if (kind === 'fauna') this.activeFauna = Math.max(0, this.activeFauna - 1);
+      if (kind === 'fauna' && !handle.silenced) this.activeFauna = Math.max(0, this.activeFauna - 1);
       try { level.disconnect(); panner?.disconnect(); } catch {}
     };
-    source.start();
+    source.start(0, 0, duration > 0 ? Math.min(duration, buffer?.duration || duration) : undefined);
     return handle;
   }
 
@@ -595,6 +853,21 @@ export class SpatialAudio {
       channel.element.src = '';
     }
     this.channels.clear();
+    for (const voice of this.voices.values()) {
+      try { voice.source.disconnect(); } catch {}
+      try { voice.panner.disconnect(); } catch {}
+      try { voice.gain.disconnect(); } catch {}
+      voice.element.src = '';
+    }
+    this.voices.clear();
+    if (this.wind) {
+      try { this.wind.source.disconnect(); } catch {}
+      try { this.wind.gain.disconnect(); } catch {}
+      this.wind.element.src = '';
+      this.wind = null;
+    }
+    this.citizenPositions.clear();
+    this.indoorTrack.clear();
     this.ctx?.close?.();
     this.ctx = null;
   }

@@ -88,22 +88,27 @@ function* mergedUpperWallSupports(b,records){
 export function climbingFallChance(floor){
  return .001+.001*Math.max(1,floor||1);
 }
+export function climbingFallDamage(height,floor){
+ return Math.round(8+Math.max(0,height||0)*8+Math.max(1,floor||1)*6);
+}
 export function reachUpperGraffiti(city,c,mission){
  const support=mission.surface,dx=[0,1,0,-1][support.side]||0,dy=[-1,0,1,0][support.side]||0;
- const wallBase={x:support.position.x+dx*.35,y:support.position.y+dy*.35};
+ const wallBase={x:support.position.x+dx*.24,y:support.position.y+dy*.24};
  const approach=city.walkable(Math.floor(wallBase.x),Math.floor(wallBase.y))?wallBase:support.approach;
  if(!c.climbing){
   if(c.path.length)return false;
-  if(Math.hypot(c.entity.x-approach.x,c.entity.y-approach.y)>.25){
+  if(Math.hypot(c.entity.x-approach.x,c.entity.y-approach.y)>.22){
    const path=city.findPath(c.entity,approach);
    if(path===null){mission.accessFailed=true;return false;}
    c.path=path.length?path:[approach];return false;
   }
   const floor=Math.max(1,support.floor||1);
+  c.entity.x=wallBase.x;c.entity.y=wallBase.y;
   c.climbing={phase:'up',targetZ:floor*CITY_FLOOR_HEIGHT,floor,z:0,facingX:support.position.x,facingY:support.position.y};
   c.skybridgeZ=0;c.facingTarget={x:support.position.x,y:support.position.y};
   mission.status='climbing';c.action='Escalando a parede para pichar';return false;
  }
+ c.entity.x=wallBase.x;c.entity.y=wallBase.y;
  c.facingTarget={x:c.climbing.facingX,y:c.climbing.facingY};
  if(c.climbing.phase==='painting'){c.skybridgeZ=c.climbing.z;return true;}
  const step=c.climbing.phase==='down'?-.65:.55;
@@ -111,11 +116,13 @@ export function reachUpperGraffiti(city,c,mission){
  c.skybridgeZ=c.climbing.z;
  const currentFloor=Math.max(1,Math.ceil(c.climbing.z/CITY_FLOOR_HEIGHT));
  if(c.climbing.z>0&&city.random()<climbingFallChance(currentFloor)){
+  const fallHeight=c.climbing.z,damage=climbingFallDamage(fallHeight,currentFloor);
   c.climbing=null;c.skybridgeZ=0;c.facingTarget=null;
-  c.needs.health=Math.max(5,(c.needs.health??100)-(10+currentFloor*6));
-  c.unconsciousUntil=city.minute+10+currentFloor*4;
+  c.needs.health=Math.max(0,(c.needs.health??100)-damage);
+  if(c.needs.health<=0){c.dead=true;c.diedAt=city.minute;c.action='Morreu ao cair da parede';}
+  else{c.unconsciousUntil=city.minute+10+currentFloor*4;c.action=`Caiu do ${currentFloor}º andar (-${damage} saúde)`;}
   city.sanitation?.soilCitizen?.(c,'sangue',5+currentFloor*3,null,'legs');
-  city.log?.(`${c.entity.properties.name} escorregou e caiu do ${currentFloor}º andar ao escalar para pichar.`,'justice',[c.id],{kind:'graffiti-fall',floor:currentFloor});
+  city.log?.(`${c.entity.properties.name} escorregou e caiu do ${currentFloor}º andar ao escalar para pichar (dano ${damage}).`,'justice',[c.id],{kind:'graffiti-fall',floor:currentFloor,damage,height:fallHeight});
   mission.accessFailed=true;return false;
  }
  if(c.climbing.phase==='up'&&c.climbing.z>=c.climbing.targetZ){c.climbing.phase='painting';return true;}

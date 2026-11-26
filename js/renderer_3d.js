@@ -8887,7 +8887,7 @@ export class RCT3DRenderer {
         const inDeepWater=citizenOnWater&&waterGroundH<WATER_LEVEL-0.04;
         const waterTime=this.materials?.[TILE_WATER]?.userData?.caribbeanWaterTime?.value??0;
         const waveY=inDeepWater?waterWaveHeight(sampleX,sampleY,waterTime):0;
-        const citizenSurfaceH=citizenOnWater?(inDeepWater?WATER_LEVEL+waveY-0.32:waterGroundH):surfaceH;
+        const citizenSurfaceH=citizenOnWater?(inDeepWater?WATER_LEVEL+waveY-0.32:waterGroundH):renderSurfaceH;
         citizenModelOptions.hidden=isPossessed;citizenModelOptions.dimmed=!inCurZone;citizenModelOptions.vehicleAngle=vehicleAngle;citizenModelOptions.visualOffset=renderOffset;citizenModelOptions.inWater=inDeepWater;citizenModelOptions.waterSurfaceY=inDeepWater?WATER_LEVEL+waveY:null;
         citizenModelOptions.indoorBounds=interiorBuilding&&interiorBuilding.constructionKind!=='open-air'?{minX:interiorBuilding.entity.x,maxX:interiorBuilding.entity.x+interiorBuilding.width,minY:interiorBuilding.entity.y,maxY:interiorBuilding.entity.y+interiorBuilding.depth}:null;
         const animal=e.properties?.cityAnimal;
