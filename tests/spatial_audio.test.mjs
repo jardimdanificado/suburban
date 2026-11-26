@@ -11,6 +11,7 @@ import {
   isometricAltitude,
   listenerPose,
   musicSkyGain,
+  groundAudibility,
   windGain,
 } from '../js/spatial_audio.js';
 import { MusicPlayer } from '../js/music.js';
@@ -154,9 +155,9 @@ test('ambience plan prefers the nearest features and swaps nature at night', () 
     construction: { x: 30, z: 0 }, buildings: { x: 4, z: 0 },
   };
   const day = ambiencePlan({ listener, features, night: false });
-  assert.deepEqual(day.map(zone => zone.key), ['river', 'forest_birds', 'city_street']);
+  assert.deepEqual(day.map(zone => zone.key), ['river', 'forest_birds', 'tree_leaves', 'city_street']);
   const night = ambiencePlan({ listener, features, night: true });
-  assert.deepEqual(night.map(zone => zone.key), ['frogs', 'night_insects', 'city_street']);
+  assert.deepEqual(night.map(zone => zone.key), ['frogs', 'night_insects', 'tree_leaves', 'city_street']);
   assert.equal(isNightHour(22), true);
   assert.equal(isNightHour(12), false);
 });
@@ -601,4 +602,28 @@ test('cyclists emit individual bike sounds and grass/dirt variations resolve cle
   for (let i = 0; i < 6; i++) await Promise.resolve();
   assert.equal(audio.playing.size, 1, 'cyclist emits bike sound');
   assert.equal(audio.pickWorldKey(['footsteps_grass', 'footsteps_grass_2']), 'footsteps_grass');
+});
+
+test('high sky altitude silences beach waves and ground activity completely', async () => {
+  assert.equal(groundAudibility(isometricAltitude(4)), 1);
+  assert.equal(groundAudibility(isometricAltitude(0.5)), 0);
+  const context = fakeContext();
+  const map = new Uint8Array(64 * 64);
+  map[0] = 2;
+  map[1] = 3;
+  const renderer = { camX: 0, camY: 0, zoom: 0.5, isPerspectiveActive: () => false, camera: { position: { x: 10, y: 10, z: 10 } } };
+  const audio = new SpatialAudio({
+    contextFactory: () => context,
+    renderer,
+    getCity: () => ({ world: { map, width: 64, height: 64 }, nature: { plants: new Map() }, buildings: [], citizens: [], hour: 12 }),
+    groundYAt: () => 0,
+    mediaFactory: url => { const el = fakeAudio(); el.src = url; return el; },
+    fetchImpl: async () => ({
+      ok: true,
+      async json() { return { animals: {}, world: { beach: { local_file: 'data/audio/world/beach.ogg' } } }; },
+    }),
+  });
+  await audio.load();
+  audio.update(1);
+  assert.equal(audio.channels.size, 0, 'beach waves never start when camera is high in the sky');
 });

@@ -67,6 +67,13 @@ export function musicSkyGain(altitude) {
   return Math.max(0, Math.min(1, (altitude - 14) / 22));
 }
 
+// Ground-level sounds (waves, footsteps, voices, fauna) fade out as the
+// camera rises into the sky, leaving only wind and music high above.
+export function groundAudibility(altitude) {
+  if (!Number.isFinite(altitude)) return 1;
+  return Math.max(0, Math.min(1, 1 - (altitude - 12) / 10));
+}
+
 // Listener pose in world units. Isometric views listen from the camera focus
 // plus the altitude implied by the zoom: zoomed out is high above the city,
 // zoomed in drops the ears to street level. Perspective views use the eye.
@@ -146,11 +153,12 @@ export function ambiencePlan({ listener, features = {}, night = false } = {}) {
   };
   add(night ? 'frogs' : 'river', features.water, 0.45, 26);
   add('beach', features.beach, night ? 0.38 : 0.48, 28);
-  add(night ? 'night_insects' : 'forest_birds', features.plants, 0.36, 24);
+  add(night ? 'night_insects' : 'forest_birds', features.plants, 0.34, 24);
+  add('tree_leaves', features.plants, 0.24, 24);
   add('construction', features.construction, 0.35, 24);
   add('city_street', features.buildings, night ? 0.08 : 0.12, 26);
   zones.sort((a, b) => b.gain - a.gain);
-  return zones.slice(0, 3);
+  return zones.slice(0, 4);
 }
 
 // Dirt and stone roads take dirt footsteps, sand takes sand footsteps, and
@@ -485,7 +493,8 @@ export class SpatialAudio {
     this.faunaTimer -= dt;
     if (this.faunaTimer > 0) return;
     this.faunaTimer = 1.8 + this.random() * 2.4;
-    if (this.activeFauna >= FAUNA_VOICE_LIMIT) return;
+    const groundScale = groundAudibility(pose.altitude);
+    if (groundScale <= 0.01 || this.activeFauna >= FAUNA_VOICE_LIMIT) return;
     const animals = this.getCity()?.fauna?.animals;
     if (!animals?.size) return;
     const night = isNightHour(this.getCity()?.hour);
@@ -501,10 +510,10 @@ export class SpatialAudio {
     });
     if (!call) return;
     this.lastCallAt.set(call.species, this.ctx.currentTime);
-    this.playFauna(call);
+    this.playFauna(call, groundScale);
   }
 
-  async playFauna(call) {
+  async playFauna(call, groundScale = 1) {
     const file = this.animalFiles[call.species];
     if (!file) return;
     this.activeFauna++;
@@ -512,7 +521,7 @@ export class SpatialAudio {
     try { buffer = await this.loadBuffer(file); } catch { this.activeFauna--; return; }
     if (this.paused || this.disposed || !this.ctx) { this.activeFauna--; return; }
     const spec = ANIMAL_SPECIES[call.species];
-    const gain = (spec?.category === 'livestock' ? 0.45 : 0.55) * (call.animal?.state === 'flee' ? 1.2 : 1);
+    const gain = (spec?.category === 'livestock' ? 0.45 : 0.55) * (call.animal?.state === 'flee' ? 1.2 : 1) * groundScale;
     const y = this.groundYAt(call.x, call.z) + (call.y || 0) + 0.45;
     const bufferDuration = Number(buffer?.duration) || 0;
     const offset = bufferDuration > FAUNA_CALL_MAX_DURATION + 1
@@ -555,7 +564,8 @@ export class SpatialAudio {
         if (indoor != null || citizen.dead || citizen.custody || citizen.climbing) continue;
         const y = this.groundYAt(entity.x, entity.y) + 0.12;
         const distance = sourceDistance(pose, entity.x, entity.y, y);
-        if (distance > 22) continue;
+        const groundScale = groundAudibility(pose.altitude);
+        if (groundScale <= 0.01 || distance > 22) continue;
 
         let cooldowns = this.citizenCooldowns.get(id);
         if (!cooldowns) {
@@ -580,7 +590,8 @@ export class SpatialAudio {
         if (citizen.swimming || SWIM_TASKS.has(citizen.task)) {
           if (cooldowns.swim <= 0) {
             cooldowns.swim = 0.85 + this.random() * 0.9;
-            candidates.push({ distance, key: 'water_splash', x: entity.x, y, z: entity.y, gain: 0.35, duration: 0.65, rate: 0.9 + this.random() * 0.2 });
+            const splashKey = this.pickWorldKey(['water_splash', 'water_splash_2', 'water_splash_3']) || 'water_splash';
+            candidates.push({ distance, key: splashKey, x: entity.x, y, z: entity.y, gain: 0.35 * groundScale, duration: 0.65, rate: 0.9 + this.random() * 0.2 });
           }
           continue;
         }
@@ -616,13 +627,16 @@ export class SpatialAudio {
           if (surface) {
             cooldowns.step = 0.36 + this.random() * 0.16;
             const stepKey = surface === 'footsteps_grass'
-              ? (this.pickWorldKey(['footsteps_grass', 'footsteps_grass_2']) || surface)
+              ? (this.pickWorldKey(['footsteps_grass', 'footsteps_grass_2', 'footsteps_grass_3']) || surface)
               : surface === 'footsteps_dirt'
-                ? (this.pickWorldKey(['footsteps_dirt', 'footsteps_dirt_2']) || surface)
-                : surface;
-            candidates.push({ distance, key: stepKey, x: entity.x, y, z: entity.y, gain: 0.44, duration: 0.34, rate: 0.92 + this.random() * 0.16 });
-            if (GRASS_TILES.has(tile) && this.worldFiles.grass_rustle && this.random() < 0.45) {
-              candidates.push({ distance, key: 'grass_rustle', x: entity.x, y, z: entity.y, gain: 0.22, duration: 0.45, rate: 0.95 + this.random() * 0.15 });
+                ? (this.pickWorldKey(['footsteps_dirt', 'footsteps_dirt_2', 'footsteps_dirt_3']) || surface)
+                : (this.pickWorldKey(['footsteps_sand', 'footsteps_sand_2', 'footsteps_sand_3']) || surface);
+            candidates.push({ distance, key: stepKey, x: entity.x, y, z: entity.y, gain: 0.44 * groundScale, duration: 0.34, rate: 0.92 + this.random() * 0.16 });
+            if (GRASS_TILES.has(tile) && this.random() < 0.45) {
+              const foliageKey = this.pickWorldKey(['grass_rustle', 'bush_rustle']);
+              if (foliageKey) {
+                candidates.push({ distance, key: foliageKey, x: entity.x, y, z: entity.y, gain: 0.22 * groundScale, duration: 0.45, rate: 0.95 + this.random() * 0.15 });
+              }
             }
           }
         }
@@ -630,7 +644,8 @@ export class SpatialAudio {
     }
 
     const animals = city?.fauna?.animals;
-    if (animals?.size) {
+    const groundScale = groundAudibility(pose.altitude);
+    if (animals?.size && groundScale > 0.01) {
       for (const [aid, animal] of animals.entries()) {
         if (!animal || animal.dead || animal.entity?.destroyed) continue;
         const y = this.groundYAt(animal.x, animal.y) + 0.15;
@@ -645,12 +660,13 @@ export class SpatialAudio {
         cd.rustle = Math.max(0, cd.rustle - stepDt);
         if ((animal.state === 'graze' || animal.state === 'forage' || animal.state === 'eat') && cd.graze <= 0) {
           cd.graze = 1.6 + this.random() * 1.8;
-          candidates.push({ distance, key: 'grazing', x: animal.x, y, z: animal.y, gain: 0.32, duration: 0.9, rate: 0.9 + this.random() * 0.2 });
+          candidates.push({ distance, key: 'grazing', x: animal.x, y, z: animal.y, gain: 0.32 * groundScale, duration: 0.9, rate: 0.9 + this.random() * 0.2 });
         } else if ((animal.state === 'walk' || animal.state === 'flee') && cd.rustle <= 0 && world?.map && Number.isFinite(world.width)) {
           const tile = world.map[Math.floor(animal.y) * world.width + Math.floor(animal.x)];
           if (GRASS_TILES.has(tile)) {
             cd.rustle = 0.7 + this.random() * 0.8;
-            candidates.push({ distance, key: 'grass_rustle', x: animal.x, y, z: animal.y, gain: 0.24, duration: 0.5, rate: 0.95 + this.random() * 0.15 });
+            const foliageKey = this.pickWorldKey(['grass_rustle', 'bush_rustle']) || 'grass_rustle';
+            candidates.push({ distance, key: foliageKey, x: animal.x, y, z: animal.y, gain: 0.24 * groundScale, duration: 0.5, rate: 0.95 + this.random() * 0.15 });
           }
         }
       }
@@ -725,8 +741,9 @@ export class SpatialAudio {
     this.ambienceTimer -= dt;
     if (this.ambienceTimer > 0 || !this.ready) return;
     this.ambienceTimer = 0.8;
+    const groundScale = groundAudibility(pose.altitude);
     const city = this.getCity();
-    const plan = ambiencePlan({
+    const plan = groundScale <= 0.01 ? [] : ambiencePlan({
       listener: pose,
       features: this.collectFeatures(city, pose),
       night: isNightHour(city?.hour),
@@ -737,7 +754,7 @@ export class SpatialAudio {
       if (!channel) continue;
       const y = this.groundYAt(zone.x, zone.z) + 0.8;
       setNodePosition(channel.panner, zone.x, y, zone.z, 0.25);
-      channel.gain.gain.setTargetAtTime(zone.gain, now, 0.4);
+      channel.gain.gain.setTargetAtTime(zone.gain * groundScale, now, 0.4);
       if (channel.element.paused) channel.element.play().catch(() => {});
     }
     // Silence only: the element keeps running muted. Pausing it would need a
@@ -913,6 +930,7 @@ export class SpatialAudio {
   // Historical events are skipped on the first poll; the id window survives
   // trims of the event feed.
   pollCityEvents(pose) {
+    if (groundAudibility(pose.altitude) <= 0.01) return;
     const events = this.getCity()?.events;
     if (!Array.isArray(events) || !events.length) return;
     const newest = events[events.length - 1];

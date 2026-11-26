@@ -10,7 +10,7 @@ import {CITIZEN_BODY_FACE_COUNT,CITIZEN_GARMENT_FACES} from './city_garment_face
 import {fittedSkirtSurface} from './city_citizen_skirts.js?v=anatomical-dress-skirt-1';
 import {createPoseWeightMorph,computeWeightMorphAttributes} from './city_citizen_weight_morph.js?v=anatomical-3d-morph-1';
 /** OBJ snapshots share one geometry per frame and one instanced draw per visible frame. */
-export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],caminhar:[0,1,2,3,4,5],andar_lento:[0,1,2,3,4,5],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0],acenar:[0,1,2,3,4,5],comemorar:[0,1,2,3],conversar:[0,1,2,3],cavar:[0,1,2,3],colher:[0,1,2,3],aplaudir:[0,1,2,3,4,5],beber:[0,1,2,3],pescar:[0],chorar:[0,1,2,3],tocar_violao:[0,1,2,3],escalar:[0,1,2,3,4,5],dancar_samba:[0,1,2,3,4,5,6,7,8,9],dancar_salsa:[0,1,2,3,4,5,6,7,8,9],dancar_rumba:[0,1,2,3,4,5,6,7,8,9],dancar_hiphop:[0,1,2,3,4,5,6,7,8,9],dancar_boba:[0,1,2,3,4,5,6,7,8,9],dancar_breakdance:[0,1,2,3,4,5,6,7,8,9],dancar_macarena:[0,1,2,3,4,5,6,7,8,9],nadar:[0,1,2,3,4,5],boiar:[0,1,2,3],carregar:[0,1,2,3,4,5],carregar_parado:[0,1,2,3],droga_cafe_andar:[0,1,2,3,4,5],droga_cafe_idle:[0,1,2,3],droga_alcool_andar:[0,1,2,3,4,5],droga_alcool_idle:[0,1,2,3],droga_folha_coca_andar:[0,1,2,3,4,5],droga_folha_coca_idle:[0,1,2,3],droga_tabaco_andar:[0,1,2,3,4,5],droga_tabaco_idle:[0,1,2,3],droga_cannabis_andar:[0,1,2,3,4,5],droga_cannabis_idle:[0,1,2,3],droga_coca_andar:[0,1,2,3,4,5],droga_coca_idle:[0,1,2,3],droga_cubensis_andar:[0,1,2,3,4,5],droga_cubensis_idle:[0,1,2,3],droga_amanita_andar:[0,1,2,3,4,5],droga_amanita_idle:[0,1,2,3],droga_peyote_andar:[0,1,2,3,4,5],droga_peyote_idle:[0,1,2,3],droga_trombeta_anjo_andar:[0,1,2,3,4,5],droga_trombeta_anjo_idle:[0,1,2,3]});
+export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],caminhar:[0,1,2,3,4,5],andar_lento:[0,1,2,3,4,5],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0],acenar:[0,1,2,3,4,5],comemorar:[0,1,2,3],conversar:[0,1,2,3],cavar:[0,1,2,3],colher:[0,1,2,3],aplaudir:[0,1,2,3,4,5],beber:[0,1,2,3],pescar:[0],chorar:[0,1,2,3],tocar_violao:[0,1,2,3],escalar:[0,1,2,3,4,5],pichar:[0,1,2,3],dancar_samba:[0,1,2,3,4,5,6,7,8,9],dancar_salsa:[0,1,2,3,4,5,6,7,8,9],dancar_rumba:[0,1,2,3,4,5,6,7,8,9],dancar_hiphop:[0,1,2,3,4,5,6,7,8,9],dancar_boba:[0,1,2,3,4,5,6,7,8,9],dancar_breakdance:[0,1,2,3,4,5,6,7,8,9],dancar_macarena:[0,1,2,3,4,5,6,7,8,9],nadar:[0,1,2,3,4,5],boiar:[0,1,2,3],carregar:[0,1,2,3,4,5],carregar_parado:[0,1,2,3],droga_cafe_andar:[0,1,2,3,4,5],droga_cafe_idle:[0,1,2,3],droga_alcool_andar:[0,1,2,3,4,5],droga_alcool_idle:[0,1,2,3],droga_folha_coca_andar:[0,1,2,3,4,5],droga_folha_coca_idle:[0,1,2,3],droga_tabaco_andar:[0,1,2,3,4,5],droga_tabaco_idle:[0,1,2,3],droga_cannabis_andar:[0,1,2,3,4,5],droga_cannabis_idle:[0,1,2,3],droga_coca_andar:[0,1,2,3,4,5],droga_coca_idle:[0,1,2,3],droga_cubensis_andar:[0,1,2,3,4,5],droga_cubensis_idle:[0,1,2,3],droga_amanita_andar:[0,1,2,3,4,5],droga_amanita_idle:[0,1,2,3],droga_peyote_andar:[0,1,2,3,4,5],droga_peyote_idle:[0,1,2,3],droga_trombeta_anjo_andar:[0,1,2,3,4,5],droga_trombeta_anjo_idle:[0,1,2,3]});
 const citizenHasPath=c=>c?._renderPathActive??!!c?.path?.length;
 export function citizenIsSleeping(c){
  if(c?.task!=='energy'||!c.sleep?.active||citizenHasPath(c)||c.mobilityTrip||c.ridingVehicleId||c.deliveryId)return false;
@@ -30,7 +30,7 @@ function activeSubstanceEffect(c){
   for(const id of SUBSTANCE_PRIORITY)if(effects.some(e=>e?.id===id))return id;
   return null;
 }
-const TOOL_CLIPS=Object.freeze({cavar:'shovel',colher:'scythe',pescar:'rod',tocar_violao:'guitar',beber:'mug'});
+const TOOL_CLIPS=Object.freeze({cavar:'shovel',colher:'scythe',pescar:'rod',tocar_violao:'guitar',beber:'mug',pichar:'spray'});
 const ACTION_CLIPS=new Set(['run','caminhar','andar_lento','pedal','murro','chute','derrotado','nadar','carregar','escalar']);
 const PRINTED_GARMENTS=new Set(['camisa social','camisa estampada','vestido estampado']),PATTERNED_GARMENTS=new Set(['camisa estampada','vestido estampado']),DRESS_PIECES=new Set(['vestido','vestido estampado']),SKIRT_PIECES=new Set(['saia','saia longa']),HAND_PIECES=new Set(['luvas']);
 const COMBINABLE_GARMENTS=new Set(['camisa','camiseta','regata','terno','casaco','trapos','macacão']);
@@ -47,7 +47,7 @@ export function citizenAnimation(c,moving=false,inWater=undefined){
     if(BIKE_KINDS.has(c.ridingVehicleKind))return c.ridingAsPassenger?'sentado_no_banco':'seated';
     return GLIDE_KINDS.has(c.ridingVehicleKind)?'glide':'passenger';
   }
-  if(c.climbing)return c.climbing.phase==='painting'?'use_alt':'escalar';
+  if(c.climbing)return c.climbing.phase==='painting'?'pichar':'escalar';
   const substance=activeSubstanceEffect(c);
   if(inWater!==undefined?inWater:c.swimming)return moving?'nadar':'boiar';
   if(moving){
@@ -66,6 +66,7 @@ export function citizenAnimation(c,moving=false,inWater=undefined){
   if(c.task==='sit'&&c.seated||c.furnitureUse?.type==='bench'||c.furnitureUse?.type==='beach_chair')return 'sentado_no_banco';
   if(c.seated)return 'seated';
   if(c.policePatrol)return 'a_postos';
+  if(c.graffitiMission?.status==='painting')return 'pichar';
   if(c.deliveryId||c.forestryJob?.stage==='return'||c.carryLoad)return 'carregar_parado';
   if(c.conversation)return 'conversar';
   if(c.celebrating||c.task==='celebrate')return 'comemorar';
@@ -205,7 +206,7 @@ function handCenter(pos,base){
 }
 function toolAnchor(data,kind){
   const l=handCenter(data.positions,82),r=handCenter(data.positions,205);
-  if(kind==='mug')return {x:r[0],y:r[1]+.02,z:r[2]+.02,ax:0,ay:1,az:0,angle:0};
+  if(kind==='mug'||kind==='spray')return {x:r[0],y:r[1]+.02,z:r[2]+.02,ax:0,ay:1,az:0,angle:0};
   if(kind==='rod')return {x:r[0],y:r[1]+.01,z:r[2]+.02,ax:1,ay:0,az:0,angle:-.42};
   const mx=(l[0]+r[0])*.5,my=(l[1]+r[1])*.5,mz=(l[2]+r[2])*.5;
   if(kind==='guitar')return {x:mx,y:my-.02,z:mz+.05,ax:0,ay:0,az:1,angle:-.52};
@@ -245,6 +246,10 @@ function toolPropGeometry(THREE,kind){
     box(0,0,0,.065,.08,.065,0xc7b293);
     box(.04,0,0,.024,.045,.018,0xa69072);
     box(0,.042,0,.056,.008,.056,0xf2eadc);
+  }else if(kind==='spray'){
+    box(0,0,0,.048,.105,.048,0xd6453a);
+    box(0,.062,0,.032,.022,.032,0xdfe6ea);
+    box(0,.076,.012,.014,.012,.018,0x2b3036);
   }
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));g.computeBoundingSphere();return g;
 }

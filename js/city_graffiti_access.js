@@ -23,7 +23,7 @@ export function* upperGraffitiSurfaceCandidates(city,c,radius=4){
    for(let side=0;side<4;side++){
     if(!sides[side])continue;
     const dx=[0,1,0,-1][side],dy=[-1,0,1,0][side],x=b.entity.x+unit.x+.5,y=b.entity.y+unit.y+.5;
-    const position={x:x+dx*.525,y:y+dy*.525,z:0},wallBase={x:x+dx*.78,y:y+dy*.78},accessPoint={x:x+dx*.3,y:y+dy*.3,z:unit.z*CITY_FLOOR_HEIGHT};
+    const position={x:x+dx*.525,y:y+dy*.525,z:0},wallBase={x:x+dx*.66,y:y+dy*.66},accessPoint={x:x+dx*.3,y:y+dy*.3,z:unit.z*CITY_FLOOR_HEIGHT};
     const key=`wall:${b.id}:${side}:${side%2?unit.y+.5:unit.x+.5}:${unit.z}`;
     if(city.justice.art.some(p=>!p.entity.destroyed&&p.support?.key===key)||city.citizens.some(p=>p.graffitiMission?.surface?.key===key))continue;
     if(!city.walkable(Math.floor(wallBase.x),Math.floor(wallBase.y)))continue;
@@ -94,7 +94,7 @@ export function climbingFallDamage(height,floor){
 }
 export function reachUpperGraffiti(city,c,mission){
  const support=mission.surface,dx=[0,1,0,-1][support.side]||0,dy=[-1,0,1,0][support.side]||0;
- const wallBase=support.approach||{x:support.position.x+dx*.25,y:support.position.y+dy*.25};
+ const wallBase=support.approach||{x:support.position.x+dx*.14,y:support.position.y+dy*.14};
  if(!c.climbing){
   if(c.path.length)return false;
   if(Math.hypot(c.entity.x-wallBase.x,c.entity.y-wallBase.y)>.28){

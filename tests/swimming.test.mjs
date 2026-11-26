@@ -115,7 +115,7 @@ test('new human animation clips map to the corresponding citizen states', () => 
   assert.equal(citizenAnimation({ task: 'outdoor_leisure' }, true), 'andar_lento');
   assert.equal(citizenAnimation({ task: 'combat-flee' }, true), 'run');
   assert.equal(citizenAnimation({ climbing: { phase: 'up', z: 1 } }, false), 'escalar');
-  assert.equal(citizenAnimation({ climbing: { phase: 'painting', z: 2 } }, false), 'use_alt');
+  assert.equal(citizenAnimation({ climbing: { phase: 'painting', z: 2 } }, false), 'pichar');
   assert(Math.abs(climbingFallChance(2) - climbingFallChance(1) - 0.001) < 1e-9);
   assert(climbingFallDamage(6, 3) > climbingFallDamage(2, 1));
   assert.equal(citizenAnimation({ conversation: {} }, false), 'conversar');
