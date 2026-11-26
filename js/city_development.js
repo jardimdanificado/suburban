@@ -641,6 +641,21 @@ export class CityDevelopment {
     }
   }
   updateHourly() {
+    if(this.projects.length>100){
+      const referenced=new Set();
+      for(const c of this.city.citizens){if(c.startupProjectId!=null)referenced.add(c.startupProjectId);if(c.workProjectId!=null)referenced.add(c.workProjectId);}
+      let done=0;for(const p of this.projects)if((p.status==='completed'||p.cancelled)&&!referenced.has(p.id))done++;
+      let drop=done-40;
+      if(drop>0){
+        let write=0;
+        for(let i=0;i<this.projects.length;i++){
+          const p=this.projects[i];
+          if(drop>0&&(p.status==='completed'||p.cancelled)&&!referenced.has(p.id)){drop--;if(p.accountId&&!this.city.accounts.get(p.accountId)?.balance)this.city.accounts.delete(p.accountId);continue;}
+          this.projects[write++]=p;
+        }
+        this.projects.length=write;
+      }
+    }
     this.ensurePlots();
     this.updateWear();
     this.planPublicWorks();

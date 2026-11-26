@@ -155,9 +155,47 @@ export class CityStateGraph {
         this.ledgerCursors.set(id,object.slice());this.previous.set(id,{kind:'CityLedger',data:[]});return id;
       }
       else if (ArrayBuffer.isView(object)) { kind = object.constructor.name; data = object instanceof Uint8Array ? object.slice() : Array.from(object); }
-      else if (object instanceof Map) { kind = 'Map'; data = []; object.forEach((v,k) => data.push(reference(k),reference(v))); }
-      else if (object instanceof Set) { kind = 'Set'; data = []; object.forEach(value => data.push(reference(value))); }
-      else if (Array.isArray(object)) { kind = 'Array'; data = object.map(reference); }
+      else if (object instanceof Map) {
+        kind = 'Map';
+        const prevData = previous?.kind === 'Map' && previous.data.length === object.size * 2 ? previous.data : null;
+        if (prevData) {
+          let i = 0, changed = false; data = null;
+          for (const [k, v] of object) {
+            const rk = reference(k), rv = reference(v);
+            if (!changed && (!Object.is(prevData[i], rk) || !Object.is(prevData[i + 1], rv))) { changed = true; data = prevData.slice(0, i); }
+            if (changed) data.push(rk, rv);
+            i += 2;
+          }
+          if (!changed) return id;
+        } else { data = []; object.forEach((v, k) => data.push(reference(k), reference(v))); }
+      }
+      else if (object instanceof Set) {
+        kind = 'Set';
+        const prevData = previous?.kind === 'Set' && previous.data.length === object.size ? previous.data : null;
+        if (prevData) {
+          let i = 0, changed = false; data = null;
+          for (const value of object) {
+            const rv = reference(value);
+            if (!changed && !Object.is(prevData[i], rv)) { changed = true; data = prevData.slice(0, i); }
+            if (changed) data.push(rv);
+            i++;
+          }
+          if (!changed) return id;
+        } else { data = []; object.forEach(value => data.push(reference(value))); }
+      }
+      else if (Array.isArray(object)) {
+        kind = 'Array';
+        const len = object.length, prevData = previous?.kind === 'Array' && previous.data.length === len ? previous.data : null;
+        if (prevData) {
+          let changed = false; data = null;
+          for (let i = 0; i < len; i++) {
+            const rv = reference(object[i]);
+            if (!changed && !Object.is(prevData[i], rv)) { changed = true; data = prevData.slice(0, i); }
+            if (changed) data.push(rv);
+          }
+          if (!changed) return id;
+        } else { data = object.map(reference); }
+      }
       else {
         kind = object.constructor?.name || 'Object';fields=true;
         const packedCitizen=!!citizenSet?.has(object),packedEntity=!!entitySet?.has(object);
@@ -167,8 +205,9 @@ export class CityStateGraph {
           if(pathIndex>=0){const compact=[];for(let i=0;i<oldFields.length;i+=2)if(oldFields[i]!=='path')compact.push(oldFields[i],oldFields[i+1]);oldFields=compact;this.previous.set(id,{kind,data:compact});}
         }
         let index=0,delta=null,full=oldFields?null:[],fullKeep=0;
-        for (const key in object) {
-          if(!Object.prototype.hasOwnProperty.call(object,key))continue;
+        const keys=Object.keys(object);
+        for (let ki=0;ki<keys.length;ki++) {
+          const key=keys[ki];
           if (localFields.has(key)||(omitCitizenPaths&&packedCitizen&&key==='path')) continue;
           if(accessorFields.has(key)&&Object.getOwnPropertyDescriptor(object,key)?.get)continue;
           const value=object[key];

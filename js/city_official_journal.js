@@ -17,6 +17,7 @@ export class CityOfficialJournal {
       yes:event.yes??bill?.yes??null,no:event.no??bill?.no??null,threshold:event.threshold??bill?.threshold??null,
       leadershipBallots:Object.freeze((action==='council-president-elected'?this.city.politics.council.leaderElections.at(-1)?.ballots||[]:[]).map(v=>Object.freeze({...v,voterName:this.city.society.citizen(v.voterId)?.entity.properties.name||String(v.voterId),candidateName:this.city.society.citizen(v.candidateId)?.entity.properties.name||String(v.candidateId)})))});
     this.records.push(record);this.byEventId.set(record.id,record);
+    if(this.records.length>400){const old=this.records.shift();if(old)this.byEventId.delete(old.id);}
   }
   get pending(){return this.records.length-this.printedThrough;}
   ensure(){
