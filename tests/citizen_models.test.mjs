@@ -100,7 +100,7 @@ test('skirt instances retain their bound morph attributes and tops are tucked ab
 test('hat meshes share one normalized shape while each animated frame retains its own head anchor',async()=>{
  const pieces=['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','cesta'];
  for(const piece of pieces){let reference=null;const anchors=[];for(let frame=0;frame<5;frame++){
-  const text=await fs.readFile(new URL(`../data/model/run/${frame}.obj`,import.meta.url),'utf8'),surface=headwearSurface(parseCitizenOBJ(text),piece);anchors.push(surface.anchor);
+  const text=await fs.readFile(new URL(`../data/animals/humano/run/${frame}.obj`,import.meta.url),'utf8'),surface=headwearSurface(parseCitizenOBJ(text),piece);anchors.push(surface.anchor);
   if(!reference)reference=surface;else{
    assert.equal(surface.positions.length,reference.positions.length,piece);assert.equal(surface.normals.length,reference.normals.length,piece);
    for(let i=0;i<surface.positions.length;i++)assert.ok(Math.abs(surface.positions[i]-reference.positions[i])<1e-6,`${piece} vertex ${i}`);

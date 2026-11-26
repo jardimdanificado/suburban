@@ -1,7 +1,7 @@
 import {smoothCitizenNormals} from './city_citizen_shading.js';
 import {citizenHeadAttachment,createHeadFlag} from './city_head_flag.js';
 import {advanceCitizenGait} from './city_citizen_gait.js';
-import {wickerBasketSurface} from './city_mobility_models.js?v=cargo-box-rear-1';
+import {wickerBasketSurface,cargoCrateSurface} from './city_mobility_models.js?v=cargo-box-rear-1';
 import {partyFlagCanvas,drawPartyFlag} from './city_party_flags.js';
 import {clothFlagGeometry,animateClothFlag} from './city_flag_animation.js?v=flag-wind-tick-13';
 import {bodyFatAmount} from './city_body_metrics.js?v=citizen-access-1';
@@ -71,7 +71,7 @@ export function citizenFrame(clip,time,phase=0,oneShot=false){
   if(clip==='glide')return FRAME_POSES.use[1];
   const sequence=clip==='pedal'?[0,2,4]:clip==='use'?[0,1]:CITIZEN_MODEL_FRAMES[clip]||CITIZEN_MODEL_FRAMES.idle,poseClip=clip==='pedal'?'run':clip in CITIZEN_MODEL_FRAMES?clip:'idle';
   if(sequence.length===1)return FRAME_POSES[poseClip][sequence[0]];
-  const fps=ACTION_CLIPS.has(clip)?8:4,index=Math.floor(Math.max(0,time)*fps+phase),frame=sequence[oneShot?Math.min(index,sequence.length-1):index%sequence.length];
+  const fps=ACTION_CLIPS.has(clip)?8:clip==='conversar'?2.2:4,index=Math.floor(Math.max(0,time)*fps+phase),frame=sequence[oneShot?Math.min(index,sequence.length-1):index%sequence.length];
   return FRAME_POSES[poseClip][frame]||{clip:poseClip,frame};
 }
 const FRAME_POSES=Object.fromEntries(Object.entries(CITIZEN_MODEL_FRAMES).map(([clip,frames])=>[clip,Object.fromEntries(frames.map(frame=>[frame,Object.freeze({clip,frame})]))]));
@@ -168,15 +168,8 @@ function partyNumberSurface(THREE,data,number){
   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));geometry.computeBoundingSphere();return geometry;
 }
 function carryBoxGeometry(THREE){
-  const hw=.13,hh=.10,hd=.11,p=[],n=[];
-  const quad=(a,b,c,d,nx,ny,nz)=>{for(const v of [a,b,c,a,c,d]){p.push(...v);n.push(nx,ny,nz);}};
-  quad([-hw,-hh,hd],[hw,-hh,hd],[hw,hh,hd],[-hw,hh,hd],0,0,1);
-  quad([hw,-hh,-hd],[-hw,-hh,-hd],[-hw,hh,-hd],[hw,hh,-hd],0,0,-1);
-  quad([-hw,hh,hd],[hw,hh,hd],[hw,hh,-hd],[-hw,hh,-hd],0,1,0);
-  quad([-hw,-hh,-hd],[hw,-hh,-hd],[hw,-hh,hd],[-hw,-hh,hd],0,-1,0);
-  quad([hw,-hh,hd],[hw,-hh,-hd],[hw,hh,-hd],[hw,hh,hd],1,0,0);
-  quad([-hw,-hh,-hd],[-hw,-hh,hd],[-hw,hh,hd],[-hw,hh,-hd],-1,0,0);
-  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));g.computeBoundingSphere();return g;
+  const data=cargoCrateSurface();
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(data.positions,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(data.normals,3));g.setAttribute('color',new THREE.Float32BufferAttribute(data.colors,3));g.computeBoundingSphere();return g;
 }
 function carryBoxAnchor(data){
   const pos=data.positions;let x=0,y=0,z=0,count=0;
@@ -193,7 +186,7 @@ export function splitGarmentSurface(data,mask,piece=null){
   return {body:new Float32Array(body),bodyNormals:new Float32Array(bodyNormals),clothes:new Float32Array(clothes),clothesNormals:new Float32Array(clothesNormals)};
 }
 export class CityCitizenModels {
-  constructor(THREE,group,{fetchAsset=globalThis.fetch?.bind(globalThis),baseURL=new URL('../data/model/',import.meta.url),decorateMaterial=()=>{}}={}){
+  constructor(THREE,group,{fetchAsset=globalThis.fetch?.bind(globalThis),baseURL=new URL('../data/animals/humano/',import.meta.url),decorateMaterial=()=>{}}={}){
     this.THREE=THREE;this.group=group;this.decorateMaterial=decorateMaterial;this.fetchAsset=fetchAsset;this.baseURL=baseURL;this.frames=new Map();this.outfits=new Map();this.headwear=new Map();this.headwearAnchors=new Map();this.carryAnchors=new Map();this.headAttachments=new Map();this.headwearBatches=new Map();this.batches=new Map();this.activeBatches=new Set();this.activeHeadwearBatches=new Set();this.motion=new WeakMap();this.bodyShapeCache=new WeakMap();this.appearanceCache=new WeakMap();this.printMaterials=new Map();this.combinedSurfaces=new WeakMap();this.clock=0;this.frameToken=0;this.ready=false;this.error=null;
     this.matrix=new THREE.Matrix4();this.accessoryMatrix=new THREE.Matrix4();this.position=new THREE.Vector3();this.accessoryOffset=new THREE.Vector3();this.scale=new THREE.Vector3();this.quaternion=new THREE.Quaternion();this.axis=new THREE.Vector3(0,1,0);this.headFlagNormal=new THREE.Vector3();this.lyingRotation=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),Math.PI/2);this.color=new THREE.Color();this.dirtColor=new THREE.Color(0x62584b);this.activeDirtColor=new THREE.Color(0x62584b);this.dirtPalette={sangue:0x7a1216,bosta:0x4e3618,barro:0x4a3520,terra:0x6b5338,tinta:0x3b78b8};this.flyCount=0;this.flyCapacity=0;this.flyMesh=null;this.swimFoamCount=0;this.swimFoamCapacity=0;this.swimFoamMesh=null;
     this.material=new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide});this.enableWeightMorph(this.material);this.combinedMaterial=this.enableWeightMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}));const morphCompile=this.combinedMaterial.onBeforeCompile;this.combinedMaterial.onBeforeCompile=shader=>{morphCompile(shader);shader.vertexShader=shader.vertexShader.replace('attribute vec3 weightMorph;','attribute vec3 weightMorph;\nattribute float citizenSurfaceType;\nattribute vec3 instanceGarmentColor;\nvarying float vCitizenSurfaceType;\nvarying vec3 vCitizenGarmentColor;').replace('#include <begin_vertex>','#include <begin_vertex>\nvCitizenSurfaceType = citizenSurfaceType;\nvCitizenGarmentColor = instanceGarmentColor;');shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying float vCitizenSurfaceType;\nvarying vec3 vCitizenGarmentColor;').replace('#include <color_fragment>','#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vCitizenGarmentColor, vCitizenSurfaceType);');};this.combinedMaterial.customProgramCacheKey=()=> 'citizen-combined-surface-weight-morph-2';this.dressMaterial=this.enableDressMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}));this.skirtMaterial=this.enableSkirtMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}));this.campaignFlags=new Map();this.campaignFlagMaterials=new Map();this.activeCampaignFlags=new Set();
@@ -635,11 +628,12 @@ if (vCitizenDirt.a > 0.05) {
     }
     if(clip==='carregar'&&this.headwear.has('static:carry-box')){
       const source=this.headwear.get('static:carry-box');
+      if(!this.carryBoxMaterial){const mat=new this.THREE.MeshLambertMaterial({color:0xffffff,vertexColors:true,side:this.THREE.DoubleSide});this.decorateMaterial(mat);this.carryBoxMaterial=mat;}
       let boxBatch=this.headwearBatches.get('carry-box');
       if(!boxBatch){boxBatch={count:0,capacity:0,mesh:null};this.headwearBatches.set('carry-box',boxBatch);}
       this.activeHeadwearBatches.add(boxBatch);
       if(boxBatch.count===boxBatch.capacity){
-        const capacity=Math.max(16,boxBatch.capacity*2),mesh=new this.THREE.InstancedMesh(source,this.material,capacity);
+        const capacity=Math.max(16,boxBatch.capacity*2),mesh=new this.THREE.InstancedMesh(source,this.carryBoxMaterial,capacity);
         mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=false;
         if(boxBatch.mesh){for(let i=0;i<boxBatch.count;i++){boxBatch.mesh.getMatrixAt(i,this.matrix);mesh.setMatrixAt(i,this.matrix);boxBatch.mesh.getColorAt(i,this.color);this.setInstanceColor(mesh,i,this.color);}mesh.userData.instanceMatrixDirty=true;mesh.userData.matrixDirtyMin=0;mesh.userData.matrixDirtyMax=boxBatch.count-1;this.group.remove(boxBatch.mesh);boxBatch.mesh.dispose();}
         this.group.add(mesh);boxBatch.mesh=mesh;boxBatch.capacity=capacity;
@@ -649,7 +643,7 @@ if (vCitizenDirt.a > 0.05) {
       this.accessoryOffset.set(anchor?.x||0,anchor?.y||.55,(anchor?.z||.2)+Math.max(0,poseBodyShape.fat)*.07).applyMatrix4(this.matrix);
       this.accessoryMatrix.copy(this.matrix).setPosition(this.accessoryOffset);
       this.setInstanceMatrix(boxBatch.mesh,boxBatch.count,this.accessoryMatrix);
-      this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:c.forestryJob?.stage==='return'?0x8c5f36:0xb98b56);
+      this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:c.forestryJob?.stage==='return'?0xd8c3a5:0xffffff);
       this.setInstanceColor(boxBatch.mesh,boxBatch.count,this.color);
       boxBatch.count++;
     }

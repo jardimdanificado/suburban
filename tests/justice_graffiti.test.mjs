@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CityJustice} from '../js/city_justice.js';
 import {nearbyGraffitiSurfaces,graffitiSurfaceVertices,graffitiSurfaceExists,graffitiCameraFocus,fitGraffitiToWall,graffitiWallHasWindow} from '../js/city_graffiti_surfaces.js';
+import {upperGraffitiSurfaces} from '../js/city_graffiti_access.js';
 import {CityStateGraph} from '../js/city_state.js';
 import {setup} from './helpers/city.mjs';
 import {renderUrbanArt} from '../js/city_justice_ui.js';
@@ -240,6 +241,54 @@ test('destroyed catalogue entries cannot move the camera',()=>{
  const records=[],camera=[],panel=new Proxy({record:(...args)=>records.push(args)},{get:(target,key)=>target[key]||(()=>{})});
  renderUrbanArt({city,view:()=> 'damage',matches:()=>true,camera:(...args)=>camera.push(args),host:{setSelection:()=>{}}},panel);
  const row=records.find(([title])=>title.includes(piece.message));assert(row);row[2]?.();assert.deepEqual(camera,[]);
+});
+
+test('large paved lots expose 4x4 and 7x9 floor pieces and reject a hole in the rectangle',()=>{
+ const world={width:32,height:32,getTile:()=>8};
+ const city={world,buildings:[],citizens:[],justice:{art:[]},walkable:()=>true,random:()=>.1};
+ const citizen={entity:{x:12.5,y:12.5}};
+ const surfaces=nearbyGraffitiSurfaces(city,citizen,4).filter(s=>s.surface==='ground');
+ for(const [w,h] of [[4,4],[7,9]]){
+  const support=surfaces.find(s=>s.tileWidth===w&&s.tileHeight===h);
+  assert(support,`${w}x${h} ground rectangle must be offered`);
+  assert.equal(support.width,.86*w);assert.equal(support.height,.86*h);assert.equal(graffitiSurfaceExists(city,support),true);
+ }
+ const mural=surfaces.find(s=>s.tileWidth===7&&s.tileHeight===9);
+ world.getTile=(x,y)=>x===12&&y===12?0:8;
+ assert.equal(graffitiSurfaceExists(city,mural),false,'one unpaved tile invalidates the whole mural');
+});
+
+test('wide walls keep growing past four tiles while every band matches',()=>{
+ const building={id:9,width:6,depth:2,door:null,terrain:{base:1.16},entity:{x:4,y:4,properties:{name:'Prédio'}},floors:1,units:[]};
+ for(let y=0;y<2;y++)for(let x=0;x<6;x++)building.units.push({id:y*6+x+1,x,y,z:0,hasWindow:false});
+ const city={world:{width:32,height:32,getTile:()=>8},buildings:[building],citizens:[],justice:{art:[]},walkable:()=>true,random:()=>.1,building:id=>id===9?building:null};
+ const wall=nearbyGraffitiSurfaces(city,{entity:{x:7,y:2.5}},8).filter(s=>s.surface==='wall');
+ assert(wall.some(s=>s.side===0&&s.tileWidth===6&&Math.abs(s.width-.86*6)<1e-6),'a six-tile facade must expose one six-tile wall');
+ assert(wall.some(s=>s.side===0&&s.tileWidth===4),'four-tile wall must remain available');
+ assert(wall.every(s=>graffitiSurfaceExists(city,s)));
+});
+
+test('upper facades merge adjacent rooms and consecutive solid floors into rectangles',()=>{
+ const building={id:9,ownerId:99,accountId:99,width:3,depth:3,floors:4,door:{x:5.5,y:7.5},entity:{x:4,y:4,properties:{name:'Prédio'}},units:[],circulation:[],terrain:{base:0}};
+ let id=10;
+ for(let z=1;z<=2;z++)for(const [x,y] of [[0,0],[1,0]])building.units.push({id:id++,buildingId:9,x,y,z,roomType:'living',hasWindow:false});
+ for(let z=0;z<3;z++)for(let y=0;y<3;y++)for(let x=0;x<3;x++){
+  if(z<=2&&y===0&&x<2)continue;
+  building.circulation.push({x,y,z});
+ }
+ const c={id:1,accountId:1,task:'leisure',entity:{x:5.5,y:7.5,properties:{name:'Artista'}},traits:{honesty:.1,riskTolerance:.8},skills:{artistic:20},path:[],needs:{}};
+ const city={minute:1440,hour:22,buildings:[building],citizens:[c],units:new Map(building.units.map(unit=>[unit.id,unit])),world:{width:32,height:32,getTile:()=>8},building:id=>id===9?building:null,walkable:()=>true,findPath:()=>[],urgentNeed:()=>false,random:()=>.05,society:{isAdult:()=>true,citizen:()=>c},currency:{price:n=>n},createEntity:data=>({...data,id:id++}),log:()=>({id:id++}),gigs:{jobs:[]},accountName:()=>null,justice:{art:[]}};
+ const merged=upperGraffitiSurfaces(city,c,8).find(s=>s.side===0&&s.tileWidth===2&&s.tileHeight===2);
+ assert(merged,'two rooms on two solid floors must merge');
+ assert.equal(merged.width,1.72);assert.equal(Math.round(merged.height*100)/100,3.44);assert.equal(graffitiSurfaceExists(city,merged),true);
+});
+
+test('a large graffiti message survives the artwork creation limit',()=>{
+ const {city,justice}=fixture(),support={kind:'street-graffiti',surface:'ground',tileX:0,tileY:0,tileWidth:7,tileHeight:9,width:.86*7,height:.86*9,position:{x:5,y:5,z:0},approach:{x:5,y:5}};
+ const message='A cidade inteira cobra a obra prometida. '.repeat(8).trim();
+ assert(message.length>180);
+ const piece=justice.createArtwork({kind:'graffiti',message,creatorId:1,x:5,y:5,support});
+ assert.equal(piece.message,message,'large surfaces keep the full text');
 });
 
 test('ground graffiti requires a paved road, excluding grass, dirt roads and unpaved sidewalk',()=>{

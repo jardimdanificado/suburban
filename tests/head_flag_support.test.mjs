@@ -13,7 +13,7 @@ class PlaneGeometry{constructor(width,height){this.parameters={width,height};thi
 const THREE={Group,Mesh,BoxGeometry:Geometry,CylinderGeometry:Geometry,PlaneGeometry,MeshLambertMaterial:class{constructor(options){this.options=options;}}};
 test('flag anchor is the actual common crown vertex in every supplied pose, including sitting and lying',async()=>{
  for(const [clip,frames]of Object.entries(CITIZEN_MODEL_FRAMES))for(const frame of frames){
-  const data=parseCitizenOBJ(await fs.readFile(new URL(`../data/model/${clip}/${frame}.obj`,import.meta.url),'utf8')),anchor=citizenHeadAttachment(data),point=anchor.position;
+  const data=parseCitizenOBJ(await fs.readFile(new URL(`../data/animals/humano/${clip}/${frame}.obj`,import.meta.url),'utf8')),anchor=citizenHeadAttachment(data),point=anchor.position;
   for(const face of HEAD_CROWN_FACES){let found=false;for(let i=face*9;i<face*9+9;i+=3)if(data.positions[i]===point.x&&data.positions[i+1]===point.y&&data.positions[i+2]===point.z)found=true;assert(found,`${clip}:${frame}: attachment must be on the crown`);}
   assert.ok(Math.abs(Math.hypot(...Object.values(anchor.normal))-1)<1e-6);
  }

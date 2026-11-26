@@ -1,6 +1,7 @@
 import {buildingFacadeWindowMask} from './city_facade_patterns.js';
 import {ensureWallArtDesign} from './city_wall_art.js';
 import {graffitiSurfaceExists,graffitiSurfaceVertices} from './city_graffiti_surfaces.js';
+import {graffitiCanvasSize,graffitiTextCapacity} from './city_graffiti_size.js';
 import {addBuildingRoof} from './city_building_roof.js';
 import {createFarmPlants,syncFarmPlants} from './city_farm_renderer.js';
 import {syncVerticalFarm} from './city_vertical_farm_renderer.js';
@@ -548,8 +549,8 @@ function applyFootSmudges(ctx,w,h,smudges,seed){
   const src=new Uint8ClampedArray(data);
   for(let i=0;i<smudges.length;i++){
     const sm=smudges[i],cx=Math.round(sm.u*w),cy=Math.round(sm.v*h);
-    const radius=Math.abs(sm.kind)===1?18:24,r2=radius*radius;
-    const shiftX=Math.round((sm.dx||1)*10),shiftY=Math.round((sm.dz||0)*10);
+    const radius=Math.max(2,Math.round((Math.abs(sm.kind)===1?18:24)*w/256)),r2=radius*radius;
+    const shiftX=Math.round((sm.dx||1)*10*w/256),shiftY=Math.round((sm.dz||0)*10*h/256);
     const minX=Math.max(0,cx-radius),maxX=Math.min(w-1,cx+radius);
     const minY=Math.max(0,cy-radius),maxY=Math.min(h-1,cy+radius);
     for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++){
@@ -641,9 +642,11 @@ function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
   const shadowHex=srgbLuminance(inkColor)>.35?'#141418':'#e8e8ee';
   const support=piece?.support;
   const sw=support?.width||1,sh=support?.height||1;
+  const canvasW=ctx.canvas?.width||256,canvasH=ctx.canvas?.height||256;
+  const scale=Math.max(1,Math.min(canvasW,canvasH)/256);
   const physAspect=Math.max(.55,Math.min(3.2,sw/sh));
   const wideLow=sh<1&&physAspect>1.5;
-  const maxChars=wideLow?26:sw>2.1?58:sw>1.2?46:34;
+  const maxChars=Math.max(1,Math.round(graffitiTextCapacity(support)*(wideLow?.8:1)));
   const wallText=condenseGraffitiWallText(face.message||'',maxChars,seed);
   const tokens=wallText.split(/\s+/).filter(Boolean);
   const fontSpec=(size,idx=0)=>{
@@ -660,10 +663,10 @@ function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
   };
   const styleScaleX=wideLow?1:(style==='pixo'?.72:style==='bomb'?1.08:1);
   const styleScaleY=wideLow?Math.min(1.65,Math.sqrt(physAspect)):(style==='pixo'?1.52:1);
-  const maxLines=wideLow?2:3;
-  let lines=[],baseSize=38;
-  const maxW=238,maxH=228;
-  for(let size=92;size>=24;size-=4){
+  const maxLines=wideLow?2:Math.max(2,Math.min(9,Math.round(3*canvasH/256)));
+  let lines=[],baseSize=38*scale;
+  const maxW=canvasW*.93,maxH=canvasH*.89;
+  for(let size=92*scale;size>=24*scale;size-=4*scale){
     ctx.font=fontSpec(size,0);lines=[];let cur=[];let curW=0;
     for(const tok of tokens){
       const label=style==='irregular'||style==='tag'?tok:tok.toUpperCase();
@@ -676,32 +679,32 @@ function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
     baseSize=size;
     if(lines.length*size*styleScaleY<=maxH&&lines.length<=maxLines)break;
   }
-  const lineHeight=Math.min(224/Math.max(1,lines.length),Math.max(32,baseSize*styleScaleY*1.06));
+  const lineHeight=Math.min((canvasH*.875)/Math.max(1,lines.length),Math.max(32*scale,baseSize*styleScaleY*1.06));
   ctx.save();
   if(style==='tag'||style==='pixo'||style==='bomb'){
     const tilt=(graffitiHash(seed,3)-.5)*(style==='tag'?.18:style==='bomb'?.12:.12);
-    ctx.translate(128,128);ctx.rotate(tilt);ctx.translate(-128,-128);
+    ctx.translate(canvasW/2,canvasH/2);ctx.rotate(tilt);ctx.translate(-canvasW/2,-canvasH/2);
   }
   if(style==='spray'){
     ctx.fillStyle=inkHex;
     for(let i=0;i<36;i++){
-      const sx=18+graffitiHash(seed,100+i)*220,sy=20+graffitiHash(seed,200+i)*216,sz=1+Math.floor(graffitiHash(seed,300+i)*3);
-      ctx.fillRect(Math.round(sx),Math.round(sy),sz,sz);
+      const sx=(18+graffitiHash(seed,100+i)*220)*canvasW/256,sy=(20+graffitiHash(seed,200+i)*216)*canvasH/256,sz=(1+Math.floor(graffitiHash(seed,300+i)*3))*scale;
+      ctx.fillRect(Math.round(sx),Math.round(sy),Math.max(1,Math.round(sz)),Math.max(1,Math.round(sz)));
     }
   }
   const drawWordOrChar=(tok,gx,gy,size,idx,scaleX=1,scaleY=1,rot=0)=>{
     ctx.save();ctx.translate(gx,gy);if(rot)ctx.rotate(rot);if(scaleX!==1||scaleY!==1)ctx.scale?.(scaleX,scaleY);
     ctx.font=fontSpec(size,idx);ctx.textAlign='center';ctx.textBaseline='middle';
     if(style==='bomb'){
-      ctx.fillStyle=shadowHex;drawPixelText(ctx,tok,4,4,244);
+      ctx.fillStyle=shadowHex;drawPixelText(ctx,tok,4*scale,4*scale,canvasW*.95);
     }
-    ctx.fillStyle=inkHex;drawPixelText(ctx,tok,0,0,244);
+    ctx.fillStyle=inkHex;drawPixelText(ctx,tok,0,0,canvasW*.95);
     ctx.restore();
   };
   lines.forEach((lineTokens,lineIdx)=>{
-    const cy=128+(lineIdx-(lines.length-1)/2)*lineHeight;
-    const lineSize=style==='stacked'?Math.max(22,Math.min(112,Math.round(baseSize*(lineIdx%2===0?1.32:.72)))):baseSize;
-    const wordGap=Math.max(10,lineSize*.36*styleScaleX);
+    const cy=canvasH/2+(lineIdx-(lines.length-1)/2)*lineHeight;
+    const lineSize=style==='stacked'?Math.max(22*scale,Math.min(112*scale,Math.round(baseSize*(lineIdx%2===0?1.32:.72)))):baseSize;
+    const wordGap=Math.max(10*scale,lineSize*.36*styleScaleX);
     if(style==='irregular'||style==='pixo'||style==='rasurada'){
       const items=[];let totalW=0;
       for(let t=0;t<lineTokens.length;t++){
@@ -710,17 +713,17 @@ function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
         const wordScale=style==='irregular'?(.75+graffitiHash(seed,lineIdx*41+t*13)*.55):1;
         for(let c=0;c<tok.length;c++){
           const charScale=style==='irregular'?wordScale*(.8+graffitiHash(seed,lineIdx*97+t*19+c)*.4):(.86+graffitiHash(seed,lineIdx*97+t*19+c)*.28);
-          const cs=Math.max(20,Math.min(116,Math.round(lineSize*charScale)));
+          const cs=Math.max(20*scale,Math.min(116*scale,Math.round(lineSize*charScale)));
           ctx.font=fontSpec(cs,c+lineIdx+t);
           const cw=Math.max(cs*.42*styleScaleX,ctx.measureText(tok[c]).width*styleScaleX);
           items.push({tok:tok[c],w:cw,size:cs,idx:c+lineIdx+t});totalW+=cw;
         }
       }
-      const fit=totalW>238?238/totalW:1;let cx=128-(totalW*fit)/2;
+      const fit=totalW>maxW?maxW/totalW:1;let cx=canvasW/2-(totalW*fit)/2;
       for(let i=0;i<items.length;i++){
         const item=items[i],w=item.w*fit;
         if(!item.space){
-          const cs=Math.max(18,Math.round(item.size*fit));
+          const cs=Math.max(18*scale,Math.round(item.size*fit));
           const yJit=(graffitiHash(seed,500+lineIdx*64+i)-.5)*lineSize*(style==='irregular'?.28:.14);
           const rot=(graffitiHash(seed,900+lineIdx*64+i)-.5)*(style==='irregular'?.34:.14);
           const ch=style==='irregular'&&graffitiHash(seed,1300+i)>.45?item.tok.toUpperCase():item.tok;
@@ -736,45 +739,46 @@ function drawStyledStreetGraffiti(ctx,piece,face,inkColor,cleaningProgress=0){
         const w=ctx.measureText(tok).width*styleScaleX;
         widths.push(w);totalW+=w+(t?wordGap:0);
       }
-      const fit=totalW>238?238/totalW:1;let cx=128-(totalW*fit)/2;
+      const fit=totalW>maxW?maxW/totalW:1;let cx=canvasW/2-(totalW*fit)/2;
       for(let t=0;t<lineTokens.length;t++){
         const w=widths[t]*fit;
-        drawWordOrChar(lineTokens[t],cx+w/2,cy,Math.max(20,Math.round(lineSize*fit)),t+lineIdx,styleScaleX,styleScaleY,0);
+        drawWordOrChar(lineTokens[t],cx+w/2,cy,Math.max(20*scale,Math.round(lineSize*fit)),t+lineIdx,styleScaleX,styleScaleY,0);
         cx+=w+wordGap*fit;
       }
     }
   });
+  const sx=canvasW/256,sy=canvasH/256;
   if(style==='pixo'){
     // Sharp angular pixo end-strokes/hooks
-    ctx.strokeStyle=inkHex;ctx.lineWidth=3;
-    ctx.beginPath();ctx.moveTo(22,42);ctx.lineTo(44,24);ctx.moveTo(214,218);ctx.lineTo(234,196);ctx.stroke();
+    ctx.strokeStyle=inkHex;ctx.lineWidth=3*scale;
+    ctx.beginPath();ctx.moveTo(22*sx,42*sy);ctx.lineTo(44*sx,24*sy);ctx.moveTo(214*sx,218*sy);ctx.lineTo(234*sx,196*sy);ctx.stroke();
   }
   if(style==='rasurada'){
-    ctx.strokeStyle=inkHex;ctx.lineWidth=5;
+    ctx.strokeStyle=inkHex;ctx.lineWidth=5*scale;
     for(let s=0;s<3;s++){
-      const y1=64+s*60+(graffitiHash(seed,700+s)-.5)*18,y2=y1+(graffitiHash(seed,710+s)-.5)*28;
-      ctx.beginPath();ctx.moveTo(18,y1);ctx.lineTo(238,y2);ctx.stroke();
+      const y1=(64+s*60+(graffitiHash(seed,700+s)-.5)*18)*sy,y2=y1+(graffitiHash(seed,710+s)-.5)*28*sy;
+      ctx.beginPath();ctx.moveTo(18*sx,y1);ctx.lineTo(238*sx,y2);ctx.stroke();
     }
   }
   if(style==='stencil'){
-    ctx.clearRect(0,126,256,3);ctx.clearRect(126,18,3,220);
+    ctx.clearRect(0,canvasH/2-1.5*scale,canvasW,3*scale);ctx.clearRect(canvasW/2-1.5*scale,0,3*scale,canvasH*.86);
   }
   if(style==='tag'||style==='spray'){
     ctx.fillStyle=inkHex;
-    for(let d=0;d<4;d++){const dx=52+graffitiHash(seed,800+d)*152,dy=164+graffitiHash(seed,810+d)*26,dh=12+graffitiHash(seed,820+d)*26;ctx.fillRect(Math.round(dx),Math.round(dy),2,Math.round(dh));}
+    for(let d=0;d<4;d++){const dx=(52+graffitiHash(seed,800+d)*152)*sx,dy=(164+graffitiHash(seed,810+d)*26)*sy,dh=(12+graffitiHash(seed,820+d)*26)*sy;ctx.fillRect(Math.round(dx),Math.round(dy),Math.max(1,Math.round(2*scale)),Math.round(dh));}
     if(style==='tag'&&lines.length){
-      const y=Math.min(242,128+((lines.length-1)/2)*lineHeight+baseSize*styleScaleY*.48);
-      ctx.strokeStyle=inkHex;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(26,y);ctx.quadraticCurveTo(128,y+14,230,y-6);ctx.stroke();
+      const y=Math.min(canvasH*.945,canvasH/2+((lines.length-1)/2)*lineHeight+baseSize*styleScaleY*.48);
+      ctx.strokeStyle=inkHex;ctx.lineWidth=4*scale;ctx.beginPath();ctx.moveTo(26*sx,y);ctx.quadraticCurveTo(canvasW/2,y+14*sy,230*sx,y-6*sy);ctx.stroke();
     }
   }
   ctx.restore();
-  if(piece?.groundSmudges?.length)applyFootSmudges(ctx,256,256,piece.groundSmudges,seed);
-  if(cleaningProgress>0)applyCleaningSmudges(ctx,256,256,cleaningProgress,seed);
+  if(piece?.groundSmudges?.length)applyFootSmudges(ctx,canvasW,canvasH,piece.groundSmudges,seed);
+  if(cleaningProgress>0)applyCleaningSmudges(ctx,canvasW,canvasH,cleaningProgress,seed);
 }
 
 function addStreetGraffiti(THREE,group,world,piece,face,inkColor,cleaningProgress=0){
   let texture;
-  const canvas=document.createElement('canvas');canvas.width=256;canvas.height=256;
+  const canvas=document.createElement('canvas');const canvasSize=graffitiCanvasSize(piece.support);canvas.width=canvasSize.width;canvas.height=canvasSize.height;
   const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.fillStyle=`#${inkColor.toString(16).padStart(6,'0')}`;ctx.textAlign='center';ctx.textBaseline='middle';
   if(piece.kind==='painting'&&!piece.layers.length&&piece.materialUsed!=='fezes'){
     canvas.width=512;canvas.height=256;drawWallPainting(ctx,piece,()=>{ctx.clearRect(0,0,512,256);drawWallPainting(ctx,piece);if(texture)texture.needsUpdate=true;});

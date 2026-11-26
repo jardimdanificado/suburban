@@ -70,6 +70,9 @@ function basket(s,x,y,z,width=.34,depth=.27,height=.23,segments=16,courses=12){
 export function wickerBasketSurface({x=0,y=0,z=0,width=.34,depth=.27,height=.23,segments=16,courses=12}={}){
   const surface=new Surface();basket(surface,x,y,z,width,depth,height,segments,courses);return surface.data();
 }
+export function cargoCrateSurface({x=0,y=-.10,z=0,width=.28,depth=.24,height=.20}={}){
+  const surface=new Surface();woodenCrate(surface,x,y,z,width,depth,height);return surface.data();
+}
 function woodenCrate(s,x,y,z,w,d,h){
   for(let i=0;i<5;i++)s.box(x+(i-2)*w/5,y,z,w/5-.007,.032,d,i%2?0x9c7046:0xad8051);
   for(let course=0;course<3;course++){

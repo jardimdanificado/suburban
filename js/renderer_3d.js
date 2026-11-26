@@ -6874,7 +6874,11 @@ export class RCT3DRenderer {
       this._terrainFarmSignatureCache={city,structureRevision:city?.structureRevision||0,grassValue:grassExclusionSignature(city?.buildings||[])};
     }
     const footprint=cachedConstructionFootprint(this,this.cityDevelopment),siteCells=footprint.cells;
-    const groundPaint=(city?.justice?.art||[]).filter(piece=>!piece.entity.destroyed&&piece.support?.kind==='street-graffiti'&&piece.support.surface==='ground').map(piece=>`${piece.support.tileX},${piece.support.tileY}`).sort();
+    const groundPaint=(city?.justice?.art||[]).filter(piece=>!piece.entity.destroyed&&piece.support?.kind==='street-graffiti'&&piece.support.surface==='ground').flatMap(piece=>{
+      const cells=[],largura=Math.max(1,piece.support.tileWidth||1),altura=Math.max(1,piece.support.tileHeight||1);
+      for(let dy=0;dy<altura;dy++)for(let dx=0;dx<largura;dx++)cells.push(`${piece.support.tileX+dx},${piece.support.tileY+dy}`);
+      return cells;
+    }).sort();
     const grassSignature=`${this._terrainFarmSignatureCache.grassValue}|sites:${footprint.signature}|paint:${groundPaint.join(';')}|graze:${city?.fauna?.grazeRevision||0}`;
     if(this._grassCoverageCity!==city||this._grassCoverageSignature!==grassSignature){
       this._grassCoverageCity=city;this._grassCoverageSignature=grassSignature;

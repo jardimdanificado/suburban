@@ -173,11 +173,13 @@ test('graffiti insult mode uses the generator and keeps the target', () => {
 
 test('hate graffiti requires a known category and a caller-supplied text', () => {
   assert.throws(() => graffitiDeOdio({message: 'texto', prejudiceType: 'inventado'}), RangeError);
-  assert.throws(() => graffitiDeOdio({message: '', prejudiceType: 'racismo'}), Error);
+  comCategoriaVazia('racismo', () => {
+    assert.throws(() => graffitiDeOdio({message: '', prejudiceType: 'racismo'}), Error);
+    assert.throws(() => graffitiContent({random: zero}, {}, {prejudiceType: 'racismo'}), Error);
+  });
   assert.deepEqual(graffitiDeOdio({message: 'texto', prejudiceType: 'racismo'}), {
     message: 'texto',
     prejudiceType: 'racismo',
     crimeLabel: 'Discriminação racial',
   });
-  assert.throws(() => graffitiContent({random: zero}, {}, {prejudiceType: 'racismo'}), Error);
 });

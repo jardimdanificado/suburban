@@ -1,6 +1,10 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {interiorRoute} from './city_interior_layout.js?v=route-cache-512-index-1';
-import {fitGraffitiToWall,graffitiWallHasWindow,graffitiWallHasBalcony} from './city_graffiti_surfaces.js';
+import {fitGraffitiToWall,graffitiWallHasWindow,graffitiWallHasBalcony,graffitiWallHasDoor} from './city_graffiti_surfaces.js';
+import {GRAFFITI_TILE_WIDTH} from './city_graffiti_size.js';
+
+const MAX_UPPER_WALL_TILES=12;
+const UPPER_WALL_SHAPES=[[1,1],[2,1],[3,1],[4,1],[5,1],[6,1],[7,9],[9,7],[2,2],[3,3],[4,4],[5,5],[7,4],[7,7]];
 
 // Upper facades require an actual room and a connected route through the stairs.
 export function upperGraffitiSurfaces(city,c,radius=4){
@@ -12,6 +16,7 @@ export function upperGraffitiSurfaces(city,c,radius=4){
 export function* upperGraffitiSurfaceCandidates(city,c,radius=4){
  for(const b of city.buildings){
   if(b.entity.destroyed||b.active===false||b.constructionKind==='open-air'||!b.door||Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)>radius)continue;
+  const records=[];
   for(const unit of b.units||[]){
    if(unit.z<1)continue;
    const sides=[unit.y===0,unit.x===b.width-1,unit.y===b.depth-1,unit.x===0];
@@ -22,9 +27,60 @@ export function* upperGraffitiSurfaceCandidates(city,c,radius=4){
     const key=`wall:${b.id}:${side}:${side%2?unit.y+.5:unit.x+.5}:${unit.z}`;
     if(city.justice.art.some(p=>!p.entity.destroyed&&p.support?.key===key)||city.citizens.some(p=>p.graffitiMission?.surface?.key===key))continue;
     if(interiorRoute(b,{...b.door,z:0},accessPoint)===null)continue;
-    const support={kind:'street-graffiti',surface:'wall',key,buildingId:b.id,unitId:unit.id,floor:unit.z,side,position,accessPoint,approach:{...b.door},rotation:[Math.PI,Math.PI/2,0,-Math.PI/2][side],width:.86,height:1.64};
+    const support={kind:'street-graffiti',surface:'wall',key,buildingId:b.id,unitId:unit.id,floor:unit.z,side,position,accessPoint,approach:{...b.door},rotation:[Math.PI,Math.PI/2,0,-Math.PI/2][side],width:GRAFFITI_TILE_WIDTH,height:1.64,tileWidth:1,tileHeight:1};
     if(graffitiWallHasWindow(b,support)||graffitiWallHasBalcony(b,support))continue;
-    fitGraffitiToWall(city,support);yield support;
+    fitGraffitiToWall(city,support);
+    records.push({support,unit,side,floor:unit.z,offset:side%2?unit.y+.5:unit.x+.5});
+    yield support;
+   }
+  }
+  yield* mergedUpperWallSupports(b,records);
+ }
+}
+
+// The upper facade can also expose rectangles: adjacent rooms on the same
+// floor widen the piece, and consecutive solid floors stack it. Every tile was
+// already validated for windows, balconies and a real interior route.
+function* mergedUpperWallSupports(b,records){
+ const bySide=[[],[],[],[]];
+ for(const record of records)bySide[record.side].push(record);
+ for(let side=0;side<4;side++){
+  const list=bySide[side];
+  if(list.length<2)continue;
+  const byKey=new Map(list.map(record=>[`${record.floor}:${record.offset}`,record]));
+  for(const start of list){
+   if(byKey.has(`${start.floor-1}:${start.offset}`)||byKey.has(`${start.floor}:${start.offset-1}`))continue;
+   let maxW=0;while(maxW<MAX_UPPER_WALL_TILES&&byKey.has(`${start.floor}:${start.offset+maxW}`))maxW++;
+   let maxH=1;
+   if((start.support.height||0)>=1){
+    maxH=0;
+    grow:while(maxH<MAX_UPPER_WALL_TILES){
+     const floor=start.floor+maxH;
+     for(let dx=0;dx<maxW;dx++){
+      const record=byKey.get(`${floor}:${start.offset+dx}`);
+      if(!record||Math.abs((record.support.height||0)-(start.support.height||0))>.001)break grow;
+     }
+     maxH++;
+    }
+   }
+   const shapes=UPPER_WALL_SHAPES.slice();
+   if(!shapes.some(([w,h])=>w===maxW&&h===maxH))shapes.push([maxW,maxH]);
+   for(const [w,h] of shapes){
+    if(w<1||h<1||w>maxW||h>maxH||w*h<=1)continue;
+    const rowStart=start.support.position,rowEnd=byKey.get(`${start.floor}:${start.offset+w-1}`).support.position,inside=[];
+    let valid=true;
+    for(let dy=0;dy<h&&valid;dy++)for(let dx=0;dx<w;dx++){
+     const record=byKey.get(`${start.floor+dy}:${start.offset+dx}`);
+     if(!record||Math.abs((record.support.height||0)-(start.support.height||0))>.001){valid=false;break;}
+     inside.push(record);
+    }
+    if(!valid)continue;
+    const minZ=Math.min(...inside.map(record=>record.support.position.z-record.support.height/2)),
+      maxZ=Math.max(...inside.map(record=>record.support.position.z+record.support.height/2)),
+      unitIds=[...new Set(inside.map(record=>record.unit.id))];
+    const support={kind:'street-graffiti',surface:'wall',key:`wall:${b.id}:${side}:${start.offset}+${w}x${h}:${start.floor}`,buildingId:b.id,unitId:start.unit.id,unitIds,floor:start.floor,side,accessPoint:start.support.accessPoint,approach:start.support.approach,rotation:start.support.rotation,position:{x:(rowStart.x+rowEnd.x)/2,y:(rowStart.y+rowEnd.y)/2,z:(minZ+maxZ)/2},width:GRAFFITI_TILE_WIDTH*w,height:maxZ-minZ,tileWidth:w,tileHeight:h};
+    if(graffitiWallHasWindow(b,support)||graffitiWallHasBalcony(b,support)||graffitiWallHasDoor(b,support))continue;
+    yield support;
    }
   }
  }

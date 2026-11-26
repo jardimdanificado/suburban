@@ -280,7 +280,7 @@ export function limitarXingamento(texto, limite = 180) {
 
 // Monta o texto a partir de uma lista já filtrada. Mantém o mesmo sorteio
 // para xingamento comum e para ofensa de categoria preconceituosa.
-function montarXingamento({nome, feminino, entradas, escolhido, chance, sorteio, limite, pixacao, categoriaTipo = null}) {
+function montarXingamento({nome, feminino, entradas, escolhido, chance, sorteio, limite, pixacao, detalhe = 0, categoriaTipo = null}) {
   const entradaEscolhida = escolhe(entradas, sorteio);
   const insulto = feminino ? entradaEscolhida.f : entradaEscolhida.m;
   const generoArtigo = entradaEscolhida.generoFixo || (feminino ? 'f' : 'm');
@@ -349,6 +349,20 @@ function montarXingamento({nome, feminino, entradas, escolhido, chance, sorteio,
       texto = `${nome} é ${artigo} ${insulto}${sufixo}`;
   }
 
+  // Em muros grandes cabe mais do que um xingamento curto. Os predicados são
+  // orações coordenadas com o mesmo sujeito, então a concordância continua
+  // correta sem inventar palavras fora do repertório curado.
+  const quantidade = Math.max(0, Math.min(3, Math.floor(Number(detalhe) || 0)));
+  if (quantidade && !texto.endsWith('?')) {
+    const restantes = PREDICADOS.slice();
+    const extras = [];
+    while (extras.length < quantidade && restantes.length) {
+      const [predicado] = restantes.splice(Math.min(restantes.length - 1, Math.floor(sorteio() * restantes.length)), 1);
+      extras.push(predicado);
+    }
+    if (extras.length) texto = `${texto.replace(/[.!]+$/u, '')}; ${extras.join('; ')}.`;
+  }
+
   const textoFinal = pixacao ? texto.toLocaleUpperCase('pt-BR') : texto;
   return {
     texto: limitarTexto(textoFinal, limite),
@@ -373,6 +387,7 @@ export function gerarXingamentoDetalhado({
   pixacao = false,
   modelo = null,
   limite = 180,
+  detalhe = 0,
 } = {}) {
   const entradas = tipo
     ? XINGAMENTOS.filter(item => item.tipos.includes(tipo))
@@ -397,6 +412,7 @@ export function gerarXingamentoDetalhado({
     sorteio,
     limite,
     pixacao,
+    detalhe,
   });
 }
 
@@ -415,6 +431,7 @@ export function gerarOfensaPreconceitoDetalhado({
   pixacao = false,
   modelo = null,
   limite = 180,
+  detalhe = 0,
 } = {}) {
   if (!Object.prototype.hasOwnProperty.call(PREJUDICE_CRIME_TYPES, tipo)) {
     throw new RangeError(`categoria de preconceito desconhecida: ${tipo}`);
@@ -446,6 +463,7 @@ export function gerarOfensaPreconceitoDetalhado({
     sorteio,
     limite,
     pixacao,
+    detalhe,
     categoriaTipo: tipo,
   });
 }

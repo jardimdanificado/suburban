@@ -28,6 +28,8 @@ concordância.
   intensificadores e modelos de pichação. Não traz discurso de ódio pronto.
 - `js/xingamentos_preconceito.js`: listas vazias por categoria de preconceito,
   preenchidas manualmente; cadastro, remoção e validação das entradas.
+- `js/city_graffiti_size.js`: medidas da peça, orçamento de texto e resolução do
+  canvas para pichações de um ou vários tiles.
 - `tests/xingamentos.test.mjs`: regressão de concordância, modelos,
   determinismo e integração com pichação.
 
@@ -227,6 +229,36 @@ vítima nula. As duas ocorrências recebem evidência `hate-graffiti` com
 `defaceArtwork` e as missões de pichação aceitam `mission.prejudiceType`. O
 crime de pichação continua separado do crime de discriminação, mas os dois
 ficam ligados para investigação, julgamento e pena.
+
+### Peças multi-tile e texto maior
+
+`js/city_graffiti_size.js` mede a superfície e converte o tamanho em orçamento
+de texto:
+
+- `graffitiTileSpan(support)` devolve largura, altura e a quantidade de tiles
+  em cada eixo.
+- `graffitiTextCapacity(support)` devolve quantos caracteres o desenho consegue
+  distribuir sem encolher a fonte até ficar ilegível.
+- `graffitiTextLimit(support)` devolve o limite persistido da mensagem.
+- `graffitiCanvasSize(support)` devolve a resolução da textura.
+
+Uma peça de um tile mantém o comportamento antigo: capacidade 34 e limite 180.
+`graffitiContent` cresce com a área: 4x4 usa complexidade `variada` e limite
+245; 7x9 usa `complexa`, até três frases e limite 486. Cada frase recebe cenas
+do mesmo assunto, nunca palavras soltas, e os temas já usados não se repetem.
+`graffitiContent`, `graffitiDeOdio`, `xingamentoGraffiti` e `createArtwork`
+aceitam `support`; sem ele, o texto e o limite continuam iguais aos anteriores.
+`xingamentoGraffiti` também aceita `support` para acrescentar até três
+predicados curados em muros grandes, sem mudar a concordância.
+
+`nearbyGraffitiSurfaces` monta retângulos de piso a partir de cada canto de
+quadra pavimentada. Ofertas padrão: 1x1, 2x2, 3x3, 4x4, 5x5, 6x6, 7x9, 9x7,
+7x7, 8x8, 9x9 e o retângulo máximo do lote. `graffitiSurfaceExists` valida
+todos os tiles cobertos, então um buraco na calçada invalida o mural inteiro.
+Muros continuam crescendo em faixas horizontais de até 12 tiles; fachadas
+superiores também empilham andares sólidos consecutivos. O canvas acompanha a
+proporção da peça (128 px por tile, mínimo de 256 px por eixo), então o texto
+não estica em faixas compridas nem em murais altos.
 
 ## Determinismo
 

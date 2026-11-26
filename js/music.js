@@ -1,4 +1,4 @@
-export const MUSIC_TRACKS = ["data/music/kayoa - suburban.mp3"];
+export const MUSIC_TRACKS = ["data/music/kayoa - suburban.mp3", "672432__maximebedot__cuba-havana-music-salsa-bodeguita_audio.ogg"];
 
 export class MusicPlayer {
   constructor({ audio = new Audio(), tracks = MUSIC_TRACKS, random = Math.random, schedule = (callback, delay) => globalThis.setTimeout(callback, delay) } = {}) {
