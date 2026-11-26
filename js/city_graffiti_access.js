@@ -86,18 +86,41 @@ function* mergedUpperWallSupports(b,records){
  }
 }
 
+export function climbingFallChance(floor){
+ return .001+.001*Math.max(1,floor||1);
+}
 export function reachUpperGraffiti(city,c,mission){
- const support=mission.surface,b=city.building(support.buildingId),room=c.indoorLocation;
- if(room){
-  if(room.buildingId!==b.id||room.exiting)return false;
-  if(room.path.length)return false;
-  return Math.hypot(room.position.x-support.accessPoint.x,room.position.y-support.accessPoint.y,room.position.z-support.accessPoint.z)<.2;
+ const support=mission.surface,dx=[0,1,0,-1][support.side]||0,dy=[-1,0,1,0][support.side]||0;
+ const wallBase={x:support.position.x+dx*.35,y:support.position.y+dy*.35};
+ const approach=city.walkable(Math.floor(wallBase.x),Math.floor(wallBase.y))?wallBase:support.approach;
+ if(!c.climbing){
+  if(c.path.length)return false;
+  if(Math.hypot(c.entity.x-approach.x,c.entity.y-approach.y)>.25){
+   const path=city.findPath(c.entity,approach);
+   if(path===null){mission.accessFailed=true;return false;}
+   c.path=path.length?path:[approach];return false;
+  }
+  const floor=Math.max(1,support.floor||1);
+  c.climbing={phase:'up',targetZ:floor*CITY_FLOOR_HEIGHT,floor,z:0,facingX:support.position.x,facingY:support.position.y};
+  c.skybridgeZ=0;c.facingTarget={x:support.position.x,y:support.position.y};
+  mission.status='climbing';c.action='Escalando a parede para pichar';return false;
  }
- if(c.path.length||Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)>.2)return false;
- const position={x:c.entity.x,y:c.entity.y,z:0},path=interiorRoute(b,position,support.accessPoint);
- if(path===null){mission.accessFailed=true;return false;}
- c.indoorLocation={buildingId:b.id,unitId:null,targetUnitId:support.unitId,roomType:'circulation',targetRoomType:'graffiti',position,path,floor:0,phase:'walking',task:c.task,layoutRevision:b.layoutRevision||0,enteredAt:city.minute};
- const own=b.ownerId===c.id||b.accountId!=null&&b.accountId===c.accountId||city.units?.get(c.homeUnitId)?.buildingId===b.id;
- if(!own)city.justice.recordTrespassUse(c,b,{id:support.unitId,price:0},'upper-floor-graffiti');
- mission.status='climbing';c.action='Subindo para pintar a fachada';return false;
+ c.facingTarget={x:c.climbing.facingX,y:c.climbing.facingY};
+ if(c.climbing.phase==='painting'){c.skybridgeZ=c.climbing.z;return true;}
+ const step=c.climbing.phase==='down'?-.65:.55;
+ c.climbing.z=Math.max(0,Math.min(c.climbing.targetZ,c.climbing.z+step));
+ c.skybridgeZ=c.climbing.z;
+ const currentFloor=Math.max(1,Math.ceil(c.climbing.z/CITY_FLOOR_HEIGHT));
+ if(c.climbing.z>0&&city.random()<climbingFallChance(currentFloor)){
+  c.climbing=null;c.skybridgeZ=0;c.facingTarget=null;
+  c.needs.health=Math.max(5,(c.needs.health??100)-(10+currentFloor*6));
+  c.unconsciousUntil=city.minute+10+currentFloor*4;
+  city.sanitation?.soilCitizen?.(c,'sangue',5+currentFloor*3,null,'legs');
+  city.log?.(`${c.entity.properties.name} escorregou e caiu do ${currentFloor}º andar ao escalar para pichar.`,'justice',[c.id],{kind:'graffiti-fall',floor:currentFloor});
+  mission.accessFailed=true;return false;
+ }
+ if(c.climbing.phase==='up'&&c.climbing.z>=c.climbing.targetZ){c.climbing.phase='painting';return true;}
+ if(c.climbing.phase==='down'&&c.climbing.z<=0){c.climbing=null;c.skybridgeZ=0;c.facingTarget=null;return true;}
+ c.action=c.climbing.phase==='down'?'Descendo da parede após pichar':`Escalando o ${currentFloor}º andar para pichar`;
+ return false;
 }

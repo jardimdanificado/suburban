@@ -1,4 +1,9 @@
-export const MUSIC_TRACKS = ["data/music/kayoa - suburban.mp3", "data/music/672432__maximebedot__cuba-havana-music-salsa-bodeguita_audio.ogg"];
+export const MUSIC_TRACKS = ["data/music/kayoa - suburban.mp3", 
+  "data/music/672432__maximebedot__cuba-havana-music-salsa-bodeguita_audio.ogg",
+  "data/music/405031__kyles__cumbia-band-playing-on-stopped-parade-float-in-street-for-40th-anniversary-party-great-song-saravena-colombia-2016.ogg",
+  "data/music/219317__felixblume__mexican-mariachis-playing-las-mananitas-on-the-square-garibaldi-in-mexico-city.ogg",
+  "data/music/177304__lenguaverde__jarabe-tapatio-mariachi.ogg",
+];
 
 export class MusicPlayer {
   constructor({ audio = new Audio(), tracks = MUSIC_TRACKS, random = Math.random, schedule = (callback, delay) => globalThis.setTimeout(callback, delay) } = {}) {

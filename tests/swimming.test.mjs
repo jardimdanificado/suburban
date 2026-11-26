@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { setup } from './helpers/city.mjs';
 import { TILE_WATER } from '../js/world_gen.js';
 import { citizenAnimation } from '../js/city_citizen_models.js';
+import { climbingFallChance } from '../js/city_graffiti_access.js';
 import { sampleCitizenMotion } from '../js/city_sim_bridge.js';
 
 function createRiverWorld() {
@@ -105,12 +106,17 @@ test('new human animation clips map to the corresponding citizen states', () => 
   assert.equal(citizenAnimation({ swimming: true }, true), 'nadar');
   assert.equal(citizenAnimation({ swimming: true }, false), 'boiar');
   assert.equal(citizenAnimation({ deliveryId: 1 }, true), 'carregar');
-  assert.equal(citizenAnimation({ task: 'walk' }, true), 'run');
+  assert.equal(citizenAnimation({ task: 'walk' }, true), 'caminhar');
+  assert.equal(citizenAnimation({ task: 'outdoor_leisure' }, true), 'andar_lento');
+  assert.equal(citizenAnimation({ task: 'combat-flee' }, true), 'run');
+  assert.equal(citizenAnimation({ climbing: { phase: 'up', z: 1 } }, false), 'escalar');
+  assert(Math.abs(climbingFallChance(2) - climbingFallChance(1) - 0.001) < 1e-9);
   assert.equal(citizenAnimation({ conversation: {} }, false), 'conversar');
   assert.equal(citizenAnimation({ celebrating: true }, false), 'comemorar');
   assert.equal(citizenAnimation({ waving: true }, false), 'acenar');
   assert.equal(citizenAnimation({ dancing: true, id: 0 }, false), 'dancar_samba');
-  assert.equal(citizenAnimation({ dancing: true, id: 1 }, false), 'dancar_hiphop');
+  assert.equal(citizenAnimation({ dancing: true, id: 1 }, false), 'dancar_salsa');
+  assert.equal(citizenAnimation({ dancing: true, id: 2 }, false), 'dancar_rumba');
   assert.equal(citizenAnimation({ task: 'construction', workProjectId: 1 }, false), 'cavar');
   assert.equal(citizenAnimation({ task: 'informal-gardening', workCell: { x: 1, y: 1 } }, false), 'colher');
   assert.equal(citizenAnimation({ task: 'water', workCell: { x: 1, y: 1 } }, false), 'beber');

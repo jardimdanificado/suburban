@@ -31,9 +31,11 @@ def parse_obj_raw(path):
 
 
 def load_canonical_idle(repo_root):
-    # acenar/0.obj has the canonical 125-vertex, 246-triangle topology;
+    # conversar/0.obj has the canonical 125-vertex, 246-triangle topology;
     # use the game's own parseCitizenOBJ via node so padding stripping matches 100%.
-    ac_path = os.path.join(repo_root, 'data/animals/humano/acenar/0.obj')
+    ac_path = os.path.join(repo_root, 'data/animals/humano/conversar/0.obj')
+    if not os.path.exists(ac_path):
+        ac_path = os.path.join(repo_root, 'data/animals/humano/idle/0.obj')
     ac_verts, ac_faces = parse_obj_raw(ac_path)
     js = (
         "import fs from 'node:fs';"
@@ -139,6 +141,7 @@ def main():
     fbx_path = os.path.abspath(args[0])
     out_dir = os.path.abspath(args[1])
     frame_count = int(args[2]) if len(args) > 2 else 4
+    exaggerate = float(args[3]) if len(args) > 3 else 1.0
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -252,6 +255,17 @@ def main():
                 raw_verts.append([wv.x * 100.0, wv.z * 100.0, -wv.y * 100.0])
             eval_obj.to_mesh_clear()
             verts = normalize_to_idle(raw_verts)
+            if exaggerate != 1.0:
+                base_norm = normalize_to_idle(base_verts)
+                ex_verts = []
+                for bv, pv in zip(base_norm, verts):
+                    k = exaggerate if bv[1] > 1.25 else 1.0
+                    ex_verts.append([
+                        bv[0] + (pv[0] - bv[0]) * k,
+                        bv[1] + (pv[1] - bv[1]) * k,
+                        bv[2] + (pv[2] - bv[2]) * k,
+                    ])
+                verts = normalize_to_idle(ex_verts)
         else:
             deltas = {k: bone_delta(b, armature) for k, b in bone_map.items()}
             raw_verts = []
@@ -271,6 +285,17 @@ def main():
                     -(tv.y - hips_rest.y) * scale_to_idle,
                 ])
             verts = normalize_to_idle(raw_verts)
+            if exaggerate != 1.0:
+                base_norm = normalize_to_idle(base_verts)
+                ex_verts = []
+                for bv, pv in zip(base_norm, verts):
+                    k = exaggerate if bv[1] > 1.25 else 1.0
+                    ex_verts.append([
+                        bv[0] + (pv[0] - bv[0]) * k,
+                        bv[1] + (pv[1] - bv[1]) * k,
+                        bv[2] + (pv[2] - bv[2]) * k,
+                    ])
+                verts = normalize_to_idle(ex_verts)
 
         out_path = os.path.join(out_dir, f'{idx}.obj')
         write_obj(out_path, verts, faces, f'{os.path.basename(out_dir)} frame {idx} (fbx frame {fnum})')
