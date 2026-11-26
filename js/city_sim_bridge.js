@@ -217,7 +217,13 @@ export class CitySimulationBridge {
     const nodeKinds=this.city.profileDiagnostics?Object.fromEntries(data.packet.nodes.reduce((counts,node)=>counts.set(node.kind,(counts.get(node.kind)||0)+1),new Map())):null;
     const receiveStarted=performance.now();
     const world=this.city.world,revision=world.revision,count=this.entities.length,structure=this.city.structureRevision,map=world.map;
-    const mapId=this.graph.ids.get(map),mapChanged=data.packet.nodes.some(node=>node.id===mapId&&node.kind==='Uint8Array'),previousMap=mapChanged?map.slice():null;
+    const mapId=this.graph.ids.get(map),mapChanged=data.packet.nodes.some(node=>node.id===mapId&&node.kind==='Uint8Array');
+    let previousMap=null;
+    if(mapChanged){
+      if(!this._prevMapScratch||this._prevMapScratch.length!==map.length)this._prevMapScratch=new Uint8Array(map.length);
+      this._prevMapScratch.set(map);
+      previousMap=this._prevMapScratch;
+    }
     const sidewalks=world.sidewalkTiles,sidewalkId=sidewalks&&this.graph.ids.get(sidewalks),sidewalksChanged=sidewalkId!=null&&data.packet.nodes.some(node=>node.id===sidewalkId&&node.kind==='Set'),previousSidewalks=sidewalksChanged?new Set(sidewalks):null;
     for(const c of this.city.citizens){
       let sample=this.motionSamples.get(c.id);

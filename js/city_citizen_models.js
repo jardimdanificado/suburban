@@ -83,7 +83,7 @@ export function citizenAnimation(c,moving=false,inWater=undefined){
   const activelyInsideWork=!!c.indoorLocation?.unitId&&WORK_TASKS.has(c.task);
   const activelyOnGig=!!c.informalJobId&&!citizenHasPath(c);
   const activelyWorking=WORK_TASKS.has(c.task)&&!citizenHasPath(c)&&(activelyUsingFurniture||activelyWorkingOutside||activelyInsideWork||activelyOnGig||c.task==='construction'&&c.workProjectId!=null);
-  if(!activelyWorking)return substance&&CITIZEN_MODEL_FRAMES[`droga_${substance}_idle`]?`droga_${substance}_idle`:(c.mood??0)<=-15?'chorar':'idle';
+  if(!activelyWorking)return substance&&CITIZEN_MODEL_FRAMES[`droga_${substance}_idle`]?`droga_${substance}_idle`:(c.mood??0)<=-20?'chorar':'idle';
   if(c.task==='water'||c.task==='drink')return 'beber';
   if(c.task==='fishing')return 'pescar';
   if(c.task==='farm'||c.forestryJob?.stage==='plant'||c.task==='informal-gardening')return 'colher';

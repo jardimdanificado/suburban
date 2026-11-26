@@ -1427,19 +1427,24 @@ export class CityJustice {
   }
   arriveToReport(c){const city=this.city,record=this.caseRecord(c.justiceReportCaseId),station=city.building(record?.reportingStationId);if(!record||record.status!=='reporting'||!station){c.justiceReportCaseId=null;c.task=null;c.targetId=null;return false;}if(Math.hypot(c.entity.x-station.door.x,c.entity.y-station.door.y)>1.5){const path=city.findPath(c.entity,station.door);if(path===null){record.status='unreported';c.justiceReportCaseId=null;c.task=null;c.targetId=null;return false;}c.targetId=station.id;c.path=path;if(!path.length)c.path=[{x:station.door.x,y:station.door.y}];return false;}c.targetId=station.id;const room=station.units.find(u=>u.roomType==='service')||station.units.find(u=>['office','workspace'].includes(u.roomType));if(!room){record.status='unreported';c.justiceReportCaseId=null;c.task=null;c.targetId=null;c.action='Delegacia sem balcão de atendimento acessível';return false;}if(!activityRoomReady(city,c,station,room,'service'))return false;record.reportedAt=city.minute;record.status='reported';record.statement={reporterId:c.id,description:`${c.entity.properties.name} compareceu pessoalmente ao balcão da delegacia.`,confidence:record.witnesses.find(w=>w.citizenId===c.id)?.confidence??.35};c.justiceReportCaseId=null;c.task=null;c.targetId=null;c.action='Registrou um boletim de ocorrência';city.log(`BO #${record.id} registrado por ${c.entity.properties.name} no balcão da delegacia.`,'justice',[c.id,record.victimId].filter(Number.isInteger),{kind:'crime-reported',caseId:record.id,buildingId:station.id,unitId:room.id});return true;}
   dispatchReports(){
-    const city=this.city,hasPolice=this.activeBuildings('police_station').some(b=>this.staffed(b)>0);
-    const available=c=>c&&!c.entity.destroyed&&c.needs.health>20&&!c.custody&&!c.justiceReportCaseId&&!c.sleep?.active&&!c.sharedBoatRide&&!REPORT_BUSY_TASKS.has(c.task)&&!city.urgentNeed?.(c);
+    const city=this.city,stations=this.activeBuildings('police_station').filter(b=>this.staffed(b)>0),hasPolice=stations.length>0;
+    const reportingCounts=new Map();
+    for(const r of this.cases)if(r.status==='reporting'&&r.reportingStationId!=null)reportingCounts.set(r.reportingStationId,(reportingCounts.get(r.reportingStationId)||0)+1);
+    const available=c=>c&&!c.entity.destroyed&&c.needs.health>20&&!c.custody&&!c.justiceReportCaseId&&!c.sleep?.active&&!c.sharedBoatRide&&!REPORT_BUSY_TASKS.has(c.task)&&!city.urgentNeed?.(c)&&Math.min(c.needs.food,c.needs.water,c.needs.toilet,c.needs.hygiene)>=30;
     for(let i=0;i<this.cases.length;i++){
       const record=this.cases[i];
       if(record.status==='reporting'){
         const reporter=city.society.citizen(record.reporterId),station=city.building(record.reportingStationId);
-        if(!reporter||reporter.entity.destroyed||reporter.task!=='justice-report'||reporter.justiceReportCaseId!==record.id||!station?.active||station.entity.destroyed){
-          record.status='unreported';record.reporterId=null;
+        const timedOut=city.minute-(record.reportStartedAt||0)>90;
+        if(timedOut||!reporter||reporter.entity.destroyed||reporter.task!=='justice-report'||reporter.justiceReportCaseId!==record.id||!station?.active||station.entity.destroyed){
+          if(timedOut)reportingCounts.set(record.reportingStationId,Math.max(0,(reportingCounts.get(record.reportingStationId)||0)-1));
+          record.status='unreported';record.reporterId=null;record._nextReportTryAt=city.minute+30;
           if(reporter?.justiceReportCaseId===record.id){reporter.justiceReportCaseId=null;if(reporter.task==='justice-report'){reporter.task=null;reporter.targetId=null;reporter.path=[];}}
         }
         continue;
       }
       if(!hasPolice||record.status!=='unreported')continue;
+      if(stations.every(st=>(reportingCounts.get(st.id)||0)>=4))continue;
       if((record._nextReportTryAt||0)>city.minute)continue;
       const victim=record.victimId!=null?city.society.citizen(record.victimId):null;
       if(record.type==='defamation'&&!record.discovery&&victim){const work=this.art.find(piece=>piece.id===record.details?.artId);if(work?.seenBy?.[victim.id]!=null)record.discovery={citizenId:victim.id,noticedAt:work.seenBy[victim.id],basis:'public-art-accusation'};}
@@ -1448,7 +1453,7 @@ export class CityJustice {
       let reporter=null;
       if(victimAware&&available(victim))reporter=victim;
       else for(let w=0;w<record.witnesses.length;w++){const candidate=city.society.citizen(record.witnesses[w].citizenId);if(available(candidate)){reporter=candidate;break;}}
-      if(reporter){record._nextReportTryAt=0;this.report(record.id,reporter.id);}
+      if(reporter){record._nextReportTryAt=0;if(this.report(record.id,reporter.id)&&record.reportingStationId!=null)reportingCounts.set(record.reportingStationId,(reportingCounts.get(record.reportingStationId)||0)+1);}
       else record._nextReportTryAt=city.minute+10;
     }
   }

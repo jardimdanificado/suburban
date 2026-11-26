@@ -186,7 +186,7 @@ export class CitySanitation {
     let queued=0;const queue=entrance.serviceQueue;
     if(queue)for(let i=0;i<queue.length;i++){const e=queue[i];if(e.buildingId===b.id&&e.kind==='toilet'&&e.resource===f.id)queued++;}
     const busy=f.occupantId&&f.occupantId!==c.id&&this.city.minute<f.busyUntil;
-    return Math.hypot(c.entity.x - b.door.x, c.entity.y - b.door.y) + (100 - f.cleanliness) * .12 + f.price / 50 + Math.max(queued,this.inboundFacilities?.get(f.id)||0)*24+(busy?8:0) - ((f.homeId === c.homeId || f.homeIds?.includes(c.homeId)) ? 24 : 0) - (c.jobId === b.id ? 4 : 0);
+    return Math.hypot(c.entity.x - b.door.x, c.entity.y - b.door.y) + (100 - f.cleanliness) * .12 + f.price / 50 + Math.max(queued,this.inboundFacilities?.get(f.id)||0)*35+(busy?60:0) - ((f.homeId === c.homeId || f.homeIds?.includes(c.homeId)) ? 24 : 0) - (c.jobId === b.id ? 4 : 0);
   }
   addWaste(b, amount = 1) {
     const stored = Math.min(amount, inventoryFree(b)); b.inventory.lixo += stored; b.litter += amount - stored;
@@ -245,7 +245,11 @@ export class CitySanitation {
   use(c) {
     const f = this.facilities.get(c.toiletTargetId), b = f && this.city.building(f.buildingId);
     const trespass=!!f&&c.trespassToiletFacilityId===f.id&&!this.allowed(c,f);
-    if (!f || !b || (!this.allowed(c, f)&&!trespass) || (f.occupantId && f.occupantId !== c.id && this.city.minute < f.busyUntil)) {
+    if (f && b && (this.allowed(c, f) || trespass) && f.occupantId && f.occupantId !== c.id && this.city.minute < f.busyUntil) {
+      if (this.choose(c, 'toilet')) return false;
+      c.path = []; c.action = 'Aguardando banheiro livre'; return false;
+    }
+    if (!f || !b || (!this.allowed(c, f)&&!trespass)) {
       const entrance=b?.officeTenantOf?this.city.building(b.officeTenantOf):b;if(entrance?.serviceQueue)entrance.serviceQueue=entrance.serviceQueue.filter(q=>q.citizenId!==c.id||q.kind!=='toilet');
       this.city.furniture?.release(c);c.task=null;c.toiletTargetId=null;c.toiletWaitingSince=null;c.targetId=null;c.path=[];c.serviceQueue=null;c.facingTarget=null;return false;
     }

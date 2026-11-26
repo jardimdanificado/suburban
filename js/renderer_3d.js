@@ -7924,14 +7924,18 @@ export class RCT3DRenderer {
 
   syncWaterPollution(world){
     const revision=world.waterPollutionRevision||0;if(this.lastWaterPollutionRevision===revision)return;
-    const shallows=[0.76,0.98,0.86];
+    const width=world.width;
     for(const chunk of this.terrainChunks.values())for(const mesh of chunk.water.children){
-      const cells=mesh.userData.waterCells,colors=mesh.geometry?.attributes?.color,mixes=mesh.userData.waterShoreMix;
+      const cells=mesh.userData.waterCells,colors=mesh.geometry?.attributes?.color,mixes=mesh.userData.waterShoreMix,lights=mesh.userData.waterLights;
       if(!cells||!colors)continue;
       for(let i=0;i<cells.length;i++){
-        const tint=waterTint(waterPollutionAt(world,cells[i]%world.width,Math.floor(cells[i]/world.width))),light=mesh.userData.waterLights[i];
-        const mix=mixes?.[i]||0,brightTint=tint.map(value=>0.58+value*0.42);
-        colors.setXYZ(i,(brightTint[0]*(1-mix)+shallows[0]*mix)*light,(brightTint[1]*(1-mix)+shallows[1]*mix)*light,(brightTint[2]*(1-mix)+shallows[2]*mix)*light);
+        const cell=cells[i],cx=cell%width,cy=(cell-cx)/width;
+        const tint=waterTint(waterPollutionAt(world,cx,cy)),light=lights[i];
+        const mix=mixes?.[i]||0,invMix=1-mix;
+        const r=((0.58+tint[0]*0.42)*invMix+0.76*mix)*light;
+        const g=((0.58+tint[1]*0.42)*invMix+0.98*mix)*light;
+        const b=((0.58+tint[2]*0.42)*invMix+0.86*mix)*light;
+        colors.setXYZ(i,r,g,b);
       }
       colors.needsUpdate=true;
     }
@@ -9537,84 +9541,43 @@ export class RCT3DRenderer {
     this.instOakLeaves.count = oakCount;
     this.instOakLeaves.instanceMatrix.needsUpdate = true;
     if (this.instOakLeaves.instanceColor) this.instOakLeaves.instanceColor.needsUpdate = true;
-    this.instTropicalTreeBlooms.count=tropicalTreeBloomCount;this.instTropicalTreeBlooms.instanceMatrix.needsUpdate=true;if(this.instTropicalTreeBlooms.instanceColor)this.instTropicalTreeBlooms.instanceColor.needsUpdate=true;
+    const commitInst=(mesh,count,withColor=false)=>{mesh.count=count;if(count>0){mesh.instanceMatrix.needsUpdate=true;if(withColor&&mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}};
+    commitInst(this.instTropicalTreeBlooms,tropicalTreeBloomCount,true);
+    commitInst(this.instPalmTrunks,palmCount);
+    commitInst(this.instPalmFronds,palmFrondCount);
+    commitInst(this.instTravellerPalms,travellerPalmCount);
+    commitInst(this.instFanPalmFronds,fanPalmCount);
+    commitInst(this.instTropicalFruits,tropicalFruitCount,true);
+    for(const [mesh,count]of [[this.instBananaStems,bananaCount],[this.instBananaLeaves,bananaCount],[this.instBananaFruits,bananaFruitCount]])commitInst(mesh,count,true);
+    for(const [mesh,count]of [[this.instPapayaTrunks,papayaCount],[this.instPapayaLeaves,papayaCount],[this.instPapayaFruits,papayaFruitCount]])commitInst(mesh,count,true);
+    for(const [mesh,count]of [[this.instBroadLeafPlants,broadLeafCount],[this.instTropicalFoliage,tropicalFoliageCount],[this.instTropicalFlowerStems,tropicalFlowerCount],[this.instTropicalFlowerHeads,tropicalFlowerCount],[this.instWaterLilyPads,waterLilyCount],[this.instWaterLilyFlowers,waterLilyCount]])commitInst(mesh,count,true);
 
-    this.instPalmTrunks.count = palmCount;
-    this.instPalmTrunks.instanceMatrix.needsUpdate = true;
-    this.instPalmFronds.count = palmFrondCount;
-    this.instPalmFronds.instanceMatrix.needsUpdate = true;
-    this.instTravellerPalms.count=travellerPalmCount;this.instTravellerPalms.instanceMatrix.needsUpdate=true;
-    this.instFanPalmFronds.count=fanPalmCount;this.instFanPalmFronds.instanceMatrix.needsUpdate=true;
-    this.instTropicalFruits.count=tropicalFruitCount;
-    this.instTropicalFruits.instanceMatrix.needsUpdate=true;
-    if(this.instTropicalFruits.instanceColor)this.instTropicalFruits.instanceColor.needsUpdate=true;
-    for(const [mesh,count]of [[this.instBananaStems,bananaCount],[this.instBananaLeaves,bananaCount],[this.instBananaFruits,bananaFruitCount]]){mesh.count=count;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}
-    for(const [mesh,count]of [[this.instPapayaTrunks,papayaCount],[this.instPapayaLeaves,papayaCount],[this.instPapayaFruits,papayaFruitCount]]){mesh.count=count;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}
-    for(const [mesh,count]of [[this.instBroadLeafPlants,broadLeafCount],[this.instTropicalFoliage,tropicalFoliageCount],[this.instTropicalFlowerStems,tropicalFlowerCount],[this.instTropicalFlowerHeads,tropicalFlowerCount],[this.instWaterLilyPads,waterLilyCount],[this.instWaterLilyFlowers,waterLilyCount]]){mesh.count=count;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}
-
-    this.instPineTrunks.count = pineCount;
-    this.instPineTrunks.instanceMatrix.needsUpdate = true;
-    this.instPineLeaves.count = pineCount;
-    this.instPineLeaves.instanceMatrix.needsUpdate = true;
-
-    this.instCherryTrunks.count = cherryCount;
-    this.instCherryTrunks.instanceMatrix.needsUpdate = true;
-    this.instCherryLeaves.count = cherryCount;
-    this.instCherryLeaves.instanceMatrix.needsUpdate = true;
-
-    this.instBirchTrunks.count = birchCount;
-    this.instBirchTrunks.instanceMatrix.needsUpdate = true;
-    this.instBirchLeaves.count = birchCount;
-    this.instBirchLeaves.instanceMatrix.needsUpdate = true;
-
-    this.instMapleTrunks.count = mapleCount;
-    this.instMapleTrunks.instanceMatrix.needsUpdate = true;
-    this.instMapleLeaves.count = mapleCount;
-    this.instMapleLeaves.instanceMatrix.needsUpdate = true;
-
-    this.instBerryBushes.count = berryBushCount;
-    this.instBerryBushes.instanceMatrix.needsUpdate = true;
-    this.instBerryOrnaments.count = berryBushCount;
-    this.instBerryOrnaments.instanceMatrix.needsUpdate = true;
-
-    this.instRoseBushes.count = roseBushCount;
-    this.instRoseBushes.instanceMatrix.needsUpdate = true;
-    this.instRoseFlowers.count = roseBushCount;
-    this.instRoseFlowers.instanceMatrix.needsUpdate = true;
-    if(this.instRoseFlowers.instanceColor)this.instRoseFlowers.instanceColor.needsUpdate=true;
-
-    this.instCacti.count = cactusCount;
-    this.instCacti.instanceMatrix.needsUpdate = true;
-
-    this.instWoodLogs.count = woodLogCount;
-    this.instWoodLogs.instanceMatrix.needsUpdate = true;
-
-    this.instStoneItems.count = stoneItemCount;
-    this.instStoneItems.instanceMatrix.needsUpdate = true;
-
-    this.instWalls.count = wallCount;
-    this.instWalls.instanceMatrix.needsUpdate = true;
-    this.instWoodWalls.count = woodWallCount;
-    this.instWoodWalls.instanceMatrix.needsUpdate = true;
-    this.instMixedWalls.count = mixedWallCount;
-    this.instMixedWalls.instanceMatrix.needsUpdate = true;
-    this.instBoneWalls.count = boneWallCount;
-    this.instBoneWalls.instanceMatrix.needsUpdate = true;
-    this.instWallsStage1.count = wallStage1Count;
-    this.instWallsStage1.instanceMatrix.needsUpdate = true;
-
-    this.instGatesClosed.count = gateClosedCount;
-    this.instGatesClosed.instanceMatrix.needsUpdate = true;
-    this.instGatesOpen.count = gateOpenCount;
-    this.instGatesOpen.instanceMatrix.needsUpdate = true;
-    this.instGatesStage1.count = gateStage1Count;
-    this.instGatesStage1.instanceMatrix.needsUpdate = true;
+    commitInst(this.instPineTrunks,pineCount);
+    commitInst(this.instPineLeaves,pineCount);
+    commitInst(this.instCherryTrunks,cherryCount);
+    commitInst(this.instCherryLeaves,cherryCount);
+    commitInst(this.instBirchTrunks,birchCount);
+    commitInst(this.instBirchLeaves,birchCount);
+    commitInst(this.instMapleTrunks,mapleCount);
+    commitInst(this.instMapleLeaves,mapleCount);
+    commitInst(this.instBerryBushes,berryBushCount);
+    commitInst(this.instBerryOrnaments,berryBushCount);
+    commitInst(this.instRoseBushes,roseBushCount);
+    commitInst(this.instRoseFlowers,roseBushCount,true);
+    commitInst(this.instCacti,cactusCount);
+    commitInst(this.instWoodLogs,woodLogCount);
+    commitInst(this.instStoneItems,stoneItemCount);
+    commitInst(this.instWalls,wallCount);
+    commitInst(this.instWoodWalls,woodWallCount);
+    commitInst(this.instMixedWalls,mixedWallCount);
+    commitInst(this.instBoneWalls,boneWallCount);
+    commitInst(this.instWallsStage1,wallStage1Count);
+    commitInst(this.instGatesClosed,gateClosedCount);
+    commitInst(this.instGatesOpen,gateOpenCount);
+    commitInst(this.instGatesStage1,gateStage1Count);
     for (let w = 0; w < 2; w++) {
-      this.instWarehouseWalls[w].count = warehouseCounts[w];
-      this.instWarehouseWalls[w].instanceMatrix.needsUpdate = true;
-      this.instWarehouseRoofs[w].count = warehouseCounts[w];
-      this.instWarehouseRoofs[w].instanceMatrix.needsUpdate = true;
-      if (this.instWarehouseRoofs[w].instanceColor) this.instWarehouseRoofs[w].instanceColor.needsUpdate = true;
+      commitInst(this.instWarehouseWalls[w],warehouseCounts[w]);
+      commitInst(this.instWarehouseRoofs[w],warehouseCounts[w],true);
     }
 
     for (let s = 0; s < 2; s++) {
@@ -9756,11 +9719,18 @@ export class RCT3DRenderer {
     this.terrainTracks.update(this.renderer,world,entities,dt*effectiveSpeed,this.cityCitizenModels,citizenRenderOffsets,this,this.cityDevelopment?.city);
     syncMovementDust(THREE,this,world,entities,citizenRenderOffsets,dt*effectiveSpeed,false);
     const activeCam = this.isPerspectiveActive() ? this.fpCamera : this.camera;
-    const lightBlockers=(this.cityDevelopment?.city?.buildings||[])
-      .filter(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&b.type!=='quarry')
-      .map(b=>{const x=b.entity.x,z=b.entity.y,base=b.terrain?.base??this.getSurfaceElevation(map,x,z);
-        return {min:[x,base,z],max:[x+b.width,base+(b.floors||1)*CITY_FLOOR_HEIGHT,z+b.depth]};});
-    this.nightLighting?.update(this.nightLightPool,activeCam,this.scene,lightBlockers);
+    const simCity=this.cityDevelopment?.city;
+    const blockerRev=`${simCity?.structureRevision||0}:${simCity?.buildings?.length||0}:${world?.revision||0}`;
+    if(!this._lightBlockersCache||this._lightBlockersCache.rev!==blockerRev){
+      const blockers=[];
+      for(const b of simCity?.buildings||[]){
+        if(b.entity.destroyed||b.constructionKind==='open-air'||b.type==='quarry')continue;
+        const x=b.entity.x,z=b.entity.y,base=b.terrain?.base??this.getSurfaceElevation(map,x,z);
+        blockers.push({min:[x,base,z],max:[x+b.width,base+(b.floors||1)*CITY_FLOOR_HEIGHT,z+b.depth]});
+      }
+      this._lightBlockersCache={rev:blockerRev,blockers};
+    }
+    this.nightLighting?.update(this.nightLightPool,activeCam,this.scene,this._lightBlockersCache.blockers);
     const shadowNow=performance.now(),shadowCameraDx=this.camX-this._lastShadowRefreshCamX,shadowCameraDy=this.camY-this._lastShadowRefreshCamY;
     this._shadowFramesSinceRefresh++;
     // A time-only cadence can refresh every single frame when rendering itself

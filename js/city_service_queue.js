@@ -5,9 +5,9 @@ const foodQueueKinds=new Set(['workmeal','supplies']);
 const queueKind=kind=>foodQueueKinds.has(kind)?'food':kind;
 const taskQueueKind=task=>task==='workmeal'||task==='supplies'?'food':task;
 const queueAuditInterval=60;
-// Virtual ticket (ficha) queue system: citizens take a numbered ticket and
-// remain free to work or do nearby activities proportional to their wait time,
-// rather than standing in a physical line at the door.
+// Service queues are shared by everyone waiting at the same entrance. Tickets
+// retain arrival order; outdoor places are reserved across all service types.
+const slotCaches=new WeakMap();
 const indoorWaitingCells=new WeakMap();
 function waitingCells(b,shell){
  let cache=indoorWaitingCells.get(b);
@@ -19,29 +19,17 @@ function waitingCells(b,shell){
 }
 // Track only tickets invalidated by a citizen field change; a periodic audit
 // handles restored queues and unusual out-of-band mutations.
-const queueStates=new WeakMap(),ticketInfo=new WeakMap(),ticketsByPerson=new WeakMap(),queuedEntrancesByCity=new WeakMap();
-function activeEntrances(city){let set=queuedEntrancesByCity.get(city);if(!set){set=new Set();for(const b of city.buildings||[])if(b.serviceQueue?.length)set.add(b);queuedEntrancesByCity.set(city,set);}return set;}
-function ticketIsValid(person,ticket){return !!person&&!person.entity.destroyed&&!person.dead&&ticket.status!=='cancelled';}
-function ticketStillNeedsService(person,ticket){
- if(!person||person.entity.destroyed||person.dead)return false;
- const n=person.needs||{};
- switch(ticket.kind){
-  case 'toilet': return (n.toilet??100)<85;
-  case 'hygiene': return (n.hygiene??100)<85;
-  case 'food':
-  case 'workmeal': return (n.food??100)<85;
-  case 'water': return (n.water??100)<85;
-  case 'supplies': return (n.water??100)<85||(n.food??100)<85||(person.provisions||0)<2||(person.pocket?.water||0)<2;
-  case 'health': return (n.health??100)<90||(person.combatInjuries?.length||0)>0;
-  default: return true;
- }
-}
+const queueStates=new WeakMap(),ticketInfo=new WeakMap(),ticketsByPerson=new WeakMap(),watchedProperties=new WeakMap();
+function ticketIsValid(person,ticket){return !!person&&!person.entity.destroyed&&taskQueueKind(person.task)===(ticket.queueKind||queueKind(ticket.kind))&&person.targetId===ticket.buildingId&&(ticket.kind!=='toilet'||person.toiletTargetId===ticket.resource);}
+function stopWatching(object){const watched=watchedProperties.get(object);if(!watched)return;for(const [key,entry]of watched){const descriptor=entry.descriptor;if('value'in descriptor)Object.defineProperty(object,key,{...descriptor,value:entry.read()});else Object.defineProperty(object,key,descriptor);}watchedProperties.delete(object);}
 function serviceGroup(state,buildingId,kind,resource,create=false){let byKind=state.groups.get(buildingId);if(!byKind&&create)state.groups.set(buildingId,byKind=new Map());let byResource=byKind?.get(queueKind(kind));if(!byResource&&create)byKind.set(queueKind(kind),byResource=new Map());let group=byResource?.get(resource);if(!group&&create)byResource.set(resource,group=new Set());return group;}
 function queueChanged(entrance){const state=queueStates.get(entrance);if(state)state.revision++;}
 function waitingTickets(entrance,buildingId){const state=queueStates.get(entrance);let cached=state.waitingByBuilding.get(buildingId);if(!cached||cached.revision!==state.revision){const tickets=entrance.serviceQueue.filter(ticket=>ticket.buildingId===buildingId).sort((a,b)=>a.sequence-b.sequence),indexes=new Map();for(let i=0;i<tickets.length;i++)indexes.set(tickets[i],i);cached={revision:state.revision,tickets,indexes};state.waitingByBuilding.set(buildingId,cached);}return cached;}
 function detachGroup(state,ticket,info){const group=info.group;if(!group)return;group.delete(ticket);info.group=null;if(group.size)return;const byKind=state.groups.get(info.buildingId),byResource=byKind?.get(info.kind);byResource?.delete(info.resource);if(!byResource?.size)byKind?.delete(info.kind);if(!byKind?.size)state.groups.delete(info.buildingId);}
-function untrackTicket(ticket){const info=ticketInfo.get(ticket);if(!info)return;ticketInfo.delete(ticket);const state=queueStates.get(info.entrance);state?.dirty.delete(ticket);state?.tickets.delete(ticket);if(state)detachGroup(state,ticket,info);const tickets=ticketsByPerson.get(info.person);tickets?.delete(ticket);if(tickets&&!tickets.size)ticketsByPerson.delete(info.person);}
-function trackTicket(city,entrance,ticket){let person=ticket.person;if(!person)person=city.society.citizen(ticket.citizenId);if(!person)return null;if(!ticket.person)Object.defineProperty(ticket,'person',{value:person});if(!ticket.queueKind)Object.defineProperty(ticket,'queueKind',{value:queueKind(ticket.kind)});let tickets=ticketsByPerson.get(person);if(!tickets)ticketsByPerson.set(person,tickets=new Set());tickets.add(ticket);const state=queueStates.get(entrance);state?.tickets.add(ticket);let info=ticketInfo.get(ticket);if(info?.entrance===entrance)return person;info={entrance,person,buildingId:ticket.buildingId,kind:queueKind(ticket.kind),resource:ticket.resource,group:null};ticketInfo.set(ticket,info);if(state&&!ticket.admittedUnitId){info.group=serviceGroup(state,info.buildingId,info.kind,info.resource,true);info.group.add(ticket);}return person;}
+function untrackTicket(ticket){const info=ticketInfo.get(ticket);if(!info)return;ticketInfo.delete(ticket);const state=queueStates.get(info.entrance);state?.dirty.delete(ticket);state?.tickets.delete(ticket);if(state)detachGroup(state,ticket,info);const tickets=ticketsByPerson.get(info.person);tickets?.delete(ticket);if(tickets&&!tickets.size){ticketsByPerson.delete(info.person);stopWatching(info.person);if(info.person.entity)stopWatching(info.person.entity);}}
+function flagPersonTickets(person){for(const ticket of ticketsByPerson.get(person)||[]){if(ticketIsValid(person,ticket))continue;const info=ticketInfo.get(ticket),state=info&&queueStates.get(info.entrance);state?.dirty.add(ticket);if(state)invalidateActivitySearch(state.city,info.buildingId);}}
+function watchProperty(object,key,person){let watched=watchedProperties.get(object);if(!watched)watchedProperties.set(object,watched=new Map());if(watched.has(key))return;const descriptor=Object.getOwnPropertyDescriptor(object,key);if(!descriptor||!descriptor.configurable||descriptor.get&&!descriptor.set)return;let value=descriptor.value;const getter=descriptor.get,setter=descriptor.set,read=()=>getter?getter.call(object):value;Object.defineProperty(object,key,{configurable:true,enumerable:descriptor.enumerable,get(){return getter?getter.call(this):value;},set(next){const before=getter?getter.call(this):value;if(setter)setter.call(this,next);else value=next;const after=getter?getter.call(this):value;if(!Object.is(before,after))flagPersonTickets(person);}});watched.set(key,{descriptor,read});}
+function trackTicket(city,entrance,ticket){let person=ticket.person;if(!person)person=city.society.citizen(ticket.citizenId);if(!person)return null;if(!ticket.person)Object.defineProperty(ticket,'person',{value:person});if(!ticket.queueKind)Object.defineProperty(ticket,'queueKind',{value:queueKind(ticket.kind)});let tickets=ticketsByPerson.get(person);if(!tickets)ticketsByPerson.set(person,tickets=new Set());tickets.add(ticket);const state=queueStates.get(entrance);state?.tickets.add(ticket);let info=ticketInfo.get(ticket);if(info?.entrance===entrance)return person;info={entrance,person,buildingId:ticket.buildingId,kind:queueKind(ticket.kind),resource:ticket.resource,group:null};ticketInfo.set(ticket,info);if(state&&!ticket.admittedUnitId){info.group=serviceGroup(state,info.buildingId,info.kind,info.resource,true);info.group.add(ticket);}for(const key of ['task','targetId','toiletTargetId'])watchProperty(person,key,person);if(person.entity)watchProperty(person.entity,'destroyed',person);return person;}
 function queueState(city,entrance){const queue=entrance.serviceQueue||[];let state=queueStates.get(entrance);if(state?.queue===queue)return state;if(state)for(const ticket of state.tickets)untrackTicket(ticket);state={city,queue,tickets:new Set(),dirty:new Set(),groups:new Map(),waitingByBuilding:new Map(),revision:0,initialized:false,lastAudit:city.minute};queueStates.set(entrance,state);return state;}
 function pruneQueue(city,entrance){
  const queue=entrance.serviceQueue,state=queueState(city,entrance),audit=!state.initialized||city.minute-state.lastAudit>=queueAuditInterval;if(!audit&&!state.dirty.size)return;
@@ -49,136 +37,69 @@ function pruneQueue(city,entrance){
  for(let read=0;read<queue.length;read++){const q=queue[read],person=trackTicket(city,entrance,q),mustCheck=audit||state.dirty.has(q);if(!mustCheck){if(write!==read)queue[write]=q;write++;continue;}state.dirty.delete(q);if(ticketIsValid(person,q)){if(write!==read)queue[write]=q;write++;}else{if(person?.serviceQueue?.buildingId===q.buildingId){person.serviceQueue=null;person.facingTarget=null;}untrackTicket(q);}}
  const changed=write!==queue.length;queue.length=write;if(changed)state.revision++;state.initialized=true;if(audit)state.lastAudit=city.minute;state.dirty.clear();
 }
-function removeTicket(entrance,ticket){
- const queue=entrance.serviceQueue,index=queue.indexOf(ticket);
- if(index>=0){queue.splice(index,1);queueChanged(entrance);}
- if(ticket.person?.serviceTicket?.sequence===ticket.sequence&&ticket.person?.serviceTicket?.buildingId===ticket.buildingId)ticket.person.serviceTicket=null;
- untrackTicket(ticket);
-}
-export function ticketRoamBudget(city,c){
- const st=c?.serviceTicket;if(!st)return null;
- const entrance=city.building(st.entranceId)||city.building(st.buildingId);
- const b=city.building(st.buildingId);
- if(!entrance||!b||entrance.entity?.destroyed||b.entity?.destroyed){c.serviceTicket=null;return null;}
- const queue=entrance.serviceQueue||[],qk=queueKind(st.kind);
- let ticket=null,ahead=0;
- for(let i=0;i<queue.length;i++){
-  const q=queue[i];
-  if(q.status==='cancelled'||q.buildingId!==st.buildingId)continue;
-  if(q.citizenId===c.id&&q.sequence===st.sequence){ticket=q;continue;}
-  if((q.queueKind||queueKind(q.kind))===qk&&q.sequence<st.sequence)ahead++;
- }
- if(!ticket){c.serviceTicket=null;return null;}
- const estWaitMinutes=ahead*4;
- const maxRadius=ahead===0?2.5:Math.max(3,Math.min(30,(estWaitMinutes-2)*2.4));
- const door=entrance.door||b.door;
- const distToDoor=door?Math.hypot(c.entity.x-door.x,c.entity.y-door.y):0;
- return {entrance,building:b,ticket,ahead,estWaitMinutes,maxRadius,distToDoor,door};
-}
-export function tickServiceTickets(city){
- const entrances=activeEntrances(city);
- let pathBudget=16;
- for(const entrance of entrances){
-  const queue=entrance.serviceQueue;
-  if(!queue?.length||entrance.entity?.destroyed){entrances.delete(entrance);continue;}
-  pruneQueue(city,entrance);
-  if(!queue.length){entrances.delete(entrance);continue;}
-  const state=queueStates.get(entrance);
-  const byKind=state?.groups;if(!byKind)continue;
-  for(const [buildingId,kindMap]of byKind){
-   const b=city.building(buildingId);if(!b||b.entity?.destroyed)continue;
-   for(const [qk,resMap]of kindMap){
-    for(const [,group]of resMap){
-     while(group.size){
-      const oldest=group.values().next().value;
-      const person=oldest.person||city.society.citizen(oldest.citizenId);
-      if(!ticketIsValid(person,oldest)){removeTicket(entrance,oldest);continue;}
-      // Lazy cancellation check ONLY when the ticket is actually called!
-      if(!ticketStillNeedsService(person,oldest)){
-       oldest.status='cancelled';
-       removeTicket(entrance,oldest);
-       continue;
-      }
-      if(oldest.status!=='called'){
-       if(person.deliveryId||person.cleaningJobId||person.custody||person.mobilityTrip||person.ridingVehicleId)break;
-       oldest.status='called';
-       if(person.serviceTicket)person.serviceTicket.status='called';
-       if(person.task!==oldest.kind||person.targetId!==oldest.buildingId){
-        person.task=oldest.kind;person.targetId=oldest.buildingId;
-        if(oldest.kind==='toilet')person.toiletTargetId=oldest.resource;
-        const door=entrance.door||b.door;
-        if(door&&!person.indoorLocation&&Math.hypot(person.entity.x-door.x,person.entity.y-door.y)>1.2&&pathBudget>0){
-         pathBudget--;
-         const route=city.findPath(person.entity,door);
-         if(route!==null)person.path=route;
-        }
-        person.action='Ficha chamada! Indo ao atendimento';
-       }
-      }
-      break;
-     }
-    }
-   }
+function removeTicket(entrance,ticket){const queue=entrance.serviceQueue,index=queue.indexOf(ticket);if(index>=0){queue.splice(index,1);queueChanged(entrance);}untrackTicket(ticket);}
+function slots(city,b){
+ const key=`${city.world.revision||0}:${city.obstacleRevision||0}:${b.door.x}:${b.door.y}`,cached=slotCaches.get(b);if(cached?.key===key)return cached.points;
+ const startX=Math.floor(b.door.x),startY=Math.floor(b.door.y);
+ const dx=b.door.x-(b.entity.x+b.width/2),dy=b.door.y-(b.entity.y+b.depth/2),axisX=Math.abs(dx)>Math.abs(dy);
+ const outX=axisX?(Math.sign(dx)||1):0,outY=axisX?0:(Math.sign(dy)||1);
+ const insideFootprint=(px,py)=>px>=b.entity.x&&px<b.entity.x+b.width&&py>=b.entity.y&&py<b.entity.y+b.depth;
+ const tiles=[],visited=new Set();
+ const addTile=(px,py)=>{visited.add(`${px},${py}`);tiles.push({x:px,y:py});};
+ if(city.walkable(startX,startY))addTile(startX,startY);
+ else{
+  for(const [ox,oy]of [[outX,outY],[outY,outX],[-outY,-outX],[-outX,-outY]]){
+   if(city.walkable(startX+ox,startY+oy)&&!insideFootprint(startX+ox,startY+oy)){addTile(startX+ox,startY+oy);break;}
   }
  }
+ let stepX=outX,stepY=outY;
+ while(tiles.length>0&&tiles.length<20){
+  const cur=tiles[tiles.length-1];
+  const dirs=[[outX,outY],[stepX,stepY],[outY,outX],[-outY,-outX],[-outX,-outY]];
+  let next=null;
+  for(const [ox,oy]of dirs){
+   const nx=cur.x+ox,ny=cur.y+oy,k=`${nx},${ny}`;
+   if(visited.has(k)||insideFootprint(nx,ny)||!city.walkable(nx,ny))continue;
+   next={x:nx,y:ny,ox,oy};break;
+  }
+  if(!next)break;
+  stepX=next.ox;stepY=next.oy;addTile(next.x,next.y);
+ }
+ const points=[];
+ if(tiles.length){
+  points.push({x:tiles[0].x+.5,y:tiles[0].y+.5});
+  for(let i=1;i<tiles.length;i++){
+   const prev=tiles[i-1],curr=tiles[i];
+   points.push({x:(prev.x+curr.x)*.5+.5,y:(prev.y+curr.y)*.5+.5});
+   points.push({x:curr.x+.5,y:curr.y+.5});
+  }
+ }
+ if(points.length<24){
+  const extra=[];
+  for(let r=1;r<=8;r++)for(let ox=-r;ox<=r;ox++){const oy=r-Math.abs(ox);for(const sign of oy?[-1,1]:[1]){const px=startX+ox,py=startY+oy*sign,k=`${px},${py}`;if(visited.has(k)||insideFootprint(px,py)||!city.walkable(px,py))continue;visited.add(k);extra.push({x:px+.5,y:py+.5});}}
+  const rank=p=>{const px=Math.floor(p.x)-startX,py=Math.floor(p.y)-startY,forward=(axisX?px:py)*(axisX?outX:outY),side=Math.abs(axisX?py:px);return (forward<1?10000:0)+side*100+Math.abs(forward);};
+  extra.sort((a,z)=>rank(a)-rank(z));
+  points.push(...extra);
+ }
+ slotCaches.set(b,{key,points});return points;
 }
 export function reserveService(city,c,b,kind,resource){
  const entrance=b.officeTenantOf?city.building(b.officeTenantOf)||b:b;entrance.serviceQueue??=[];
- activeEntrances(city).add(entrance);
- activeEntrances(city).add(entrance);
  const state=queueStates.get(entrance);let ticket;for(const candidate of ticketsByPerson.get(c)||[]){const info=ticketInfo.get(candidate);if(info?.entrance===entrance&&candidate.buildingId===b.id&&candidate.kind===kind&&candidate.resource===resource){ticket=candidate;break;}}
  if(!ticket&&!state?.initialized)ticket=entrance.serviceQueue.find(q=>q.citizenId===c.id&&q.buildingId===b.id&&q.kind===kind&&q.resource===resource);
- if(!ticket){ticket={citizenId:c.id,buildingId:b.id,kind,resource,joinedAt:city.minute,sequence:entrance.nextServiceTicket=(entrance.nextServiceTicket||0)+1,slot:`ficha:${entrance.nextServiceTicket}`,status:'waiting'};Object.defineProperties(ticket,{person:{value:c},queueKind:{value:queueKind(kind)}});entrance.serviceQueue.push(ticket);if(state?.queue===entrance.serviceQueue){state.initialized=true;trackTicket(city,entrance,ticket);queueChanged(entrance);}c.serviceQueue={buildingId:b.id,kind,resource,sequence:ticket.sequence};c.serviceTicket={buildingId:b.id,entranceId:entrance.id,kind,resource,sequence:ticket.sequence,joinedAt:city.minute,status:'waiting'};}
+ if(!ticket){ticket={citizenId:c.id,buildingId:b.id,kind,resource,joinedAt:city.minute,sequence:entrance.nextServiceTicket=(entrance.nextServiceTicket||0)+1,slot:null};Object.defineProperties(ticket,{person:{value:c},queueKind:{value:queueKind(kind)}});entrance.serviceQueue.push(ticket);if(state?.queue===entrance.serviceQueue){state.initialized=true;trackTicket(city,entrance,ticket);queueChanged(entrance);}c.serviceQueue={buildingId:b.id,kind,resource,sequence:ticket.sequence};}
  return ticket;
-}
-export function roamAwayFromDoor(city,c,door,maxRadius=10,ahead=1,taskName='walk'){
- if(!door||!c||c.playerControlled||c.indoorLocation||c.path?.length)return false;
- const dist=Math.hypot(c.entity.x-door.x,c.entity.y-door.y);
- if(dist>2.5)return false;
- const r=Math.max(3,Math.min(10,Math.floor(maxRadius||10)));
- const offsets=[[r,0],[-r,0],[0,r],[0,-r],[3,2],[-3,2],[3,-2],[-3,-2],[2,3],[-2,3],[2,-3],[-2,-3],[4,0],[-4,0],[0,4],[0,-4]];
- const start=(c.id*7+(city.minute|0))%offsets.length;
- for(let i=0,tries=0;i<offsets.length&&tries<6;i++){
-  const [dx,dy]=offsets[(start+i)%offsets.length];
-  const tx=Math.floor(door.x+dx),ty=Math.floor(door.y+dy);
-  if(!city.walkable(tx,ty))continue;
-  tries++;
-  const dest={x:tx+0.5,y:ty+0.5};
-  const path=city.findPath(c.entity,dest);
-  if(path?.length){
-   c.path=path;c.task=taskName;c.targetId=null;c.toiletTargetId=null;c.serviceQueue=null;c.facingTarget=null;
-   c.action=`Com ficha na mão (${ahead} na frente)`;
-   return true;
-  }
- }
- return false;
 }
 export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=null){
  const entrance=b.officeTenantOf?city.building(b.officeTenantOf)||b:b;entrance.serviceQueue??=[];
- activeEntrances(city).add(entrance);
  pruneQueue(city,entrance);
  const ticket=reserveService(city,c,b,kind,resource);
- const activeGroup=serviceGroup(queueStates.get(entrance),b.id,kind,resource);
- // Lazy cancellation check ONLY when a ticket is called at the front of the queue!
- let oldest=activeGroup?.values().next().value;
- while(oldest&&oldest!==ticket){
-  const op=oldest.person||city.society.citizen(oldest.citizenId);
-  if(!ticketIsValid(op,oldest)||!ticketStillNeedsService(op,oldest)){
-   oldest.status='cancelled';
-   removeTicket(entrance,oldest);
-   oldest=activeGroup?.values().next().value;
-  }else break;
- }
+ const activeGroup=serviceGroup(queueStates.get(entrance),b.id,kind,resource),oldest=activeGroup?.values().next().value;
  const older=!!oldest&&oldest.sequence<ticket.sequence;
  let inside=c.indoorLocation?.buildingId===b.id&&!c.indoorLocation.exiting;
  // Available rooms, rather than a global one-person-per-minute gate, set
  // throughput. A multi-floor public building can serve several people at once.
  if((!older||ticket.admittedUnitId===room?.id&&!!room)&&ready){
-  if(!ticketStillNeedsService(c,ticket)){
-   ticket.status='cancelled';
-   removeTicket(entrance,ticket);c.serviceQueue=null;c.facingTarget=null;
-   return false;
-  }
   // Reserve the real room before walking from the queue to the interior entry tile.
   // Admitted people no longer block the next ticket when other rooms are free.
   const wasAdmitted=!!room&&ticket.admittedUnitId===room.id;
@@ -191,9 +112,22 @@ export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=nul
  // A queue can outlast its service capacity; a critically urgent person must
  // eventually leave it instead of waiting forever at zero need.
  if(kind==='toilet'&&c.needs.toilet<10&&city.minute-ticket.joinedAt>=90){removeTicket(entrance,ticket);c.serviceQueue=null;c.facingTarget=null;city.sanitation.emergencyRelief(c);return false;}
+ // The outdoor route ends at the door. From there, use the interior graph
+ // to reach a waiting place without trying to path through exterior walls.
  if(c.path.length)return false;
+ if(!inside&&b.constructionKind!=='open-air'){
+  const entry=buildingInteriorEntrance(entrance),approach=entrance.door||b.door;
+  if(entry&&Math.hypot(c.entity.x-approach.x,c.entity.y-approach.y)>.75){const route=city.findPath(c.entity,approach);if(route!==null)c.path=route;c.action='Indo para a espera dentro do prédio';return false;}
+  if(entry){c.indoorLocation={buildingId:b.id,targetUnitId:null,unitId:null,targetRoomType:'waiting',roomType:'circulation',floor:0,position:{x:c.entity.x,y:c.entity.y,z:0},path:[entry],phase:'waiting',task:kind,layoutRevision:b.layoutRevision||0,enteredAt:city.minute};inside=true;}
+ }
+ c.lastProgressAt=city.minute;c.action=kind==='toilet'?'Aguardando na fila do banheiro':['food','workmeal','supplies'].includes(kind)?'Aguardando na fila de alimentação':'Aguardando na fila de atendimento';
+ if(!c.facingTarget||c.facingTarget.x!==b.door.x||c.facingTarget.y!==b.door.y||Object.keys(c.facingTarget).length!==2)c.facingTarget={x:b.door.x,y:b.door.y};
+ // Recompute ordinal positions after every departure: followers advance to
+ // the head of the line instead of retaining a stale, empty slot.
  if(inside){
   const location=c.indoorLocation,shell=city.building(b.officeTenantOf)||b,cells=waitingCells(b,shell);
+  // Share circulation across service types and floors. Crowded queues use
+  // denser waiting spots instead of leaving their overflow at the doorway.
   if(!cells.length)return false;
   const waiting=waitingTickets(entrance,b.id),index=waiting.indexes.get(ticket)??0,perCell=Math.max(4,Math.ceil(waiting.tickets.length/cells.length)),side=Math.ceil(Math.sqrt(perCell)),within=index%perCell;
   const cell=cells[Math.floor(index/perCell)],slot=`${cell.x},${cell.y},${cell.z}:${within}/${side}`;
@@ -203,18 +137,20 @@ export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=nul
   }
   return false;
  }
- // Virtual ficha: count how many active tickets are ahead of this citizen.
- const budget=ticketRoamBudget(city,c),ahead=budget?.ahead??0;
- if(ahead>=1&&kind!=='work'&&kind!=='manage'){
-  // Far enough in line: free the citizen and move them away from the door!
-  c.task=null;c.targetId=null;c.toiletTargetId=null;c.serviceQueue=null;c.facingTarget=null;
-  roamAwayFromDoor(city,c,entrance.door||b.door,budget?.maxRadius??10,ahead,null);
-  c.action=`Com ficha na mão (${ahead} na frente)`;
-  return false;
- }
- // Next in line (ahead === 0): wait nearby (bench if available) without forming a physical line.
- c.lastProgressAt=city.minute;
- c.action=kind==='toilet'?'Aguardando chamada da ficha (banheiro)':['food','workmeal','supplies'].includes(kind)?'Aguardando chamada da ficha (alimentação)':'Aguardando chamada da ficha';
  if(city.furniture?.queueSeat(c,b)){ticket.slot=`bench:${c.seatId}`;return false;}
+ const positions=slots(city,entrance),waiting=waitingTickets(entrance,b.id),ordinal=Math.max(0,waiting.indexes.get(ticket)??0);
+ const target=positions[ordinal]||positions.at(-1)||null;
+ if(target){
+  const ahead=ordinal>0?positions[ordinal-1]:b.door;
+  if(ahead)c.facingTarget={x:ahead.x,y:ahead.y};
+  ticket.slot=ordinal;
+  const dist=Math.hypot(c.entity.x-target.x,c.entity.y-target.y);
+  const failedRecently=ticket.lastSlotTry?.ordinal===ordinal&&city.minute-ticket.lastSlotTry.minute<10;
+  if(dist>.2&&!failedRecently){
+   const path=city.findPath(c.entity,target);
+   if(path!==null){if(!path.length||Math.hypot(path.at(-1).x-target.x,path.at(-1).y-target.y)>.05)path.push({x:target.x,y:target.y});c.path=path;}
+   else ticket.lastSlotTry={ordinal,minute:city.minute};
+  }
+ }else ticket.slot=null;
  return false;
 }

@@ -936,7 +936,8 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
     :x>=renderer.renderedMinTx&&x+width<=renderer.renderedMaxTx+1&&y>=renderer.renderedMinTy&&y+depth<=renderer.renderedMaxTy+1);
   renderer.lampMeshes ??= new Map();
   const cityNightLights=renderer.cityNightLights??=[];cityNightLights.length=0;
-  const liveBuildings = new Set(entities.filter(e => e.properties?.cityBuilding && !e.destroyed).map(e => e.id));
+  const liveBuildings = new Set();
+  for (const e of entities) if (e.properties?.cityBuilding && !e.destroyed) liveBuildings.add(e.id);
   const sleepingFloorsByBuilding=new Map();
   for(const entity of entities){
     const citizen=entity.properties?.citizen,location=citizen?.indoorLocation;
@@ -949,7 +950,7 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
   for (const post of world.cityLampPosts || []) {
     if (!post.built) continue;
     liveLamps.add(post.id);
-    if(!inView(post.x,post.y)){const existing=renderer.lampMeshes.get(post.id);if(existing)existing.visible=false;}
+    if(!inView(post.x,post.y)){const existing=renderer.lampMeshes.get(post.id);if(existing)existing.visible=false;continue;}
     let lamp = renderer.lampMeshes.get(post.id);
     if(lamp&&lamp.userData.styleVersion!==3){renderer.scene.remove(lamp);lamp.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});renderer.lampMeshes.delete(post.id);lamp=null;}
     if (!lamp) {

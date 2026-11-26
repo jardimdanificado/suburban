@@ -212,6 +212,7 @@ export function searchEmployment(city,c){
 }
 export function routeToInterview(city,c){
   if(c.sleep?.active||c.sleep?.minutes>0)return false;
+  if(Math.min(c.needs?.food??100,c.needs?.water??100,c.needs?.toilet??100,c.needs?.hygiene??100)<30||(c.needs?.energy??100)<20)return false;
   const a=c.career?.pendingInterview;if(!a||a.status!=='análise'||a.submittedAt!=null)return false;
   const b=city.building(a.agencyBuildingId);if(!b?.active||b.entity.destroyed)return false;
   const lead=Math.max(30,Math.ceil(Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)*2+15));

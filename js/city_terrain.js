@@ -420,7 +420,7 @@ export function generateSettlement(city) {
   if (preset === 'developed') {
     officeTypes=['builder','bank','carrier','newsroom','research_institute','research_institute','publisher'].filter(type=>OFFICE_BUSINESSES.has(type));
     const starterHousing=Array.from({length:Math.max(1,Math.ceil((city.initialPopulation||0)/60))},()=>['super_popular_housing',4,4,4]);
-    specs = [['townhall', 4, 4, hallFloors], ['office_tower', 3, 3, officeTypes.length+5], ['quarry', 4, 4, 1], ['mint', 3, 3, 1], ['bike_rack',4,2,1], ['cycle_assembler',3,3,businessFloors('cycle_assembler','startup')], ['bike_rack',4,2,1], ['public_toilet',4,4,4], ['popular_refectory',4,4,4], ...starterHousing, ['cleaner',3,3,businessFloors('cleaner','startup')]];
+    specs = [['townhall', 4, 4, hallFloors], ['office_tower', 3, 3, officeTypes.length+5], ['quarry', 4, 4, 1], ['mint', 3, 3, 1], ['farm', 6, 6, 1], ['bike_rack',4,2,1], ['cycle_assembler',3,3,businessFloors('cycle_assembler','startup')], ['bike_rack',4,2,1], ['public_toilet',4,4,4], ['popular_refectory',4,4,4], ...starterHousing, ['cleaner',3,3,businessFloors('cleaner','startup')]];
   } else if (preset === 'frontier') {
     officeTypes=['builder','bank','carrier'].filter(type=>OFFICE_BUSINESSES.has(type));
     specs = [['townhall', 4, 4, hallFloors], ['office_tower', 3, 3, officeTypes.length + 1], ['quarry', 4, 4, 1]];
