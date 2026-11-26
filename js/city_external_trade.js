@@ -124,3 +124,45 @@ export function municipalSurplusExportsHourly(city){
  }
  return sales;
 }
+
+const TOURIST_GOODS=new Set(['pao','marmita','marmita_carne','churrasco','queijo','conserva','ceramica','cesta','roupas','livros','maca','goiaba','maracuja']);
+const TOURIST_SERVICE_TYPES=new Set(['bicycle_rental','leisure','library']);
+const TOURIST_GOOD_TYPES=new Set(['restaurant','bakery','market','greengrocer','artisan','pottery','clothing_store','publisher']);
+
+/** External daytime visitors spend external money on local hospitality, food, crafts and leisure. */
+export function tourismHourly(city){
+ if(city.hour<9||city.hour>=21)return 0;
+ const cleanliness=city.sanitation?.cleanliness?.().score??100;
+ if(cleanliness<40)return 0;
+ const economy=city.economy,venues=city.buildings.filter(b=>b.active&&!b.entity.destroyed&&(TOURIST_SERVICE_TYPES.has(b.type)||TOURIST_GOOD_TYPES.has(b.type)));
+ if(!venues.length)return 0;
+ const artScore=Math.min(3,Math.floor((city.justice?.art?.filter(a=>!a.entity?.destroyed).length||0)/4));
+ const visitors=Math.min(6,Math.max(1,Math.floor(venues.length/2)+artScore+(cleanliness>=75?1:0)));
+ ensureExternalAccount(city,'external-tourism','Turismo externo');
+ economy.tourism??={visitors:0,revenue:0,tax:0,purchases:0};
+ const taxRate=economicPolicy(city,'tourismTaxRate')??.05,offset=Math.floor(city.minute/60)%venues.length;
+ let served=0;
+ for(let i=0;i<venues.length&&served<visitors;i++){
+  const b=venues[(i+offset)%venues.length];
+  if(TOURIST_SERVICE_TYPES.has(b.type)){
+   const gross=city.currency.price(1200),tax=Math.floor(gross*taxRate),net=gross-tax;
+   if(net>0&&city.transfer('external-tourism',b.accountId,net,`Consumo turístico: ${b.entity.properties.name}`,{buildingId:b.id,tourism:true})){
+    if(tax>0)city.transfer('external-tourism','treasury',tax,'Taxa turística municipal',{buildingId:b.id,tourism:true});
+    city.recordBusinessRevenue(b,net);b.lastSaleAt=city.minute;
+    economy.tourism.visitors++;economy.tourism.revenue+=gross;economy.tourism.tax+=tax;economy.tourism.purchases++;served++;
+   }
+   continue;
+  }
+  const good=Object.keys(b.inventory||{}).find(g=>TOURIST_GOODS.has(g)&&(b.inventory[g]||0)>=2&&!b.importedUnitPrice?.[g]&&economy.goods[g]);
+  if(!good)continue;
+  const qty=Math.min(2,b.inventory[good]-1),gross=Math.max(1,Math.ceil(economy.goods[good].price*qty*1.2)),tax=Math.floor(gross*taxRate),net=gross-tax;
+  if(net>0&&city.transfer('external-tourism',b.accountId,net,`Compra turística: ${economy.goods[good].label}`,{buildingId:b.id,good,quantity:qty,tourism:true})){
+   if(tax>0)city.transfer('external-tourism','treasury',tax,'Taxa turística municipal',{buildingId:b.id,good,quantity:qty,tourism:true});
+   b.inventory[good]-=qty;economy.consumed[good]=(economy.consumed[good]||0)+qty;
+   economy.recordGoods('tourism',good,qty,b.id,null,{gross,tax});
+   city.recordBusinessRevenue(b,net);b.lastSaleAt=city.minute;
+   economy.tourism.visitors++;economy.tourism.revenue+=gross;economy.tourism.tax+=tax;economy.tourism.purchases++;served++;
+  }
+ }
+ return served;
+}

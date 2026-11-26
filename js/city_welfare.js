@@ -1,3 +1,4 @@
+import {economicPolicy} from './city_economic_policies.js';
 /** Means-tested transfers use existing treasury funds and a daily envelope. */
 export class CityWelfare {
   constructor(city) {
@@ -30,6 +31,33 @@ export class CityWelfare {
     if(this.mealAssistanceEligible(citizen))return offer;
     const cost=Object.entries(offer.inputs||{}).reduce((n,[good,q])=>n+(city.economy.goods[good]?.price||0)*q,0),price=Math.ceil(cost*1.5);return {...offer,price:Math.min(price,Math.max(0,cash-floor))};
   }
+  distributeSurplusDividend() {
+    const city = this.city, share = economicPolicy(city,'socialDividendShare');
+    if (!this.policy.enabled || this.dividendDay === city.day || !share || share <= 0) return 0;
+    const reserve = city.fiscal?.reserve() ?? city.currency.price(this.policy.reserve);
+    const surplus = Math.max(0, city.treasury - Math.ceil(reserve * 1.5));
+    const pool = Math.floor(surplus * share);
+    if (pool < 1) return 0;
+    const cap = city.currency.price(this.policy.cashTarget), maxAssets = cap * 3;
+    const eligible = city.citizens
+      .filter(c => !c.entity.destroyed && city.society.isAdult(c))
+      .map(c => ({ c, assets: c.balance + city.bank.savings(c.accountId) }))
+      .filter(row => row.assets < maxAssets)
+      .sort((a,b) => a.assets - b.assets || a.c.id - b.c.id);
+    if (!eligible.length) return 0;
+    this.dividendDay = city.day;
+    let remaining = pool, paidTotal = 0;
+    for (let i = 0; i < eligible.length && remaining > 0; i++) {
+      const { c } = eligible[i], perHead = Math.ceil(remaining / (eligible.length - i)), amount = Math.min(cap, perHead, remaining, Math.max(0, city.treasury - Math.ceil(reserve * 1.25)));
+      if (amount <= 0) break;
+      if (city.transfer('treasury', c.accountId, amount, 'Dividendo social de superávit municipal')) {
+        remaining -= amount; paidTotal += amount;
+        c.benefitsReceived = (c.benefitsReceived || 0) + amount;
+      }
+    }
+    if (paidTotal > 0) this.totalPaid += paidTotal;
+    return paidTotal;
+  }
   hourly() {
     const city = this.city;
     if (this.day !== city.day) { this.day = city.day; this.spentToday = 0; this.paid.clear(); }
@@ -51,6 +79,7 @@ export class CityWelfare {
     // Subsistence transfers take priority over optional replenishment. Both
     // meal and water purchases may be marked essential, but must not consume
     // the cash needed for residents' benefits before this pass can run.
+    this.distributeSurplusDividend();
     this.restockPublicMeals();
     city.water.hourly();
   }

@@ -14,7 +14,7 @@ import {rentOffice,rentAvailableOffice,officeStartupCost,prepareOfficeSearch,off
 import {taxCategory,taxRate} from './city_sales_tax.js';
 import {equityShares,offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends,distributeWorkerProfitShare} from './city_equity.js?v=daily-mayor-privatization-2';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
-import {externalTradeHourly,orderImport,ensureImportDepot,importDepotClaim} from './city_external_trade.js';
+import {externalTradeHourly,tourismHourly,orderImport,ensureImportDepot,importDepotClaim} from './city_external_trade.js';
 import {outdoorCellReady,workCellReady,activityRoomReady} from './city_interiors.js?v=citizen-access-1';
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
@@ -1171,7 +1171,7 @@ export class CityEconomy {
       case 7: if(reducedCadence(this.city,this,'freight-rebalance',120,120,this.city.buildings.length))this.city.logistics.rebalanceWaiting(); break;
       case 8: this.trade(); break;
       case 9: this.city.paint.hourly();updateClothes(this.city); updateCompanyUniforms(this.city); this.householdPurchases(); this.city.publications.hourly(); break;
-      case 10: this.city.sanitation.hourly(); this.city.workMeals.purchase(); externalTradeHourly(this.city); break;
+      case 10: this.city.sanitation.hourly(); this.city.workMeals.purchase(); externalTradeHourly(this.city); tourismHourly(this.city); break;
       case 11:
         {const city=this.city,businesses=this.businesses,marketScarce=Object.values(this.market||{}).some(row=>row.demand>10&&row.stock<2),economySignature=`${city.buildings.length}:${businesses.length}:${city.citizens.length}:${city.development.projects.length}`,demandDue=reducedCadence(city,this,'economic-demand',120,180,economySignature),marketDue=reducedCadence(city,this,'market-prices',marketScarce?30:120,120,`${city.buildings.length}:${marketScarce}`),supplyDue=reducedCadence(city,this,'supply-chain-planning',120,240,`${city.buildings.length}:${city.development.projects.length}`);
         if(!city.profileDiagnostics){if(demandDue)this.updateDemand(true);if(marketDue)updateMarket(this);if(supplyDue)planSupplyChains(this);tradeSharesHourly(city);break;}
