@@ -41,6 +41,7 @@ export class MusicPlayer {
 
   setSkyFactor(factor) {
     const next = Math.max(0, Math.min(1, Number(factor) || 0));
+    if (next === this.skyFactor) return;
     const wasInSky = this.skyFactor > 0;
     this.skyFactor = next;
     this.audio.volume = this.baseVolume * next;

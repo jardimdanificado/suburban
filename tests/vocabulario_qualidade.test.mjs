@@ -27,7 +27,7 @@ test('curated generator keeps grammatical forms across every theme and level', (
     for (const complexidade of ['simples', 'variada', 'complexa']) {
       for (let seed = 0; seed < 60; seed++) {
         const frase = gerarFrase({ tema, random: seeded(seed * 31 + 7), complexidade });
-        assert.match(frase, /^[A-ZÁÉÍÓÚÂÊÔÃÕÇ]/u, `${tema}: ${frase}`);
+        assert.match(frase, /^[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ]/u, `${tema}: ${frase}`);
         assert.match(frase, /\.$/u, `${tema}: ${frase}`);
         assert.doesNotMatch(frase, FORMAS_INVENTADAS, `${tema}: ${frase}`);
         assert.doesNotMatch(frase, PREPOSICAO_SEM_CONTRACAO, `${tema}: ${frase}`);

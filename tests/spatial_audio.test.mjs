@@ -627,3 +627,36 @@ test('high sky altitude silences beach waves and ground activity completely', as
   audio.update(1);
   assert.equal(audio.channels.size, 0, 'beach waves never start when camera is high in the sky');
 });
+
+test('3P and freecam sample ground at fpCamera position and react to camera distance', async () => {
+  const context = fakeContext();
+  const sampled = [];
+  const elements = new Array(16).fill(0);
+  elements[0] = 1; elements[5] = 1; elements[10] = 1; elements[15] = 1;
+  const renderer = {
+    camX: 0, camY: 0, zoom: 1.2,
+    isPerspectiveActive: () => true,
+    fpCamera: { position: { x: 50, y: 12, z: 60 }, matrixWorld: { elements } },
+  };
+  const audio = new SpatialAudio({
+    contextFactory: () => context,
+    renderer,
+    getCity: () => ({ buildings: [{ entity: { x: 50, y: 60 } }], citizens: [], world: { map: new Uint8Array(128 * 128), width: 128, height: 128 } }),
+    groundYAt: (x, z) => { sampled.push([x, z]); return x >= 40 ? 8 : 0; },
+    mediaFactory: url => { const el = fakeAudio(); el.src = url; return el; },
+    fetchImpl: async () => ({
+      ok: true,
+      async json() { return { animals: {}, world: { city_street: { local_file: 'data/audio/world/city_street.ogg' } } }; },
+    }),
+  });
+  await audio.load();
+  audio.update(0.4);
+  assert.deepEqual(sampled[0], [50, 60], 'ground is sampled at fpCamera position, not stale camX/camY');
+  const nearGain = audio.channels.get('city_street').gain.gain.value;
+  assert.ok(nearGain > 0);
+
+  renderer.fpCamera.position.y = 32;
+  audio.update(0.4);
+  const farGain = audio.channels.get('city_street').gain.gain.value;
+  assert.equal(farGain, 0, 'moving 3P/freecam camera high away silences ground audio');
+});

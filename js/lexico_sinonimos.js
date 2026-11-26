@@ -15,6 +15,7 @@ import { SUBSTANTIVOS_EXTRA } from './lexico_amplo_substantivos.js';
 import { SUBSTANTIVOS_EXTRA_B } from './lexico_amplo_substantivos_b.js';
 import { VERBOS_EXTRA } from './lexico_amplo_verbos.js';
 import { VERBOS_EXTRA_B } from './lexico_amplo_verbos_b.js';
+import { SUBSTANTIVOS_PIXO, VERBOS_PIXO } from './lexico_pixo.js';
 
 const SUBSTANTIVOS_BASE = {
   // Poder público e vida política
@@ -403,5 +404,9 @@ function fundirLexico(base, ...extras) {
   ])));
 }
 
-export const SUBSTANTIVOS = fundirLexico(SUBSTANTIVOS_BASE, SUBSTANTIVOS_EXTRA, SUBSTANTIVOS_EXTRA_B);
-export const VERBOS_TRANSITIVOS = fundirLexico(VERBOS_BASE, VERBOS_EXTRA, VERBOS_EXTRA_B);
+export const SUBSTANTIVOS = fundirLexico(
+  SUBSTANTIVOS_BASE, SUBSTANTIVOS_EXTRA, SUBSTANTIVOS_EXTRA_B, SUBSTANTIVOS_PIXO,
+);
+export const VERBOS_TRANSITIVOS = fundirLexico(
+  VERBOS_BASE, VERBOS_EXTRA, VERBOS_EXTRA_B, VERBOS_PIXO,
+);

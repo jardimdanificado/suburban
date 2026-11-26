@@ -15,11 +15,12 @@ import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
 import { SimulationTime, FF_SPEED, FF_LOD_SPEED, FF2_SPEED } from "./js/simulation_time.js?v=ff3-ff4-steps-1";
 import { OptionsPanel } from "./js/options.js?v=music-1";
 import { MusicPlayer } from "./js/music.js";
-import { SpatialAudio, musicSkyGain } from "./js/spatial_audio.js?v=audio-1";
+import { SpatialAudio } from "./js/spatial_audio.js?v=audio-1";
 import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
 import { WorldNetClient, WorldNetCoordinator } from './js/world_net.js?v=world-net-1';
 import { StartupLoading } from './js/startup_loading.js';
 import { aquecerCatalogos } from './js/vocabulario.js?v=economic-flow-7';
+import { openCreatureInfoEntityId } from './js/selection_outline.js';
 
 const root = document.querySelector("#experience");
 const canvasUI = document.querySelector("#canvas-ui");
@@ -707,6 +708,7 @@ function frame(now) {
   renderer3D.showFavoriteBadges=!mainMenu.isActive();
   // As viagens intermunicipais são desenhadas no relógio da cidade observada.
   worldNetCoordinator.prepareForRender(worldNetCoordinator.cityId);
+  music.setSkyFactor(mainMenu.isActive() ? 1 : 0);
 
   if (mainMenu.isActive()) {
     mainMenu.update(dt);
@@ -726,6 +728,7 @@ function frame(now) {
 
     const renderDt = Math.min((now - lastRenderedAt) / 1000, 0.25);
     lastRenderedAt = now;
+    renderer3D.outlinedEntityId = -1;
     renderer3D.render(world, entities, time.elapsed, renderDt, paused ? 0 : time.speed);
     gameAudio.update(dt);
 
@@ -755,6 +758,7 @@ function frame(now) {
   setActiveEntities(entities);
   const indexEnded = profiling ? performance.now() : 0;
   renderer3D.selectedCityUnitId = selected?.properties.cityBuilding ? cityUI.unitId : null;
+  renderer3D.outlinedEntityId = openCreatureInfoEntityId({ gameUI, cityUI, city });
   renderer3D.cityDevelopment=city.development;
   renderer3D.cityLogistics=city.logistics;
   renderer3D.profileFrame=profiling;renderer3D.render(world, entities, time.elapsed, renderDt, paused ? 0 : time.speed);
@@ -837,7 +841,6 @@ export const gameAudio = new SpatialAudio({
   getSpeed: () => time.speed,
   groundYAt: (x, z) => Number(renderer3D.getSurfaceElevation(world.map, x, z)) || 0,
   onPauseChange: paused => { if (paused) music.pause(); else music.resume(); },
-  onAltitudeChange: altitude => music.setSkyFactor(musicSkyGain(altitude)),
 });
 options.audio = gameAudio;
 gameAudio.setMuted(options.values.sfxMuted === true);

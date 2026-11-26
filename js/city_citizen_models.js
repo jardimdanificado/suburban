@@ -592,7 +592,7 @@ if (vCitizenDirt.a > 0.05) {
     return {level,hex};
   }
   begin(dt=0,speed=1,simTick=null){this.frameToken++;this.animationPaused=speed<=0;this.frameDelta=Math.max(0,Math.min(.1,dt));this.clock+=this.frameDelta*Math.max(0,Math.min(2,speed));this.campaignFlagTime=Number.isFinite(simTick)?Math.floor(simTick/20)*.1:Math.floor(this.clock*3)/10;this.activeCampaignFlags.clear();this.flyCount=0;if(this.flyMesh)this.flyMesh.count=0;this.swimFoamCount=0;if(this.swimFoamMesh)this.swimFoamMesh.count=0;for(const batch of this.activeBatches){batch.count=0;if(batch.mesh)batch.mesh.count=0;if(batch.clothingMesh)batch.clothingMesh.count=0;}this.activeBatches.clear();for(const batch of this.activeHeadwearBatches){batch.count=0;if(batch.mesh)batch.mesh.count=0;}this.activeHeadwearBatches.clear();}
-  add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false,smoothMovement=false,vehicleAngle=null,visualOffset=null,indoorBounds=null,activeCampaignElectionId=null,activeCampaignStatus=null,inWater=undefined,waterSurfaceY=null}={}){
+  add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false,smoothMovement=false,vehicleAngle=null,visualOffset=null,indoorBounds=null,activeCampaignElectionId=null,activeCampaignStatus=null,inWater=undefined,waterSurfaceY=null,outline=null}={}){
     if(!this.ready)return false;
     const c=entity.properties.citizen;if(!c)return false;
     if(hidden)return true;
@@ -697,6 +697,11 @@ if (vCitizenDirt.a > 0.05) {
     else if(batch.combined&&!clothingColorUnchanged){this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:presenceColor?Number.parseInt(String(presenceColor).replace('#',''),16):garmentColorHex);this.setInstanceGarmentColor(batch.mesh,bodyIndex,this.color);this.activeDirtColor.setHex(dirtVisual.hex);this.setInstanceDirt(batch.mesh,bodyIndex,this.activeDirtColor,dimmed||combatFlash?0:dirtLevel01,dz);}
     if(batch.clothingMesh||batch.combined){motion.clothingColorAppearance=appearance;motion.clothingColorDirt=dirtToken;motion.clothingColorCombat=combatFlash;motion.clothingColorDimmed=dimmed;motion.clothingColorPresence=presenceColor;}
     batch.count++;
+    if(outline){
+      if(!matrixReady){this.quaternion.setFromAxisAngle(this.axis,renderAngle);if(lying)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size*heightScale,size);this.matrix.compose(this.position,this.quaternion,this.scale);matrixReady=true;}
+      outline.add(combinedSource||bodySource,this.matrix,poseBodyShape.fat);
+      if(outfit&&!combinedSource)outline.add(clothingSource,this.matrix,poseBodyShape.fat);
+    }
     const items=appearance.items;
     motion.accessoryTransforms??=[];
     for(let itemIndex=0;itemIndex<items.length;itemIndex++){const item=items[itemIndex];motion.accessoryTransforms[itemIndex]??={};if(!RENDERED_ACCESSORIES.has(item.piece)&&!item.piece.startsWith('party-number-')){motion.accessoryTransforms[itemIndex].key=null;continue;}
@@ -711,6 +716,10 @@ if (vCitizenDirt.a > 0.05) {
       if(!accessoryUnchanged){if(!matrixReady){this.quaternion.setFromAxisAngle(this.axis,renderAngle);if(lying)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size*heightScale,size);this.matrix.compose(this.position,this.quaternion,this.scale);matrixReady=true;}if(isStaticHeadwear){const anchor=this.headwearAnchors.get(itemKey);this.accessoryOffset.set(anchor?.x||0,anchor?.y||0,anchor?.z||0).applyMatrix4(this.matrix);this.accessoryMatrix.copy(this.matrix).setPosition(this.accessoryOffset);this.setInstanceMatrix(head.mesh,accessoryIndex,this.accessoryMatrix);}else this.setInstanceMatrix(head.mesh,accessoryIndex,this.matrix);}
       accessoryTransform.key=itemKey;accessoryTransform.batch=head;accessoryTransform.mesh=head.mesh;accessoryTransform.index=accessoryIndex;if(isFittedClothing&&(!accessoryUnchanged||accessoryTransform.fatToken!==poseBodyShape.fat)){this.setInstanceFat(head.mesh,accessoryIndex,poseBodyShape);accessoryTransform.fatToken=poseBodyShape.fat;}
       const hex=itemColorHexes[itemIndex],itemDirt=Math.max(item.dirt||0,dirtVisual.level),itemDirtToken=`${Math.round(itemDirt)}:${dirtVisual.hex}`,accessoryColorUnchanged=accessoryColorSlotUnchanged&&accessoryTransform.colorItem===item&&accessoryTransform.colorHex===hex&&accessoryTransform.colorDirt===itemDirtToken&&accessoryTransform.colorCombat===combatFlash&&accessoryTransform.colorDimmed===dimmed;if(!accessoryColorUnchanged){this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:hex);this.setInstanceColor(head.mesh,head.count,this.color);this.activeDirtColor.setHex(dirtVisual.hex);this.setInstanceDirt(head.mesh,head.count,this.activeDirtColor,dimmed||combatFlash?0:Math.min(1,itemDirt/100),dz);accessoryTransform.colorItem=item;accessoryTransform.colorHex=hex;accessoryTransform.colorDirt=itemDirtToken;accessoryTransform.colorCombat=combatFlash;accessoryTransform.colorDimmed=dimmed;}head.count++;
+      if(outline){
+        if(isStaticHeadwear&&accessoryUnchanged){const anchor=this.headwearAnchors.get(itemKey);this.accessoryOffset.set(anchor?.x||0,anchor?.y||0,anchor?.z||0).applyMatrix4(this.matrix);this.accessoryMatrix.copy(this.matrix).setPosition(this.accessoryOffset);}
+        outline.add(source,isStaticHeadwear?this.accessoryMatrix:this.matrix,isFittedClothing?poseBodyShape.fat:0);
+      }
     }
     if((clip==='carregar'||clip==='carregar_parado')&&this.headwear.has('static:carry-box')){
       const source=this.headwear.get('static:carry-box');

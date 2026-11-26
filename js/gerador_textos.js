@@ -9,6 +9,7 @@ import { CENAS_AMPLAS_A } from './cenas_amplas_a.js';
 import { CENAS_AMPLAS_B } from './cenas_amplas_b.js';
 import { CENAS_AMPLAS_C } from './cenas_amplas_c.js';
 import { CENAS_AMPLAS_D } from './cenas_amplas_d.js';
+import { CENAS_PIXO } from './cenas_pixo.js';
 
 const TEMAS = [
   'politica', 'cidade', 'trabalho', 'economia', 'moradia', 'familia',
@@ -374,9 +375,15 @@ for (const [tema, extras] of Object.entries(CENAS_EXTRA)) {
 
 // Cenas amplas entram sem repetir uma cena que já exista no tema. A checagem
 // por JSON compara sujeito, verbo, objeto e complemento ao mesmo tempo.
-const CENAS_AMPLAS = {
-  ...CENAS_AMPLAS_A, ...CENAS_AMPLAS_B, ...CENAS_AMPLAS_C, ...CENAS_AMPLAS_D,
-};
+// A fusão é por tema, somando as cenas de cada arquivo. Espalhar os objetos
+// direto faria o último sobrescrever o tema inteiro dos anteriores.
+const CENAS_AMPLAS = {};
+for (const fonte of [CENAS_AMPLAS_A, CENAS_AMPLAS_B, CENAS_AMPLAS_C, CENAS_AMPLAS_D, CENAS_PIXO]) {
+  for (const [tema, cenas] of Object.entries(fonte)) {
+    if (!CENAS_AMPLAS[tema]) CENAS_AMPLAS[tema] = [...cenas];
+    else CENAS_AMPLAS[tema].push(...cenas);
+  }
+}
 for (const [tema, cenas] of Object.entries(CENAS_AMPLAS)) {
   if (!CENAS[tema]) continue;
   const existentes = new Set(CENAS[tema].map(cena => JSON.stringify(cena)));
@@ -886,13 +893,13 @@ function removerRepeticoes(texto) {
 // Aplica uma variante por campo, com chance independente. O verbo só troca em
 // cena com objeto direto: a lista é de transitivos diretos.
 function aplicarVariantes(cena, random) {
-  const sujeito = random() < 0.38
+  const sujeito = random() < 0.5
     ? trocarCabeca(cena.s.split(' '), 1, random, 2)
     : cena.s;
-  const verbo = cena.o && VERBOS_TRANSITIVOS[cena.v] && random() < 0.34
+  const verbo = cena.o && VERBOS_TRANSITIVOS[cena.v] && random() < 0.45
     ? escolhe(VERBOS_TRANSITIVOS[cena.v], random)
     : cena.v;
-  const objeto = cena.o && random() < 0.3
+  const objeto = cena.o && random() < 0.4
     ? { ...cena.o, n: trocarCabeca(cena.o.n.split(' '), 0, random) }
     : cena.o;
   return { s: sujeito, v: verbo, o: objeto, c: cena.c };

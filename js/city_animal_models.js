@@ -224,9 +224,10 @@ export class CityAnimalModels {
     this.scale.set(size, size, size);
     this.matrix.compose(this.position, this.quaternion, this.scale);
     batch.mesh.setMatrixAt(batch.count, this.matrix);
-    this.color.setHex(options.selected ? 0xfff3b0 : (this.THREE.DataTexture ? 0xffffff : (entity.properties.render?.color ?? spec.color ?? 0xd9d2c5)));
+    this.color.setHex(this.THREE.DataTexture ? 0xffffff : (entity.properties.render?.color ?? spec.color ?? 0xd9d2c5));
     batch.mesh.setColorAt(batch.count, this.color);
     batch.count++;
+    if (options.outline) options.outline.add(source, this.matrix);
 
     if ((animal.altitude || 0) > 0.25 && this.THREE.CircleGeometry && this.THREE.MeshBasicMaterial) {
       if (this.shadowCount === this.shadowCapacity) {

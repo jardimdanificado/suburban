@@ -75,7 +75,7 @@ export class CharacterGameUI {
     return targets.sort((a,b)=>a.distance-b.distance);
   }
   selectTarget(target){this.targetKey=`${target.kind}:${target.id}`;this.selectedEntityId=target.entityId;}
-  dossier(target){return this.desktop.openPage(`inspect-${target.kind}-${target.id}`,{title:`Ficha · ${target.label}`,width:380,height:440,draw:p=>drawTargetDossier(p,this.getCity(),target,id=>this.getEntities().find(e=>e.id===id))});}
+  dossier(target){const state=this.desktop.openPage(`inspect-${target.kind}-${target.id}`,{title:`Ficha · ${target.label}`,width:380,height:440,draw:p=>drawTargetDossier(p,this.getCity(),target,id=>this.getEntities().find(e=>e.id===id))});if(state&&(target.kind==='person'||target.kind==='animal'))state.inspectedCreatureEntityId=target.entityId;return state;}
   target(){const targets=this.targets();return this.targetKey?targets.find(t=>`${t.kind}:${t.id}`===this.targetKey):targets.find(t=>t.kind!=='person')||targets[0];}
   inspect(entityId,notify=true){
     const target=this.visibleTargets(Infinity).find(t=>t.entityId===entityId);

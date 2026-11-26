@@ -1,4 +1,5 @@
 import {NormalMapControl} from './normal_map_control.js';
+import {SelectionOutline} from './selection_outline.js';
 import {terrainSurfaceNormals} from './terrain_surface_normals.js';
 import {createFarmPlantGeometry} from './farm_plant_geometry.js?v=onion-model-1';
 import {BOTANICAL_TREE_MODELS,botanicalTreeTextures,addBotanicalTreeWind,BotanicalTreeInstances} from './botanical_trees.js?v=species-colors-3';
@@ -3596,6 +3597,7 @@ export class RCT3DRenderer {
     this.camY = 512.0;
     this.zoom = 1.2;
     this.selectedEntityId = -1;
+    this.outlinedEntityId = -1;
     this.waterTime = 0;
     this.flameTime = 0;
     this.isPaused = false;
@@ -3944,13 +3946,6 @@ export class RCT3DRenderer {
       if(!this.nightLighting)this.scene.add(pl);
       this.nightLightPool.push(pl);
     }
-    this.followMarker = new THREE.Mesh(
-      new THREE.CircleGeometry(0.42, 24),
-      new THREE.MeshBasicMaterial({ color: 0xffd36a, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide })
-    );
-    this.followMarker.rotation.x = -Math.PI / 2;
-    this.followMarker.visible = false;
-    this.scene.add(this.followMarker);
     this.followLight = new THREE.PointLight(0xffd36a, 1.8, 4.5, 1.8);
     this.followLight.castShadow = false;
     this.followLight.visible = false;
@@ -5012,6 +5007,8 @@ export class RCT3DRenderer {
       applyRetroDitherToMaterial(material,32,1.0);
       material.customProgramCacheKey=()=>`${cacheKey()}:animal-smooth-dither-1`;
     }});
+    this.selectionOutline=new SelectionOutline(THREE,this.entityGroup);
+    this._outlineResVec=new THREE.Vector2();
     this.citizenViewProjection=new THREE.Vector3();
 
     // Floating UI Group (Emotes, Held Items & Clan House Flags)
@@ -5042,30 +5039,6 @@ export class RCT3DRenderer {
     this.territoryGroup = new THREE.Group();
     this.scene.add(this.territoryGroup);
     this.lastVisualizedGroupId = null;
-
-    // Selection Reticle (Ground Box Decal beneath units & multi-tile structures)
-    const reticleGeo = new THREE.BufferGeometry();
-    // Unit square from -0.5 to +0.5 with border outline lines
-    const reticleVerts = new Float32Array([
-      // Outer border strip
-      -0.5, 0, -0.5,   0.5, 0, -0.5,
-       0.5, 0, -0.5,   0.5, 0,  0.5,
-       0.5, 0,  0.5,  -0.5, 0,  0.5,
-      -0.5, 0,  0.5,  -0.5, 0, -0.5
-    ]);
-    reticleGeo.setAttribute('position', new THREE.BufferAttribute(reticleVerts, 3));
-    const reticleMat = new THREE.LineBasicMaterial({
-      color: 0xffdd33,
-      linewidth: 3,
-      transparent: true,
-      opacity: 0.95,
-      depthTest: true,
-      depthWrite: false
-    });
-    this.reticleMesh = new THREE.LineSegments(reticleGeo, reticleMat);
-    this.reticleMesh.renderOrder = 0;
-    this.reticleMesh.visible = false;
-    this.scene.add(this.reticleMesh);
 
     // 3D Editor Selection Cursor (Terrain draped polygon + outline)
     this.editorCursorGeo = new THREE.BufferGeometry();
@@ -6463,7 +6436,6 @@ export class RCT3DRenderer {
   }
 
   updateCamera(entities = null, dt = 0.016) {
-    this.followMarker.visible = false;
     this.followLight.visible = false;
     if (this.isPerspectiveActive()) {
       const targetEnt = this.findCameraEntity(this.fpEntityId, entities);
@@ -6551,9 +6523,6 @@ export class RCT3DRenderer {
           this.tpCameraPosition.copy(safeCamera);
           this.fpCamera.position.copy(this.tpCameraPosition);
           this.fpCamera.lookAt(this.tpCameraTarget);
-          const followGroundY=eyeY-0.65;
-          this.followMarker.position.set(eyeX, followGroundY + 0.045, eyeZ);
-          this.followMarker.visible = !anchor;
 
         } else {
           // 1P First Person Camera: Position at creature eyes and look forward
@@ -8115,6 +8084,7 @@ export class RCT3DRenderer {
     this.cityCitizenBatches.begin();
     this.cityCitizenModels.begin(dt,effectiveSpeed,this.simTick);
     this.cityAnimalModels.begin(dt,effectiveSpeed);
+    this.selectionOutline.begin();
     const perspectiveActive=this.isPerspectiveActive(),firstPersonActive=this.isFirstPersonActive(),thirdPersonActive=this.isThirdPersonActive();
     const activeElection=this.cityDevelopment?.city?.politics?.active;
     const activeElectionId=activeElection?.id,activeElectionStatus=activeElection?.status;
@@ -8330,7 +8300,7 @@ export class RCT3DRenderer {
       }
       const renderSurfaceH=surfaceH+((renderAtInterior||renderElevated)?(interiorPosition?.z??cityCitizen?.skybridgeZ??0):0)+(cityCitizen?.climbing?.z||0);
       const profileAfterSurface = profileCitizenStart ? performance.now() : 0;
-      if(cityCitizen&&e.id!==this.selectedEntityId&&!this.citizenVisibleInView(renderX,renderY,renderSurfaceH+(cityCitizen.bodyHeightCm||170)/200))continue;
+      if(cityCitizen&&e.id!==this.selectedEntityId&&e.id!==this.outlinedEntityId&&!this.citizenVisibleInView(renderX,renderY,renderSurfaceH+(cityCitizen.bodyHeightCm||170)/200))continue;
 
       // --- 3D WOOD LOGS (Volumetric Stacked Timber Logs) ---
       if (isWoodLog && woodLogCount < this.maxInstances) {
@@ -8918,7 +8888,9 @@ export class RCT3DRenderer {
         const animal=e.properties?.cityAnimal;
         const ax=Math.floor(e.x),ay=Math.floor(e.y),animalTile=animal&&world?(world.getTile?world.getTile(ax,ay):world.map?.[ay]?.[ax]):null;
         const animalSurfaceH=(animal&&animalTile===TILE_WATER?WATER_LEVEL-(animal.species==='jacare'?.17:animal.species==='capivara'?.14:.06):surfaceH)+(animal?.altitude||0);
-        const modelRendered=(cityCitizen&&this.cityCitizenModels.add(e,citizenSurfaceH,citizenModelOptions))||(animal&&this.cityAnimalModels.add(e,animalSurfaceH,{perspective:perspectiveActive,selected:this.selectedEntityId===e.id}));
+        const outlined = this.outlinedEntityId === e.id ? this.selectionOutline : null;
+        citizenModelOptions.outline = outlined;
+        const modelRendered=(cityCitizen&&this.cityCitizenModels.add(e,citizenSurfaceH,citizenModelOptions))||(animal&&this.cityAnimalModels.add(e,animalSurfaceH,{perspective:perspectiveActive,selected:this.selectedEntityId===e.id,outline:outlined}));
         if(modelRendered){
           activeIds.add(e.id);const previous=this.entitySprites.get(e.id);if(previous)previous.visible=false;
         }else{
@@ -9589,17 +9561,6 @@ export class RCT3DRenderer {
     // Update Claimed Territory 3D Overlay
     this.rebuildTerritoryOverlayIfNeeded(world, clanGroups, visualizedGroupId);
 
-    // Update Selection Reticle
-    if (selectedPos) {
-      this.reticleMesh.position.set(selectedPos.x, selectedPos.y, selectedPos.z);
-      const scaleX = selectedPos.fpW || 1;
-      const scaleZ = selectedPos.fpH || 1;
-      this.reticleMesh.scale.set(scaleX, 1, scaleZ);
-      this.reticleMesh.visible = true;
-    } else {
-      this.reticleMesh.visible = false;
-    }
-
     // Update 3D Atmosphere Clouds (Visible in 1P & 3P modes during daytime, and at high altitude zoom in isometric)
     if (this.cloudMesh && this.cloudMat) {
       const isNightTime = (world?.clock) ? (world.clock.hour < 5 || world.clock.hour >= 20) : false;
@@ -9649,6 +9610,7 @@ export class RCT3DRenderer {
         (this.isFirstPersonActive?.() && this.fpEntityId == null));
       retroDitherPostUniform.value=postBayerActive?1:0;
       this.renderer.setRenderTarget(this.renderTarget);
+      this.selectionOutline.setResolution(this.renderTarget.width, this.renderTarget.height);
       this.renderer.render(this.scene, activeCam);
       this.renderer.setRenderTarget(this.pixelPresentationEnabled ? this.presentationTarget : null);
       this.postMaterial.uniforms.tDiffuse.value = this.renderTarget.texture;
@@ -9682,6 +9644,12 @@ export class RCT3DRenderer {
       retroDitherPostUniform.value=0;
       this.postMaterial.uniforms.uBayerEnabled.value=0;
       this.renderer.setRenderTarget(this.pixelPresentationEnabled ? this.presentationTarget : null);
+      if (this.pixelPresentationEnabled && this.presentationTarget) {
+        this.selectionOutline.setResolution(this.presentationTarget.width, this.presentationTarget.height);
+      } else {
+        const db = this.renderer.getDrawingBufferSize(this._outlineResVec);
+        this.selectionOutline.setResolution(db.x, db.y);
+      }
       this.renderer.render(this.scene, activeCam);
     }
     this.presentPixels();

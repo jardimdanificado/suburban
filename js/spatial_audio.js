@@ -23,14 +23,14 @@ const CHANNEL_FILES = {};
 // Event kind to positional one-shot. `duration` trims long recordings such as
 // the 27 s door latch down to one open.
 const EVENT_SOUNDS = {
-  construction: { key: 'hammer', gain: 0.5, duration: 2 },
-  'project-started': { key: 'hammer', gain: 0.45, duration: 2 },
-  'service-contracted': { key: 'hammer', gain: 0.45, duration: 2 },
-  'business-founded': { key: 'cash_register', gain: 0.4, duration: 2.2 },
-  purchase: { key: 'coins', gain: 0.35, duration: 1.1 },
-  'home-lease': { key: 'coins', gain: 0.3, duration: 1.1 },
-  'bill-voted': { key: 'gavel', gain: 0.5, duration: 2.5 },
-  'council-elected': { key: 'gavel', gain: 0.4, duration: 2.5 },
+  construction: { key: 'hammer', gain: 0.28, duration: 2 },
+  'project-started': { key: 'hammer', gain: 0.25, duration: 2 },
+  'service-contracted': { key: 'hammer', gain: 0.25, duration: 2 },
+  'business-founded': { key: 'cash_register', gain: 0.22, duration: 2.2 },
+  purchase: { key: 'coins', gain: 0.2, duration: 1.1 },
+  'home-lease': { key: 'coins', gain: 0.18, duration: 1.1 },
+  'bill-voted': { key: 'gavel', gain: 0.28, duration: 2.5 },
+  'council-elected': { key: 'gavel', gain: 0.24, duration: 2.5 },
 };
 
 // Same curve as the PannerNode 'inverse' distance model, kept pure so the
@@ -425,7 +425,10 @@ export class SpatialAudio {
     if (!context || context.state === 'suspended') return;
     if ((this.getSpeed() || 1) > MAX_AUDIBLE_SPEED) { this.silenceSources(); return; }
     const renderer = this.renderer;
-    const ground = this.groundYAt(Number(renderer?.camX) || 0, Number(renderer?.camY) || 0) + 1.2;
+    const perspective = typeof renderer?.isPerspectiveActive === 'function' && renderer.isPerspectiveActive();
+    const refX = perspective ? Number(renderer?.fpCamera?.position?.x) : Number(renderer?.camX);
+    const refZ = perspective ? Number(renderer?.fpCamera?.position?.z) : Number(renderer?.camY);
+    const ground = this.groundYAt(Number.isFinite(refX) ? refX : 0, Number.isFinite(refZ) ? refZ : 0) + 1.2;
     const pose = listenerPose(renderer, ground);
     if (!pose) return;
     this.lastAltitude = pose.altitude;
@@ -442,16 +445,16 @@ export class SpatialAudio {
     const listener = this.ctx.listener;
     const now = this.ctx.currentTime;
     if (listener.positionX) {
-      listener.positionX.setTargetAtTime(pose.x, now, 0.08);
-      listener.positionY.setTargetAtTime(pose.y, now, 0.08);
-      listener.positionZ.setTargetAtTime(pose.z, now, 0.08);
+      listener.positionX.setTargetAtTime(pose.x, now, 0.04);
+      listener.positionY.setTargetAtTime(pose.y, now, 0.04);
+      listener.positionZ.setTargetAtTime(pose.z, now, 0.04);
       if (listener.forwardX) {
-        listener.forwardX.setTargetAtTime(pose.fx, now, 0.08);
-        listener.forwardY.setTargetAtTime(pose.fy, now, 0.08);
-        listener.forwardZ.setTargetAtTime(pose.fz, now, 0.08);
-        listener.upX.setTargetAtTime(0, now, 0.08);
-        listener.upY.setTargetAtTime(1, now, 0.08);
-        listener.upZ.setTargetAtTime(0, now, 0.08);
+        listener.forwardX.setTargetAtTime(pose.fx, now, 0.04);
+        listener.forwardY.setTargetAtTime(pose.fy, now, 0.04);
+        listener.forwardZ.setTargetAtTime(pose.fz, now, 0.04);
+        listener.upX.setTargetAtTime(0, now, 0.04);
+        listener.upY.setTargetAtTime(1, now, 0.04);
+        listener.upZ.setTargetAtTime(0, now, 0.04);
       } else {
         listener.setOrientation(pose.fx, pose.fy, pose.fz, 0, 1, 0);
       }
@@ -504,7 +507,7 @@ export class SpatialAudio {
       random: this.random,
       now: this.ctx.currentTime,
       lastCallAt: this.lastCallAt,
-      radius: 22,
+      radius: 16,
       cooldown: 8,
       night,
     });
@@ -521,7 +524,7 @@ export class SpatialAudio {
     try { buffer = await this.loadBuffer(file); } catch { this.activeFauna--; return; }
     if (this.paused || this.disposed || !this.ctx) { this.activeFauna--; return; }
     const spec = ANIMAL_SPECIES[call.species];
-    const gain = (spec?.category === 'livestock' ? 0.45 : 0.55) * (call.animal?.state === 'flee' ? 1.2 : 1) * groundScale;
+    const gain = (spec?.category === 'livestock' ? 0.26 : 0.32) * (call.animal?.state === 'flee' ? 1.2 : 1) * groundScale;
     const y = this.groundYAt(call.x, call.z) + (call.y || 0) + 0.45;
     const bufferDuration = Number(buffer?.duration) || 0;
     const offset = bufferDuration > FAUNA_CALL_MAX_DURATION + 1
@@ -556,16 +559,16 @@ export class SpatialAudio {
         if (!previous) continue;
         if (indoor !== previous.indoor && indoor != null && previous.indoor == null && this.doorTimer <= 0) {
           const distance = Math.hypot(entity.x - pose.x, entity.y - pose.z);
-          if (distance <= 20) {
+          if (distance <= 15) {
             this.doorTimer = 0.9;
-            this.playWorldOneShot('door', entity.x, entity.y, 0.3, 1.8);
+            this.playWorldOneShot('door', entity.x, entity.y, 0.18, 1.8);
           }
         }
         if (indoor != null || citizen.dead || citizen.custody || citizen.climbing) continue;
         const y = this.groundYAt(entity.x, entity.y) + 0.12;
         const distance = sourceDistance(pose, entity.x, entity.y, y);
         const groundScale = groundAudibility(pose.altitude);
-        if (groundScale <= 0.01 || distance > 22) continue;
+        if (groundScale <= 0.01 || distance > 15) continue;
 
         let cooldowns = this.citizenCooldowns.get(id);
         if (!cooldowns) {
@@ -583,7 +586,7 @@ export class SpatialAudio {
         if (citizen.ridingVehicleId) {
           if (BIKE_KINDS.has(citizen.ridingVehicleKind) && moved >= 0.05 && cooldowns.bike <= 0 && this.worldFiles.bike) {
             cooldowns.bike = 1.4 + this.random() * 1.6;
-            candidates.push({ distance, key: 'bike', x: entity.x, y, z: entity.y, gain: 0.36, duration: 0.95, rate: 0.94 + this.random() * 0.12 });
+            candidates.push({ distance, key: 'bike', x: entity.x, y, z: entity.y, gain: 0.22 * groundScale, duration: 0.95, rate: 0.94 + this.random() * 0.12 });
           }
           continue;
         }
@@ -591,7 +594,7 @@ export class SpatialAudio {
           if (cooldowns.swim <= 0) {
             cooldowns.swim = 0.85 + this.random() * 0.9;
             const splashKey = this.pickWorldKey(['water_splash', 'water_splash_2', 'water_splash_3']) || 'water_splash';
-            candidates.push({ distance, key: splashKey, x: entity.x, y, z: entity.y, gain: 0.35 * groundScale, duration: 0.65, rate: 0.9 + this.random() * 0.2 });
+            candidates.push({ distance, key: splashKey, x: entity.x, y, z: entity.y, gain: 0.22 * groundScale, duration: 0.65, rate: 0.9 + this.random() * 0.2 });
           }
           continue;
         }
@@ -602,20 +605,20 @@ export class SpatialAudio {
             const pool = female ? ['voice_female', 'voice_female_2'] : ['voice_male'];
             if (this.worldFiles.voice_laugh && this.random() < 0.16) pool.unshift('voice_laugh');
             const voiceKey = this.pickWorldKey(pool) || (female ? 'voice_female' : 'voice_male');
-            candidates.push({ distance, key: voiceKey, x: entity.x, y: y + 1.2, z: entity.y, gain: 0.4, duration: 1.1 + this.random() * 0.9, rate: 0.92 + this.random() * 0.16 });
+            candidates.push({ distance, key: voiceKey, x: entity.x, y: y + 1.2, z: entity.y, gain: 0.24 * groundScale, duration: 1.1 + this.random() * 0.9, rate: 0.92 + this.random() * 0.16 });
           }
         }
         if (FORAGE_TASKS.has(citizen.task) && cooldowns.forage <= 0) {
           cooldowns.forage = 1.4 + this.random() * 1.6;
-          candidates.push({ distance, key: 'grazing', x: entity.x, y, z: entity.y, gain: 0.3, duration: 0.85, rate: 0.95 + this.random() * 0.1 });
+          candidates.push({ distance, key: 'grazing', x: entity.x, y, z: entity.y, gain: 0.18 * groundScale, duration: 0.85, rate: 0.95 + this.random() * 0.1 });
         }
         if (cooldowns.work <= 0 && moved < 0.04) {
           if (citizen.task === 'construction' && citizen.workProjectId != null) {
             cooldowns.work = 1.5 + this.random() * 1.5;
-            candidates.push({ distance, key: this.pickWorldKey(['hammer', 'saw']) || 'hammer', x: entity.x, y, z: entity.y, gain: 0.32, duration: 0.9, rate: 0.95 + this.random() * 0.1 });
+            candidates.push({ distance, key: this.pickWorldKey(['hammer', 'saw']) || 'hammer', x: entity.x, y, z: entity.y, gain: 0.2 * groundScale, duration: 0.9, rate: 0.95 + this.random() * 0.1 });
           } else if (citizen.forestryJob?.stage === 'cut' && this.worldFiles.wood_chop) {
             cooldowns.work = 1.6 + this.random() * 1.4;
-            candidates.push({ distance, key: 'wood_chop', x: entity.x, y, z: entity.y, gain: 0.32, duration: 0.9, rate: 0.95 + this.random() * 0.1 });
+            candidates.push({ distance, key: 'wood_chop', x: entity.x, y, z: entity.y, gain: 0.2 * groundScale, duration: 0.9, rate: 0.95 + this.random() * 0.1 });
           }
         }
         if (moved >= 0.04 && cooldowns.step <= 0) {
@@ -631,11 +634,11 @@ export class SpatialAudio {
               : surface === 'footsteps_dirt'
                 ? (this.pickWorldKey(['footsteps_dirt', 'footsteps_dirt_2', 'footsteps_dirt_3']) || surface)
                 : (this.pickWorldKey(['footsteps_sand', 'footsteps_sand_2', 'footsteps_sand_3']) || surface);
-            candidates.push({ distance, key: stepKey, x: entity.x, y, z: entity.y, gain: 0.44 * groundScale, duration: 0.34, rate: 0.92 + this.random() * 0.16 });
+            candidates.push({ distance, key: stepKey, x: entity.x, y, z: entity.y, gain: 0.24 * groundScale, duration: 0.34, rate: 0.92 + this.random() * 0.16 });
             if (GRASS_TILES.has(tile) && this.random() < 0.45) {
               const foliageKey = this.pickWorldKey(['grass_rustle', 'bush_rustle']);
               if (foliageKey) {
-                candidates.push({ distance, key: foliageKey, x: entity.x, y, z: entity.y, gain: 0.22 * groundScale, duration: 0.45, rate: 0.95 + this.random() * 0.15 });
+                candidates.push({ distance, key: foliageKey, x: entity.x, y, z: entity.y, gain: 0.14 * groundScale, duration: 0.45, rate: 0.95 + this.random() * 0.15 });
               }
             }
           }
@@ -650,7 +653,7 @@ export class SpatialAudio {
         if (!animal || animal.dead || animal.entity?.destroyed) continue;
         const y = this.groundYAt(animal.x, animal.y) + 0.15;
         const distance = sourceDistance(pose, animal.x, animal.y, y);
-        if (distance > 18) continue;
+        if (distance > 15) continue;
         let cd = this.animalCooldowns.get(aid);
         if (!cd) {
           cd = { graze: this.random() * 1.5, rustle: this.random() * 1.0 };
@@ -660,13 +663,13 @@ export class SpatialAudio {
         cd.rustle = Math.max(0, cd.rustle - stepDt);
         if ((animal.state === 'graze' || animal.state === 'forage' || animal.state === 'eat') && cd.graze <= 0) {
           cd.graze = 1.6 + this.random() * 1.8;
-          candidates.push({ distance, key: 'grazing', x: animal.x, y, z: animal.y, gain: 0.32 * groundScale, duration: 0.9, rate: 0.9 + this.random() * 0.2 });
+          candidates.push({ distance, key: 'grazing', x: animal.x, y, z: animal.y, gain: 0.18 * groundScale, duration: 0.9, rate: 0.9 + this.random() * 0.2 });
         } else if ((animal.state === 'walk' || animal.state === 'flee') && cd.rustle <= 0 && world?.map && Number.isFinite(world.width)) {
           const tile = world.map[Math.floor(animal.y) * world.width + Math.floor(animal.x)];
           if (GRASS_TILES.has(tile)) {
             cd.rustle = 0.7 + this.random() * 0.8;
             const foliageKey = this.pickWorldKey(['grass_rustle', 'bush_rustle']) || 'grass_rustle';
-            candidates.push({ distance, key: foliageKey, x: animal.x, y, z: animal.y, gain: 0.24 * groundScale, duration: 0.5, rate: 0.95 + this.random() * 0.15 });
+            candidates.push({ distance, key: foliageKey, x: animal.x, y, z: animal.y, gain: 0.14 * groundScale, duration: 0.5, rate: 0.95 + this.random() * 0.15 });
           }
         }
       }
@@ -740,7 +743,7 @@ export class SpatialAudio {
     const now = this.ctx.currentTime;
     this.ambienceTimer -= dt;
     if (this.ambienceTimer > 0 || !this.ready) return;
-    this.ambienceTimer = 0.8;
+    this.ambienceTimer = 0.35;
     const groundScale = groundAudibility(pose.altitude);
     const city = this.getCity();
     const plan = groundScale <= 0.01 ? [] : ambiencePlan({
@@ -1040,9 +1043,9 @@ export class SpatialAudio {
       panner = context.createPanner();
       panner.panningModel = 'equalpower';
       panner.distanceModel = 'inverse';
-      panner.refDistance = 6;
-      panner.maxDistance = 40;
-      panner.rolloffFactor = 1.0;
+      panner.refDistance = 2.5;
+      panner.maxDistance = 18;
+      panner.rolloffFactor = 2.0;
       setNodePosition(panner, x, Number.isFinite(y) ? y : 1, z);
       source.connect(panner);
       panner.connect(level);
