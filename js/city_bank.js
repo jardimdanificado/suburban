@@ -76,6 +76,19 @@ export class CityBank {
     city.history.record('credit', `Crédito aprovado por ${bank.entity.properties.name}.`, [clientId,bank.accountId], { amount, rate:loan.rate, loanId:loan.id });
     return loan;
   }
+  lendMicrocredit(bank, clientId, amount) {
+    const city = this.city, client = city.accounts.get(clientId);
+    const cap = city.currency.price(economicPolicy(city,'microcreditCap'));
+    if (!this.policy.creditEnabled || !this.canServe(bank) || !client || client.entity?.destroyed || client.creditAllowed === false || !city.society.isAdult(client) || !Number.isSafeInteger(amount) || amount <= 0 || cap <= 0 || this.loans.some(l => l.clientId === clientId && l.status !== 'paid')) return false;
+    const reserve = this.liquidityReserve(bank), available = Math.floor(Math.max(0, bank.balance - reserve) * .4);
+    const approved = Math.min(amount, cap, available);
+    if (approved < 1 || city.reputation.creditFactor(client) < .5 || !city.transfer(bank.accountId, clientId, approved, 'Microcrédito produtivo bancário', { loanId: this.nextId })) return false;
+    const rate = economicPolicy(city,'creditLoanRate') * .5;
+    const loan = { id: this.nextId++, bankId: bank.id, clientId, purpose: 'microcredit', principal: approved, remaining: approved, interest: 0, rate, dailyPayment: Math.ceil(approved/45), dueDay: city.day+1, missed: 0, status: 'active', startedAt: city.minute, paid: 0 };
+    this.loans.push(loan);
+    city.history.record('credit', `Microcrédito produtivo aprovado por ${bank.entity.properties.name}.`, [clientId,bank.accountId], { amount: approved, rate, loanId: loan.id, purpose: 'microcredit' });
+    return loan;
+  }
   repay(bank,clientId,loanId,amount){
     const loan=this.loans.find(l=>l.id===loanId&&l.bankId===bank?.id&&l.clientId===clientId&&!['paid','written-off','foreclosed'].includes(l.status));
     if(!this.canServe(bank)||!loan||!Number.isSafeInteger(amount)||amount<1||amount>loan.remaining+loan.interest)return false;
@@ -204,8 +217,9 @@ export class CityBank {
       const preferredBanks=banks.length>1?banks.slice().sort((a,b)=>city.relationships.businessPenalty(c,a)-city.relationships.businessPenalty(c,b)):banks;
       for (const deposit of this.deposits.values()) if (deposit.clientId === c.accountId && deposit.balance > 0 && c.balance < this.policy.cashReserve) this.withdraw({id:deposit.bankId},c.accountId,Math.min(deposit.balance,this.policy.cashReserve-c.balance));
       if (!banks.length) continue;
-      if (c.balance < city.welfare.policy.cashTarget && (c.jobId || c.businessIds.length) && c.creditAllowed !== false) {
-        for (const bank of preferredBanks) if (this.lend(bank,c.accountId,city.welfare.policy.cashTarget-c.balance)) break;
+      if (c.balance < city.welfare.policy.cashTarget && c.creditAllowed !== false) {
+        const needed = city.welfare.policy.cashTarget - c.balance;
+        for (const bank of preferredBanks) if ((c.jobId || c.businessIds.length) ? this.lend(bank,c.accountId,needed) : this.lendMicrocredit(bank,c.accountId,needed)) break;
       }
       const amount = Math.floor(Math.max(0,c.balance-this.policy.cashReserve)*(c.savingsRate ?? .2));
       if (amount > 0) this.deposit(preferredBanks[0],c.accountId,amount);

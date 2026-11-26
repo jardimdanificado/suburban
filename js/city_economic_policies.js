@@ -34,6 +34,7 @@ export const ECONOMIC_POLICIES=Object.freeze({
  creditLoanRate:spec('Crédito pessoal: juros diários',.001,0,.01,.00025,'Crédito','Juros com limite de risco, reserva bancária e proteção da subsistência.'),
  creditReserveDays:spec('Reserva de operação dos bancos em dias',21,3,60,3,'Crédito','Protege a operação antes de conceder novos empréstimos.'),
  householdDebtLimit:spec('Crédito: múltiplo da renda diária',12,2,30,2,'Crédito','Limita empréstimos pessoais pela renda verificável; depósitos continuam integralmente lastreados.'),
+ microcreditCap:spec('Microcrédito produtivo: teto por pessoa',15000,0,100000,2500,'Crédito','Permite empréstimo pequeno com juros reduzidos para autônomos e trabalhadores sem vínculo formal.'),
  taxPaymentCap:spec('Tributos: teto diário do caixa disponível',.2,.05,.5,.05,'Proteção econômica','Protege subsistência e operação; o restante vira dívida tributária registrada.'),
  fiscalGuardDays:spec('Alerta fiscal: horizonte em dias',30,7,90,7,'Orçamento','Antecipa revisão de receita antes do esgotamento do caixa livre.'),
  automaticStabilizer:spec('Revisão fiscal preventiva',true,0,1,1,'Orçamento','Encaminha propostas tributárias ao Legislativo em vez de alterar impostos sem votação.'),
@@ -46,7 +47,7 @@ export function setEconomicPolicy(city,key,value){if(!validateEconomicPolicy(key
 export function economicPolicyAffinity(city,profile,payload){const s=ECONOMIC_POLICIES[payload.key];if(!s)return 0;const direction=Math.sign(Number(payload.value)-Number(payload.previousValue??economicPolicy(city,payload.key)));const social=['Patrimônio','Renda','Proteção econômica'].includes(s.group);return direction*(social?profile.redistribution*.8-profile.economy*.4:['Empresas','Crédito','Trabalho'].includes(s.group)?profile.economy*.6+.25:profile.fiscal*.5+.15);}
 export function recordEconomicIncome(city,from,to,amount,reason){
  const person=city.accounts.get(to);if(!person?.entity?.properties?.citizen||person.entity.destroyed)return;
- if(/^(Salário|Primeiro aluguel|Aluguel|Distribuição de lucros|Lucro de empresa|Participação nos lucros|Herança)/.test(reason)){
+ if(/^(Salário|Primeiro aluguel|Aluguel|Distribuição de lucros|Lucro de empresa|Participação nos lucros|Pagamento por bico|Herança)/.test(reason)){
   const income=person.fiscalIncome??={income:0,dividends:0,rent:0,inheritance:0};
   if(/^Herança/.test(reason))income.inheritance+=amount;else {income.income+=amount;if(/lucros|Lucro/.test(reason))income.dividends+=amount;if(/aluguel|Aluguel/.test(reason))income.rent+=amount;}
  }

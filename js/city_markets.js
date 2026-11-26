@@ -4,9 +4,9 @@ import { inventoryFree } from './city_inventory.js';
 import {isRoadAt} from './city_terrain.js?v=entrance-retaining-clearance-1';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export function carryCapacity(c){return injuredCarryCapacity(c,c?.equipment?.carrinho?72:c?.equipment?.cesta?36:24);}
-const STREET_MERCHANT_TYPES=new Set(['market','greengrocer','bakery','restaurant','cycle_shop','clothing_store','sports_shop','thrift_store','pharmacy','artisan','publisher']);
+const STREET_MERCHANT_TYPES=new Set(['market','greengrocer','bakery','restaurant','cycle_shop','clothing_store','sports_shop','thrift_store','pharmacy','artisan','publisher','farm','furniture','tailor','pottery','soapworks','toolmaker']);
 const live=c=>!!c?.entity&&!c.entity.destroyed;
-function hasStreetProducts(b){return STREET_MERCHANT_TYPES.has(b.type)||INDUSTRIES[b.type]?.category==='services';}
+function hasStreetProducts(b){return STREET_MERCHANT_TYPES.has(b.type)||['services','food'].includes(INDUSTRIES[b.type]?.category);}
 function nearRoad(city,x,y){return [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>isRoadAt(city.world,x+dx,y+dy));}
 function stallFootprintClear(city,site,position){
  const dx=site.x-position.x,dy=site.y-position.y,angle=Math.hypot(dx,dy)>.1?Math.atan2(dx,dy):0,cx=position.x+Math.sin(angle)*.1,cy=position.y+Math.cos(angle)*.1;
@@ -17,6 +17,7 @@ function fairStock(economy,business){
  const stock={},available=Object.keys(business.inventory||{}).filter(good=>(business.inventory[good]||0)>0);
  let offered=available;
  if(['market','greengrocer'].includes(business.type))offered=economy.retailAssortment(business).filter(good=>available.includes(good));
+ else if(business.type==='farm'&&business.crop)offered=available.filter(good=>good===business.crop);
  else if(business.type==='bakery')offered=available.filter(good=>good==='pao');
  else if(business.type==='restaurant'){
   const meal=economy.mealOffer(business);offered=meal?Object.keys(meal.inputs).filter(good=>available.includes(good)):[];
