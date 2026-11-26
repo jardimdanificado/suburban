@@ -15,7 +15,7 @@ import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
 import { SimulationTime, FF_SPEED, FF_LOD_SPEED, FF2_SPEED } from "./js/simulation_time.js?v=ff3-ff4-steps-1";
 import { OptionsPanel } from "./js/options.js?v=music-1";
 import { MusicPlayer } from "./js/music.js";
-import { SpatialAudio } from "./js/spatial_audio.js?v=audio-1";
+import { SpatialAudio, musicSkyGain } from "./js/spatial_audio.js?v=audio-1";
 import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
 import { WorldNetClient, WorldNetCoordinator } from './js/world_net.js?v=world-net-1';
 import { StartupLoading } from './js/startup_loading.js';
@@ -78,7 +78,7 @@ worldNetCoordinator.client = worldNet;
 renderer3D.worldCoordinator = worldNetCoordinator;
 let optionStorage = null;
 try { optionStorage = window.localStorage; } catch {}
-const music = new MusicPlayer();
+const music = new MusicPlayer({ skyOnly: true });
 export const options = new OptionsPanel({ renderer: renderer3D, time, step: stepSimulation, storage: optionStorage, music });
 music.start();
 for (const type of ["pointerdown", "keydown"]) {
@@ -837,6 +837,7 @@ export const gameAudio = new SpatialAudio({
   getSpeed: () => time.speed,
   groundYAt: (x, z) => Number(renderer3D.getSurfaceElevation(world.map, x, z)) || 0,
   onPauseChange: paused => { if (paused) music.pause(); else music.resume(); },
+  onAltitudeChange: altitude => music.setSkyFactor(musicSkyGain(altitude)),
 });
 options.audio = gameAudio;
 gameAudio.setMuted(options.values.sfxMuted === true);

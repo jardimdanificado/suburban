@@ -4076,12 +4076,36 @@ export class RCT3DRenderer {
       return material;
     };
 
+    const addStoneTriplanarShader = (material) => {
+      const prevCompile = material.onBeforeCompile;
+      const prevKey = material.customProgramCacheKey;
+      material.onBeforeCompile = (shader, renderer) => {
+        if (prevCompile) prevCompile.call(material, shader, renderer);
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', '#include <common>\nvarying vec3 vStoneWorldPos;\nvarying vec3 vStoneWorldNormal;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\nvStoneWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvStoneWorldNormal = normalize(mat3(modelMatrix) * objectNormal);');
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', '#include <common>\nvarying vec3 vStoneWorldPos;\nvarying vec3 vStoneWorldNormal;')
+          .replace('#include <map_fragment>', `#ifdef USE_MAP
+  vec3 stoneW = pow(abs(vStoneWorldNormal), vec3(4.0));
+  stoneW /= max(stoneW.x + stoneW.y + stoneW.z, 1e-4);
+  vec4 sampledXZ = texture2D( map, vStoneWorldPos.xz * 0.5 );
+  vec4 sampledXY = texture2D( map, vStoneWorldPos.xy * 0.5 );
+  vec4 sampledZY = texture2D( map, vStoneWorldPos.zy * 0.5 );
+  diffuseColor *= sampledXZ * stoneW.y + sampledXY * stoneW.z + sampledZY * stoneW.x;
+#endif`);
+      };
+      material.customProgramCacheKey = () => `${prevKey ? prevKey.call(material) + ':' : ''}stone-triplanar-1`;
+      return material;
+    };
+
     const terrainSurfaceMaterials = (normalMapsEnabled, category, style, normalMap, normalScale, roughness, metalness) => Object.fromEntries(
       Array.from({length:4},(_,variant)=>{
         const street=style==='pavedRoad'||style.startsWith('sidewalk');
         const stone=['rock','mountain','peak'].includes(style);
         const surface=street?streetSurfaceTextures(THREE,style,variant):stone?rockSurfaceTextures(style,variant):{map:createTerrainSurfaceTexture(style,variant),normalMap};
-        return [`terrain${category}${variant}`,makeMat(normalMapsEnabled,{map:surface.map,color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},surface.normalMap,stone?.65:normalScale,roughness,metalness)];
+        const mat=makeMat(normalMapsEnabled,{map:surface.map,color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},surface.normalMap,stone?.65:normalScale,roughness,metalness);
+        return [`terrain${category}${variant}`,stone?addStoneTriplanarShader(mat):mat];
       })
     );
 
@@ -7359,7 +7383,7 @@ export class RCT3DRenderer {
             const lowB=otherStone?.[otherIndexB]||[edge.b[0]+offsetB.x,otherSurface?otherSurface[otherIndexB]:terrainCornerHeight(world,...edge.b),edge.b[1]+offsetB.z];
             const highA=edge.pointA,highB=edge.pointB,diffA=highA[1]-lowA[1],diffB=highB[1]-lowB[1];
             const cuts=diffA*diffB<0?[0,diffA/(diffA-diffB),1]:[0,1];
-            const wall=tileMeshBuckets[`terrainRock${terrainTextureHash(tx,ty,TILE_STONE+edge.side)&3}`];
+            const wall=tileMeshBuckets[`terrainRock${terrainTextureHash(tx,ty,TILE_STONE)&3}`];
             const along=point=>edge.side===0||edge.side===2?point[0]:point[2];
             const cornerMid=(lower,upper,gridPt)=>{
               const gx=gridPt[0],gz=gridPt[1];
@@ -7398,10 +7422,10 @@ export class RCT3DRenderer {
                 const g1=to===1?edge.b:[Math.round(upper1[0]),Math.round(upper1[2])];
                 const mid0=from===0?cornerMid(lower0,upper0,g0):lerpPoint(lower0,upper0,.5);
                 const mid1=to===1?cornerMid(lower1,upper1,g1):lerpPoint(lower1,upper1,.5);
-                pushCliffQuad(lower0,mid0,mid1,lower1,zoneMult*.76,zoneMult*.86);
-                pushCliffQuad(mid0,upper0,upper1,mid1,zoneMult*.86,zoneMult*.96);
+                pushCliffQuad(lower0,mid0,mid1,lower1,zoneMult*.86,zoneMult*.94);
+                pushCliffQuad(mid0,upper0,upper1,mid1,zoneMult*.94,zoneMult);
               }else{
-                pushCliffQuad(lower0,upper0,upper1,lower1,zoneMult*.80,zoneMult*.94);
+                pushCliffQuad(lower0,upper0,upper1,lower1,zoneMult*.88,zoneMult);
               }
             }
           }
@@ -8304,7 +8328,7 @@ export class RCT3DRenderer {
           }
         }else surfaceH = this.getSurfaceElevation(map, isPlantOrItem ? e.x + 0.5 : e.x, isPlantOrItem ? e.y + 0.5 : e.y);
       }
-      const renderSurfaceH=surfaceH+((renderAtInterior||renderElevated)?(interiorPosition?.z??cityCitizen?.skybridgeZ??0):0);
+      const renderSurfaceH=surfaceH+((renderAtInterior||renderElevated)?(interiorPosition?.z??cityCitizen?.skybridgeZ??0):0)+(cityCitizen?.climbing?.z||0);
       const profileAfterSurface = profileCitizenStart ? performance.now() : 0;
       if(cityCitizen&&e.id!==this.selectedEntityId&&!this.citizenVisibleInView(renderX,renderY,renderSurfaceH+(cityCitizen.bodyHeightCm||170)/200))continue;
 
@@ -8887,7 +8911,8 @@ export class RCT3DRenderer {
         const inDeepWater=citizenOnWater&&waterGroundH<WATER_LEVEL-0.04;
         const waterTime=this.materials?.[TILE_WATER]?.userData?.caribbeanWaterTime?.value??0;
         const waveY=inDeepWater?waterWaveHeight(sampleX,sampleY,waterTime):0;
-        const citizenSurfaceH=citizenOnWater?(inDeepWater?WATER_LEVEL+waveY-0.32:waterGroundH):renderSurfaceH;
+        const citizenSkyZ=(cityCitizen&&!cityCitizen.indoorLocation&&(cityCitizen.skybridgeZ>0)?cityCitizen.skybridgeZ:0)+(cityCitizen?.climbing?.z||0);
+        const citizenSurfaceH=citizenOnWater?(inDeepWater?WATER_LEVEL+waveY-0.32:waterGroundH):surfaceH+citizenSkyZ;
         citizenModelOptions.hidden=isPossessed;citizenModelOptions.dimmed=!inCurZone;citizenModelOptions.vehicleAngle=vehicleAngle;citizenModelOptions.visualOffset=renderOffset;citizenModelOptions.inWater=inDeepWater;citizenModelOptions.waterSurfaceY=inDeepWater?WATER_LEVEL+waveY:null;
         citizenModelOptions.indoorBounds=interiorBuilding&&interiorBuilding.constructionKind!=='open-air'?{minX:interiorBuilding.entity.x,maxX:interiorBuilding.entity.x+interiorBuilding.width,minY:interiorBuilding.entity.y,maxY:interiorBuilding.entity.y+interiorBuilding.depth}:null;
         const animal=e.properties?.cityAnimal;

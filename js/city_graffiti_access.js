@@ -23,10 +23,11 @@ export function* upperGraffitiSurfaceCandidates(city,c,radius=4){
    for(let side=0;side<4;side++){
     if(!sides[side])continue;
     const dx=[0,1,0,-1][side],dy=[-1,0,1,0][side],x=b.entity.x+unit.x+.5,y=b.entity.y+unit.y+.5;
-    const position={x:x+dx*.525,y:y+dy*.525,z:0},accessPoint={x:x+dx*.3,y:y+dy*.3,z:unit.z*CITY_FLOOR_HEIGHT};
+    const position={x:x+dx*.525,y:y+dy*.525,z:0},wallBase={x:x+dx*.78,y:y+dy*.78},accessPoint={x:x+dx*.3,y:y+dy*.3,z:unit.z*CITY_FLOOR_HEIGHT};
     const key=`wall:${b.id}:${side}:${side%2?unit.y+.5:unit.x+.5}:${unit.z}`;
     if(city.justice.art.some(p=>!p.entity.destroyed&&p.support?.key===key)||city.citizens.some(p=>p.graffitiMission?.surface?.key===key))continue;
-    const support={kind:'street-graffiti',surface:'wall',key,buildingId:b.id,unitId:unit.id,floor:unit.z,side,position,accessPoint,approach:{...b.door},rotation:[Math.PI,Math.PI/2,0,-Math.PI/2][side],width:GRAFFITI_TILE_WIDTH,height:1.64,tileWidth:1,tileHeight:1};
+    if(!city.walkable(Math.floor(wallBase.x),Math.floor(wallBase.y)))continue;
+    const support={kind:'street-graffiti',surface:'wall',key,buildingId:b.id,unitId:unit.id,floor:unit.z,side,position,accessPoint,approach:wallBase,rotation:[Math.PI,Math.PI/2,0,-Math.PI/2][side],width:GRAFFITI_TILE_WIDTH,height:1.64,tileWidth:1,tileHeight:1};
     if(graffitiWallHasWindow(b,support)||graffitiWallHasBalcony(b,support))continue;
     fitGraffitiToWall(city,support);
     records.push({support,unit,side,floor:unit.z,offset:side%2?unit.y+.5:unit.x+.5});
@@ -93,27 +94,30 @@ export function climbingFallDamage(height,floor){
 }
 export function reachUpperGraffiti(city,c,mission){
  const support=mission.surface,dx=[0,1,0,-1][support.side]||0,dy=[-1,0,1,0][support.side]||0;
- const wallBase={x:support.position.x+dx*.24,y:support.position.y+dy*.24};
- const approach=city.walkable(Math.floor(wallBase.x),Math.floor(wallBase.y))?wallBase:support.approach;
+ const wallBase=support.approach||{x:support.position.x+dx*.25,y:support.position.y+dy*.25};
  if(!c.climbing){
   if(c.path.length)return false;
-  if(Math.hypot(c.entity.x-approach.x,c.entity.y-approach.y)>.22){
-   const path=city.findPath(c.entity,approach);
+  if(Math.hypot(c.entity.x-wallBase.x,c.entity.y-wallBase.y)>.28){
+   const path=city.findPath(c.entity,wallBase);
    if(path===null){mission.accessFailed=true;return false;}
-   c.path=path.length?path:[approach];return false;
+   c.path=path.length?path:[wallBase];return false;
   }
   const floor=Math.max(1,support.floor||1);
-  c.entity.x=wallBase.x;c.entity.y=wallBase.y;
-  c.climbing={phase:'up',targetZ:floor*CITY_FLOOR_HEIGHT,floor,z:0,facingX:support.position.x,facingY:support.position.y};
-  c.skybridgeZ=0;c.facingTarget={x:support.position.x,y:support.position.y};
+  const targetZ=Math.max(.5,floor*CITY_FLOOR_HEIGHT-.55);
+  c.climbing={phase:'up',targetZ,floor,z:0,x:wallBase.x,y:wallBase.y,facingX:support.position.x,facingY:support.position.y,lastMinute:city.minute,dtMoved:false};
+  c.path=[];c.facingTarget={x:support.position.x,y:support.position.y};
   mission.status='climbing';c.action='Escalando a parede para pichar';return false;
  }
- c.entity.x=wallBase.x;c.entity.y=wallBase.y;
+ c.path=[];
+ c.entity.x=c.climbing.x;c.entity.y=c.climbing.y;
  c.facingTarget={x:c.climbing.facingX,y:c.climbing.facingY};
- if(c.climbing.phase==='painting'){c.skybridgeZ=c.climbing.z;return true;}
- const step=c.climbing.phase==='down'?-.65:.55;
- c.climbing.z=Math.max(0,Math.min(c.climbing.targetZ,c.climbing.z+step));
- c.skybridgeZ=c.climbing.z;
+ if(c.climbing.phase==='painting')return true;
+ if(!c.climbing.dtMoved&&city.minute>c.climbing.lastMinute){
+  const mins=Math.max(1,city.minute-c.climbing.lastMinute);
+  const step=(c.climbing.phase==='down'?-2.2:1.85)*mins;
+  c.climbing.z=Math.max(0,Math.min(c.climbing.targetZ,c.climbing.z+step));
+ }
+ c.climbing.lastMinute=city.minute;c.climbing.dtMoved=false;
  const currentFloor=Math.max(1,Math.ceil(c.climbing.z/CITY_FLOOR_HEIGHT));
  if(c.climbing.z>0&&city.random()<climbingFallChance(currentFloor)){
   const fallHeight=c.climbing.z,damage=climbingFallDamage(fallHeight,currentFloor);

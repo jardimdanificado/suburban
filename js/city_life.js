@@ -59,7 +59,7 @@ export class CityLife {
   }
   recoverBlockedPosition(c,worldRevision=this.city.world.revision||0,obstacleRevision=this.city.obstacleRevision||0,occupiedCount=this.city.occupied.size) {
     const city=this.city;
-    if(c.entity.destroyed||c.indoorLocation||c.mobilityTrip||c.localBoatTrip||c.sharedBoatRide||c.fishingJob?.boatId&&c.fishingJob.stage!=='tow'||c.ridingVehicleId||c.skybridgeTransit||c.skybridgeZ)return false;
+    if(c.entity.destroyed||c.indoorLocation||c.mobilityTrip||c.localBoatTrip||c.sharedBoatRide||c.fishingJob?.boatId&&c.fishingJob.stage!=='tow'||c.ridingVehicleId||c.skybridgeTransit||c.skybridgeZ||c.climbing)return false;
     const checked=c._posCheck;
     if(c.path?.length&&checked?.w===worldRevision&&checked.o===obstacleRevision)return false;
     const x=Math.floor(c.entity.x),y=Math.floor(c.entity.y);

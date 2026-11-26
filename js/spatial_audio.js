@@ -8,12 +8,17 @@ import { ANIMAL_SPECIES } from './animal_catalog.js';
 export const DEFAULT_MANIFEST_URL = 'data/audio/manifest.json';
 export const MAX_AUDIBLE_SPEED = 16;
 const WATER_TILE = 2;
-const MARKET_TYPES = new Set(['market', 'greengrocer', 'restaurant', 'bakery']);
-const MAX_BUFFER_BYTES = 24 * 1024 * 1024;
+const SAND_TILE = 3;
+const VOID_TILE = 5;
+const GRASS_TILES = new Set([0, 9]);
+const SWIM_TASKS = new Set(['swim-leisure', 'swim-hygiene', 'swim-exit']);
+const TALK_TASKS = new Set(['social', 'visit', 'interview', 'campaign']);
+const FORAGE_TASKS = new Set(['forage', 'informal-gardening']);
+const MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 const FAUNA_VOICE_LIMIT = 3;
-const CITIZEN_VOICE_LIMIT = 3;
-// The crowd chatter reuses the crowded-market recording: real voices, CC0.
-const CHANNEL_FILES = { crowd: 'market' };
+const FAUNA_CALL_MAX_DURATION = 5.5;
+const MAX_PERSON_VOICES = 20;
+const CHANNEL_FILES = {};
 // Event kind to positional one-shot. `duration` trims long recordings such as
 // the 27 s door latch down to one open.
 const EVENT_SOUNDS = {
@@ -53,6 +58,12 @@ export function isometricAltitude(zoom) {
 export function windGain(altitude) {
   if (!Number.isFinite(altitude)) return 0;
   return Math.max(0, Math.min(1, (altitude - 6) / 34)) * 0.7;
+}
+
+// Music plays only high above the city (sky view); street level stays silent.
+export function musicSkyGain(altitude) {
+  if (!Number.isFinite(altitude)) return 0;
+  return Math.max(0, Math.min(1, (altitude - 14) / 22));
 }
 
 // Listener pose in world units. Isometric views listen from the camera focus
@@ -132,26 +143,21 @@ export function ambiencePlan({ listener, features = {}, night = false } = {}) {
     const gain = volume * distanceAttenuation(distance, { refDistance: 6, maxDistance: radius, rolloffFactor: 0.8 });
     if (gain >= 0.03) zones.push({ key, x: feature.x, z: feature.z, distance, gain });
   };
-  add(night ? 'frogs' : 'river', features.water, 0.55, 26);
-  add(night ? 'night_insects' : 'forest_birds', features.plants, 0.5, 24);
-  add('market', features.market, 0.55, 22);
-  add('construction', features.construction, 0.5, 24);
-  add('city_street', features.buildings, night ? 0.22 : 0.32, 26);
-  if (features.crowd) {
-    const crowd = features.crowd;
-    const boost = Math.min(1, (crowd.count || 0) / 14);
-    const gain = (0.28 + 0.32 * boost) * (night ? 0.6 : 1);
-    add('crowd', crowd, gain, 24);
-  }
+  add(night ? 'frogs' : 'river', features.water, 0.45, 26);
+  add('beach', features.beach, night ? 0.38 : 0.48, 28);
+  add(night ? 'night_insects' : 'forest_birds', features.plants, 0.36, 24);
+  add('construction', features.construction, 0.35, 24);
+  add('city_street', features.buildings, night ? 0.08 : 0.12, 26);
   zones.sort((a, b) => b.gain - a.gain);
   return zones.slice(0, 3);
 }
 
-// Dirt and stone roads take the dry footstep loop; everything else takes the
-// grass loop. Water tiles get no footsteps at all.
+// Dirt and stone roads take dirt footsteps, sand takes sand footsteps, and
+// grass/earth takes grass footsteps. Water and void get no footsteps.
 const DIRT_TILES = new Set([6, 7, 8, 11, 12, 13]);
 export function footstepSurface(tile) {
-  if (!Number.isFinite(tile) || tile === WATER_TILE) return null;
+  if (!Number.isFinite(tile) || tile === WATER_TILE || tile === VOID_TILE) return null;
+  if (tile === SAND_TILE) return 'footsteps_sand';
   return DIRT_TILES.has(tile) ? 'footsteps_dirt' : 'footsteps_grass';
 }
 
@@ -168,16 +174,19 @@ export function crowdCluster(citizens, listener, { radius = 20, cell = 4, limit 
     const distance = sourceDistance(listener, entity.x, entity.y);
     if (distance > radius) continue;
     const key = `${Math.floor(entity.x / cell)},${Math.floor(entity.y / cell)}`;
+    const talking = !!(citizen.conversation || TALK_TASKS.has(citizen.task)) ? 1 : 0;
     const bucket = buckets.get(key);
-    if (bucket) { bucket.count++; bucket.sx += entity.x; bucket.sz += entity.y; }
-    else buckets.set(key, { count: 1, sx: entity.x, sz: entity.y });
+    if (bucket) { bucket.count++; bucket.talkCount += talking; bucket.sx += entity.x; bucket.sz += entity.y; }
+    else buckets.set(key, { count: 1, talkCount: talking, sx: entity.x, sz: entity.y });
   }
   let best = null;
   for (const bucket of buckets.values()) {
-    if (!best || bucket.count > best.count) best = bucket;
+    const score = bucket.count + bucket.talkCount * 2;
+    const bestScore = best ? best.count + best.talkCount * 2 : -1;
+    if (score > bestScore) best = bucket;
   }
   if (!best) return null;
-  return { x: best.sx / best.count, z: best.sz / best.count, count: best.count };
+  return { x: best.sx / best.count, z: best.sz / best.count, count: best.count, talkCount: best.talkCount };
 }
 
 function defaultContextFactory() {
@@ -193,11 +202,18 @@ function defaultMediaFactory(url) {
   return element;
 }
 
-function setNodePosition(node, x, y, z) {
+function setNodePosition(node, x, y, z, smooth = 0) {
   if (node.positionX) {
-    node.positionX.setValueAtTime(x, node.context.currentTime);
-    node.positionY.setValueAtTime(y, node.context.currentTime);
-    node.positionZ.setValueAtTime(z, node.context.currentTime);
+    const now = node.context.currentTime;
+    if (smooth > 0) {
+      node.positionX.setTargetAtTime(x, now, smooth);
+      node.positionY.setTargetAtTime(y, now, smooth);
+      node.positionZ.setTargetAtTime(z, now, smooth);
+    } else {
+      node.positionX.setValueAtTime(x, now);
+      node.positionY.setValueAtTime(y, now);
+      node.positionZ.setValueAtTime(z, now);
+    }
   } else {
     node.setPosition(x, y, z);
   }
@@ -211,6 +227,7 @@ export class SpatialAudio {
     getSpeed = () => 1,
     groundYAt = () => 1,
     onPauseChange = () => {},
+    onAltitudeChange = () => {},
     manifestUrl = DEFAULT_MANIFEST_URL,
     contextFactory = defaultContextFactory,
     mediaFactory = defaultMediaFactory,
@@ -226,6 +243,7 @@ export class SpatialAudio {
     this.getSpeed = getSpeed;
     this.groundYAt = groundYAt;
     this.onPauseChange = onPauseChange;
+    this.onAltitudeChange = onAltitudeChange;
     this.manifestUrl = manifestUrl;
     this.contextFactory = contextFactory;
     this.mediaFactory = mediaFactory;
@@ -250,6 +268,10 @@ export class SpatialAudio {
     this.voices = new Map();
     this.wind = null;
     this.citizenPositions = new Map();
+    this.citizenCooldowns = new Map();
+    this.animalCooldowns = new Map();
+    this.activeWalkers = new Map();
+    this.activePersonVoices = 0;
     this.indoorTrack = new Map();
     this.lastCallAt = new Map();
     this.activeFauna = 0;
@@ -257,6 +279,7 @@ export class SpatialAudio {
     this.ambienceTimer = 0;
     this.voiceTimer = 0;
     this.doorTimer = 0;
+    this.lastAltitude = 0;
     this.lastEventId = null;
   }
 
@@ -325,8 +348,26 @@ export class SpatialAudio {
     if (paused === this.paused) return false;
     this.paused = paused;
     if (paused) this.silenceSources();
+    else this.resumeLoops();
     this.onPauseChange(paused);
     return true;
+  }
+
+  // Pause resumed: loops restart on the same frame, and a suspended audio
+  // context gets one more chance to run.
+  resumeLoops() {
+    if (!this.ctx) return;
+    if (this.ctx.state === 'suspended') this.ctx.resume?.().catch?.(() => {});
+    for (const channel of this.channels.values()) {
+      if (channel.element.paused) channel.element.play().catch(() => {});
+    }
+    for (const voice of this.voices.values()) {
+      if (voice.element.paused) voice.element.play().catch(() => {});
+    }
+    const wind = this.wind;
+    if (wind && wind.element.paused && windGain(this.lastAltitude || 0) > 0.02) {
+      wind.element.play().catch(() => {});
+    }
   }
 
   // Hard stop: every buffer source is stopped on the spot and every loop is
@@ -338,6 +379,7 @@ export class SpatialAudio {
     }
     this.playing.clear();
     this.activeFauna = 0;
+    this.activePersonVoices = 0;
     const now = this.ctx?.currentTime ?? 0;
     for (const channel of this.channels.values()) {
       try {
@@ -345,7 +387,6 @@ export class SpatialAudio {
         channel.gain.gain.setValueAtTime(0, now);
       } catch {}
       try { channel.element.pause(); } catch {}
-      channel.stopAt = Infinity;
     }
     for (const voice of this.voices.values()) {
       try {
@@ -372,12 +413,14 @@ export class SpatialAudio {
     this.setPaused(this.getPaused());
     if (this.paused) return;
     const context = this.ensureContext();
-    if (!context) return;
+    if (!context || context.state === 'suspended') return;
     if ((this.getSpeed() || 1) > MAX_AUDIBLE_SPEED) { this.silenceSources(); return; }
     const renderer = this.renderer;
     const ground = this.groundYAt(Number(renderer?.camX) || 0, Number(renderer?.camY) || 0) + 1.2;
     const pose = listenerPose(renderer, ground);
     if (!pose) return;
+    this.lastAltitude = pose.altitude;
+    this.onAltitudeChange(pose.altitude);
     this.updateListener(pose);
     this.updateWind(pose);
     this.updateAmbience(dt, pose);
@@ -440,7 +483,7 @@ export class SpatialAudio {
   updateFauna(dt, pose) {
     this.faunaTimer -= dt;
     if (this.faunaTimer > 0) return;
-    this.faunaTimer = 1.1 + this.random() * 1.9;
+    this.faunaTimer = 1.8 + this.random() * 2.4;
     if (this.activeFauna >= FAUNA_VOICE_LIMIT) return;
     const animals = this.getCity()?.fauna?.animals;
     if (!animals?.size) return;
@@ -452,7 +495,7 @@ export class SpatialAudio {
       now: this.ctx.currentTime,
       lastCallAt: this.lastCallAt,
       radius: 22,
-      cooldown: 6,
+      cooldown: 8,
       night,
     });
     if (!call) return;
@@ -470,90 +513,157 @@ export class SpatialAudio {
     const spec = ANIMAL_SPECIES[call.species];
     const gain = (spec?.category === 'livestock' ? 0.45 : 0.55) * (call.animal?.state === 'flee' ? 1.2 : 1);
     const y = this.groundYAt(call.x, call.z) + (call.y || 0) + 0.45;
-    this.playBuffer(buffer, { x: call.x, y, z: call.z, gain, kind: 'fauna' });
+    const bufferDuration = Number(buffer?.duration) || 0;
+    const offset = bufferDuration > FAUNA_CALL_MAX_DURATION + 1
+      ? this.random() * Math.min(bufferDuration - FAUNA_CALL_MAX_DURATION, bufferDuration * 0.7)
+      : 0;
+    this.playBuffer(buffer, { x: call.x, y, z: call.z, gain, kind: 'fauna', duration: FAUNA_CALL_MAX_DURATION, offset });
   }
 
-  // Citizens wear the street: up to three footsteps loops follow the nearest
-  // walkers, and a door opens when someone steps into a building.
+  // Each person and animal emits individual positional sounds (footsteps per
+  // surface, swimming splashes, individual voices, foraging/grazing) at their
+  // own world coordinates rather than sharing one muddied crowd loop.
   updateCitizenVoices(dt, pose) {
-    const now = this.ctx.currentTime;
     this.doorTimer = Math.max(0, this.doorTimer - dt);
     this.voiceTimer -= dt;
     if (this.voiceTimer > 0) return;
-    this.voiceTimer = 0.35;
+    const stepDt = 0.25;
+    this.voiceTimer = stepDt;
     const city = this.getCity();
     const citizens = city?.citizens;
-    if (!Array.isArray(citizens) || !citizens.length) return;
-    const world = city.world;
-    const limit = 1200;
-    const walkers = [];
-    let scanned = 0;
-    for (const citizen of citizens) {
-      if (++scanned > limit) break;
-      const entity = citizen?.entity;
-      if (!entity || entity.destroyed) continue;
-      const id = citizen.id ?? entity.id;
-      const previous = this.citizenPositions.get(id);
-      const indoor = citizen.indoorLocation?.buildingId ?? citizen.indoorLocation?.id ?? null;
-      this.citizenPositions.set(id, { x: entity.x, y: entity.y, indoor });
-      if (!previous) continue;
-      if (indoor !== previous.indoor && indoor != null && previous.indoor == null && this.doorTimer <= 0) {
-        const distance = Math.hypot(entity.x - pose.x, entity.y - pose.z);
-        if (distance <= 20) {
-          this.doorTimer = 0.9;
-          this.playWorldOneShot('door', entity.x, entity.y, 0.3, 1.8);
+    const world = city?.world;
+    const candidates = [];
+    if (Array.isArray(citizens) && citizens.length) {
+      let scanned = 0;
+      for (const citizen of citizens) {
+        if (++scanned > 1200) break;
+        const entity = citizen?.entity;
+        if (!entity || entity.destroyed) continue;
+        const id = citizen.id ?? entity.id;
+        const previous = this.citizenPositions.get(id);
+        const indoor = citizen.indoorLocation?.buildingId ?? citizen.indoorLocation?.id ?? null;
+        this.citizenPositions.set(id, { x: entity.x, y: entity.y, indoor });
+        if (!previous) continue;
+        if (indoor !== previous.indoor && indoor != null && previous.indoor == null && this.doorTimer <= 0) {
+          const distance = Math.hypot(entity.x - pose.x, entity.y - pose.z);
+          if (distance <= 20) {
+            this.doorTimer = 0.9;
+            this.playWorldOneShot('door', entity.x, entity.y, 0.3, 1.8);
+          }
+        }
+        if (indoor != null || citizen.dead || citizen.custody || citizen.ridingVehicleId || citizen.climbing) continue;
+        const y = this.groundYAt(entity.x, entity.y) + 0.12;
+        const distance = sourceDistance(pose, entity.x, entity.y, y);
+        if (distance > 18) continue;
+
+        let cooldowns = this.citizenCooldowns.get(id);
+        if (!cooldowns) {
+          cooldowns = { step: this.random() * 0.3, swim: this.random() * 0.6, talk: this.random() * 1.5, forage: this.random() * 1.0 };
+          this.citizenCooldowns.set(id, cooldowns);
+        }
+        cooldowns.step = Math.max(0, cooldowns.step - stepDt);
+        cooldowns.swim = Math.max(0, cooldowns.swim - stepDt);
+        cooldowns.talk = Math.max(0, cooldowns.talk - stepDt);
+        cooldowns.forage = Math.max(0, cooldowns.forage - stepDt);
+
+        if (citizen.swimming || SWIM_TASKS.has(citizen.task)) {
+          if (cooldowns.swim <= 0) {
+            cooldowns.swim = 0.85 + this.random() * 0.9;
+            candidates.push({ distance, key: 'water_splash', x: entity.x, y, z: entity.y, gain: 0.35, duration: 0.65, rate: 0.9 + this.random() * 0.2 });
+          }
+          continue;
+        }
+        if (citizen.conversation || TALK_TASKS.has(citizen.task)) {
+          if (cooldowns.talk <= 0) {
+            cooldowns.talk = 2.0 + this.random() * 2.4;
+            const female = citizen.sex === 'F' || citizen.gender === 'female' || (typeof id === 'number' && id % 2 === 0);
+            const voiceKey = female && this.worldFiles.voice_female ? 'voice_female' : (this.worldFiles.voice_male ? 'voice_male' : 'voice_female');
+            candidates.push({ distance, key: voiceKey, x: entity.x, y: y + 1.2, z: entity.y, gain: 0.4, duration: 1.1 + this.random() * 0.9, rate: 0.92 + this.random() * 0.16 });
+          }
+        }
+        if (FORAGE_TASKS.has(citizen.task) && cooldowns.forage <= 0) {
+          cooldowns.forage = 1.4 + this.random() * 1.6;
+          candidates.push({ distance, key: 'grazing', x: entity.x, y, z: entity.y, gain: 0.3, duration: 0.85, rate: 0.95 + this.random() * 0.1 });
+        }
+        const moved = Math.hypot(entity.x - previous.x, entity.y - previous.y);
+        if (moved >= 0.04 && cooldowns.step <= 0) {
+          let tile = null;
+          if (world?.map && Number.isFinite(world.width)) {
+            tile = world.map[Math.floor(entity.y) * world.width + Math.floor(entity.x)];
+          }
+          const surface = footstepSurface(tile);
+          if (surface) {
+            cooldowns.step = 0.36 + this.random() * 0.16;
+            candidates.push({ distance, key: surface, x: entity.x, y, z: entity.y, gain: 0.44, duration: 0.34, rate: 0.92 + this.random() * 0.16 });
+            if (GRASS_TILES.has(tile) && this.worldFiles.grass_rustle && this.random() < 0.45) {
+              candidates.push({ distance, key: 'grass_rustle', x: entity.x, y, z: entity.y, gain: 0.22, duration: 0.45, rate: 0.95 + this.random() * 0.15 });
+            }
+          }
         }
       }
-      if (indoor != null) continue;
-      if (!previous || Math.hypot(entity.x - previous.x, entity.y - previous.y) < 0.05) continue;
-      const distance = Math.hypot(entity.x - pose.x, entity.y - pose.z);
-      if (distance > 16) continue;
-      let tile = null;
-      if (world?.map && Number.isFinite(world.width)) {
-        tile = world.map[Math.floor(entity.y) * world.width + Math.floor(entity.x)];
-      }
-      const file = footstepSurface(tile);
-      if (!file) continue;
-      walkers.push({ id, x: entity.x, z: entity.y, distance, file });
     }
-    walkers.sort((a, b) => a.distance - b.distance);
-    const active = walkers.slice(0, CITIZEN_VOICE_LIMIT);
-    const wanted = new Set(active.map(walker => walker.id));
-    for (const walker of active) {
-      const voice = this.ensureVoice(walker.id, walker.file);
-      if (!voice) continue;
-      const y = this.groundYAt(walker.x, walker.z) + 0.12;
-      setNodePosition(voice.panner, walker.x, y, walker.z);
-      const gain = 0.34 * distanceAttenuation(walker.distance, { refDistance: 3, maxDistance: 16, rolloffFactor: 1.4 });
-      voice.gain.gain.setTargetAtTime(gain, now, 0.15);
-      if (voice.pausedAt) { voice.pausedAt = 0; }
-      if (voice.element.paused) voice.element.play().catch(() => {});
-    }
-    for (const [id, voice] of this.voices) {
-      if (wanted.has(id)) continue;
-      voice.gain.gain.setTargetAtTime(0, now, 0.12);
-      if (!voice.pausedAt) voice.pausedAt = now + 0.5;
-      if (voice.pausedAt <= now) {
-        try { voice.element.pause(); } catch {}
-        voice.pausedAt = 0;
+
+    const animals = city?.fauna?.animals;
+    if (animals?.size) {
+      for (const [aid, animal] of animals.entries()) {
+        if (!animal || animal.dead || animal.entity?.destroyed) continue;
+        const y = this.groundYAt(animal.x, animal.y) + 0.15;
+        const distance = sourceDistance(pose, animal.x, animal.y, y);
+        if (distance > 18) continue;
+        let cd = this.animalCooldowns.get(aid);
+        if (!cd) {
+          cd = { graze: this.random() * 1.5, rustle: this.random() * 1.0 };
+          this.animalCooldowns.set(aid, cd);
+        }
+        cd.graze = Math.max(0, cd.graze - stepDt);
+        cd.rustle = Math.max(0, cd.rustle - stepDt);
+        if ((animal.state === 'graze' || animal.state === 'forage' || animal.state === 'eat') && cd.graze <= 0) {
+          cd.graze = 1.6 + this.random() * 1.8;
+          candidates.push({ distance, key: 'grazing', x: animal.x, y, z: animal.y, gain: 0.32, duration: 0.9, rate: 0.9 + this.random() * 0.2 });
+        } else if ((animal.state === 'walk' || animal.state === 'flee') && cd.rustle <= 0 && world?.map && Number.isFinite(world.width)) {
+          const tile = world.map[Math.floor(animal.y) * world.width + Math.floor(animal.x)];
+          if (GRASS_TILES.has(tile)) {
+            cd.rustle = 0.7 + this.random() * 0.8;
+            candidates.push({ distance, key: 'grass_rustle', x: animal.x, y, z: animal.y, gain: 0.24, duration: 0.5, rate: 0.95 + this.random() * 0.15 });
+          }
+        }
       }
     }
-    if (this.citizenPositions.size > 4096) {
+
+    candidates.sort((a, b) => a.distance - b.distance);
+    for (const item of candidates) {
+      if (this.activePersonVoices >= MAX_PERSON_VOICES) break;
+      this.playWorldGrain(item.key, item.x, item.y, item.z, item);
+    }
+
+    if (this.citizenPositions.size > 4096 && Array.isArray(citizens)) {
       for (const id of this.citizenPositions.keys()) {
-        if (!citizens.some(citizen => (citizen.id ?? citizen.entity?.id) === id)) this.citizenPositions.delete(id);
+        if (!citizens.some(citizen => (citizen.id ?? citizen.entity?.id) === id)) {
+          this.citizenPositions.delete(id);
+          this.citizenCooldowns.delete(id);
+        }
       }
     }
   }
 
-  ensureVoice(id, file) {
-    const key = `${id}:${file}`;
-    const existing = this.voices.get(id);
-    if (existing?.key === key) return existing;
-    if (existing) {
-      try { existing.element.pause(); } catch {}
-      try { existing.source.disconnect(); existing.panner.disconnect(); existing.gain.disconnect(); } catch {}
-      this.voices.delete(id);
-    }
+  playWorldGrain(key, x, y, z, { gain = 0.4, duration = 0.4, rate = 1 } = {}) {
+    const file = this.worldFiles[key];
+    if (!file || this.paused || this.activePersonVoices >= MAX_PERSON_VOICES) return;
+    this.activePersonVoices++;
+    this.loadBuffer(file)
+      .then(buffer => {
+        if (this.paused || this.disposed) { this.activePersonVoices = Math.max(0, this.activePersonVoices - 1); return; }
+        const bufferDuration = Number(buffer?.duration) || 0;
+        const offset = bufferDuration > duration + 0.5 ? this.random() * Math.max(0, bufferDuration - duration) : 0;
+        const handle = this.playBuffer(buffer, { x, y, z, gain, kind: 'person', duration, offset, playbackRate: rate });
+        if (!handle) this.activePersonVoices = Math.max(0, this.activePersonVoices - 1);
+      })
+      .catch(() => { this.activePersonVoices = Math.max(0, this.activePersonVoices - 1); });
+  }
+
+  ensureVoice(file) {
+    const existing = this.voices.get(file);
+    if (existing) return existing;
     const url = this.worldFiles[file];
     if (!url || !this.ctx) return null;
     let element;
@@ -565,28 +675,24 @@ export class SpatialAudio {
     panner.distanceModel = 'inverse';
     panner.refDistance = 3;
     panner.maxDistance = 16;
-    panner.rolloffFactor = 1.4;
+    // Distance attenuation is already applied to voice.gain; keep the panner
+    // for 3D stereo panning only so zoomed views do not double-attenuate.
+    panner.rolloffFactor = 0;
     const gain = this.ctx.createGain();
     gain.gain.value = 0;
     source.connect(panner);
     panner.connect(gain);
     gain.connect(this.master);
-    const voice = { id, key, file, element, source, panner, gain, pausedAt: 0 };
-    this.voices.set(id, voice);
+    const voice = { file, element, source, panner, gain };
+    this.voices.set(file, voice);
     return voice;
   }
 
   updateAmbience(dt, pose) {
     const now = this.ctx.currentTime;
-    for (const channel of this.channels.values()) {
-      if (channel.stopAt <= now) {
-        try { channel.element.pause(); } catch {}
-        channel.stopAt = Infinity;
-      }
-    }
     this.ambienceTimer -= dt;
     if (this.ambienceTimer > 0 || !this.ready) return;
-    this.ambienceTimer = 1.8;
+    this.ambienceTimer = 0.8;
     const city = this.getCity();
     const plan = ambiencePlan({
       listener: pose,
@@ -598,15 +704,16 @@ export class SpatialAudio {
       const channel = this.ensureChannel(zone.key);
       if (!channel) continue;
       const y = this.groundYAt(zone.x, zone.z) + 0.8;
-      setNodePosition(channel.panner, zone.x, y, zone.z);
+      setNodePosition(channel.panner, zone.x, y, zone.z, 0.25);
       channel.gain.gain.setTargetAtTime(zone.gain, now, 0.4);
-      channel.stopAt = Infinity;
       if (channel.element.paused) channel.element.play().catch(() => {});
     }
+    // Silence only: the element keeps running muted. Pausing it would need a
+    // fresh play() when the camera returns, and a rejected play would leave
+    // the loop dead for good.
     for (const [key, channel] of this.channels) {
       if (wanted.has(key)) continue;
       channel.gain.gain.setTargetAtTime(0, now, 0.25);
-      if (!Number.isFinite(channel.stopAt)) channel.stopAt = now + 0.9;
     }
   }
 
@@ -624,13 +731,14 @@ export class SpatialAudio {
     panner.distanceModel = 'inverse';
     panner.refDistance = 6;
     panner.maxDistance = 40;
-    panner.rolloffFactor = 1;
+    // ambiencePlan already computes 3D distance attenuation on channel.gain.
+    panner.rolloffFactor = 0;
     const gain = this.ctx.createGain();
     gain.gain.value = 0;
     source.connect(panner);
     panner.connect(gain);
     gain.connect(this.master);
-    const channel = { key, element, source, panner, gain, stopAt: Infinity };
+    const channel = { key, element, source, panner, gain };
     this.channels.set(key, channel);
     return channel;
   }
@@ -640,19 +748,36 @@ export class SpatialAudio {
     const world = city?.world;
     if (world?.map && Number.isFinite(world.width) && Number.isFinite(world.height)) {
       const radius = 26;
-      let best = null, bestDistance = Infinity;
+      let bestWater = null, bestWaterDist = Infinity;
+      let bestBeach = null, bestBeachDist = Infinity;
       const x0 = Math.max(0, Math.floor(pose.x - radius));
       const x1 = Math.min(world.width - 1, Math.ceil(pose.x + radius));
       const z0 = Math.max(0, Math.floor(pose.z - radius));
       const z1 = Math.min(world.height - 1, Math.ceil(pose.z + radius));
+      const touchesSand = (tx, tz) => {
+        for (let dz = -2; dz <= 2; dz += 2) {
+          const nz = tz + dz;
+          if (nz < 0 || nz >= world.height) continue;
+          for (let dx = -2; dx <= 2; dx += 2) {
+            const nx = tx + dx;
+            if (nx >= 0 && nx < world.width && world.map[nz * world.width + nx] === SAND_TILE) return true;
+          }
+        }
+        return false;
+      };
       for (let z = z0; z <= z1; z += 2) {
         for (let x = x0; x <= x1; x += 2) {
           if (world.map[z * world.width + x] !== WATER_TILE) continue;
           const distance = Math.hypot(x + 0.5 - pose.x, z + 0.5 - pose.z);
-          if (distance < bestDistance) { bestDistance = distance; best = { x: x + 0.5, z: z + 0.5 }; }
+          if (touchesSand(x, z)) {
+            if (distance < bestBeachDist) { bestBeachDist = distance; bestBeach = { x: x + 0.5, z: z + 0.5 }; }
+          } else if (distance < bestWaterDist) {
+            bestWaterDist = distance; bestWater = { x: x + 0.5, z: z + 0.5 };
+          }
         }
       }
-      if (best) features.water = best;
+      if (bestWater) features.water = bestWater;
+      if (bestBeach) features.beach = bestBeach;
     }
 
     const plants = city?.nature?.plants;
@@ -670,22 +795,56 @@ export class SpatialAudio {
     const buildings = city?.buildings;
     if (Array.isArray(buildings)) {
       let nearest = null, nearestDistance = Infinity;
-      let market = null, marketDistance = Infinity;
       for (const building of buildings) {
         const entity = building?.entity;
         if (!entity || entity.destroyed) continue;
         const distance = Math.hypot(entity.x - pose.x, entity.y - pose.z);
         if (distance < nearestDistance) { nearestDistance = distance; nearest = { x: entity.x, z: entity.y }; }
-        if (MARKET_TYPES.has(building.type) && distance < marketDistance) {
-          marketDistance = distance; market = { x: entity.x, z: entity.y };
-        }
       }
       if (nearest) features.buildings = nearest;
-      if (market) features.market = market;
     }
 
     const crowd = crowdCluster(city?.citizens, pose);
     if (crowd) features.crowd = crowd;
+
+    const grassRustle = { count: 0, sx: 0, sz: 0 };
+    const grazing = { count: 0, sx: 0, sz: 0 };
+    if (Array.isArray(city?.citizens)) {
+      let cCount = 0;
+      for (const citizen of city.citizens) {
+        if (++cCount > 900) break;
+        const entity = citizen?.entity;
+        if (!entity || entity.destroyed || citizen.indoorLocation || citizen.dead || citizen.ridingVehicleId) continue;
+        if (sourceDistance(pose, entity.x, entity.y) > 20) continue;
+        if (FORAGE_TASKS.has(citizen.task)) {
+          grazing.count++; grazing.sx += entity.x; grazing.sz += entity.y;
+        }
+        if (world?.map && Number.isFinite(world.width)) {
+          const tile = world.map[Math.floor(entity.y) * world.width + Math.floor(entity.x)];
+          if (GRASS_TILES.has(tile) && (citizen.path?.length || FORAGE_TASKS.has(citizen.task))) {
+            grassRustle.count++; grassRustle.sx += entity.x; grassRustle.sz += entity.y;
+          }
+        }
+      }
+    }
+    const animals = city?.fauna?.animals;
+    if (animals?.size) {
+      for (const animal of animals.values()) {
+        if (!animal || animal.dead || animal.entity?.destroyed) continue;
+        if (sourceDistance(pose, animal.x, animal.y) > 20) continue;
+        if (animal.state === 'graze' || animal.state === 'forage' || animal.state === 'eat') {
+          grazing.count++; grazing.sx += animal.x; grazing.sz += animal.y;
+        }
+        if (world?.map && Number.isFinite(world.width)) {
+          const tile = world.map[Math.floor(animal.y) * world.width + Math.floor(animal.x)];
+          if (GRASS_TILES.has(tile) && (animal.state === 'walk' || animal.state === 'flee' || animal.state === 'graze')) {
+            grassRustle.count++; grassRustle.sx += animal.x; grassRustle.sz += animal.y;
+          }
+        }
+      }
+    }
+    if (grazing.count > 0) features.grazing = { x: grazing.sx / grazing.count, z: grazing.sz / grazing.count, count: grazing.count };
+    if (grassRustle.count > 0) features.grassRustle = { x: grassRustle.sx / grassRustle.count, z: grassRustle.sz / grassRustle.count, count: grassRustle.count };
 
     const projects = city?.development?.projects;
     if (Array.isArray(projects)) {
@@ -736,7 +895,7 @@ export class SpatialAudio {
       if (id <= this.lastEventId) break;
       const kind = event.kind || event.data?.kind;
       if (!EVENT_SOUNDS[kind]) continue;
-      const position = this.eventPosition(event);
+      const position = this.eventPosition(event, pose);
       if (!position) continue;
       if (Math.hypot(position.x - pose.x, position.z - pose.z) > 30) continue;
       played.push({ kind, position });
@@ -748,7 +907,7 @@ export class SpatialAudio {
     }
   }
 
-  eventPosition(event) {
+  eventPosition(event, pose = null) {
     const data = event.data || event;
     const city = this.getCity();
     if (data.projectId != null) {
@@ -770,6 +929,12 @@ export class SpatialAudio {
           return { x: building.entity.x, z: building.entity.y };
         }
       }
+    }
+    const kind = event.kind || data.kind;
+    if (kind === 'bill-voted' || kind === 'council-elected') {
+      const hall = city?.buildings?.find(b => b?.entity && !b.entity.destroyed && (b.type === 'city_hall' || b.type === 'council' || b.municipal));
+      if (hall) return { x: hall.entity.x, z: hall.entity.y };
+      if (pose) return { x: pose.x, z: pose.z };
     }
     return null;
   }
@@ -809,11 +974,14 @@ export class SpatialAudio {
     return buffer;
   }
 
-  playBuffer(buffer, { x, y, z, gain = 1, kind = 'world', duration = 0 } = {}) {
+  playBuffer(buffer, { x, y, z, gain = 1, kind = 'world', duration = 0, offset = 0, playbackRate = 1 } = {}) {
     const context = this.ctx;
     if (!context || this.paused) return null;
     const source = context.createBufferSource();
     source.buffer = buffer;
+    if (source.playbackRate && Number.isFinite(playbackRate) && playbackRate > 0) {
+      source.playbackRate.value = playbackRate;
+    }
     const level = context.createGain();
     level.gain.value = Math.max(0, Math.min(1, gain));
     let tail = level;
@@ -822,9 +990,9 @@ export class SpatialAudio {
       panner = context.createPanner();
       panner.panningModel = 'equalpower';
       panner.distanceModel = 'inverse';
-      panner.refDistance = 4;
+      panner.refDistance = 6;
       panner.maxDistance = 40;
-      panner.rolloffFactor = 1.2;
+      panner.rolloffFactor = 1.0;
       setNodePosition(panner, x, Number.isFinite(y) ? y : 1, z);
       source.connect(panner);
       panner.connect(level);
@@ -837,9 +1005,18 @@ export class SpatialAudio {
     source.onended = () => {
       this.playing.delete(handle);
       if (kind === 'fauna' && !handle.silenced) this.activeFauna = Math.max(0, this.activeFauna - 1);
+      if (kind === 'person' && !handle.silenced) this.activePersonVoices = Math.max(0, this.activePersonVoices - 1);
       try { level.disconnect(); panner?.disconnect(); } catch {}
     };
-    source.start(0, 0, duration > 0 ? Math.min(duration, buffer?.duration || duration) : undefined);
+    const bufferDuration = Number(buffer?.duration) || 0;
+    const startOffset = bufferDuration > 0 && offset > 0 ? Math.min(offset, Math.max(0, bufferDuration - 0.1)) : 0;
+    const maxAvailable = bufferDuration > 0 ? Math.max(0.05, bufferDuration - startOffset) : duration;
+    const playDuration = duration > 0 ? Math.min(duration, maxAvailable || duration) : 0;
+    if (playDuration > 0 && playDuration < (bufferDuration || Infinity)) {
+      const fadeOutAt = context.currentTime + Math.max(0.05, playDuration - Math.min(0.25, playDuration * 0.35));
+      level.gain.setTargetAtTime(0, fadeOutAt, 0.06);
+    }
+    source.start(0, startOffset, playDuration > 0 ? playDuration : undefined);
     return handle;
   }
 
@@ -867,6 +1044,9 @@ export class SpatialAudio {
       this.wind = null;
     }
     this.citizenPositions.clear();
+    this.citizenCooldowns.clear();
+    this.animalCooldowns.clear();
+    this.activeWalkers.clear();
     this.indoorTrack.clear();
     this.ctx?.close?.();
     this.ctx = null;

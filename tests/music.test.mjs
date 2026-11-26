@@ -77,3 +77,28 @@ test('default timer uses the global receiver required by browser timers', () => 
     globalThis.setTimeout = original;
   }
 });
+
+test('skyOnly music stays silent at ground level and plays only when entering the sky', async () => {
+  const audio = audioStub();
+  audio.paused = true;
+  audio.pause = () => { audio.paused = true; };
+  audio.play = async () => { audio.paused = false; audio.calls++; };
+  const music = new MusicPlayer({ audio, tracks: ['sky.mp3'], skyOnly: true });
+  music.setVolume(0.5);
+  await music.start();
+  assert.equal(audio.calls, 0, 'does not start on the ground');
+  assert.equal(audio.volume, 0);
+
+  music.setSkyFactor(0.5);
+  await Promise.resolve();
+  assert.equal(audio.calls, 1, 'starts when entering the sky');
+  assert.equal(audio.volume, 0.25);
+
+  music.setSkyFactor(0);
+  assert.equal(audio.paused, true, 'pauses when returning to street level');
+  assert.equal(audio.volume, 0);
+
+  music.setSkyFactor(1);
+  assert.equal(audio.calls, 2, 'resumes when returning to the sky');
+  assert.equal(audio.volume, 0.5);
+});

@@ -10,6 +10,7 @@ import {
   isNightHour,
   isometricAltitude,
   listenerPose,
+  musicSkyGain,
   windGain,
 } from '../js/spatial_audio.js';
 import { MusicPlayer } from '../js/music.js';
@@ -48,8 +49,9 @@ function fakeContext() {
     createBufferSource() {
       const source = {
         context, buffer: null, started: false, stopped: false, onended: null,
+        startArgs: null,
         connect() { return this; }, disconnect() {},
-        start() { this.started = true; },
+        start(...args) { this.started = true; this.startArgs = args; },
         stop() { this.stopped = true; },
       };
       context.sources.push(source);
@@ -148,13 +150,13 @@ test('fauna calls respect radius, sleep, cooldown and night weighting', () => {
 test('ambience plan prefers the nearest features and swaps nature at night', () => {
   const listener = { x: 0, y: 2, z: 0 };
   const features = {
-    water: { x: 3, z: 0 }, plants: { x: 2, z: 0 }, market: { x: 5, z: 0 },
+    water: { x: 3, z: 0 }, plants: { x: 2, z: 0 }, crowd: { x: 4, z: 0, count: 14 },
     construction: { x: 30, z: 0 }, buildings: { x: 4, z: 0 },
   };
   const day = ambiencePlan({ listener, features, night: false });
-  assert.deepEqual(day.map(zone => zone.key), ['river', 'market', 'forest_birds']);
+  assert.deepEqual(day.map(zone => zone.key), ['river', 'forest_birds', 'city_street']);
   const night = ambiencePlan({ listener, features, night: true });
-  assert.deepEqual(night.map(zone => zone.key), ['frogs', 'market', 'night_insects']);
+  assert.deepEqual(night.map(zone => zone.key), ['frogs', 'night_insects', 'city_street']);
   assert.equal(isNightHour(22), true);
   assert.equal(isNightHour(12), false);
 });
@@ -175,56 +177,54 @@ test('crowd cluster follows the densest group of citizens and ignores the rest',
   assert.equal(crowdCluster([], { x: 0, z: 0 }), null);
 });
 
-test('footsteps pick dirt on roads, grass elsewhere and silence on water', () => {
+test('footsteps pick dirt on roads, sand on beaches, grass elsewhere and silence on water', () => {
   assert.equal(footstepSurface(0), 'footsteps_grass');
+  assert.equal(footstepSurface(3), 'footsteps_sand');
   assert.equal(footstepSurface(6), 'footsteps_dirt');
   assert.equal(footstepSurface(13), 'footsteps_dirt');
   assert.equal(footstepSurface(2), null);
+  assert.equal(footstepSurface(5), null);
   assert.equal(footstepSurface(undefined), null);
 });
 
-test('citizen walkers get positional footstep loops that pause stops', async () => {
+test('citizen walkers get individual positional footstep one-shots that pause stops', async () => {
   const context = fakeContext();
-  const elements = [];
-  const citizens = Array.from({ length: 5 }, (_, index) => ({
+  const citizens = Array.from({ length: 3 }, (_, index) => ({
     id: index + 1,
     entity: { x: index, y: 0, destroyed: false },
     indoorLocation: null,
   }));
   const audio = new SpatialAudio({
     contextFactory: () => context,
+    random: () => 0,
     getCity: () => ({ citizens, world: { map: new Uint8Array(32 * 32), width: 32, height: 32 } }),
-    renderer: { camX: 0, camY: 0, isPerspectiveActive: () => false, camera: { position: { x: 10, y: 10, z: 10 } } },
+    renderer: { camX: 0, camY: 0, zoom: 4, isPerspectiveActive: () => false, camera: { position: { x: 10, y: 10, z: 10 } } },
     groundYAt: () => 0,
-    mediaFactory: url => {
-      const element = fakeAudio();
-      element.src = url;
-      elements.push(element);
-      return element;
-    },
-    fetchImpl: async () => ({
-      ok: true,
-      async json() {
-        return {
-          animals: {},
-          world: {
-            footsteps_grass: { local_file: 'data/audio/world/footsteps_grass.ogg' },
-            footsteps_dirt: { local_file: 'data/audio/world/footsteps_dirt.ogg' },
+    fetchImpl: async url => url.endsWith('.json')
+      ? {
+          ok: true,
+          async json() {
+            return {
+              animals: {},
+              world: {
+                footsteps_grass: { local_file: 'data/audio/world/footsteps_grass.ogg' },
+                footsteps_dirt: { local_file: 'data/audio/world/footsteps_dirt.ogg' },
+              },
+            };
           },
-        };
-      },
-    }),
+        }
+      : { ok: true, async arrayBuffer() { return new ArrayBuffer(8); } },
   });
   await audio.load();
-  audio.update(0.4);
-  assert.equal(audio.voices.size, 0, 'the first sample only records positions');
+  audio.update(0.3);
+  assert.equal(audio.playing.size, 0, 'the first sample only records positions');
   for (const citizen of citizens) citizen.entity.x += 0.4;
-  audio.update(0.4);
-  assert.equal(audio.voices.size, 3, 'only the nearest walkers keep a loop');
-  assert.ok([...audio.voices.values()].every(voice => voice.element.paused === false));
+  audio.update(0.3);
+  for (let i = 0; i < 6; i++) await Promise.resolve();
+  assert.equal(audio.playing.size, 3, 'each walking citizen emits an individual footstep');
   audio.setPaused(true);
-  assert.ok([...audio.voices.values()].every(voice => voice.element.paused === true));
-  assert.equal(elements.length > 0, true);
+  assert.equal(audio.playing.size, 0);
+  assert.ok(context.sources.every(s => s.stopped === true));
 });
 
 test('a citizen entering a building plays the door one-shot', async () => {
@@ -245,6 +245,55 @@ test('a citizen entering a building plays the door one-shot', async () => {
   assert.equal(fetches, 2, 'manifest plus one door download');
   for (let index = 0; index < 5; index++) await Promise.resolve();
   assert.equal(audio.playing.size, 1);
+});
+
+test('zooming back in restores loops that were only muted, never paused', async () => {
+  const context = fakeContext();
+  const elements = [];
+  const renderer = {
+    camX: 0, camY: 0, zoom: 3,
+    isPerspectiveActive: () => false,
+    camera: { position: { x: 10, y: 10, z: 10 } },
+  };
+  const map = new Uint8Array(64 * 64);
+  map[0] = 2;
+  const audio = new SpatialAudio({
+    contextFactory: () => context,
+    renderer,
+    getCity: () => ({ world: { map, width: 64, height: 64 }, nature: { plants: new Map() }, buildings: [], citizens: [], hour: 12 }),
+    groundYAt: () => 0,
+    mediaFactory: url => {
+      const element = fakeAudio();
+      element.src = url;
+      element.pauses = 0;
+      element.pause = function () { this.pauses++; this.paused = true; };
+      elements.push(element);
+      return element;
+    },
+    fetchImpl: async () => ({
+      ok: true,
+      async json() { return { animals: {}, world: { river: { local_file: 'data/audio/world/river.ogg' } } }; },
+    }),
+  });
+  await audio.load();
+  audio.update(0.4);
+  const river = audio.channels.get('river');
+  assert.ok(river);
+  assert.equal(river.element.paused, false);
+  assert.ok(river.gain.gain.value > 0.3);
+
+  renderer.zoom = 0.3;
+  audio.update(2);
+  assert.equal(river.element.paused, false, 'muted, not paused');
+  assert.equal(river.gain.gain.value, 0);
+
+  renderer.zoom = 3;
+  audio.update(2);
+  assert.equal(river.element.paused, false);
+  assert.ok(river.gain.gain.value > 0.3, 'gain returns without a new play');
+
+  audio.setPaused(true);
+  assert.equal(river.element.paused, true, 'explicit pause still stops the loop');
 });
 
 test('zoomed out raises the wind layer and zooming in fades it to silence', async () => {
@@ -384,4 +433,136 @@ test('options apply and persist sound-effect mute and volume', () => {
   panel.apply('sfxVolume', 1);
   assert.deepEqual(applied.slice(-2), [['muted', false], ['volume', 1]]);
   assert.equal(JSON.parse(saved).sfxVolume, 1);
+});
+
+test('ambience plan selects beach near sandy shores without crowd loop', () => {
+  const listener = { x: 0, y: 2, z: 0 };
+  const plan = ambiencePlan({
+    listener,
+    features: { beach: { x: 2, z: 0 }, water: { x: 8, z: 0 } },
+    night: false,
+  });
+  assert.deepEqual(plan.map(zone => zone.key), ['beach', 'river']);
+});
+
+test('ambience panner does not double-attenuate and high zoom silences individual footsteps', async () => {
+  const context = fakeContext();
+  const citizens = [{ id: 1, entity: { x: 1, y: 0, destroyed: false }, indoorLocation: null }];
+  const renderer = { camX: 0, camY: 0, zoom: 3, isPerspectiveActive: () => false, camera: { position: { x: 10, y: 10, z: 10 } } };
+  const audio = new SpatialAudio({
+    contextFactory: () => context,
+    random: () => 0,
+    renderer,
+    getCity: () => ({ citizens, world: { map: new Uint8Array(32 * 32), width: 32, height: 32 }, buildings: [{ entity: { x: 1, y: 0 } }] }),
+    groundYAt: () => 0,
+    mediaFactory: url => { const el = fakeAudio(); el.src = url; return el; },
+    fetchImpl: async url => url.endsWith('.json')
+      ? {
+          ok: true,
+          async json() {
+            return {
+              animals: {},
+              world: {
+                footsteps_grass: { local_file: 'data/audio/world/footsteps_grass.ogg' },
+                city_street: { local_file: 'data/audio/world/city_street.ogg' },
+              },
+            };
+          },
+        }
+      : { ok: true, async arrayBuffer() { return new ArrayBuffer(8); } },
+  });
+  await audio.load();
+  audio.update(0.3);
+  citizens[0].entity.x += 0.4;
+  audio.update(0.3);
+  for (let i = 0; i < 6; i++) await Promise.resolve();
+  const channel = audio.channels.get('city_street');
+  assert.equal(channel.panner.rolloffFactor, 0);
+  assert.equal(audio.playing.size, 1);
+
+  audio.setPaused(true);
+  audio.setPaused(false);
+  renderer.zoom = 0.3;
+  citizens[0].entity.x += 0.4;
+  audio.update(0.5);
+  for (let i = 0; i < 6; i++) await Promise.resolve();
+  assert.equal(audio.playing.size, 0, 'zoomed out high silences ground footsteps');
+});
+
+test('long fauna recordings are capped in duration and suspended context skips updates', async () => {
+  const context = fakeContext();
+  context.decodeAudioData = async () => ({ duration: 180, length: 4800 * 180, numberOfChannels: 1 });
+  const audio = new SpatialAudio({
+    contextFactory: () => context,
+    renderer: { camX: 0, camY: 0, zoom: 4, isPerspectiveActive: () => false, camera: { position: { x: 5, y: 5, z: 5 } } },
+    getCity: () => ({ fauna: { animals: new Map([[1, { species: 'andorinha', x: 1, y: 0, entity: {}, state: 'idle' }]]) } }),
+    groundYAt: () => 0,
+    fetchImpl: async url => url.endsWith('.json')
+      ? { ok: true, async json() { return { animals: { andorinha: { local_file: 'data/audio/animals/andorinha.ogg' } }, world: {} }; } }
+      : { ok: true, async arrayBuffer() { return new ArrayBuffer(8); } },
+  });
+  await audio.load();
+  context.state = 'suspended';
+  audio.update(2);
+  assert.equal(context.sources.length, 0, 'suspended context does not schedule sources');
+
+  context.state = 'running';
+  audio.update(2);
+  for (let i = 0; i < 6; i++) await Promise.resolve();
+  assert.equal(context.sources.length, 1);
+  assert.ok(context.sources[0].startArgs[2] <= 5.5, 'long animal recording is capped');
+});
+
+test('musicSkyGain is zero at street/default zoom and rises to 1 in the sky', () => {
+  assert.equal(musicSkyGain(isometricAltitude(12)), 0);
+  assert.equal(musicSkyGain(isometricAltitude(1.2)), 0);
+  assert.ok(musicSkyGain(isometricAltitude(0.5)) > 0.5);
+  assert.equal(musicSkyGain(isometricAltitude(0.3)), 1);
+});
+
+test('swimming, talking, grazing and grass rustling emit individual positional sounds', async () => {
+  const context = fakeContext();
+  const citizens = [
+    { id: 1, entity: { x: 1, y: 0, destroyed: false }, swimming: true, indoorLocation: null },
+    { id: 2, entity: { x: 2, y: 0, destroyed: false }, swimming: true, indoorLocation: null },
+    { id: 3, entity: { x: 1, y: 1, destroyed: false }, conversation: { id: 9 }, task: 'social', indoorLocation: null },
+    { id: 4, entity: { x: 1.5, y: 1, destroyed: false }, conversation: { id: 9 }, task: 'social', indoorLocation: null },
+  ];
+  const animals = new Map([
+    [1, { species: 'vaca', x: 1, y: 0, state: 'graze', entity: {} }],
+    [2, { species: 'cabra', x: 2, y: 0, state: 'graze', entity: {} }],
+  ]);
+  const audio = new SpatialAudio({
+    contextFactory: () => context,
+    random: () => 0,
+    renderer: { camX: 1, camY: 0, zoom: 4, isPerspectiveActive: () => false, camera: { position: { x: 5, y: 5, z: 5 } } },
+    getCity: () => ({
+      citizens,
+      fauna: { animals },
+      world: { map: new Uint8Array(32 * 32), width: 32, height: 32 },
+      buildings: [],
+    }),
+    groundYAt: () => 0,
+    fetchImpl: async url => url.endsWith('.json')
+      ? {
+          ok: true,
+          async json() {
+            return {
+              animals: {},
+              world: {
+                water_splash: { local_file: 'data/audio/world/water_splash.ogg' },
+                voice_female: { local_file: 'data/audio/world/voice_female.ogg' },
+                voice_male: { local_file: 'data/audio/world/voice_male.ogg' },
+                grazing: { local_file: 'data/audio/world/grazing.ogg' },
+              },
+            };
+          },
+        }
+      : { ok: true, async arrayBuffer() { return new ArrayBuffer(8); } },
+  });
+  await audio.load();
+  audio.update(0.3);
+  audio.update(0.3);
+  for (let i = 0; i < 6; i++) await Promise.resolve();
+  assert.equal(audio.playing.size, 6, '2 swimmers + 2 talkers + 2 grazing animals each emit their own positional sound');
 });
