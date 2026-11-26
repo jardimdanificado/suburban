@@ -17,6 +17,8 @@ const GRAPHICS = [
 const AUDIO = [
   { key: "musicMuted", label: "MUTE", values: BOOL, default: false },
   { key: "musicVolume", label: "VOLUME DA MUSICA", values: [0, 0.1, 0.25, 0.5, 0.75, 1].map(v => [v, `${v * 100}%`]), default: 0.25 },
+  { key: "sfxMuted", label: "MUTE EFEITOS", values: BOOL, default: false },
+  { key: "sfxVolume", label: "VOLUME DOS EFEITOS", values: [0, 0.1, 0.25, 0.5, 0.75, 1].map(v => [v, `${v * 100}%`]), default: 0.8 },
 ];
 const TIME = [{key:"fastForwardEnabled",label:"MODOS FF",values:BOOL,default:false}];
 const INTERFACE = [{key:'pauseForCouncilBills',label:'PAUSAR EM PROJETOS DA CÂMARA',values:BOOL,default:false},{key:'showInterventions',label:'CONTROLES DE INTERVENÇÃO',values:BOOL,default:true}];
@@ -33,9 +35,10 @@ const EFFECTS = [
   effect("contrast", "CONTRASTE", [0.5, 0.75, 1, 1.25, 1.5].map(v => [v, `${v}`]), 1),
 ];
 export class OptionsPanel {
-  constructor({ renderer, time, step, storage = null, music = null, onTimeChange = () => {} }) {
+  constructor({ renderer, time, step, storage = null, music = null, audio = null, onTimeChange = () => {} }) {
     this.renderer = renderer;
     this.music = music;
+    this.audio = audio;
     this.time = time;
     this.onTimeChange = onTimeChange;
     this.step = step;
@@ -67,6 +70,8 @@ export class OptionsPanel {
     const r = this.renderer;
     if (key === "musicMuted") this.music?.setMuted(value);
     else if (key === "musicVolume") this.music?.setVolume(value);
+    else if (key === "sfxMuted") this.audio?.setMuted(value);
+    else if (key === "sfxVolume") this.audio?.setVolume(value);
     else if (key === "fastForwardEnabled") { this.time.setFastForwardEnabled(value); this.onTimeChange(this.time); }
     else if (item.graphic) r.setGraphicOptions({ [key]: value });
     else if (key === "terrainOptimizations") r.setTerrainOptimizations(value);

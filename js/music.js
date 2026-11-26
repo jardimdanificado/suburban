@@ -14,6 +14,9 @@ export class MusicPlayer {
     this.waiting = false;
     this.playing = false;
     this.pending = false;
+    this.suspended = false;
+    this.resumePlayback = false;
+    this.needsStart = false;
     audio.preload = "auto";
     audio.addEventListener("ended", () => {
       this.playing = false;
@@ -22,6 +25,7 @@ export class MusicPlayer {
       const minutes = 7 + Math.floor(this.random() * 8);
       this.schedule(() => {
         this.waiting = false;
+        if (this.suspended) { this.needsStart = true; return; }
         this.start();
       }, minutes * 60_000);
     });
@@ -30,8 +34,32 @@ export class MusicPlayer {
   setMuted(value) { this.audio.muted = value; }
   setVolume(value) { this.audio.volume = value; }
 
+  // Pause must silence music on the same frame as the simulation pause.
+  pause() {
+    if (this.suspended) return;
+    this.suspended = true;
+    if (this.audio.paused !== true) {
+      this.resumePlayback = true;
+      this.audio.pause?.();
+    }
+  }
+
+  resume() {
+    if (!this.suspended) return;
+    this.suspended = false;
+    if (this.needsStart) {
+      this.needsStart = false;
+      this.start();
+      return;
+    }
+    if (this.resumePlayback) {
+      this.resumePlayback = false;
+      if (this.playing) this.audio.play().catch(() => {});
+    }
+  }
+
   async start() {
-    if (this.waiting || this.playing || this.pending || !this.tracks.length) return;
+    if (this.suspended || this.waiting || this.playing || this.pending || !this.tracks.length) return;
     this.pending = true;
     if (!this.audio.getAttribute("src")) {
       this.audio.src = this.tracks[Math.floor(this.random() * this.tracks.length)];

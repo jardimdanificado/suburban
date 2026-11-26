@@ -15,6 +15,7 @@ import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
 import { SimulationTime, FF_SPEED, FF_LOD_SPEED, FF2_SPEED } from "./js/simulation_time.js?v=ff3-ff4-steps-1";
 import { OptionsPanel } from "./js/options.js?v=music-1";
 import { MusicPlayer } from "./js/music.js";
+import { SpatialAudio } from "./js/spatial_audio.js?v=audio-1";
 import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
 import { WorldNetClient, WorldNetCoordinator } from './js/world_net.js?v=world-net-1';
 import { StartupLoading } from './js/startup_loading.js';
@@ -726,6 +727,7 @@ function frame(now) {
     const renderDt = Math.min((now - lastRenderedAt) / 1000, 0.25);
     lastRenderedAt = now;
     renderer3D.render(world, entities, time.elapsed, renderDt, paused ? 0 : time.speed);
+    gameAudio.update(dt);
 
     const pointerX = mousePosition.x;
     const pointerY = mousePosition.y;
@@ -756,6 +758,7 @@ function frame(now) {
   renderer3D.cityDevelopment=city.development;
   renderer3D.cityLogistics=city.logistics;
   renderer3D.profileFrame=profiling;renderer3D.render(world, entities, time.elapsed, renderDt, paused ? 0 : time.speed);
+  gameAudio.update(dt);
   const sceneEnded = profiling ? performance.now() : 0;
   const pointerX = mousePosition.x;
   const pointerY = mousePosition.y;
@@ -824,6 +827,23 @@ try { city.initialize(); } catch (error) {
   cityGenerationError = error.message;
   city.log(error.message, 'city', [], { kind: 'generation-failed' });
   city.syncClock();
+}
+// Posicional: o listener segue a câmera ativa e cada emissor fica na posição
+// do animal, da obra ou do ambiente mais próximo. Pausar silencia tudo.
+export const gameAudio = new SpatialAudio({
+  renderer: renderer3D,
+  getCity: () => city,
+  getPaused: () => time.paused,
+  getSpeed: () => time.speed,
+  groundYAt: (x, z) => Number(renderer3D.getSurfaceElevation(world.map, x, z)) || 0,
+  onPauseChange: paused => { if (paused) music.pause(); else music.resume(); },
+});
+options.audio = gameAudio;
+gameAudio.setMuted(options.values.sfxMuted === true);
+gameAudio.setVolume(options.values.sfxVolume ?? 0.8);
+gameAudio.load().catch(() => {});
+for (const type of ["pointerdown", "keydown"]) {
+  window.addEventListener(type, () => gameAudio.unlock(), { capture: true });
 }
 startupLoading.stage('Carregando sistemas…', 0.8);
 await startupLoading.paint();
