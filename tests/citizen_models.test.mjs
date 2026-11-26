@@ -291,3 +291,20 @@ test('carrying citizens hold an instanced box anchored between their hands',asyn
  model.begin(.05,1);e.properties.citizen.deliveryId=null;e.properties.citizen.path=[];model.add(e,0);model.end();
  assert.equal(boxBatch.count,0,'non-carrying citizen should not render a box');
 });
+test('tool-using animations render the matching instanced prop in hand',async()=>{
+ const {model}=await models();
+ const cases=[
+  [{task:'construction',workProjectId:1},'tool:shovel'],
+  [{task:'informal-gardening',workCell:{x:1,y:1}},'tool:scythe'],
+  [{task:'fishing',workCell:{x:1,y:1}},'tool:rod'],
+  [{playingGuitar:true},'tool:guitar'],
+  [{task:'water',workCell:{x:1,y:1}},'tool:mug'],
+ ];
+ for(let i=0;i<cases.length;i++){
+  const [patch,batchKey]=cases[i],e=person(96+i);
+  Object.assign(e.properties.citizen,patch);
+  model.begin(.05,1);model.add(e,0);model.end();
+  const batch=model.headwearBatches.get(batchKey);
+  assert(batch&&batch.count===1,`${batchKey} should render in hand`);
+ }
+});
