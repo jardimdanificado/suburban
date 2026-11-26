@@ -10,7 +10,7 @@ import {CITIZEN_BODY_FACE_COUNT,CITIZEN_GARMENT_FACES} from './city_garment_face
 import {fittedSkirtSurface} from './city_citizen_skirts.js?v=anatomical-dress-skirt-1';
 import {createPoseWeightMorph,computeWeightMorphAttributes} from './city_citizen_weight_morph.js?v=anatomical-3d-morph-1';
 /** OBJ snapshots share one geometry per frame and one instanced draw per visible frame. */
-export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],caminhar:[0,1,2,3,4,5],andar_lento:[0,1,2,3,4,5],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0],acenar:[0,1,2,3,4,5],comemorar:[0,1,2,3],conversar:[0,1,2,3],cavar:[0,1,2,3],colher:[0,1,2,3],aplaudir:[0,1,2,3,4,5],beber:[0,1,2,3],pescar:[0],chorar:[0,1,2,3],tocar_violao:[0,1,2,3],escalar:[0,1,2,3,4,5],dancar_samba:[0,1,2,3,4,5,6,7,8,9],dancar_salsa:[0,1,2,3,4,5,6,7,8,9],dancar_rumba:[0,1,2,3,4,5,6,7,8,9],dancar_hiphop:[0,1,2,3,4,5,6,7,8,9],dancar_boba:[0,1,2,3,4,5,6,7,8,9],dancar_breakdance:[0,1,2,3,4,5,6,7,8,9],dancar_macarena:[0,1,2,3,4,5,6,7,8,9],nadar:[0,1,2,3,4,5],boiar:[0,1,2,3],carregar:[0,1,2,3,4]});
+export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],caminhar:[0,1,2,3,4,5],andar_lento:[0,1,2,3,4,5],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0],acenar:[0,1,2,3,4,5],comemorar:[0,1,2,3],conversar:[0,1,2,3],cavar:[0,1,2,3],colher:[0,1,2,3],aplaudir:[0,1,2,3,4,5],beber:[0,1,2,3],pescar:[0],chorar:[0,1,2,3],tocar_violao:[0,1,2,3],escalar:[0,1,2,3,4,5],dancar_samba:[0,1,2,3,4,5,6,7,8,9],dancar_salsa:[0,1,2,3,4,5,6,7,8,9],dancar_rumba:[0,1,2,3,4,5,6,7,8,9],dancar_hiphop:[0,1,2,3,4,5,6,7,8,9],dancar_boba:[0,1,2,3,4,5,6,7,8,9],dancar_breakdance:[0,1,2,3,4,5,6,7,8,9],dancar_macarena:[0,1,2,3,4,5,6,7,8,9],nadar:[0,1,2,3,4,5],boiar:[0,1,2,3],carregar:[0,1,2,3,4,5],carregar_parado:[0,1,2,3],droga_cafe_andar:[0,1,2,3,4,5],droga_cafe_idle:[0,1,2,3],droga_alcool_andar:[0,1,2,3,4,5],droga_alcool_idle:[0,1,2,3],droga_folha_coca_andar:[0,1,2,3,4,5],droga_folha_coca_idle:[0,1,2,3],droga_tabaco_andar:[0,1,2,3,4,5],droga_tabaco_idle:[0,1,2,3],droga_cannabis_andar:[0,1,2,3,4,5],droga_cannabis_idle:[0,1,2,3],droga_coca_andar:[0,1,2,3,4,5],droga_coca_idle:[0,1,2,3],droga_cubensis_andar:[0,1,2,3,4,5],droga_cubensis_idle:[0,1,2,3],droga_amanita_andar:[0,1,2,3,4,5],droga_amanita_idle:[0,1,2,3],droga_peyote_andar:[0,1,2,3,4,5],droga_peyote_idle:[0,1,2,3],droga_trombeta_anjo_andar:[0,1,2,3,4,5],droga_trombeta_anjo_idle:[0,1,2,3]});
 const citizenHasPath=c=>c?._renderPathActive??!!c?.path?.length;
 export function citizenIsSleeping(c){
  if(c?.task!=='energy'||!c.sleep?.active||citizenHasPath(c)||c.mobilityTrip||c.ridingVehicleId||c.deliveryId)return false;
@@ -23,6 +23,13 @@ const CASUAL_WALK_TASKS=new Set(['walk','leisure','social','visit','shopping','s
 const BIKE_KINDS=new Set(['bicicleta','bicicleta_carga']),GLIDE_KINDS=new Set(['patinete','patins','skate']);
 const ALT_USE_TASKS=new Set(['food','workmeal','provisions','toilet','hygiene','water','health','shopping','supplies','care','caregiving','leisure','social','vote']);
 const DANCE_CLIPS=Object.freeze(['dancar_samba','dancar_salsa','dancar_rumba','dancar_hiphop','dancar_boba','dancar_breakdance','dancar_macarena']);
+const SUBSTANCE_PRIORITY=Object.freeze(['trombeta_anjo','amanita','cubensis','peyote','coca','alcool','cannabis','folha_coca','tabaco','cafe']);
+function activeSubstanceEffect(c){
+  const effects=c?.substanceState?.effects;
+  if(!effects?.length)return null;
+  for(const id of SUBSTANCE_PRIORITY)if(effects.some(e=>e?.id===id))return id;
+  return null;
+}
 const TOOL_CLIPS=Object.freeze({cavar:'shovel',colher:'scythe',pescar:'rod',tocar_violao:'guitar',beber:'mug'});
 const ACTION_CLIPS=new Set(['run','caminhar','andar_lento','pedal','murro','chute','derrotado','nadar','carregar','escalar']);
 const PRINTED_GARMENTS=new Set(['camisa social','camisa estampada','vestido estampado']),PATTERNED_GARMENTS=new Set(['camisa estampada','vestido estampado']),DRESS_PIECES=new Set(['vestido','vestido estampado']),SKIRT_PIECES=new Set(['saia','saia longa']),HAND_PIECES=new Set(['luvas']);
@@ -41,9 +48,11 @@ export function citizenAnimation(c,moving=false,inWater=undefined){
     return GLIDE_KINDS.has(c.ridingVehicleKind)?'glide':'passenger';
   }
   if(c.climbing)return 'escalar';
+  const substance=activeSubstanceEffect(c);
   if(inWater!==undefined?inWater:c.swimming)return moving?'nadar':'boiar';
   if(moving){
     if(c.deliveryId||c.forestryJob?.stage==='return'||c.carryLoad)return 'carregar';
+    if(substance&&CITIZEN_MODEL_FRAMES[`droga_${substance}_andar`])return `droga_${substance}_andar`;
     if(c.task==='combat-flee'||c.task==='police-response'||c.running||(c.playerControlled&&c.playerRunning))return 'run';
     if(c.task==='outdoor_leisure'||c.task==='swim-leisure'||(c.needs?.energy??100)<25)return 'andar_lento';
     if(CASUAL_WALK_TASKS.has(c.task))return 'caminhar';
@@ -57,6 +66,7 @@ export function citizenAnimation(c,moving=false,inWater=undefined){
   if(c.task==='sit'&&c.seated||c.furnitureUse?.type==='bench'||c.furnitureUse?.type==='beach_chair')return 'sentado_no_banco';
   if(c.seated)return 'seated';
   if(c.policePatrol)return 'a_postos';
+  if(c.deliveryId||c.forestryJob?.stage==='return'||c.carryLoad)return 'carregar_parado';
   if(c.conversation)return 'conversar';
   if(c.celebrating||c.task==='celebrate')return 'comemorar';
   if(c.clapping||c.task==='clap')return 'aplaudir';
@@ -69,7 +79,7 @@ export function citizenAnimation(c,moving=false,inWater=undefined){
   const activelyInsideWork=!!c.indoorLocation?.unitId&&WORK_TASKS.has(c.task);
   const activelyOnGig=!!c.informalJobId&&!citizenHasPath(c);
   const activelyWorking=WORK_TASKS.has(c.task)&&!citizenHasPath(c)&&(activelyUsingFurniture||activelyWorkingOutside||activelyInsideWork||activelyOnGig||c.task==='construction'&&c.workProjectId!=null);
-  if(!activelyWorking)return (c.mood??0)<=-15?'chorar':'idle';
+  if(!activelyWorking)return substance&&CITIZEN_MODEL_FRAMES[`droga_${substance}_idle`]?`droga_${substance}_idle`:(c.mood??0)<=-15?'chorar':'idle';
   if(c.task==='water'||c.task==='drink')return 'beber';
   if(c.task==='fishing')return 'pescar';
   if(c.task==='farm'||c.forestryJob?.stage==='plant'||c.task==='informal-gardening')return 'colher';
@@ -83,7 +93,7 @@ export function citizenFrame(clip,time,phase=0,oneShot=false){
   if(clip==='glide')return FRAME_POSES.use[1];
   const sequence=clip==='pedal'?[0,2,4]:clip==='use'?[0,1]:CITIZEN_MODEL_FRAMES[clip]||CITIZEN_MODEL_FRAMES.idle,poseClip=clip==='pedal'?'run':clip in CITIZEN_MODEL_FRAMES?clip:'idle';
   if(sequence.length===1)return FRAME_POSES[poseClip][sequence[0]];
-  const fps=clip==='andar_lento'?5:clip==='caminhar'?6.5:ACTION_CLIPS.has(clip)?8:clip.startsWith('dancar_')?5:clip==='conversar'?2.5:4,index=Math.floor(Math.max(0,time)*fps+phase),frame=sequence[oneShot?Math.min(index,sequence.length-1):index%sequence.length];
+  const fps=clip==='andar_lento'?5:clip==='caminhar'?6.5:clip.endsWith('_andar')?6:ACTION_CLIPS.has(clip)?8:clip.startsWith('dancar_')?5:clip==='conversar'?2.5:4,index=Math.floor(Math.max(0,time)*fps+phase),frame=sequence[oneShot?Math.min(index,sequence.length-1):index%sequence.length];
   return FRAME_POSES[poseClip][frame]||{clip:poseClip,frame};
 }
 const FRAME_POSES=Object.fromEntries(Object.entries(CITIZEN_MODEL_FRAMES).map(([clip,frames])=>[clip,Object.fromEntries(frames.map(frame=>[frame,Object.freeze({clip,frame})]))]));
@@ -261,25 +271,25 @@ export class CityCitizenModels {
   }
   applyPixelDirtShader(shader){
     shader.vertexShader=shader.vertexShader
-      .replace('#include <common>','#include <common>\nattribute vec4 instanceDirt;\nattribute vec4 instanceDirtZoneA;\nattribute vec4 instanceDirtZoneB;\nvarying vec4 vCitizenDirt;\nvarying vec4 vCitizenDirtZoneA;\nvarying vec4 vCitizenDirtZoneB;\nvarying vec3 vCitizenLocalPos;')
-      .replace('#include <begin_vertex>','#include <begin_vertex>\nvCitizenDirt = instanceDirt;\nvCitizenDirtZoneA = instanceDirtZoneA;\nvCitizenDirtZoneB = instanceDirtZoneB;\nvCitizenLocalPos = position;');
+      .replace('#include <common>','#include <common>\nattribute vec3 citizenBodyPos;\nattribute vec4 instanceDirt;\nattribute vec4 instanceDirtZoneA;\nattribute vec4 instanceDirtZoneB;\nvarying vec4 vCitizenDirt;\nvarying vec4 vCitizenDirtZoneA;\nvarying vec4 vCitizenDirtZoneB;\nvarying vec3 vCitizenLocalPos;')
+      .replace('#include <begin_vertex>','#include <begin_vertex>\nvCitizenDirt = instanceDirt;\nvCitizenDirtZoneA = instanceDirtZoneA;\nvCitizenDirtZoneB = instanceDirtZoneB;\nvCitizenLocalPos = citizenBodyPos;');
     shader.fragmentShader=shader.fragmentShader
       .replace('#include <common>','#include <common>\nvarying vec4 vCitizenDirt;\nvarying vec4 vCitizenDirtZoneA;\nvarying vec4 vCitizenDirtZoneB;\nvarying vec3 vCitizenLocalPos;')
       .replace('#include <color_fragment>',`#include <color_fragment>
 if (vCitizenDirt.a > 0.05) {
   float y = vCitizenLocalPos.y, x = vCitizenLocalPos.x, z = vCitizenLocalPos.z;
-  float feetMask = smoothstep(0.22 + vCitizenDirtZoneA.x * 0.62, 0.14 + vCitizenDirtZoneA.x * 0.62, y) * step(0.01, vCitizenDirtZoneA.x);
-  float armMask = step(0.15, abs(x)) * step(0.42, y) * step(y, 1.16) * vCitizenDirtZoneA.y;
-  float headMask = step(1.15, y) * vCitizenDirtZoneA.z;
-  float seatMask = (step(z, 0.02) * step(0.36, y) * step(y, 0.72) + step(0.20, y) * step(y, 0.56) * step(z, 0.06)) * vCitizenDirtZoneA.w;
-  float backMask = step(z, -0.02) * step(0.35, y) * step(y, 1.24) * vCitizenDirtZoneB.x;
-  float sideMask = step(x, -0.06) * step(0.15, y) * step(y, 1.26) * vCitizenDirtZoneB.y;
-  float torsoMask = step(abs(x), 0.18) * step(0.55, y) * step(y, 1.16) * vCitizenDirtZoneB.z;
+  float feetMask = smoothstep(0.14 + vCitizenDirtZoneA.x * 0.40, 0.08 + vCitizenDirtZoneA.x * 0.40, y) * step(0.01, vCitizenDirtZoneA.x);
+  float armMask = step(0.10, abs(x)) * step(0.45, y) * step(y, 0.88) * vCitizenDirtZoneA.y;
+  float headMask = step(0.84, y) * vCitizenDirtZoneA.z;
+  float seatMask = (step(z, 0.04) * step(0.38, y) * step(y, 0.58) + step(0.24, y) * step(y, 0.48) * step(z, 0.07)) * vCitizenDirtZoneA.w;
+  float backMask = step(z, -0.01) * step(0.44, y) * step(y, 0.88) * vCitizenDirtZoneB.x;
+  float sideMask = step(x, -0.05) * step(0.18, y) * step(y, 0.92) * vCitizenDirtZoneB.y;
+  float torsoMask = step(abs(x), 0.14) * step(0.50, y) * step(y, 0.86) * vCitizenDirtZoneB.z;
   float zoneWeight = clamp(max(max(feetMask, armMask), max(max(headMask, seatMask), max(max(backMask, sideMask), max(torsoMask, vCitizenDirtZoneB.w)))), 0.0, 1.0);
   if (zoneWeight > 0.02) {
-    vec3 pCell = floor(vCitizenLocalPos * 26.0);
+    vec3 pCell = floor(vCitizenLocalPos * 32.0);
     float h = fract(sin(dot(pCell, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-    float h2 = fract(sin(dot(floor(vCitizenLocalPos * 11.0), vec3(41.13, 19.7, 73.9))) * 29431.7);
+    float h2 = fract(sin(dot(floor(vCitizenLocalPos * 14.0), vec3(41.13, 19.7, 73.9))) * 29431.7);
     float threshold = clamp(zoneWeight * (0.28 + vCitizenDirt.a * 0.48), 0.0, 0.78);
     float speck = step(1.0 - threshold, h * 0.72 + h2 * 0.28);
     diffuseColor.rgb = mix(diffuseColor.rgb, vCitizenDirt.rgb, zoneWeight * vCitizenDirt.a * 0.18);
@@ -318,13 +328,13 @@ if (vCitizenDirt.a > 0.05) {
   }
   combinedCitizenSurface(body,clothes){
     let byClothes=this.combinedSurfaces.get(body);if(!byClothes)this.combinedSurfaces.set(body,byClothes=new WeakMap());let cached=byClothes.get(clothes);if(cached)return cached;
-    const bodyPositions=body.attributes.position.array,clothingPositions=clothes.attributes.position.array,bodyNormals=body.attributes.normal.array,clothingNormals=clothes.attributes.normal.array,positions=new Float32Array(bodyPositions.length+clothingPositions.length),normals=new Float32Array(positions.length),weightMorph=new Float32Array(positions.length),weightNormalLinear=new Float32Array(positions.length),weightNormalQuadratic=new Float32Array(positions.length),surface=new Float32Array(positions.length/3),bodyVertices=bodyPositions.length/3;
-    positions.set(bodyPositions);positions.set(clothingPositions,bodyPositions.length);normals.set(bodyNormals);normals.set(clothingNormals,bodyNormals.length);
+    const bodyPositions=body.attributes.position.array,clothingPositions=clothes.attributes.position.array,bodyNormals=body.attributes.normal.array,clothingNormals=clothes.attributes.normal.array,bodyCanonical=body.attributes.citizenBodyPos?.array||bodyPositions,clothingCanonical=clothes.attributes.citizenBodyPos?.array||clothingPositions,positions=new Float32Array(bodyPositions.length+clothingPositions.length),canonical=new Float32Array(positions.length),normals=new Float32Array(positions.length),weightMorph=new Float32Array(positions.length),weightNormalLinear=new Float32Array(positions.length),weightNormalQuadratic=new Float32Array(positions.length),surface=new Float32Array(positions.length/3),bodyVertices=bodyPositions.length/3;
+    positions.set(bodyPositions);positions.set(clothingPositions,bodyPositions.length);canonical.set(bodyCanonical);canonical.set(clothingCanonical,bodyPositions.length);normals.set(bodyNormals);normals.set(clothingNormals,bodyNormals.length);
     if(body.attributes.weightMorph)weightMorph.set(body.attributes.weightMorph.array);if(clothes.attributes.weightMorph)weightMorph.set(clothes.attributes.weightMorph.array,bodyPositions.length);
     if(body.attributes.weightNormalLinear)weightNormalLinear.set(body.attributes.weightNormalLinear.array);if(clothes.attributes.weightNormalLinear)weightNormalLinear.set(clothes.attributes.weightNormalLinear.array,bodyPositions.length);
     if(body.attributes.weightNormalQuadratic)weightNormalQuadratic.set(body.attributes.weightNormalQuadratic.array);if(clothes.attributes.weightNormalQuadratic)weightNormalQuadratic.set(clothes.attributes.weightNormalQuadratic.array,bodyPositions.length);
     for(let i=bodyVertices;i<positions.length/3;i++)surface[i]=1;
-    const geometry=new this.THREE.BufferGeometry();geometry.setAttribute('position',new this.THREE.BufferAttribute(positions,3));geometry.setAttribute('normal',new this.THREE.BufferAttribute(normals,3));geometry.setAttribute('weightMorph',new this.THREE.BufferAttribute(weightMorph,3));geometry.setAttribute('weightNormalLinear',new this.THREE.BufferAttribute(weightNormalLinear,3));geometry.setAttribute('weightNormalQuadratic',new this.THREE.BufferAttribute(weightNormalQuadratic,3));geometry.setAttribute('citizenSurfaceType',new this.THREE.BufferAttribute(surface,1));geometry.computeBoundingSphere();geometry.userData.citizenCombinedSurface=true;byClothes.set(clothes,geometry);return geometry;
+    const geometry=new this.THREE.BufferGeometry();geometry.setAttribute('position',new this.THREE.BufferAttribute(positions,3));geometry.setAttribute('citizenBodyPos',new this.THREE.BufferAttribute(canonical,3));geometry.setAttribute('normal',new this.THREE.BufferAttribute(normals,3));geometry.setAttribute('weightMorph',new this.THREE.BufferAttribute(weightMorph,3));geometry.setAttribute('weightNormalLinear',new this.THREE.BufferAttribute(weightNormalLinear,3));geometry.setAttribute('weightNormalQuadratic',new this.THREE.BufferAttribute(weightNormalQuadratic,3));geometry.setAttribute('citizenSurfaceType',new this.THREE.BufferAttribute(surface,1));geometry.computeBoundingSphere();geometry.userData.citizenCombinedSurface=true;byClothes.set(clothes,geometry);return geometry;
   }
   setInstanceGarmentColor(mesh,index,color){
     const attribute=mesh.geometry.attributes.instanceGarmentColor;if(!attribute)return;const offset=index*3;
@@ -495,9 +505,14 @@ if (vCitizenDirt.a > 0.05) {
     // garment follows the chest, thighs, hands and feet through every pose.
     for(const {key,data} of entries)if(data.triangles!==CITIZEN_BODY_FACE_COUNT)throw Error(`Topologia de roupa incompatível em ${key}: ${data.triangles} faces`);
     const masks=Object.fromEntries(RENDERED_GARMENTS.map(piece=>[piece,garmentSurface(CITIZEN_BODY_FACE_COUNT,piece)]));
-    const idle=entries.find(e=>e.key==='idle:0').data.bounds,height=idle.max[1]-idle.min[1];if(!(height>0))throw Error('Modelo sem altura');
+    const idleIdx=entries.findIndex(e=>e.key==='idle:0');if(idleIdx>0){const [idleEntry]=entries.splice(idleIdx,1);entries.unshift(idleEntry);}
+    const idle=entries[0].data.bounds,height=idle.max[1]-idle.min[1];if(!(height>0))throw Error('Modelo sem altura');
     const origin=[(idle.min[0]+idle.max[0])/2,Math.min(...entries.map(e=>e.data.bounds.min[1])),(idle.min[2]+idle.max[2])/2],factor=1.05/height;
+    let idleBodyPos=null;
+    const attachCanonicalBodyPos=(geometry,pos,ref=null)=>{const src=ref&&ref.length===pos.length?ref:pos;geometry.setAttribute('citizenBodyPos',new this.THREE.Float32BufferAttribute(src,3));return geometry;};
+    const attachElevatedBodyPos=(geometry,yShift=0.92)=>{const pos=geometry.attributes.position.array,elev=new Float32Array(pos.length);elev.set(pos);for(let i=1;i<elev.length;i+=3)elev[i]+=yShift;geometry.setAttribute('citizenBodyPos',new this.THREE.Float32BufferAttribute(elev,3));return geometry;};
     for(const {key,data}of entries){const positions=data.positions;for(let i=0;i<positions.length;i++)positions[i]=(positions[i]-origin[i%3])*factor;
+      if(key==='idle:0')idleBodyPos=new Float32Array(positions);
       const morphVertex=createPoseWeightMorph(data);
       const attachment=citizenHeadAttachment(data);
       const attachPt=attachment.position;
@@ -513,7 +528,7 @@ if (vCitizenDirt.a > 0.05) {
         geometry.setAttribute('weightNormalLinear',new this.THREE.Float32BufferAttribute(smoothed.derivatives[0],3));
         geometry.setAttribute('weightNormalQuadratic',new this.THREE.Float32BufferAttribute(smoothed.derivatives[1],3));
       };
-      const geometry=new this.THREE.BufferGeometry();geometry.setAttribute('position',new this.THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new this.THREE.Float32BufferAttribute(data.normals,3));attachWeightMorph(geometry,positions,data.normals);geometry.computeBoundingSphere();this.frames.set(key,geometry);
+      const geometry=new this.THREE.BufferGeometry();geometry.setAttribute('position',new this.THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new this.THREE.Float32BufferAttribute(data.normals,3));attachCanonicalBodyPos(geometry,positions,idleBodyPos);attachWeightMorph(geometry,positions,data.normals);geometry.computeBoundingSphere();this.frames.set(key,geometry);
       const skirtCuts={};
       for(const piece of ['saia','saia longa']){
         const surface=fittedSkirtSurface(data,piece,morphVertex),mask=surface.bodyMask,parts=splitGarmentSurface(data,mask,piece);
@@ -536,10 +551,11 @@ if (vCitizenDirt.a > 0.05) {
         if(piece==='saia'||piece==='saia longa')parts=skirtCuts[piece].parts;
         else if(DRESS_PIECES.has(piece))parts={body:dressBody.body,bodyNormals:dressBody.bodyNormals,clothes:dressPositions,clothesNormals:dressNormals};
         else parts=splitGarmentSurface(data,masks[piece],piece);
-        const make=(positions,normals,withUV=false,hideBack=false,attributes=null,skipWeightMorph=false)=>{const g=new this.THREE.BufferGeometry();g.setAttribute('position',new this.THREE.Float32BufferAttribute(positions,3));g.setAttribute('normal',new this.THREE.Float32BufferAttribute(normals,3));if(withUV){let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;for(let v=0;v<positions.length;v+=3){minX=Math.min(minX,positions[v]);maxX=Math.max(maxX,positions[v]);minY=Math.min(minY,positions[v+1]);maxY=Math.max(maxY,positions[v+1]);}const width=Math.max(.001,maxX-minX),height=Math.max(.001,maxY-minY),uv=new Float32Array(positions.length/3*2);for(let v=0,j=0;v<positions.length;v+=3){uv[j++]=hideBack&&normals[v+2]<-.25?2:(positions[v]-minX)/width;uv[j++]=(positions[v+1]-minY)/height;}g.setAttribute('uv',new this.THREE.Float32BufferAttribute(uv,2));}if(attributes)for(const [name,array]of Object.entries(attributes))g.setAttribute(name,new this.THREE.Float32BufferAttribute(array,3));else if(!skipWeightMorph)attachWeightMorph(g,positions,normals);g.computeBoundingSphere();return g;};
+        const idleOutfit=key==='idle:0'?null:this.outfits.get(`idle:0:${piece}`);
+        const make=(positions,normals,withUV=false,hideBack=false,attributes=null,skipWeightMorph=false,refPositions=null)=>{const g=new this.THREE.BufferGeometry();g.setAttribute('position',new this.THREE.Float32BufferAttribute(positions,3));g.setAttribute('normal',new this.THREE.Float32BufferAttribute(normals,3));attachCanonicalBodyPos(g,positions,refPositions);if(withUV){let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;for(let v=0;v<positions.length;v+=3){minX=Math.min(minX,positions[v]);maxX=Math.max(maxX,positions[v]);minY=Math.min(minY,positions[v+1]);maxY=Math.max(maxY,positions[v+1]);}const width=Math.max(.001,maxX-minX),height=Math.max(.001,maxY-minY),uv=new Float32Array(positions.length/3*2);for(let v=0,j=0;v<positions.length;v+=3){uv[j++]=hideBack&&normals[v+2]<-.25?2:(positions[v]-minX)/width;uv[j++]=(positions[v+1]-minY)/height;}g.setAttribute('uv',new this.THREE.Float32BufferAttribute(uv,2));}if(attributes)for(const [name,array]of Object.entries(attributes))g.setAttribute(name,new this.THREE.Float32BufferAttribute(array,3));else if(!skipWeightMorph)attachWeightMorph(g,positions,normals);g.computeBoundingSphere();return g;};
         const printed=PRINTED_GARMENTS.has(piece);
         const garmentMaterial=printed?this.printedMaterial(piece):DRESS_PIECES.has(piece)?this.dressMaterial:SKIRT_PIECES.has(piece)?this.skirtMaterial:this.material;
-        const outfit={body:make(parts.body,parts.bodyNormals),clothes:make(parts.clothes,parts.clothesNormals,printed||piece==='macacão',piece==='camisa social',DRESS_PIECES.has(piece)?dressAttrs:null,SKIRT_PIECES.has(piece)),material:garmentMaterial};
+        const outfit={body:make(parts.body,parts.bodyNormals,false,false,null,false,idleOutfit?.body?.attributes?.position?.array),clothes:make(parts.clothes,parts.clothesNormals,printed||piece==='macacão',piece==='camisa social',DRESS_PIECES.has(piece)?dressAttrs:null,SKIRT_PIECES.has(piece),idleOutfit?.clothes?.attributes?.position?.array),material:garmentMaterial};
         if(SKIRT_PIECES.has(piece)){
           const surface=skirtCuts[piece].surface;
           outfit.clothes.setAttribute('skirtMorph',new this.THREE.Float32BufferAttribute(surface.morphDeltas,3));
@@ -549,16 +565,16 @@ if (vCitizenDirt.a > 0.05) {
         if(['camisa','camisa social','camisa estampada','camiseta','regata','terno','casaco','trapos'].includes(piece))for(const skirtPiece of SKIRT_PIECES){
           const union=new Uint8Array(skirtCuts[skirtPiece].mask.length),tucked=new Uint8Array(union.length),upperMask=masks[piece];
           for(let i=0;i<union.length;i++){union[i]=Number(skirtCuts[skirtPiece].mask[i]||upperMask[i]);tucked[i]=Number(upperMask[i]&&!skirtCuts[skirtPiece].mask[i]);}
-          const combined=splitGarmentSurface(data,union,piece);outfit[skirtPiece==='saia'?'bodyWithSaia':'bodyWithSaiaLonga']=make(combined.body,combined.bodyNormals);
-          const top=splitGarmentSurface(data,tucked,piece);outfit[skirtPiece==='saia'?'clothesWithSaia':'clothesWithSaiaLonga']=make(top.clothes,top.clothesNormals,printed,piece==='camisa social');
+          const combined=splitGarmentSurface(data,union,piece);outfit[skirtPiece==='saia'?'bodyWithSaia':'bodyWithSaiaLonga']=make(combined.body,combined.bodyNormals,false,false,null,false,idleOutfit?.[skirtPiece==='saia'?'bodyWithSaia':'bodyWithSaiaLonga']?.attributes?.position?.array);
+          const top=splitGarmentSurface(data,tucked,piece);outfit[skirtPiece==='saia'?'clothesWithSaia':'clothesWithSaiaLonga']=make(top.clothes,top.clothesNormals,printed,piece==='camisa social',null,false,idleOutfit?.[skirtPiece==='saia'?'clothesWithSaia':'clothesWithSaiaLonga']?.attributes?.position?.array);
         }
         this.outfits.set(`${key}:${piece}`,outfit);
         if(LOWER_PIECES.has(piece)||HAND_PIECES.has(piece))this.headwear.set(`${key}:${piece}`,outfit.clothes);
       }
-      for(const piece of HEADWEAR_PIECES){const part=headwearSurface(data,piece),anchorKey=`${key}:${piece}`;this.headwearAnchors.set(anchorKey,part.anchor);if(!this.headwear.has(`static:${piece}`)){const g=new this.THREE.BufferGeometry();g.setAttribute('position',new this.THREE.Float32BufferAttribute(part.positions,3));g.setAttribute('normal',new this.THREE.Float32BufferAttribute(part.normals,3));g.computeBoundingSphere();this.headwear.set(`static:${piece}`,g);}}
-      if(key.startsWith('carregar:')){this.carryAnchors.set(key,carryBoxAnchor(data));if(!this.headwear.has('static:carry-box'))this.headwear.set('static:carry-box',carryBoxGeometry(this.THREE));}
+      for(const piece of HEADWEAR_PIECES){const part=headwearSurface(data,piece),anchorKey=`${key}:${piece}`;this.headwearAnchors.set(anchorKey,part.anchor);if(!this.headwear.has(`static:${piece}`)){const g=new this.THREE.BufferGeometry();g.setAttribute('position',new this.THREE.Float32BufferAttribute(part.positions,3));g.setAttribute('normal',new this.THREE.Float32BufferAttribute(part.normals,3));attachElevatedBodyPos(g,0.92);g.computeBoundingSphere();this.headwear.set(`static:${piece}`,g);}}
+      if(key.startsWith('carregar:')||key.startsWith('carregar_parado:')){this.carryAnchors.set(key,carryBoxAnchor(data));if(!this.headwear.has('static:carry-box'))this.headwear.set('static:carry-box',attachElevatedBodyPos(carryBoxGeometry(this.THREE),0.55));}
       const toolKind=TOOL_CLIPS[key.split(':')[0]];
-      if(toolKind){this.carryAnchors.set(key,toolAnchor(data,toolKind));if(!this.headwear.has(`static:tool:${toolKind}`))this.headwear.set(`static:tool:${toolKind}`,toolPropGeometry(this.THREE,toolKind));}
+      if(toolKind){this.carryAnchors.set(key,toolAnchor(data,toolKind));if(!this.headwear.has(`static:tool:${toolKind}`))this.headwear.set(`static:tool:${toolKind}`,attachElevatedBodyPos(toolPropGeometry(this.THREE,toolKind),0.55));}
     }
     this.ready=true;return true;
   }
@@ -624,7 +640,7 @@ if (vCitizenDirt.a > 0.05) {
     const poseBodyShape=clip==='sentado_no_banco'&&bodyShape.fat>.9?{...bodyShape,fat:.9}:bodyShape;
     if(actionState){const token=`${clip}:${actionToken??''}`;if(motion.actionToken!==token){motion.actionToken=token;motion.actionStartedAt=this.clock;}}
     else motion.actionToken=null;
-    const animationTime=(clip==='run'||clip==='caminhar'||clip==='andar_lento'||clip==='pedal')?motion.walkFrame/8:actionState?this.clock-(motion.actionStartedAt??this.clock):this.clock,pose=citizenFrame(clip,animationTime,actionState?0:(entity.id*13)%17,actionState),key=`${pose.clip}:${pose.frame}`;
+    const animationTime=(clip==='run'||clip==='caminhar'||clip==='andar_lento'||clip==='pedal'||clip.endsWith('_andar'))?motion.walkFrame/8:actionState?this.clock-(motion.actionStartedAt??this.clock):this.clock,pose=citizenFrame(clip,animationTime,actionState?0:(entity.id*13)%17,actionState),key=`${pose.clip}:${pose.frame}`;
     if(!traveling&&!sleeping&&c.facingTarget)motion.angle=Math.atan2(c.facingTarget.x-x,c.facingTarget.y-y);
     const appearance=this.appearanceFor(c,entity),{piece,printed,patterned,garment,garmentHex,garmentColorHex,printId,garmentMaterial,lower,lowerSkirt,itemColorHexes}=appearance;
     let poseBatch=motion.poseBatches?.get(key);if(!poseBatch){poseBatch=new Map();motion.poseBatches??=new Map();motion.poseBatches.set(key,poseBatch);}
@@ -690,7 +706,7 @@ if (vCitizenDirt.a > 0.05) {
       accessoryTransform.key=itemKey;accessoryTransform.batch=head;accessoryTransform.mesh=head.mesh;accessoryTransform.index=accessoryIndex;if(isFittedClothing&&(!accessoryUnchanged||accessoryTransform.fatToken!==poseBodyShape.fat)){this.setInstanceFat(head.mesh,accessoryIndex,poseBodyShape);accessoryTransform.fatToken=poseBodyShape.fat;}
       const hex=itemColorHexes[itemIndex],itemDirt=Math.max(item.dirt||0,dirtVisual.level),itemDirtToken=`${Math.round(itemDirt)}:${dirtVisual.hex}`,accessoryColorUnchanged=accessoryColorSlotUnchanged&&accessoryTransform.colorItem===item&&accessoryTransform.colorHex===hex&&accessoryTransform.colorDirt===itemDirtToken&&accessoryTransform.colorCombat===combatFlash&&accessoryTransform.colorDimmed===dimmed;if(!accessoryColorUnchanged){this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:hex);this.setInstanceColor(head.mesh,head.count,this.color);this.activeDirtColor.setHex(dirtVisual.hex);this.setInstanceDirt(head.mesh,head.count,this.activeDirtColor,dimmed||combatFlash?0:Math.min(1,itemDirt/100),dz);accessoryTransform.colorItem=item;accessoryTransform.colorHex=hex;accessoryTransform.colorDirt=itemDirtToken;accessoryTransform.colorCombat=combatFlash;accessoryTransform.colorDimmed=dimmed;}head.count++;
     }
-    if(clip==='carregar'&&this.headwear.has('static:carry-box')){
+    if((clip==='carregar'||clip==='carregar_parado')&&this.headwear.has('static:carry-box')){
       const source=this.headwear.get('static:carry-box');
       if(!this.carryBoxMaterial){const mat=new this.THREE.MeshLambertMaterial({color:0xffffff,vertexColors:true,side:this.THREE.DoubleSide});this.decorateMaterial(mat);this.carryBoxMaterial=mat;}
       let boxBatch=this.headwearBatches.get('carry-box');

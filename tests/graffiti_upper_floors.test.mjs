@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import {CityJustice} from '../js/city_justice.js';
 import {upperGraffitiSurfaces,upperGraffitiSurfaceCandidates} from '../js/city_graffiti_access.js';
 import {fitGraffitiToWall,graffitiSurfaceExists} from '../js/city_graffiti_surfaces.js';
-import {syncCitizenInterior,advanceCitizenInterior} from '../js/city_interiors.js?v=citizen-access-1';
 
 function fixture(){
  const unit={id:10,buildingId:9,x:0,y:0,z:1,roomType:'circulation',hasWindow:false};
@@ -37,33 +36,56 @@ test('upper walls retain floor height, exclude windows/balconies, and disappear 
  building.floors=1;assert.equal(graffitiSurfaceExists(city,support),false);
 });
 
-for(const kind of ['graffiti','painting'])test(`${kind} requires walking upstairs before painting and then leaves through the door`,()=>{
+test('upper walls are offered even without an interior stair route',()=>{
+ const {city,c,building}=fixture();building.circulation=[];
+ assert(upperGraffitiSurfaces(city,c).length,'climbing the exterior must not require an interior route');
+});
+
+for(const kind of ['graffiti','painting'])test(`${kind} requires climbing the facade before painting and then climbing down`,()=>{
  const {city,c,records}=fixture();assert.equal(city.justice.considerAutonomousGraffiti(c),true);
- const mission=c.graffitiMission;assert(mission.surface.accessPoint);mission.artKind=kind;c.path=[];
- city.justice.updateGraffitiMission(c);assert(c.indoorLocation.path.length);assert.equal(mission.completeAt,null);
- assert.equal(records.filter(r=>r.type==='trespass').length,1);
- syncCitizenInterior(city,c);assert.equal(c.indoorLocation.exiting,undefined);
- city.justice.updateGraffitiMission(c);assert.equal(city.justice.art.length,0);
- advanceCitizenInterior(city,c,100);assert.equal(c.indoorLocation.floor,1);
- city.justice.updateGraffitiMission(c);assert(mission.completeAt>city.minute);
- city.minute=mission.completeAt;city.justice.updateGraffitiMission(c);
+ const mission=c.graffitiMission;assert(mission.surface.accessPoint);mission.artKind=kind;
+ // Walk the first leg to the wall base; the climb begins once the path empties.
+ for(let guard=0;guard<20&&!c.climbing;guard++){
+  city.justice.updateGraffitiMission(c);
+  if(c.climbing)break;
+  assert(c.path.length,'upper mission must route to the wall base');
+  const last=c.path.at(-1);c.entity.x=last.x;c.entity.y=last.y;c.path=[];city.minute++;
+ }
+ assert(c.climbing,'the painter must start climbing the wall');
+ assert.equal(c.indoorLocation,undefined);
+ assert.equal(records.filter(r=>r.type==='trespass').length,0);
+ for(let guard=0;guard<80&&!city.justice.art.length;guard++){
+  city.justice.updateGraffitiMission(c);
+  if(mission.completeAt!=null)city.minute=mission.completeAt;
+  else city.minute++;
+ }
  assert.equal(city.justice.art.length,1);assert.equal(city.justice.art[0].kind,kind);assert(city.justice.art[0].support.position.z>1.8);
- assert.equal(records.filter(r=>r.type==='graffiti').length,1);assert.equal(c.graffitiMission,null);
- syncCitizenInterior(city,c);assert.equal(c.indoorLocation.exiting,true);
- advanceCitizenInterior(city,c,100);assert.equal(c.indoorLocation,null);
+ assert.equal(records.filter(r=>r.type==='graffiti').length,1);
+ for(let guard=0;guard<40&&c.climbing;guard++){city.minute++;city.justice.updateGraffitiMission(c);}
+ assert.equal(c.climbing,null);assert.equal(c.skybridgeZ,0);assert.equal(c.graffitiMission,null);
 });
 
-test('residents can access their own building without an invasion record',()=>{
- const {city,c,records}=fixture();c.homeUnitId=10;city.justice.considerAutonomousGraffiti(c);c.path=[];city.justice.updateGraffitiMission(c);
- assert(c.indoorLocation);assert.equal(records.filter(r=>r.type==='trespass').length,0);
+test('residents climb their own facade without an invasion record',()=>{
+ const {city,c,records}=fixture();c.homeUnitId=10;assert.equal(city.justice.considerAutonomousGraffiti(c),true);
+ for(let guard=0;guard<20&&!c.climbing;guard++){
+  city.justice.updateGraffitiMission(c);
+  if(c.climbing)break;
+  const last=c.path.at(-1);c.entity.x=last.x;c.entity.y=last.y;c.path=[];city.minute++;
+ }
+ assert(c.climbing);assert.equal(c.indoorLocation,undefined);assert.equal(records.filter(r=>r.type==='trespass').length,0);
 });
 
-test('interruption upstairs cancels painting and preserves the physical exit route',()=>{
- const {city,c}=fixture();city.justice.considerAutonomousGraffiti(c);c.path=[];city.justice.updateGraffitiMission(c);
- advanceCitizenInterior(city,c,100);city.urgentNeed=()=> 'energy';city.justice.updateGraffitiMission(c);
+test('interruption during the climb cancels painting and clears the elevation',()=>{
+ const {city,c}=fixture();assert.equal(city.justice.considerAutonomousGraffiti(c),true);
+ for(let guard=0;guard<20&&!c.climbing;guard++){
+  city.justice.updateGraffitiMission(c);
+  if(c.climbing)break;
+  const last=c.path.at(-1);c.entity.x=last.x;c.entity.y=last.y;c.path=[];city.minute++;
+ }
+ assert(c.climbing);city.minute++;city.justice.updateGraffitiMission(c);assert(c.climbing.z>0);
+ city.urgentNeed=()=> 'energy';city.justice.updateGraffitiMission(c);
  assert.equal(c.graffitiMission,null);assert.equal(city.justice.art.length,0);
- syncCitizenInterior(city,c);assert.equal(c.indoorLocation.exiting,true);
- advanceCitizenInterior(city,c,100);assert.equal(c.indoorLocation,null);
+ assert.equal(c.climbing,null);assert.equal(c.skybridgeZ,0);
 });
 
 test('single-floor buildings provide no upper targets',()=>{

@@ -1,12 +1,12 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {interiorRoute} from './city_interior_layout.js?v=route-cache-512-index-1';
 import {fitGraffitiToWall,graffitiWallHasWindow,graffitiWallHasBalcony,graffitiWallHasDoor} from './city_graffiti_surfaces.js';
 import {GRAFFITI_TILE_WIDTH} from './city_graffiti_size.js';
 
 const MAX_UPPER_WALL_TILES=12;
 const UPPER_WALL_SHAPES=[[1,1],[2,1],[3,1],[4,1],[5,1],[6,1],[7,9],[9,7],[2,2],[3,3],[4,4],[5,5],[7,4],[7,7]];
 
-// Upper facades require an actual room and a connected route through the stairs.
+// Upper facades require an actual room. The painter reaches them by climbing the
+// exterior wall from its base, so no interior route is needed.
 export function upperGraffitiSurfaces(city,c,radius=4){
  return [...upperGraffitiSurfaceCandidates(city,c,radius)];
 }
@@ -26,7 +26,6 @@ export function* upperGraffitiSurfaceCandidates(city,c,radius=4){
     const position={x:x+dx*.525,y:y+dy*.525,z:0},accessPoint={x:x+dx*.3,y:y+dy*.3,z:unit.z*CITY_FLOOR_HEIGHT};
     const key=`wall:${b.id}:${side}:${side%2?unit.y+.5:unit.x+.5}:${unit.z}`;
     if(city.justice.art.some(p=>!p.entity.destroyed&&p.support?.key===key)||city.citizens.some(p=>p.graffitiMission?.surface?.key===key))continue;
-    if(interiorRoute(b,{...b.door,z:0},accessPoint)===null)continue;
     const support={kind:'street-graffiti',surface:'wall',key,buildingId:b.id,unitId:unit.id,floor:unit.z,side,position,accessPoint,approach:{...b.door},rotation:[Math.PI,Math.PI/2,0,-Math.PI/2][side],width:GRAFFITI_TILE_WIDTH,height:1.64,tileWidth:1,tileHeight:1};
     if(graffitiWallHasWindow(b,support)||graffitiWallHasBalcony(b,support))continue;
     fitGraffitiToWall(city,support);
@@ -40,7 +39,7 @@ export function* upperGraffitiSurfaceCandidates(city,c,radius=4){
 
 // The upper facade can also expose rectangles: adjacent rooms on the same
 // floor widen the piece, and consecutive solid floors stack it. Every tile was
-// already validated for windows, balconies and a real interior route.
+// already validated for windows and balconies.
 function* mergedUpperWallSupports(b,records){
  const bySide=[[],[],[],[]];
  for(const record of records)bySide[record.side].push(record);

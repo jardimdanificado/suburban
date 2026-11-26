@@ -204,6 +204,21 @@ test('political graffiti carries its named target, party and known scandal throu
  assert.equal(art.politicalKind,'corruption');assert.equal(art.layers[0].message,art.message);
 });
 
+test('an artist with prejudice paints a hateful slur against a matching nearby victim',()=>{
+ const {city,citizen,justice}=fixture();justice.art=[];
+ const target={id:2,skinColor:0x241a12,gender:'f',entity:{x:2.5,y:2.5,destroyed:false,properties:{name:'Vizinha'}},needs:{}};
+ city.citizens.push(target);
+ citizen.prejudices={racismo:{target:'pele-escura',strength:.9}};citizen.prejudiceProfileVersion=1;
+ assert.equal(justice.considerAutonomousGraffiti(citizen),true);
+ const mission=citizen.graffitiMission;
+ assert.equal(mission.prejudiceType,'racismo');assert.equal(mission.subjectId,2);assert.match(mission.message,/VIZINHA/);
+ const support=mission.surface;citizen.entity.x=support.approach.x;citizen.entity.y=support.approach.y;citizen.path=[];
+ justice.updateGraffitiMission(citizen);city.minute=mission.completeAt;
+ assert.equal(justice.updateGraffitiMission(citizen),true);
+ const art=justice.art[0];
+ assert.equal(art.subjectId,2);assert.equal(art.prejudiceType,'racismo');assert(art.hateCaseId!=null);
+});
+
 test('hateful graffiti records the prejudice crime alongside the graffiti case',()=>{
   const {city,justice}=fixture(),calls=[];
   justice.crimeRecord=(type,offenderId,victimId,details)=>{const record={id:101+calls.length,evidence:[],details:{}};justice.cases.push(record);calls.push({type,offenderId,victimId,details});return record;};

@@ -19,11 +19,39 @@ import {activityRoomReady,syncCitizenInterior} from './city_interiors.js?v=citiz
 import {civicStatus,civicVisit} from './city_public_services.js';
 import {inventoryFree} from './city_inventory.js';
 import {beginBuildingSiteSearch} from './city_terrain.js?v=entrance-retaining-clearance-1';
-import {PREJUDICE_TYPES,PREJUDICE_CRIME_TYPES,prejudicesInCommon} from './city_prejudice.js?v=discrimination-laws-1';
+import {PREJUDICE_TYPES,PREJUDICE_CRIME_TYPES,prejudiceAgainstTypes,prejudicesInCommon} from './city_prejudice.js?v=discrimination-laws-1';
 import {selectClothes} from './city_clothing.js';
 import {favoriteColors,pickGraffitiColor} from './city_colors.js';
 export const GRAFFITI_STYLES=['pixo','tag','stencil','bubble','spray','irregular','stacked','bomb','rasurada'];
 function pickGraffitiStyle(c,random=Math.random){return GRAFFITI_STYLES[Math.floor(random()*GRAFFITI_STYLES.length)]||'pixo';}
+// Hate graffiti needs both a bigoted author and an actual victim. The target is
+// taken from the building owner, the mayor or someone walking nearby, so the
+// slur has a named person and the prejudice incident has a victim.
+function hateGraffitiContent(city,c,support){
+  const building=support?.buildingId!=null?city.building(support.buildingId):null,
+    neighbors=[building?.ownerId!=null?city.society.citizen(building.ownerId):null,city.economy?.mayorId!=null?city.society.citizen(city.economy.mayorId):null],
+    seen=new Set(),pool=[];
+  const consider=person=>{
+    if(!person||seen.has(person.id)||person.id===c.id||!person.entity||person.entity.destroyed)return;
+    if(city.society.isAdult&&!city.society.isAdult(person))return;
+    seen.add(person.id);
+    if(Math.hypot(person.entity.x-c.entity.x,person.entity.y-c.entity.y)>10)return;
+    const bias=prejudiceAgainstTypes(c,person)[0],name=String(person.entity.properties?.name||'').trim();
+    if(!bias||!name)return;
+    pool.push({person,bias,name});
+  };
+  for(const person of neighbors)consider(person);
+  for(const person of city.citizens||[])if(pool.length<8)consider(person);
+  if(!pool.length)return null;
+  const target=pool[Math.floor(city.random()*pool.length)],
+    chance=.12+Math.min(.25,target.bias.strength*.25);
+  if(city.random()>=chance)return null;
+  try{
+    const genero=target.person.socialProfile?.gender==='woman'||target.person.gender==='f'?'f':'m',
+      content=graffitiContent(city,c,{prejudiceType:target.bias.type,targetName:target.name,genero,intensidade:target.bias.strength,pixacao:true,support});
+    return {...content,subjectId:target.person.id,prejudiceStrength:target.bias.strength};
+  }catch{return null;}
+}
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const graffitiSupportRevisions=new WeakMap();
 const REPORT_BUSY_TASKS=new Set(['vote','food','water','health','toilet','hygiene','energy','provisions','workmeal','supplies']);
@@ -860,9 +888,9 @@ export class CityJustice {
     const hostileTarget=targetPerson?targetPerson.entity?.properties?.name:building?.municipal?'Prefeitura':city.random()<.5?'Governo':'Cidade';
     // Muros grandes recebem mais predicados no próprio xingamento; a chance de
     // insulto continua a mesma para não alterar o comportamento existente.
-    const content=hostilityRoll>=.2
+    const content=hateGraffitiContent(city,c,route.support)||(hostilityRoll>=.2
       ? graffitiContent(city,c,{xingamento:true,pixacao:true,targetName:hostileTarget,genero:targetPerson?.gender||'m',intensidade:.65,support:route.support})
-      : graffitiContent(city,c,{support:route.support});
+      : graffitiContent(city,c,{support:route.support}));
     c.graffitiMission={status:'to-surface',surface:route.support,artKind:route.support.accessPoint&&city.random()<.3?'painting':'graffiti',graffitiColor:pickGraffitiColor(c,()=>city.random()),graffitiStyle:pickGraffitiStyle(c,()=>city.random()),...content,startedAt:city.minute,completeAt:null,waitingReason:null};c.task='urban-graffiti';c.path=route.path;
     if(!c.path.length&&dist(c.entity,route.support.approach)>.1)c.path=[route.support.approach];
     c.targetId=null;c.action=`Indo pichar: ${graffitiSurfaceLabel(route.support).toLowerCase()}`;return true;

@@ -106,6 +106,11 @@ test('new human animation clips map to the corresponding citizen states', () => 
   assert.equal(citizenAnimation({ swimming: true }, true), 'nadar');
   assert.equal(citizenAnimation({ swimming: true }, false), 'boiar');
   assert.equal(citizenAnimation({ deliveryId: 1 }, true), 'carregar');
+  assert.equal(citizenAnimation({ deliveryId: 1 }, false), 'carregar_parado');
+  assert.equal(citizenAnimation({ substanceState: { effects: [{ id: 'alcool', until: 99 }] } }, true), 'droga_alcool_andar');
+  assert.equal(citizenAnimation({ substanceState: { effects: [{ id: 'alcool', until: 99 }] } }, false), 'droga_alcool_idle');
+  assert.equal(citizenAnimation({ substanceState: { effects: [{ id: 'coca', until: 99 }] } }, true), 'droga_coca_andar');
+  assert.equal(citizenAnimation({ substanceState: { effects: [{ id: 'cannabis', until: 99 }] } }, false), 'droga_cannabis_idle');
   assert.equal(citizenAnimation({ task: 'walk' }, true), 'caminhar');
   assert.equal(citizenAnimation({ task: 'outdoor_leisure' }, true), 'andar_lento');
   assert.equal(citizenAnimation({ task: 'combat-flee' }, true), 'run');
