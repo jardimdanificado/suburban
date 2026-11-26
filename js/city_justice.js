@@ -337,7 +337,7 @@ export class CityJustice {
     measure('propertyFencing',()=>this.updatePropertyFencing());
     measure('skybridgeArt',()=>this.updateSkybridgeArtSupport());
     measure('streetGraffitiSupports',()=>this.updateStreetGraffitiSupports());
-    measure('stolenInventory',()=>{for(const citizen of this.city.citizens)if(citizen.inventoryProvenance?.length)reconcileStolenInventory(citizen);});
+    if(this.city.minute%5===0)measure('stolenInventory',()=>{for(const citizen of this.city.citizens)if(citizen.inventoryProvenance?.length)reconcileStolenInventory(citizen);});
     if(this.city.minute%30===0){measure('streetGraffiti',()=>{for(const c of this.city.citizens)this.considerAutonomousGraffiti(c);});measure('fecesGraffiti',()=>this.considerFecesGraffiti());measure('artReaction',()=>this.reactToArt());}
     if(profile)this.lastMinuteProfile={...profile,...(this.lastMinuteProfile?.siteSearch?{siteSearch:this.lastMinuteProfile.siteSearch}:{})};
   }

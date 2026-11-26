@@ -169,11 +169,12 @@ function diagonalClear(terrain,from,to,a,b,isBlocked,roadOnly=false){
   return true;
 }
 function terrainPathGrid(world){
-  let grid=pathTerrainGrids.get(world);if(grid&&grid.revision===(world.revision||0)&&grid.width===world.width&&grid.height===world.height)return grid;
+  const rev=world.topologyRevision??world.revision??0;
+  let grid=pathTerrainGrids.get(world);if(grid&&grid.revision===rev&&grid.width===world.width&&grid.height===world.height)return grid;
   const size=world.width*world.height,tiles=new Uint8Array(size),walkable=new Uint8Array(size),roads=new Uint8Array(size),elevations=new Float32Array(size),source=world.map;
   let minCost=Infinity;
   for(let i=0;i<size;i++){const tile=baseTerrainTile(source?source[i]:world.getTile(i%world.width,Math.floor(i/world.width)));tiles[i]=tile;walkable[i]=land.has(tile)?1:0;roads[i]=ROAD_TILES.has(tile)?1:0;elevations[i]=tileHeight(tile);if(walkable[i])minCost=Math.min(minCost,roads[i]?ROAD_RULES.pavedCost:tileCosts[tile]);}
-  grid={revision:world.revision||0,width:world.width,height:world.height,tiles,walkable,roads,elevations,minCost};pathTerrainGrids.set(world,grid);return grid;
+  grid={revision:rev,width:world.width,height:world.height,tiles,walkable,roads,elevations,minCost};pathTerrainGrids.set(world,grid);return grid;
 }
 function heapPush(w,node,cost,score){
   let cap=w.heapNodes.length;if(w.heapLength===cap){cap=Math.max(64,cap*2);const nodes=new Int32Array(cap),costs=new Float64Array(cap),scores=new Float64Array(cap);nodes.set(w.heapNodes);costs.set(w.heapCosts);scores.set(w.heapScores);w.heapNodes=nodes;w.heapCosts=costs;w.heapScores=scores;}
@@ -208,7 +209,7 @@ export function findSharedTerrainPath(city,start,goal,blockedGrid){
   const origin=sy*width+sx,destination=gy*width+gx,terrain=terrainPathGrid(world);
   if(blockedGrid[origin])return undefined;
   if(!terrain.walkable[origin]||!terrain.walkable[destination]||blockedGrid[destination])return null;
-  const revision=`${world.revision||0}:${city.obstacleRevision||0}:${city.occupied.size}:${width}:${height}`,profile=city._pathSearchProfile;
+  const revision=`${world.topologyRevision??world.revision??0}:${city.obstacleRevision||0}:${city.occupied.size}:${width}:${height}`,profile=city._pathSearchProfile;
   let cache=sharedDestinations.get(city);
   if(!cache||cache.revision!==revision){
     cache={revision,requests:new Map(),sourceRequests:new Map(),fields:new Map(),sources:new Map()};sharedDestinations.set(city,cache);

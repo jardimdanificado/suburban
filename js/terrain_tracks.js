@@ -183,7 +183,9 @@ export class PaintCarry {
   contacts(entity,stamps,world,groundArt=[],onStep=null){
     if(!stamps.length)return [];
     const shoes=this.history.get(entity),deposits=[];
-    if(!shoes&&!groundArt.length)return deposits;
+    const isGrid=groundArt instanceof Map;
+    const hasSources=isGrid?groundArt.size>0:groundArt.length>0;
+    if(!shoes&&!hasSources)return deposits;
     const map=shoes||new Map();
     if(!shoes)this.history.set(entity,map);
     for(const stamp of stamps){
@@ -192,10 +194,13 @@ export class PaintCarry {
       const capacity=walking?3:.75;
       let state=map.get(foot);
       let stepped=null;
-      for(let i=0;i<groundArt.length;i++){
-        const item=groundArt[i],w=item.width||.86,h=item.height||.86;
-        const u=(stamp.x-item.x)/w+.5,v=(stamp.z-item.y)/h+.5;
-        if(u>=0&&u<=1&&v>=0&&v<=1){stepped=item;onStep?.(item,u,v,stamp);break;}
+      const list=isGrid?groundArt.get((Math.floor(stamp.x)>>3)+','+(Math.floor(stamp.z)>>3)):groundArt;
+      if(list){
+        for(let i=0;i<list.length;i++){
+          const item=list[i],w=item.width||.86,h=item.height||.86;
+          const u=(stamp.x-item.x)/w+.5,v=(stamp.z-item.y)/h+.5;
+          if(u>=0&&u<=1&&v>=0&&v<=1){stepped=item;onStep?.(item,u,v,stamp);break;}
+        }
       }
       if(stepped){
         if(!state){state={remaining:0,load:0,color:0xffffff};map.set(foot,state);}
@@ -425,38 +430,47 @@ export class TerrainTracks {
     this.sandCarry ||= new SandCarry();this.dirtCarry ||= new SandCarry();this.paintCarry ||= new PaintCarry();this.grassWear ||= new GrassWear();
     this.ensureWorld(renderer,world);this.time+=Math.max(0,dt);this.uniforms.terrainTrackTime.value=this.time;
     if(dt<=0)return;
-    let groundArt=[];
     const artList=city?.justice?.art;
-    if(artList?.length){
-      const artRev=`${city.justice.artRevision||0}:${artList.length}`;
-      if(!this._groundArtCache||this._groundArtCache.rev!==artRev){
-        const items=[];
+    const artRev=artList?.length?`${city.justice.artRevision||0}:${artList.length}`:'0';
+    const stains=city?.sanitation?.stains,feces=city?.sanitation?.streetFeces;
+    const sourceRev=`${artRev}:${stains?.size||0}:${feces?.size||0}`;
+    if(!this._groundSourceCache||this._groundSourceCache.rev!==sourceRev){
+      const grid=new Map(),artItems=[];
+      const addSource=(item)=>{
+        const hw=(item.width||.86)*.5,hh=(item.height||.86)*.5;
+        const x0=Math.floor(item.x-hw)>>3,x1=Math.floor(item.x+hw)>>3;
+        const y0=Math.floor(item.y-hh)>>3,y1=Math.floor(item.y+hh)>>3;
+        for(let gy=y0;gy<=y1;gy++)for(let gx=x0;gx<=x1;gx++){
+          const k=gx+','+gy;let bucket=grid.get(k);if(!bucket)grid.set(k,bucket=[]);bucket.push(item);
+        }
+      };
+      if(artList?.length){
         for(let i=0;i<artList.length;i++){
           const piece=artList[i];
           if(piece.entity?.destroyed||piece.support?.kind!=='street-graffiti'||piece.support.surface!=='ground'||(piece.wearProgress||0)>=1)continue;
           const face=piece.layers?.at(-1)||piece;
-          items.push({piece,x:piece.support.position?.x??piece.entity.x,y:piece.support.position?.y??piece.entity.y,width:piece.support.width||.86,height:piece.support.height||.86,inkColor:piece.renderedInkColor??face.color??piece.color??0xffffff});
-        }
-        this._groundArtCache={rev:artRev,items};
-      }
-      groundArt=this._groundArtCache.items;
-      for(let i=0;i<groundArt.length;i++){const item=groundArt[i];if(item.piece.renderedInkColor!=null)item.inkColor=item.piece.renderedInkColor;}
-    }
-    const groundSources=[...groundArt];
-    if(city?.sanitation?.stains?.size){
-      for(const stain of city.sanitation.stains.values()){
-        if(stain.scope==='street'&&stain.kind==='blood'&&stain.amount>0){
-          groundSources.push({stain,dirtKind:'sangue',x:stain.x,y:stain.y,width:stain.radius*2,height:stain.radius*2,inkColor:stain.color??0x8c1118});
+          const item={piece,x:piece.support.position?.x??piece.entity.x,y:piece.support.position?.y??piece.entity.y,width:piece.support.width||.86,height:piece.support.height||.86,inkColor:piece.renderedInkColor??face.color??piece.color??0xffffff};
+          artItems.push(item);addSource(item);
         }
       }
-    }
-    if(city?.sanitation?.streetFeces?.size){
-      for(const [key,pile] of city.sanitation.streetFeces){
-        if(!pile?.amount)continue;
-        const [fx,fy]=key.split(',').map(Number);
-        groundSources.push({fecesKey:key,dirtKind:'bosta',x:fx+.5,y:fy+.5,width:.7,height:.7,inkColor:0x4e3618});
+      if(stains?.size){
+        for(const stain of stains.values()){
+          if(stain.scope==='street'&&stain.kind==='blood'&&stain.amount>0){
+            addSource({stain,dirtKind:'sangue',x:stain.x,y:stain.y,width:stain.radius*2,height:stain.radius*2,inkColor:stain.color??0x8c1118});
+          }
+        }
       }
+      if(feces?.size){
+        for(const [key,pile] of feces){
+          if(!pile?.amount)continue;
+          const comma=key.indexOf(','),fx=Number(key.slice(0,comma)),fy=Number(key.slice(comma+1));
+          addSource({fecesKey:key,dirtKind:'bosta',x:fx+.5,y:fy+.5,width:.7,height:.7,inkColor:0x4e3618});
+        }
+      }
+      this._groundSourceCache={rev:sourceRev,grid,artItems};
     }
+    const groundSources=this._groundSourceCache.grid;
+    for(let i=0;i<this._groundSourceCache.artItems.length;i++){const item=this._groundSourceCache.artItems[i];if(item.piece.renderedInkColor!=null)item.inkColor=item.piece.renderedInkColor;}
     const stamps=[],paintStamps=[];
     if(city?.sanitation?.stains?.size){
       for(const stain of city.sanitation.stains.values()){
@@ -478,7 +492,7 @@ export class TerrainTracks {
         if(p.groundSmudges.length>48)p.groundSmudges.shift();
         p.wearProgress=Math.min(1,(p.wearProgress||0)+(Math.abs(stamp.kind)===1?.025:.045));
         p._smudgeSteps=(p._smudgeSteps||0)+1;
-        if(p._smudgeSteps===1||p._smudgeSteps%4===0||p.wearProgress>=1){p.smudgeRevision=(p.smudgeRevision||0)+1;if(p.wearProgress>=1)this._groundArtCache=null;}
+        if(p._smudgeSteps===1||p._smudgeSteps%4===0||p.wearProgress>=1){p.smudgeRevision=(p.smudgeRevision||0)+1;if(p.wearProgress>=1)this._groundSourceCache=null;}
         if(citizen)city?.sanitation?.soilCitizen?.(citizen,'tinta',1.0,item.inkColor,'arms');
       }else if(item.dirtKind&&citizen){
         city?.sanitation?.soilCitizen?.(citizen,item.dirtKind,item.dirtKind==='bosta'?1.5:1.2,null,'feet');
@@ -524,7 +538,7 @@ export class TerrainTracks {
         if(dirtDeposits.length)city?.sanitation?.soilCitizen?.(citizen,'barro',.06,null,'feet');
         else if(tile===TILE_ROAD_GRASS||tile===TILE_ROAD_HILL||tile===TILE_HILL)city?.sanitation?.soilCitizen?.(citizen,'terra',.025,null,'feet');
       }
-      if(groundSources.length||this.paintCarry.history.has(entity)){
+      if(groundSources.size||this.paintCarry.history.has(entity)){
         paintStamps.push(...this.paintCarry.contacts(entity,contacts,world,groundSources,(item,u,v,stamp)=>onStepGroundSource(item,u,v,stamp,citizen)));
       }
       this.grassWear.record(contacts,world,this.time);

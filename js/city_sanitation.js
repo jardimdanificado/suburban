@@ -555,17 +555,21 @@ export class CitySanitation {
     if (g) g.dirt = Math.min(100, (g.dirt || 0) + amount * (heavy ? 0.35 : 0.15));
   }
   washCitizenDirt(c, fraction = 1) {
-    if (!c?.dirtSources) return;
+    if (!c) return;
     const keep = Math.max(0, 1 - fraction);
-    for (const key of Object.keys(c.dirtSources)) {
-      c.dirtSources[key] = Number((c.dirtSources[key] * keep).toFixed(2));
+    if (c.dirtSources) {
+      for (const key of Object.keys(c.dirtSources)) {
+        c.dirtSources[key] = Number((c.dirtSources[key] * keep).toFixed(2));
+      }
+      if ((c.dirtSources.tinta || 0) <= 1) delete c.dirtTintColor;
     }
     if (c.dirtZones) {
       for (const key of Object.keys(c.dirtZones)) {
         c.dirtZones[key] = Number((c.dirtZones[key] * keep).toFixed(2));
       }
     }
-    if ((c.dirtSources.tinta || 0) <= 1) delete c.dirtTintColor;
+    const g = c.wardrobe?.[c.wearingIndex];
+    if (g && g.dirt > 0) g.dirt = Number((g.dirt * keep).toFixed(2));
   }
   requestStainCleaning(stain) {
     if (!stain || stain.jobId || !this.stains.has(stain.id)) return null;

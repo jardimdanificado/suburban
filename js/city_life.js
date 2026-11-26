@@ -60,15 +60,12 @@ export class CityLife {
   recoverBlockedPosition(c,worldRevision=this.city.world.revision||0,obstacleRevision=this.city.obstacleRevision||0,occupiedCount=this.city.occupied.size) {
     const city=this.city;
     if(c.entity.destroyed||c.indoorLocation||c.mobilityTrip||c.localBoatTrip||c.sharedBoatRide||c.fishingJob?.boatId&&c.fishingJob.stage!=='tow'||c.ridingVehicleId||c.skybridgeTransit||c.skybridgeZ)return false;
-    const checked=this.positionChecks.get(c);
-    // A citizen following a route computed against the current terrain and
-    // obstacle revisions cannot become blocked on a later waypoint. Avoid
-    // probing walkability on every tile while the route and map stay valid.
-    if(c.path?.length&&checked?.worldRevision===worldRevision&&checked.obstacleRevision===obstacleRevision&&checked.occupiedCount===occupiedCount)return false;
+    const checked=c._posCheck;
+    if(c.path?.length&&checked?.w===worldRevision&&checked.o===obstacleRevision)return false;
     const x=Math.floor(c.entity.x),y=Math.floor(c.entity.y);
-    if(checked?.x===x&&checked.y===y&&checked.worldRevision===worldRevision&&checked.obstacleRevision===obstacleRevision&&checked.occupiedCount===occupiedCount)return false;
-    if(checked){checked.x=x;checked.y=y;checked.worldRevision=worldRevision;checked.obstacleRevision=obstacleRevision;checked.occupiedCount=occupiedCount;}
-    else this.positionChecks.set(c,{x,y,worldRevision,obstacleRevision,occupiedCount});
+    if(checked&&checked.x===x&&checked.y===y&&checked.w===worldRevision&&checked.o===obstacleRevision&&checked.c===occupiedCount)return false;
+    if(checked){checked.x=x;checked.y=y;checked.w=worldRevision;checked.o=obstacleRevision;checked.c=occupiedCount;}
+    else c._posCheck={x,y,w:worldRevision,o:obstacleRevision,c:occupiedCount};
     if(city.walkable(x,y))return false;
     if(city.world.getTile(x,y)===TILE_WATER&&(c.swimming||c.path?.length||c.task==='swim-leisure'||c.task==='swim-hygiene'||c.task==='swim-exit'))return false;
     // Repair invalid ground positions, including walls and water after a route interruption.

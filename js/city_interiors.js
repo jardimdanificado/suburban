@@ -51,7 +51,7 @@ function leaveEntrance(city,c,occupied=null){
 }
 export function disperseCrowds(city){
  const groups=new Map();for(const c of city.citizens)if(!c.entity.destroyed&&!c.indoorLocation&&!c.path.length){const key=crowdTileKey(city,Math.floor(c.entity.x),Math.floor(c.entity.y)),people=groups.get(key);if(!people)groups.set(key,c);else if(Array.isArray(people))people.push(c);else groups.set(key,[people,c]);}
- let budget=32,taken=null;for(const people of groups.values())if(Array.isArray(people)&&people.length>2)for(const c of people){if(!budget) return;if(c.playerControlled||c.task||c.conversation||c.deliveryId||c.mobilityTrip||city.urgentNeed(c))continue;if(!taken){taken=new Set();for(const other of city.citizens)if(!other.entity.destroyed&&!other.indoorLocation){taken.add(crowdTileKey(city,Math.floor(other.entity.x),Math.floor(other.entity.y)));const goal=other.path?.at(-1);if(goal)taken.add(crowdTileKey(city,Math.floor(goal.x),Math.floor(goal.y)));}}leaveEntrance(city,c,taken);if(c.path.length)budget--;}
+ let budget=8,taken=null;for(const people of groups.values())if(Array.isArray(people)&&people.length>2)for(const c of people){if(!budget) return;if(c.playerControlled||c.task||c.conversation||c.deliveryId||c.mobilityTrip||city.urgentNeed(c))continue;if(!taken){taken=new Set();for(const other of city.citizens)if(!other.entity.destroyed&&!other.indoorLocation){taken.add(crowdTileKey(city,Math.floor(other.entity.x),Math.floor(other.entity.y)));const goal=other.path?.at(-1);if(goal)taken.add(crowdTileKey(city,Math.floor(goal.x),Math.floor(goal.y)));}}leaveEntrance(city,c,taken);budget--;}
 }
 
 function exit(city,c){

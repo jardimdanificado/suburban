@@ -736,8 +736,9 @@ export class CityEconomy {
     // Rotate equal bids. A scarce upstream stock serves one batch per factory
     // before any factory can reserve six batches and starve the other chains.
     const offset=(this.tradeCursor||0)%Math.max(1,buyers.length);this.tradeCursor=offset+1;
-    const totalBuyers=buyers.length;
+    const totalBuyers=buyers.length,tradeStart=performance.now();
     for (let bi=0;bi<totalBuyers;bi++) {
+      if(totalBuyers>30&&bi>0&&performance.now()-tradeStart>18){this.tradeCursor=(bi+offset)%totalBuyers;break;}
       const buyer=buyers[(bi+offset)%totalBuyers];
       const buyerPerson=this.city.relationships.businessPerson(buyer);
       const buyerInputs=this.city.vehicles.recipeFor(buyer)?.inputs||(buyer.type==='library'?{livros:1}:(civicSpec(buyer)||justiceServiceSpec(buyer))?.inputs)||(buyer.type==='paper_mill'?paperMillInputs(this.city,buyer):INDUSTRIES[buyer.type]?.inputs);
