@@ -12,7 +12,7 @@ import {JUSTICE_SKILLS,ensureJusticeSkills} from './city_justice_skills.js';
 import {businessFloors,businessJobCapacity} from './city_business_heights.js';
 import {rentOffice,rentAvailableOffice,officeStartupCost,prepareOfficeSearch,officeSpaceDemand,setupOfficeTower,officeFloors,OFFICE_BUSINESSES,OFFICE_ONLY_TYPES,createMunicipalOffice} from './city_offices.js?v=office-demand-rollout-1';
 import {taxCategory,taxRate} from './city_sales_tax.js';
-import {equityShares,offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js?v=daily-mayor-privatization-2';
+import {equityShares,offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends,distributeWorkerProfitShare} from './city_equity.js?v=daily-mayor-privatization-2';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import {externalTradeHourly,orderImport,ensureImportDepot,importDepotClaim} from './city_external_trade.js';
 import {outdoorCellReady,workCellReady,activityRoomReady} from './city_interiors.js?v=citizen-access-1';
@@ -818,13 +818,14 @@ export class CityEconomy {
           if(!this.accepts(store,good))continue;
           const claim=importDepotClaim(depot,store,good);if(!(store.worldIncoming?.[good])&&!(store.importIncoming?.[good])&&depot?.inventory[good]>0&&claim>0)local.push({seller:depot,good,price:0,available:Math.min(depot.inventory[good],claim)});
           for(const seller of businesses){
-            const makes=seller.type==='farm'&&seller.crop===good||seller.type==='bakery'&&good==='pao'||seller.type==='kitchen'&&Object.hasOwn(INDUSTRIES.kitchen.outputs,good)||Object.hasOwn(INDUSTRIES[seller.type]?.outputs||{},good);
-            if(!makes||seller.inventory[good]<1||city.findPath(seller.door,store.door)===null||city.logistics.transportLimit(seller,store)<1)continue;
+            const isProducer=seller.type==='farm'&&seller.crop===good||seller.type==='bakery'&&good==='pao'||seller.type==='kitchen'&&Object.hasOwn(INDUSTRIES.kitchen.outputs,good)||Object.hasOwn(INDUSTRIES[seller.type]?.outputs||{},good);
+            const isLocalRetail=(seller.type==='market'||seller.type==='greengrocer')&&!seller.importedUnitPrice?.[good];
+            if((!isProducer&&!isLocalRetail)||seller.inventory[good]<1||city.findPath(seller.door,store.door)===null||city.logistics.transportLimit(seller,store)<1)continue;
             const agreement=this.supplyAgreements.find(a=>a.sellerId===seller.id&&a.buyerId===store.id&&a.good===good&&a.until>city.minute),price=agreement?.unitPrice??this.goods[good].price;
-            local.push({seller,good,price,available:seller.inventory[good]});
+            local.push({seller,good,price,available:seller.inventory[good],retailPenalty:isProducer?0:1});
           }
         }
-        local.sort((a,b)=>a.price-b.price||b.available-a.available||a.seller.id-b.seller.id);
+        local.sort((a,b)=>a.price-b.price||(a.retailPenalty||0)-(b.retailPenalty||0)||b.available-a.available||a.seller.id-b.seller.id);
         let purchase=local[0]||null,quantity=0;
         if(purchase)quantity=Math.min(missing,purchase.available,inventoryFree(store),purchase.seller===depot?purchase.available:Math.min(24,city.logistics.transportLimit(purchase.seller,store)));
         else {
@@ -1201,7 +1202,7 @@ export class CityEconomy {
       if(b.balance<reserve&&owner&&owner.balance>this.city.welfare.subsistenceFloor(owner)+this.city.currency.price(2500))this.city.transfer(owner.accountId,b.accountId,Math.min(this.city.currency.price(10000),owner.balance-this.city.welfare.subsistenceFloor(owner)-this.city.currency.price(1500)),'Aporte emergencial do proprietário');
       if(b.equityShares?.length){if(b.balance>=reserve)distributeShareDividends(this.city,b);}
       else if(owner){
-        const profit = Math.max(0, b.totalRevenue - b.totalExpenses - b.dividends),dividend = Math.min(Math.floor(profit * economicPolicy(this.city,'dividendPayout')), Math.max(0, b.balance - reserve));
+        const profit = Math.max(0, b.totalRevenue - b.totalExpenses - b.dividends),distributable = Math.min(Math.floor(profit * economicPolicy(this.city,'dividendPayout')), Math.max(0, b.balance - reserve)),plrPaid = distributeWorkerProfitShare(this.city, b, distributable),dividend = Math.max(0, distributable - plrPaid);
         if(dividend>0){const shares=(b.equityPartners||[{citizenId:owner.id,amount:1}]).filter(a=>this.citizen(a.citizenId)),total=shares.reduce((n,a)=>n+a.amount,0);for(const share of shares){const amount=Math.floor(dividend*share.amount/Math.max(1,total));if(amount&&this.city.transfer(b.accountId,`citizen:${share.citizenId}`,amount,'Distribuição de lucros por quota de capital'))b.dividends+=amount;}}
       }
       if(b.balance<reserve){

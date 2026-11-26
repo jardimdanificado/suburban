@@ -115,8 +115,23 @@ export function tradeSharesHourly(city){
   }
  }
 }
+export function distributeWorkerProfitShare(city,b,distributable){
+ const rate=economicPolicy(city,'profitSharingRate');
+ if(!rate||distributable<=0||!b.workers?.length)return 0;
+ const workers=b.workers.map(id=>city.society.citizen(id)).filter(c=>c&&!c.entity?.destroyed);
+ if(!workers.length)return 0;
+ const pool=Math.floor(distributable*rate),perWorker=Math.floor(pool/workers.length);
+ if(perWorker<=0)return 0;
+ let paid=0;
+ for(const worker of workers){
+  if(city.transfer(b.accountId,worker.accountId,perWorker,'Participação nos lucros (PLR)',{buildingId:b.id})){
+   paid+=perWorker;b.dividends=(b.dividends||0)+perWorker;
+  }
+ }
+ return paid;
+}
 export function distributeShareDividends(city,b){
- if(!b.equityShares?.length)return 0;const profit=Math.max(0,b.totalRevenue-b.totalExpenses-(b.dividends||0)-(b.fiscalDistributedProfit||0)),dividend=Math.min(Math.floor(profit*economicPolicy(city,'dividendPayout')),Math.max(0,b.balance-city.fiscal.businessReserve(b)));let paid=0;
+ if(!b.equityShares?.length)return 0;const profit=Math.max(0,b.totalRevenue-b.totalExpenses-(b.dividends||0)-(b.fiscalDistributedProfit||0)),distributable=Math.min(Math.floor(profit*economicPolicy(city,'dividendPayout')),Math.max(0,b.balance-city.fiscal.businessReserve(b)));let paid=distributeWorkerProfitShare(city,b,distributable);const dividend=Math.max(0,distributable-paid);
  for(const share of b.equityShares){const amount=Math.floor(dividend*share.points/TOTAL);if(amount&&city.transfer(b.accountId,share.accountId,amount,'Distribuição de lucros por participação',{buildingId:b.id,points:share.points})){paid+=amount;b.dividends=(b.dividends||0)+amount;}}
  return paid;
 }

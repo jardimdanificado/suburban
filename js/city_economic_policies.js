@@ -25,6 +25,7 @@ export const ECONOMIC_POLICIES=Object.freeze({
  municipalRentals:spec('Locação de imóveis municipais',true,0,1,1,'Moradia','Permite locar imóveis comerciais e residenciais municipais; habitação social continua protegida.'),
  municipalRentDiscount:spec('Locação municipal: desconto',.1,0,.75,.05,'Moradia','Desconto sobre novos contratos municipais de aluguel.'),
  dividendPayout:spec('Distribuição de lucro empresarial',.35,0,.8,.05,'Empresas','Limita dividendos ao lucro realizado e ao caixa livre após a reserva operacional.'),
+ profitSharingRate:spec('PLR: participação dos trabalhadores nos lucros',.2,0,.5,.05,'Trabalho','Destina parcela do lucro distribuível aos funcionários ativos da empresa.'),
  businessReserveDays:spec('Reserva de folha empresarial em dias',3,1,14,1,'Empresas','Evita prender uma semana inteira de salários em toda pequena empresa.'),
  serviceBufferDays:spec('Custeio: dias de caixa por serviço',2,1,7,1,'Orçamento','Dimensiona o caixa operacional das instalações públicas.'),
  directHiring:spec('Contratação direta pelos empregadores',true,0,1,1,'Trabalho','Entrevistas no empregador quando o balcão municipal não atende; candidatura nunca depende indefinidamente de um secretário.'),
@@ -45,7 +46,7 @@ export function setEconomicPolicy(city,key,value){if(!validateEconomicPolicy(key
 export function economicPolicyAffinity(city,profile,payload){const s=ECONOMIC_POLICIES[payload.key];if(!s)return 0;const direction=Math.sign(Number(payload.value)-Number(payload.previousValue??economicPolicy(city,payload.key)));const social=['Patrimônio','Renda','Proteção econômica'].includes(s.group);return direction*(social?profile.redistribution*.8-profile.economy*.4:['Empresas','Crédito','Trabalho'].includes(s.group)?profile.economy*.6+.25:profile.fiscal*.5+.15);}
 export function recordEconomicIncome(city,from,to,amount,reason){
  const person=city.accounts.get(to);if(!person?.entity?.properties?.citizen||person.entity.destroyed)return;
- if(/^(Salário|Primeiro aluguel|Aluguel|Distribuição de lucros|Lucro de empresa|Herança)/.test(reason)){
+ if(/^(Salário|Primeiro aluguel|Aluguel|Distribuição de lucros|Lucro de empresa|Participação nos lucros|Herança)/.test(reason)){
   const income=person.fiscalIncome??={income:0,dividends:0,rent:0,inheritance:0};
   if(/^Herança/.test(reason))income.inheritance+=amount;else {income.income+=amount;if(/lucros|Lucro/.test(reason))income.dividends+=amount;if(/aluguel|Aluguel/.test(reason))income.rent+=amount;}
  }
