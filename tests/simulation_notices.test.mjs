@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup } from './helpers/city.mjs';
-import { createSimulationNoticeTracker, pollSimulationNotices } from '../js/city_simulation_notices.js';
+import { createSimulationNoticeTracker, pollSimulationNotices, dismissSimulationNotice, takeSimulationNotice } from '../js/city_simulation_notices.js';
 
 test('simulation notices collect deaths, combat, council votes, decrees, and cleanup programs', () => {
   const city = setup({ starter: true, population: 24 });
@@ -45,7 +45,7 @@ test('simulation notices collect deaths, combat, council votes, decrees, and cle
     position: { x: building.door.x, y: building.door.y },
   });
 
-  const notices = pollSimulationNotices(city, tracker);
+  const notices = pollSimulationNotices(city, tracker, 1000, { ttlMs: 5000 });
   assert.equal(notices.length, 6);
   assert.deepEqual(
     notices.map(n => n.category),
@@ -60,4 +60,12 @@ test('simulation notices collect deaths, combat, council votes, decrees, and cle
   assert(crimeNotice.text.includes('agressão em via'), 'expected how/reason');
   assert.equal(notices[5].title, 'Decreto do Prefeito');
   assert.equal(notices[5].billId, 99);
+
+  // Player can dismiss a single notice or open/take one, and remaining expire after ttlMs.
+  assert.equal(dismissSimulationNotice(tracker, notices[0].id), true);
+  assert.equal(tracker.queue.length, 5);
+  const opened = takeSimulationNotice(tracker, crimeNotice.id);
+  assert.equal(opened?.id, crimeNotice.id);
+  assert.equal(tracker.queue.length, 4);
+  assert.equal(pollSimulationNotices(city, tracker, 6500, { ttlMs: 5000 }).length, 0);
 });

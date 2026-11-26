@@ -61,6 +61,8 @@ function crimeDetailsSummary(city, record) {
   };
 }
 
+export const DEFAULT_INBOX_TTL_MS = 12000;
+
 export function createSimulationNoticeTracker() {
   return {
     lastEventId: null,
@@ -72,7 +74,22 @@ export function createSimulationNoticeTracker() {
   };
 }
 
-export function pollSimulationNotices(city, tracker) {
+export function dismissSimulationNotice(tracker, id) {
+  if (!tracker?.queue?.length) return false;
+  const idx = tracker.queue.findIndex(item => item.id === id);
+  if (idx < 0) return false;
+  tracker.queue.splice(idx, 1);
+  return true;
+}
+
+export function takeSimulationNotice(tracker, id) {
+  if (!tracker?.queue?.length) return null;
+  const idx = tracker.queue.findIndex(item => item.id === id);
+  if (idx < 0) return null;
+  return tracker.queue.splice(idx, 1)[0];
+}
+
+export function pollSimulationNotices(city, tracker, now = Date.now(), { ttlMs = DEFAULT_INBOX_TTL_MS } = {}) {
   if (!city || !tracker) return [];
   if (tracker.lastMinute != null && city.minute < tracker.lastMinute) {
     tracker.lastEventId = null;
@@ -81,6 +98,14 @@ export function pollSimulationNotices(city, tracker) {
     tracker.queue.length = 0;
   }
   tracker.lastMinute = city.minute;
+
+  // Discard expired inbox items that the player chose not to open.
+  for (let i = tracker.queue.length - 1; i >= 0; i--) {
+    const item = tracker.queue[i];
+    if (now - (item.receivedAt ?? now) >= (item.durationMs ?? ttlMs)) {
+      tracker.queue.splice(i, 1);
+    }
+  }
 
   const entries = city.history?.entries || [];
   if (tracker.lastEventId == null) {
@@ -111,6 +136,8 @@ export function pollSimulationNotices(city, tracker) {
       category: rule.category,
       text: crimeInfo?.text || entry.text,
       minute: entry.minute ?? city.minute,
+      receivedAt: now,
+      durationMs: ttlMs,
       eventId: entry.id,
       billId: entry.data?.billId ?? null,
       justiceCaseId: kind === 'crime-recorded' ? (entry.data?.caseId ?? null) : null,
@@ -131,6 +158,8 @@ export function pollSimulationNotices(city, tracker) {
         category: 'decree',
         text: `${bill.title} — ${DECREE_STATUS_LABELS[bill.status]}.`,
         minute: city.minute,
+        receivedAt: now,
+        durationMs: ttlMs,
         eventId: bill.eventId ?? null,
         billId: bill.id,
         citizenIds: [],
@@ -146,6 +175,8 @@ export function pollSimulationNotices(city, tracker) {
         category: 'council',
         text: `${bill.title} — ${label}.`,
         minute: city.minute,
+        receivedAt: now,
+        durationMs: ttlMs,
         eventId: bill.eventId ?? null,
         billId: bill.id,
         citizenIds: [],
@@ -153,6 +184,6 @@ export function pollSimulationNotices(city, tracker) {
     }
   }
 
-  if (tracker.queue.length > 40) tracker.queue.splice(0, tracker.queue.length - 40);
+  if (tracker.queue.length > 12) tracker.queue.splice(0, tracker.queue.length - 12);
   return tracker.queue;
 }

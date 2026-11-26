@@ -7196,7 +7196,7 @@ export class RCT3DRenderer {
       const deep = deepBedSample(px, pz);
       if (localProfile) {
         const s = localProfile.sample(px, pz);
-        const blend = Math.max(0, Math.min(1, (s.distance - 2.4) / 0.8));
+        const blend = Math.max(0, Math.min(1, (s.distance - 2.9) / 0.8));
         const y = s.height * (1 - blend) + deep.y * blend;
         const depthFactor = Math.max(0, Math.min(1, (WATER_LEVEL - y) / 0.85));
         const wet = 0.75 * (1 - blend) + (0.75 - depthFactor * 0.32) * blend;
