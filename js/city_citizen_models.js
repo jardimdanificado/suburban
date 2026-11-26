@@ -10,7 +10,7 @@ import {CITIZEN_BODY_FACE_COUNT,CITIZEN_GARMENT_FACES} from './city_garment_face
 import {fittedSkirtSurface} from './city_citizen_skirts.js?v=anatomical-dress-skirt-1';
 import {createPoseWeightMorph,computeWeightMorphAttributes} from './city_citizen_weight_morph.js?v=anatomical-3d-morph-1';
 /** OBJ snapshots share one geometry per frame and one instanced draw per visible frame. */
-export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],caminhar:[0,1,2,3,4,5],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0],acenar:[0,1,2,3,4,5],comemorar:[0,1,2,3],conversar:[0,1,2,3],cavar:[0,1,2,3],colher:[0,1,2,3],aplaudir:[0,1,2,3,4,5],beber:[0,1,2,3],pescar:[0],chorar:[0,1,2,3],tocar_violao:[0,1,2,3],escalar:[0,1,2,3,4,5],pichar:[0,1,2,3],dancar_samba:[0,1,2,3,4,5,6,7,8,9],dancar_salsa:[0,1,2,3,4,5,6,7,8,9],dancar_rumba:[0,1,2,3,4,5,6,7,8,9],dancar_hiphop:[0,1,2,3,4,5,6,7,8,9],dancar_boba:[0,1,2,3,4,5,6,7,8,9],dancar_breakdance:[0,1,2,3,4,5,6,7,8,9],dancar_macarena:[0,1,2,3,4,5,6,7,8,9],nadar:[0,1,2,3,4,5],boiar:[0,1,2,3],carregar:[0,1,2,3,4,5],carregar_parado:[0,1,2,3],droga_cafe_andar:[0,1,2,3,4,5],droga_cafe_idle:[0,1,2,3],droga_alcool_andar:[0,1,2,3,4,5],droga_alcool_idle:[0,1,2,3],droga_folha_coca_andar:[0,1,2,3,4,5],droga_folha_coca_idle:[0,1,2,3],droga_tabaco_andar:[0,1,2,3,4,5],droga_tabaco_idle:[0,1,2,3],droga_cannabis_andar:[0,1,2,3,4,5],droga_cannabis_idle:[0,1,2,3],droga_coca_andar:[0,1,2,3,4,5],droga_coca_idle:[0,1,2,3],droga_cubensis_andar:[0,1,2,3,4,5],droga_cubensis_idle:[0,1,2,3],droga_amanita_andar:[0,1,2,3,4,5],droga_amanita_idle:[0,1,2,3],droga_peyote_andar:[0,1,2,3,4,5],droga_peyote_idle:[0,1,2,3],droga_trombeta_anjo_andar:[0,1,2,3,4,5],droga_trombeta_anjo_idle:[0,1,2,3]});
+export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],caminhar:[0,1,2,3,4,5],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0],acenar:[0,1,2,3,4,5],comemorar:[0,1,2,3],conversar:[0,1,2,3],cavar:[0,1,2,3],colher:[0,1,2,3],aplaudir:[0,1,2,3,4,5],beber:[0,1,2,3],pescar:[0],chorar:[0,1,2,3],tocar_violao:[0,1,2,3],escalar:[0,1,2,3,4,5],pichar:[0,1,2,3],pedalar:[0,1,2,3],patinete:[0,1,2,3],skate:[0,1,2,3],patins:[0,1,2,3],empurrar_carrinho:[0,1,2,3],dancar_samba:[0,1,2,3,4,5,6,7,8,9],dancar_salsa:[0,1,2,3,4,5,6,7,8,9],dancar_rumba:[0,1,2,3,4,5,6,7,8,9],dancar_hiphop:[0,1,2,3,4,5,6,7,8,9],dancar_boba:[0,1,2,3,4,5,6,7,8,9],dancar_breakdance:[0,1,2,3,4,5,6,7,8,9],dancar_macarena:[0,1,2,3,4,5,6,7,8,9],nadar:[0,1,2,3,4,5],boiar:[0,1,2,3],carregar:[0,1,2,3,4,5],carregar_parado:[0,1,2,3],droga_cafe_andar:[0,1,2,3,4,5],droga_cafe_idle:[0,1,2,3],droga_alcool_andar:[0,1,2,3,4,5],droga_alcool_idle:[0,1,2,3],droga_folha_coca_andar:[0,1,2,3,4,5],droga_folha_coca_idle:[0,1,2,3],droga_tabaco_andar:[0,1,2,3,4,5],droga_tabaco_idle:[0,1,2,3],droga_cannabis_andar:[0,1,2,3,4,5],droga_cannabis_idle:[0,1,2,3],droga_coca_andar:[0,1,2,3,4,5],droga_coca_idle:[0,1,2,3],droga_cubensis_andar:[0,1,2,3,4,5],droga_cubensis_idle:[0,1,2,3],droga_amanita_andar:[0,1,2,3,4,5],droga_amanita_idle:[0,1,2,3],droga_peyote_andar:[0,1,2,3,4,5],droga_peyote_idle:[0,1,2,3],droga_trombeta_anjo_andar:[0,1,2,3,4,5],droga_trombeta_anjo_idle:[0,1,2,3]});
 const citizenHasPath=c=>c?._renderPathActive??!!c?.path?.length;
 export function citizenIsSleeping(c){
  if(c?.task!=='energy'||!c.sleep?.active||citizenHasPath(c)||c.mobilityTrip||c.ridingVehicleId||c.deliveryId)return false;
@@ -31,7 +31,7 @@ function activeSubstanceEffect(c){
   return null;
 }
 const TOOL_CLIPS=Object.freeze({cavar:'shovel',colher:'scythe',pescar:'rod',tocar_violao:'guitar',beber:'mug',pichar:'spray'});
-const ACTION_CLIPS=new Set(['run','caminhar','pedal','murro','chute','derrotado','nadar','carregar','escalar','pichar']);
+const ACTION_CLIPS=new Set(['run','caminhar','pedal','pedalar','patinete','skate','patins','empurrar_carrinho','murro','chute','derrotado','nadar','carregar','escalar','pichar']);
 const PRINTED_GARMENTS=new Set(['camisa social','camisa estampada','vestido estampado']),PATTERNED_GARMENTS=new Set(['camisa estampada','vestido estampado']),DRESS_PIECES=new Set(['vestido','vestido estampado']),SKIRT_PIECES=new Set(['saia','saia longa']),HAND_PIECES=new Set(['luvas']);
 const COMBINABLE_GARMENTS=new Set(['camisa','camiseta','regata','terno','casaco','trapos','macacão']);
 const HEADWEAR_PIECES=new Set(['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','cesta']);
@@ -43,9 +43,10 @@ export function citizenAnimation(c,moving=false,inWater=undefined){
   if(c.surrenderedUntil)return 'sentado_no_chao';
   if(c.mobilityTrip?.stage==='boarding')return moving?'run':'idle';
   if(c.ridingVehicleId){
-    if(c.ridingVehicleKind==='carrinho')return 'run';
-    if(BIKE_KINDS.has(c.ridingVehicleKind))return c.ridingAsPassenger?'sentado_no_banco':'seated';
-    return GLIDE_KINDS.has(c.ridingVehicleKind)?'glide':'passenger';
+    if(c.ridingVehicleKind==='carrinho')return moving?'empurrar_carrinho':'empurrar_carrinho_parado';
+    if(BIKE_KINDS.has(c.ridingVehicleKind))return c.ridingAsPassenger?'sentado_no_banco':(moving?'pedalar':'pedalar_parado');
+    if(GLIDE_KINDS.has(c.ridingVehicleKind))return moving?c.ridingVehicleKind:`${c.ridingVehicleKind}_parado`;
+    return 'passenger';
   }
   if(c.climbing){
     if(c._renderIndoorPosition===null&&c.climbing.phase==='down'){}
@@ -96,6 +97,11 @@ export function citizenFrame(clip,time,phase=0,oneShot=false){
   if(clip==='seated')return FRAME_POSES.use[2];
   if(clip==='glide')return FRAME_POSES.use[1];
   if(clip==='escalar_parado')return FRAME_POSES.escalar[0];
+  if(clip==='pedalar_parado')return FRAME_POSES.pedalar[0];
+  if(clip==='patinete_parado')return FRAME_POSES.patinete[0];
+  if(clip==='skate_parado')return FRAME_POSES.skate[0];
+  if(clip==='patins_parado')return FRAME_POSES.patins[0];
+  if(clip==='empurrar_carrinho_parado')return FRAME_POSES.empurrar_carrinho[0];
   const sequence=clip==='pedal'?[0,2,4]:clip==='use'?[0,1]:CITIZEN_MODEL_FRAMES[clip]||CITIZEN_MODEL_FRAMES.idle,poseClip=clip==='pedal'?'run':clip in CITIZEN_MODEL_FRAMES?clip:'idle';
   if(sequence.length===1)return FRAME_POSES[poseClip][sequence[0]];
   const fps=clip==='caminhar'?6.5:clip.endsWith('_andar')?6:ACTION_CLIPS.has(clip)?8:clip.startsWith('dancar_')?5:clip==='conversar'?2.5:4,index=Math.floor(Math.max(0,time)*fps+phase),frame=sequence[oneShot?Math.min(index,sequence.length-1):index%sequence.length];
@@ -194,11 +200,11 @@ function partyNumberSurface(THREE,data,number){
   for(let i=0;i<digits.length;i++){const digit=digits[i],cx=x-width/2+digitW*(i+.5),barW=digitW*.68,barH=thickness,sideW=thickness,midY=centerY;for(const seg of segments[digit]||[]){if(seg===0)rect(cx,midY+height*.43,barW,barH);if(seg===3)rect(cx,midY,barW,barH);if(seg===6)rect(cx,midY-height*.43,barW,barH);if(seg===1)rect(cx-barW*.49,midY+height*.22,sideW,height*.38);if(seg===2)rect(cx+barW*.49,midY+height*.22,sideW,height*.38);if(seg===4)rect(cx-barW*.49,midY-height*.22,sideW,height*.38);if(seg===5)rect(cx+barW*.49,midY-height*.22,sideW,height*.38);}}
   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));geometry.computeBoundingSphere();return geometry;
 }
-function carryBoxGeometry(THREE){
+export function carryBoxGeometry(THREE){
   const data=cargoCrateSurface();
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(data.positions,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(data.normals,3));g.setAttribute('color',new THREE.Float32BufferAttribute(data.colors,3));g.computeBoundingSphere();return g;
 }
-function carryBoxAnchor(data){
+export function carryBoxAnchor(data){
   const pos=data.positions;let x=0,y=0,z=0,count=0;
   for(const base of [82,205])for(let f=base;f<base+12;f++)for(let c=0;c<3;c++){const i=f*9+c*3;x+=pos[i];y+=pos[i+1];z+=pos[i+2];count++;}
   return {x:x/(count||1),y:y/(count||1)+.03,z:z/(count||1)+.04};
@@ -208,15 +214,23 @@ function handCenter(pos,base){
   for(let f=base;f<base+12;f++)for(let c=0;c<3;c++){const i=f*9+c*3;x+=pos[i];y+=pos[i+1];z+=pos[i+2];count++;}
   return [x/(count||1),y/(count||1),z/(count||1)];
 }
-function toolAnchor(data,kind){
+export function toolAnchor(data,kind){
   const l=handCenter(data.positions,82),r=handCenter(data.positions,205);
-  if(kind==='mug'||kind==='spray')return {x:r[0],y:r[1]+.02,z:r[2]+.02,ax:0,ay:1,az:0,angle:0};
-  if(kind==='rod')return {x:r[0],y:r[1]+.01,z:r[2]+.02,ax:1,ay:0,az:0,angle:-.42};
+  if(kind==='mug')return {x:r[0],y:r[1]+.01,z:r[2]+.03,ax:0,ay:1,az:0,angle:0};
+  if(kind==='spray')return {x:r[0],y:r[1]+.02,z:r[2]+.03,ax:1,ay:0,az:0,angle:.2};
   const mx=(l[0]+r[0])*.5,my=(l[1]+r[1])*.5,mz=(l[2]+r[2])*.5;
-  if(kind==='guitar')return {x:mx,y:my-.02,z:mz+.05,ax:0,ay:0,az:1,angle:-.52};
-  return {x:mx,y:my,z:mz+.02,ax:1,ay:0,az:0,angle:.36};
+  if(kind==='rod')return {x:mx,y:my+.02,z:mz+.02,ax:1,ay:0,az:0,angle:-.55};
+  if(kind==='guitar')return {x:mx,y:my-.01,z:mz+.14,ax:0,ay:0,az:1,angle:-.45};
+  let dx=r[0]-l[0],dy=r[1]-l[1],dz=r[2]-l[2];
+  if(dy<0){dx=-dx;dy=-dy;dz=-dz;}
+  const len=Math.hypot(dx,dy,dz);
+  if(len<1e-3)return {x:mx,y:my,z:mz+.02,ax:1,ay:0,az:0,angle:.36};
+  dx/=len;dy/=len;dz/=len;
+  const ax=dz,az=-dx,alen=Math.hypot(ax,az),angle=Math.acos(Math.max(-1,Math.min(1,dy)));
+  if(alen<1e-4)return {x:mx,y:my,z:mz+.02,ax:1,ay:0,az:0,angle:0};
+  return {x:mx,y:my-.04,z:mz+.02,ax:ax/alen,ay:0,az:az/alen,angle};
 }
-function toolPropGeometry(THREE,kind){
+export function toolPropGeometry(THREE,kind){
   const p=[],n=[],col=[];
   const box=(cx,cy,cz,w,h,d,hex)=>{
     const hw=w/2,hh=h/2,hd=d/2,cr=((hex>>16)&255)/255,cg=((hex>>8)&255)/255,cb=(hex&255)/255;
@@ -656,7 +670,7 @@ if (vCitizenDirt.a > 0.05) {
     const poseBodyShape=clip==='sentado_no_banco'&&bodyShape.fat>.9?{...bodyShape,fat:.9}:bodyShape;
     if(actionState){const token=`${clip}:${actionToken??''}`;if(motion.actionToken!==token){motion.actionToken=token;motion.actionStartedAt=this.clock;}}
     else motion.actionToken=null;
-    const animationTime=(clip==='run'||clip==='caminhar'||clip==='pedal'||clip.endsWith('_andar'))?motion.walkFrame/8:actionState?this.clock-(motion.actionStartedAt??this.clock):this.clock,pose=citizenFrame(clip,animationTime,actionState?0:(entity.id*13)%17,actionState),key=`${pose.clip}:${pose.frame}`;
+    const animationTime=(clip==='run'||clip==='caminhar'||clip==='pedal'||clip==='pedalar'||clip==='patinete'||clip==='skate'||clip==='patins'||clip==='empurrar_carrinho'||clip.endsWith('_andar'))?motion.walkFrame/8:actionState?this.clock-(motion.actionStartedAt??this.clock):this.clock,pose=citizenFrame(clip,animationTime,actionState?0:(entity.id*13)%17,actionState),key=`${pose.clip}:${pose.frame}`;
     if(c.climbing){motion.angle=Math.atan2(c.climbing.facingX-x,c.climbing.facingY-y);renderAngle=motion.angle;}
     else if(!traveling&&!sleeping&&c.facingTarget)motion.angle=Math.atan2(c.facingTarget.x-x,c.facingTarget.y-y);
     const appearance=this.appearanceFor(c,entity),{piece,printed,patterned,garment,garmentHex,garmentColorHex,printId,garmentMaterial,lower,lowerSkirt,itemColorHexes}=appearance;
@@ -676,7 +690,7 @@ if (vCitizenDirt.a > 0.05) {
         this.group.add(clothing);batch.clothingMesh=clothing;
       }batch.capacity=capacity;
     }
-    const bikeRider=c.ridingVehicleId&&BIKE_KINDS.has(c.ridingVehicleKind),riderLift=bikeRider?(c.ridingAsPassenger?0.23:0.38):c.ridingVehicleId?0.18:0;
+    const bikeRider=c.ridingVehicleId&&BIKE_KINDS.has(c.ridingVehicleKind),riderLift=bikeRider?(c.ridingAsPassenger?0.23:0.38):c.ridingVehicleKind==='patinete'?0.14:c.ridingVehicleKind==='skate'?0.136:c.ridingVehicleKind==='patins'?0.09:c.ridingVehicleKind==='carrinho'?0:c.ridingVehicleId?0.18:0;
     const size=(entity.properties.render.size||1)*(perspective?1.05:1),heightScale=(c.bodyHeightCm||170)/170,baseSurfaceH=waterSurfaceY!=null&&(clip==='nadar'||clip==='boiar')?(clip==='boiar'?waterSurfaceY-0.77*size*heightScale:waterSurfaceY-0.32*size):surfaceH,insideZ=c.indoorLocation?(inside?.z??0):0,positionY=baseSurfaceH+(posePoint?.z??insideZ)+(motion.renderClimbZ||0)+riderLift,bodyIndex=batch.count;
     const transformUnchanged=motion.bodyBatch===batch&&motion.bodyMesh===batch.mesh&&motion.clothingMesh===batch.clothingMesh&&motion.bodyIndex===bodyIndex&&motion.bodyFrame===this.frameToken-1&&motion.bodyX===renderX&&motion.bodyY===positionY&&motion.bodyZ===renderY&&motion.bodyAngle===renderAngle&&motion.bodySize===size&&motion.bodyHeightScale===heightScale&&motion.bodyLying===lying;
     this.position.set(renderX,positionY,renderY);

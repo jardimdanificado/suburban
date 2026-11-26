@@ -112,7 +112,7 @@ test('hat meshes share one normalized shape while each animated frame retains it
 });
 test('animation distinguishes actual movement, on-site work, idle and bicycle poses',()=>{
  assert.equal(citizenAnimation({task:null,path:[]}), 'idle');assert.equal(citizenAnimation({task:'work',path:[],workCell:{x:0,y:0}}), 'use');assert.equal(citizenAnimation({task:'work',path:[{}]},true),'run');
- assert.equal(citizenAnimation({task:'work',path:[{}]},false),'idle');assert.equal(citizenAnimation({ridingVehicleId:1,ridingVehicleKind:'bicicleta',mobilityTrip:{stage:'riding'}},true),'seated');assert.deepEqual(citizenFrame('mount',.3),{clip:'use',frame:0});assert.deepEqual(citizenFrame('passenger',.3),{clip:'use',frame:0});
+ assert.equal(citizenAnimation({task:'work',path:[{}]},false),'idle');assert.equal(citizenAnimation({ridingVehicleId:1,ridingVehicleKind:'bicicleta',mobilityTrip:{stage:'riding'}},true),'pedalar');assert.equal(citizenAnimation({ridingVehicleId:2,ridingVehicleKind:'patinete'},true),'patinete');assert.equal(citizenAnimation({ridingVehicleId:3,ridingVehicleKind:'skate'},true),'skate');assert.equal(citizenAnimation({ridingVehicleId:4,ridingVehicleKind:'patins'},true),'patins');assert.equal(citizenAnimation({ridingVehicleId:5,ridingVehicleKind:'carrinho'},true),'empurrar_carrinho');assert.deepEqual(citizenFrame('mount',.3),{clip:'use',frame:0});assert.deepEqual(citizenFrame('passenger',.3),{clip:'use',frame:0});
  assert.deepEqual([0,.125,.25].map(time=>citizenFrame('pedal',time).frame),[0,2,4]);
  assert.notEqual(citizenFrame('run',0).frame,citizenFrame('run',.15).frame);assert.equal(citizenFrame('use',.5).frame,0);assert.equal(citizenFrame('seated',.5).frame,2);assert.equal(citizenFrame('use',.75).frame,1);
 });
@@ -172,13 +172,13 @@ test('bicycle riders stay seated when stationary and a waiting boarding rider st
  const {model}=await models(),e=person(0);e.properties.citizen.ridingVehicleId=1;e.properties.citizen.ridingVehicleKind='bicicleta';
  const pose=()=>[...model.batches].find(([,b])=>b.count)?.[0];
  e.properties.citizen.mobilityTrip={stage:'riding'};
- model.begin(0,1);model.add(e,0);model.end();assert.equal(pose(),'use:2');
- model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:2');
- e.x=.25;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:2');
- e.x=.5;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:2');
+ model.begin(0,1);model.add(e,0);model.end();assert.equal(pose(),'pedalar:0');
+ model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'pedalar:0');
+ e.x=.25;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'pedalar:1');
+ e.x=.5;model.begin(.1,1);model.add(e,0);model.end();assert.match(pose(),/^pedalar:[0-3]$/);
  e.properties.citizen.mobilityTrip.stage='boarding';model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'idle:0');
- e.properties.citizen.mobilityTrip=null;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:2');
- e.properties.citizen.ridingVehicleKind='patinete';assert.equal(citizenAnimation(e.properties.citizen,true),'glide');
+ e.properties.citizen.mobilityTrip=null;model.begin(.1,1);model.add(e,0);model.end();assert.match(pose(),/^pedalar:[0-3]$/);
+ e.properties.citizen.ridingVehicleKind='patinete';assert.equal(citizenAnimation(e.properties.citizen,true),'patinete');
 });
 
 test('each garment replaces a distinct part of every animated body and follows its pose',async()=>{

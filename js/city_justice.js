@@ -879,8 +879,8 @@ export class CityJustice {
       if(preferUpper){yield first.value;yield* upper;}
       yield* ground;
       if(!preferUpper&&!first.done){yield first.value;yield* upper;}
-    })();let route=null;
-    for(const support of targets){const path=city.findPath(c.entity,support.approach);if(path!==null){route={support,path};break;}}
+    })();let route=null,probes=0;const maxProbes=city.fastForward?4:8;
+    for(const support of targets){if(++probes>maxProbes)break;const path=city.findPath(c.entity,support.approach);if(path!==null){route={support,path};break;}}
     if(!route)return false;
     const building=route.support.buildingId!=null?city.building(route.support.buildingId):null,owner=building?.ownerId!=null?city.society.citizen(building.ownerId):null,mayor=city.economy?.mayorId!=null?city.society.citizen(city.economy.mayorId):null;
     const hostilityRoll=city.random();
@@ -908,8 +908,8 @@ export class CityJustice {
       const {building,point}=sites[0],owner=building.ownerId==null?null:city.society.citizen(building.ownerId),party=city.politics.parties.filter(item=>item.active).sort((a,b)=>a.id-b.id)[0],attackRoll=city.random(),attackParty=!!party&&attackRoll<.25,attackPerson=!attackParty&&owner&&attackRoll<.55,subjectId=attackPerson?owner.id:attackParty?(city.society.citizen(city.economy.mayorId)?.id??null):null,partyId=attackParty?party.id:null,targetName=attackParty?party.name:attackPerson?owner.entity.properties.name:building.municipal?'Prefeitura':city.economy.businesses.some(company=>company.id===building.id)?owner?.entity.properties.name||building.entity.properties.name:building.entity.properties.name;
       const content=city.random()>=.15?graffitiContent(city,c,{xingamento:true,pixacao:true,targetName,intensidade:.75}):graffitiContent(city,c,{protest:true,targetName});
       const surfaces=nearbyGraffitiSurfaces(city,c,8).filter(s=>['wall','retaining','ground'].includes(s.surface));
-      let surface=null,path=null;
-      for(const candidate of surfaces){const p=city.findPath(c.entity,candidate.approach);if(p!==null){surface=candidate;path=p;break;}}
+      let surface=null,path=null,probes=0;const maxProbes=city.fastForward?4:8;
+      for(const candidate of surfaces){if(++probes>maxProbes)break;const p=city.findPath(c.entity,candidate.approach);if(p!==null){surface=candidate;path=p;break;}}
       if(!surface){
         path=city.findPath(c.entity,point);
         if(path===null)continue;

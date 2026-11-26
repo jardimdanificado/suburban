@@ -47,6 +47,27 @@ const CLIP_LABELS = {
   sentado_no_banco: 'Sentado no banco',
   sentado_no_chao: 'Sentado no chão',
   varrer: 'Varrendo',
+  aplaudir: 'Aplaudindo',
+  beber: 'Bebendo',
+  carregar_parado: 'Carregando (parado)',
+  chorar: 'Chorando',
+  colher: 'Colhendo',
+  dancar_boba: 'Dança boba',
+  dancar_breakdance: 'Breakdance',
+  dancar_hiphop: 'Hip hop',
+  dancar_macarena: 'Macarena',
+  dancar_rumba: 'Rumba',
+  dancar_salsa: 'Salsa',
+  dancar_samba: 'Samba',
+  empurrar_carrinho: 'Empurrando carrinho',
+  escalar: 'Escalando',
+  patins: 'Patins',
+  patinete: 'Patinete',
+  pedalar: 'Pedalando',
+  pescar: 'Pescando',
+  pichar: 'Pichando',
+  skate: 'Skate',
+  tocar_violao: 'Tocando violão',
 };
 
 function readCatalog() {
@@ -271,6 +292,8 @@ function buildHtml(groups, outFile) {
 <script type="module">
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { createAnimalSpeciesTextures } from "./${assetBase}js/animal_textures.js";
+import { garmentSurface, carryBoxGeometry, carryBoxAnchor, toolPropGeometry, toolAnchor } from "./${assetBase}js/city_citizen_models.js";
+import { mobilityModelGeometry, patinsSkateGeometry } from "./${assetBase}js/city_mobility_models.js";
 
 const manifest = window.__ANIMAL_PREVIEW__;
 const assetBase = new URL(manifest.assetBase + "data/animals/", document.baseURI);
@@ -353,37 +376,12 @@ for (const group of manifest.groups) {
   groupsEl.append(section);
 }
 
-function parseUVs(text) {
-  const uvs = [];
-  const faceUVs = [];
-  for (const line of text.split(/\\r?\\n/)) {
-    const row = line.trim();
-    if (!row || row.startsWith("#")) continue;
-    const parts = row.split(/\\s+/);
-    const tag = parts.shift();
-    if (tag === "vt") uvs.push([Number(parts[0]) || 0, Number(parts[1]) || 0]);
-    else if (tag === "f" && parts.length >= 3) {
-      const idx = parts.map(part => {
-        const vt = part.split("/")[1];
-        return vt ? Math.max(0, Number(vt) - 1) : 0;
-      });
-      for (let i = 1; i < idx.length - 1; i++) faceUVs.push([idx[0], idx[i], idx[i + 1]]);
-    }
-  }
-  const out = new Float32Array(faceUVs.length * 6);
-  let offset = 0;
-  for (const tri of faceUVs) for (const vi of tri) {
-    const uv = uvs[vi] || [0, 0];
-    out[offset++] = uv[0];
-    out[offset++] = uv[1];
-  }
-  return out;
-}
-
 function parseOBJ(text) {
   const vertices = [];
+  const uvs = [];
   const normals = [];
   const triangles = [];
+  let hasUV = false;
   const index = (raw, length) => {
     const n = Number(raw);
     if (!Number.isInteger(n) || n === 0) throw Error("OBJ: índice inválido");
@@ -397,13 +395,17 @@ function parseOBJ(text) {
     const fields = row.split(/\\s+/);
     const tag = fields.shift();
     if (tag === "v" || tag === "vn") {
-      const value = fields.slice(0, 3).map(Number);
-      (tag === "v" ? vertices : normals).push(value);
+      (tag === "v" ? vertices : normals).push(fields.slice(0, 3).map(Number));
+    } else if (tag === "vt") {
+      uvs.push([Number(fields[0]) || 0, Number(fields[1]) || 0]);
     } else if (tag === "f") {
       const face = fields.map(part => {
         const bits = part.split("/");
+        const uv = bits[1] ? index(bits[1], uvs.length) : null;
+        if (uv != null) hasUV = true;
         return {
           vertex: index(bits[0], vertices.length),
+          uv,
           normal: bits[2] ? index(bits[2], normals.length) : null,
         };
       });
@@ -419,9 +421,11 @@ function parseOBJ(text) {
   }
   const positions = new Float32Array(triangles.length * 9);
   const normalData = new Float32Array(positions.length);
+  const uvData = new Float32Array(triangles.length * 6);
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
   let offset = 0;
+  let uvOffset = 0;
   for (const face of triangles) {
     const [a, b, c] = face.map(point => vertices[point.vertex]);
     const u = b.map((v, i) => v - a[i]);
@@ -432,6 +436,9 @@ function parseOBJ(text) {
     for (const point of face) {
       const xyz = vertices[point.vertex];
       const normal = point.normal == null ? flat : normals[point.normal];
+      const uv = point.uv != null ? uvs[point.uv] : [0, 0];
+      uvData[uvOffset++] = uv[0];
+      uvData[uvOffset++] = uv[1];
       for (let axis = 0; axis < 3; axis++) {
         positions[offset + axis] = xyz[axis];
         normalData[offset + axis] = normal[axis];
@@ -441,7 +448,7 @@ function parseOBJ(text) {
       offset += 3;
     }
   }
-  return { positions, normals: normalData, uvs: parseUVs(text), bounds: { min, max } };
+  return { positions, normals: normalData, uvs: uvData, hasUV, triangles: triangles.length, bounds: { min, max } };
 }
 
 let renderer;
@@ -455,8 +462,96 @@ try {
   errorEl.textContent = "WebGL indisponível neste navegador: " + error.message;
 }
 
+const TOOL_CLIPS = {
+  cavar: "shovel",
+  colher: "scythe",
+  pescar: "rod",
+  tocar_violao: "guitar",
+  beber: "mug",
+  pichar: "spray",
+};
+const CARRY_CLIPS = new Set(["carregar", "carregar_parado"]);
+const VEHICLE_CLIPS = {
+  pedalar: { kind: "bicicleta", lift: 0.38, xOffset: 0, zOffset: 0, rotY: 0, color: 0x386b78 },
+  patinete: { kind: "patinete", lift: 0.14, xOffset: 0, zOffset: 0, rotY: 0, color: 0x648d82 },
+  skate: { kind: "skate", lift: 0.136, xOffset: 0.07, zOffset: 0.02, rotY: -0.42, color: 0x414943 },
+  patins: { kind: "patins", lift: 0.09, perFoot: true, color: 0xa3774b },
+  empurrar_carrinho: { kind: "carrinho", lift: 0, xOffset: 0, zOffset: 0.88, rotY: 0, color: 0x52645b },
+};
+
+const humanoColorsCache = new Map();
+function buildHumanoColors(faceCount) {
+  if (humanoColorsCache.has(faceCount)) return humanoColorsCache.get(faceCount);
+  const shoes = garmentSurface(faceCount, "sapatos");
+  const pants = garmentSurface(faceCount, "calça");
+  const shirt = garmentSurface(faceCount, "camisa");
+  const cSkin = new THREE.Color().setHex(0xd69f76);
+  const cShirt = new THREE.Color().setHex(0x4c7ca8);
+  const cPants = new THREE.Color().setHex(0x344152);
+  const cShoes = new THREE.Color().setHex(0x2b2522);
+  const colors = new Float32Array(faceCount * 9);
+  for (let t = 0; t < faceCount; t++) {
+    const col = shoes[t] ? cShoes : pants[t] ? cPants : shirt[t] ? cShirt : cSkin;
+    for (let k = 0; k < 3; k++) {
+      const i = t * 9 + k * 3;
+      colors[i] = col.r;
+      colors[i + 1] = col.g;
+      colors[i + 2] = col.b;
+    }
+  }
+  const attr = new THREE.Float32BufferAttribute(colors, 3);
+  humanoColorsCache.set(faceCount, attr);
+  return attr;
+}
+
+let humanoNormPromise = null;
+function getHumanoNorm() {
+  if (!humanoNormPromise) {
+    const url = new URL("humano/idle/0.obj", assetBase);
+    humanoNormPromise = fetch(url)
+      .then(r => (r.ok ? r.text() : null))
+      .then(text => {
+        if (!text) return null;
+        const data = parseOBJ(text);
+        const h = data.bounds.max[1] - data.bounds.min[1];
+        if (!(h > 0)) return null;
+        const origin = [
+          (data.bounds.min[0] + data.bounds.max[0]) / 2,
+          data.bounds.min[1],
+          (data.bounds.min[2] + data.bounds.max[2]) / 2,
+        ];
+        return { origin, factor: 1.05 / h };
+      })
+      .catch(() => null);
+  }
+  return humanoNormPromise;
+}
+
+const propGeoCache = new Map();
+function getPropGeometry(kind) {
+  if (!propGeoCache.has(kind)) {
+    propGeoCache.set(kind, kind === "carry-box" ? carryBoxGeometry(THREE) : toolPropGeometry(THREE, kind));
+  }
+  return propGeoCache.get(kind);
+}
+
+const vehicleGeoCache = new Map();
+function getVehicleGeometry(kind) {
+  if (!vehicleGeoCache.has(kind)) {
+    vehicleGeoCache.set(kind, mobilityModelGeometry(THREE, kind));
+  }
+  return vehicleGeoCache.get(kind);
+}
+
+const propMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true, side: THREE.DoubleSide });
 const materials = new Map();
 function materialFor(species, color, textured) {
+  if (species === "humano") {
+    if (!materials.has("humano:vertex")) {
+      materials.set("humano:vertex", new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true }));
+    }
+    return materials.get("humano:vertex");
+  }
   const key = species + (textured ? ":tex" : ":plain");
   if (materials.has(key)) return materials.get(key);
   let material;
@@ -473,25 +568,85 @@ function materialFor(species, color, textured) {
   return material;
 }
 
+let singleSkateGeo = null;
+function getSingleSkateGeometry() {
+  if (!singleSkateGeo) singleSkateGeo = patinsSkateGeometry(THREE);
+  return singleSkateGeo;
+}
+
+function footAnchor(data, sideSign) {
+  const pos = data.positions;
+  const pts = [];
+  for (let i = 0; i < pos.length; i += 3) {
+    if (pos[i] * sideSign > 0.02) pts.push([pos[i], pos[i + 1], pos[i + 2]]);
+  }
+  pts.sort((a, b) => a[1] - b[1]);
+  const top = pts.slice(0, 12);
+  let x = 0, y = 0, z = 0;
+  for (const p of top) { x += p[0]; y += p[1]; z += p[2]; }
+  const n = top.length || 1;
+  return { x: x / n, y: y / n, z: z / n };
+}
+
+function positionPropMesh(card, data) {
+  if (card.patinsGroup && data) {
+    for (const [group, sign] of [[card.patinsGroup.left, 1], [card.patinsGroup.right, -1]]) {
+      const f = footAnchor(data, sign);
+      group.position.set(f.x, Math.max(0, f.y - 0.01), f.z);
+      group.rotation.x = f.y > 0.03 ? 0.32 : 0;
+    }
+  }
+  if (!card.propMesh || !data) return;
+  if (CARRY_CLIPS.has(card.clip)) {
+    const anchor = carryBoxAnchor(data);
+    card.propMesh.position.set(anchor.x || 0, anchor.y || 0.55, anchor.z || 0.2);
+    card.propMesh.quaternion.identity();
+    return;
+  }
+  const toolKind = TOOL_CLIPS[card.clip];
+  if (toolKind) {
+    const anchor = toolAnchor(data, toolKind);
+    card.propMesh.position.set(anchor.x || 0, anchor.y || 0.55, anchor.z || 0.2);
+    const axis = new THREE.Vector3(anchor.ax || 0, anchor.ay || 1, anchor.az || 0);
+    card.propMesh.quaternion.setFromAxisAngle(axis, anchor.angle || 0);
+  }
+}
+
 function fetchFrame(card, frame) {
   const key = frame;
   if (card.geometries.has(key)) return Promise.resolve(card.geometries.get(key));
   const url = new URL(card.species + "/" + card.clip + "/" + frame + ".obj", assetBase);
-  const promise = fetch(url)
-    .then(response => {
+  const promise = Promise.all([
+    fetch(url).then(response => {
       if (!response.ok) throw Error("Falha em " + url.pathname + " (" + response.status + ")");
       return response.text();
-    })
-    .then(text => {
+    }),
+    card.species === "humano" ? getHumanoNorm() : Promise.resolve(null),
+  ])
+    .then(([text, norm]) => {
       const data = parseOBJ(text);
+      if (norm) {
+        const min = [Infinity, Infinity, Infinity];
+        const max = [-Infinity, -Infinity, -Infinity];
+        for (let i = 0; i < data.positions.length; i++) {
+          const axis = i % 3;
+          const v = (data.positions[i] - norm.origin[axis]) * norm.factor;
+          data.positions[i] = v;
+          if (v < min[axis]) min[axis] = v;
+          if (v > max[axis]) max[axis] = v;
+        }
+        data.bounds = { min, max };
+      }
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(data.positions, 3));
       geometry.setAttribute("normal", new THREE.Float32BufferAttribute(data.normals, 3));
-      if (data.uvs.length === (data.positions.length / 3) * 2 && data.uvs.length) {
+      if (card.species === "humano") {
+        geometry.setAttribute("color", buildHumanoColors(data.triangles));
+      } else if (data.hasUV && data.uvs.length === (data.positions.length / 3) * 2 && data.uvs.length) {
         geometry.setAttribute("uv", new THREE.Float32BufferAttribute(data.uvs, 2));
       }
       geometry.computeBoundingSphere();
-      return { geometry, bounds: data.bounds, textured: geometry.hasAttribute("uv") };
+      return { geometry, rawData: data, bounds: data.bounds, textured: geometry.hasAttribute("uv") };
     })
     .catch(error => {
       console.warn(error);
@@ -509,7 +664,46 @@ async function initCard(card) {
   const scene = new THREE.Scene();
   const material = materialFor(card.species, card.color, data.textured);
   const mesh = new THREE.Mesh(data.geometry, material);
+  const vehicleInfo = card.species === "humano" ? VEHICLE_CLIPS[card.clip] : null;
+  if (vehicleInfo) mesh.position.y = vehicleInfo.lift;
   scene.add(mesh);
+
+  card.propMesh = null;
+  if (card.species === "humano") {
+    if (CARRY_CLIPS.has(card.clip)) {
+      card.propMesh = new THREE.Mesh(getPropGeometry("carry-box"), propMaterial);
+      scene.add(card.propMesh);
+      positionPropMesh(card, data.rawData);
+    } else if (TOOL_CLIPS[card.clip]) {
+      card.propMesh = new THREE.Mesh(getPropGeometry(TOOL_CLIPS[card.clip]), propMaterial);
+      scene.add(card.propMesh);
+      positionPropMesh(card, data.rawData);
+    }
+    if (vehicleInfo) {
+      const paintMat = new THREE.MeshLambertMaterial({ color: vehicleInfo.color, vertexColors: true, side: THREE.DoubleSide });
+      if (vehicleInfo.perFoot) {
+        const sg = getSingleSkateGeometry();
+        const makeSkate = () => {
+          const g = new THREE.Group();
+          g.add(new THREE.Mesh(sg.fixed, propMaterial), new THREE.Mesh(sg.paint, paintMat));
+          return g;
+        };
+        const left = makeSkate();
+        const right = makeSkate();
+        scene.add(left, right);
+        card.patinsGroup = { left, right };
+        positionPropMesh(card, data.rawData);
+      } else {
+        const vg = getVehicleGeometry(vehicleInfo.kind);
+        const vehicleGroup = new THREE.Group();
+        vehicleGroup.add(new THREE.Mesh(vg.fixed, propMaterial), new THREE.Mesh(vg.paint, paintMat));
+        vehicleGroup.position.set(vehicleInfo.xOffset || 0, 0, vehicleInfo.zOffset || 0);
+        vehicleGroup.rotation.y = vehicleInfo.rotY || 0;
+        scene.add(vehicleGroup);
+      }
+    }
+  }
+
   scene.add(new THREE.HemisphereLight(0xffffff, 0x40503f, 1.8));
   const key = new THREE.DirectionalLight(0xfff1d8, 2.8);
   key.position.set(2.5, 4, 3);
@@ -519,18 +713,20 @@ async function initCard(card) {
   scene.add(rim);
   scene.add(new THREE.AmbientLight(0xffffff, .35));
 
-  const { min, max } = data.bounds;
-  const size = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
-  const center = new THREE.Vector3((min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2);
-  const radius = Math.max(0.001, Math.hypot(size[0], size[1], size[2]) / 2);
+  const box = new THREE.Box3().setFromObject(scene);
+  const sizeVec = new THREE.Vector3();
+  const center = new THREE.Vector3();
+  box.getSize(sizeVec);
+  box.getCenter(center);
+  const radius = Math.max(0.001, sizeVec.length() / 2);
 
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(radius * .72, 24),
     new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: .22, depthWrite: false })
   );
   shadow.rotation.x = -Math.PI / 2;
-  shadow.position.set(center.x, min[1] + radius * .002, center.z);
-  shadow.scale.set(1, size[2] / Math.max(.001, size[0]), 1);
+  shadow.position.set(center.x, box.min.y + radius * .002, center.z);
+  shadow.scale.set(1, sizeVec.z / Math.max(.001, sizeVec.x), 1);
   scene.add(shadow);
 
   const camera = new THREE.PerspectiveCamera(30, 4 / 3, radius * .02, radius * 40);
@@ -664,6 +860,7 @@ function draw() {
             if (data && card.mesh && card.mesh.geometry !== data.geometry) {
               card.mesh.geometry = data.geometry;
               card.mesh.material = materialFor(card.species, card.color, data.textured);
+              positionPropMesh(card, data.rawData);
               card.frame = frame;
             }
           });

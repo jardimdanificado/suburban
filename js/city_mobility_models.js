@@ -2,10 +2,10 @@
 export const MOBILITY_GROUND_CONTACTS = {
   bicicleta: [[0,-.43,.044],[0,.43,.044]],
   bicicleta_carga: [[0,-.43,.044],[0,.63,.044]],
-  carrinho: [[-.33,.24,.044],[.33,.24,.044]],
+  carrinho: [[-.24,.22,.044],[.24,.22,.044]],
   patinete: [[0,-.28,.044],[0,.28,.044]],
   skate: [[-.14,-.22,.038],[.14,-.22,.038],[-.14,.22,.038],[.14,.22,.038]],
-  patins: [-.13,.13].flatMap(x=>[-.078,.078].flatMap(dx=>[-.083,.083].map(z=>[x+dx,z,.032]))),
+  patins: [-.13,.13].flatMap(x=>[-.046,.046].flatMap(dx=>[-.075,.075].map(z=>[x+dx,z,.028]))),
 };
 
 const WOOD=0x986c43,WICKER=0xb88d58,STEEL=0x6b7475,RUBBER=0x292d2c,LEATHER=0x49392e;
@@ -141,38 +141,62 @@ function bicycle(s,p,cargo){
     }
   }
 }
+function rollerSkate(s,p,x){
+  s.box(x,.082,0,.105,.016,.24,0x3b3532);
+  for(const z of [-.075,.075]){
+    s.tube([x-.048,.042,z],[x+.048,.042,z],.008,STEEL,6);
+    s.tube([x,.080,z],[x,.042,z],.010,STEEL,5);
+    for(const dx of [-.046,.046]){
+      s.ring(x+dx,.042,z,.026,.014,0x292d2c,14,5);
+      s.ring(x+dx,.042,z,.012,.006,0xd6a86e,10,4);
+    }
+  }
+  s.box(x,.045,.124,.034,.024,.024,0xd45b4a);
+  p.box(x,.128,.01,.096,.076,.22,0xffffff);
+  p.box(x,.215,-.042,.092,.125,.108,0xffffff);
+  s.box(x,.282,-.042,.098,.020,.114,LEATHER);
+  s.box(x,.182,.045,.052,.11,.024,0xede4d3);
+  for(let i=0;i<4;i++)s.box(x,.225-i*.024,.068-i*.014,.066,.009,.014,0xd2c4a4);
+  s.box(x,.116,.116,.092,.048,.026,0xede4d3);
+}
 export function mobilityModelSurface(kind){
   const s=new Surface(),p=new Surface();
   if(kind==='bicicleta'||kind==='bicicleta_carga')bicycle(s,p,kind==='bicicleta_carga');
   else if(kind==='carrinho'){
-    for(const [x,z,width] of MOBILITY_GROUND_CONTACTS.carrinho)wheel(s,x,z,.16,width/2);
-    woodenCrate(s,0,.35,.22,.58,.73,.27);
-    for(const x of [-.315,.315]){
-      p.tube([x,.26,.50],[x,.53,-.64],.023,0xffffff,6);
-      s.tube([x,.53,-.64],[x,.55,-.78],.027,LEATHER,6);
-      p.tube([x,.32,-.10],[x,.035,-.17],.018,0xffffff,5);
+    for(const [x,z,width] of MOBILITY_GROUND_CONTACTS.carrinho)wheel(s,x,z,.14,width/2);
+    woodenCrate(s,0,.30,.20,.44,.58,.24);
+    for(const x of [-.21,.21]){
+      p.tube([x,.24,.44],[x,.63,-.52],.020,0xffffff,6);
+      s.tube([x,.63,-.52],[x,.65,-.64],.024,LEATHER,6);
+      p.tube([x,.31,-.08],[x,.035,-.14],.016,0xffffff,5);
     }
-    p.tube([-.33,.185,.24],[.33,.185,.24],.024,0xffffff);
+    p.tube([-.24,.164,.22],[.24,.164,.22],.020,0xffffff);
   }else if(kind==='patinete'){
     for(const [x,z,width] of MOBILITY_GROUND_CONTACTS.patinete)wheel(s,x,z,.055,width/2);
     p.box(0,.12,0,.20,.035,.61,0xffffff);s.box(0,.141,-.02,.15,.009,.43,0x5d645c);
-    p.tube([0,.09,.28],[0,.73,.23],.017,0xffffff);
-    s.tube([-.19,.75,.22],[.19,.75,.22],.014,STEEL);
-    for(const x of [-.15,.15])s.box(x,.75,.22,.085,.035,.04,LEATHER);
-    basket(s,0,.51,.34,.22,.17,.17,12,8);
+    p.tube([0,.09,.28],[0,.76,.27],.017,0xffffff);
+    s.tube([-.20,.78,.27],[.20,.78,.27],.014,STEEL);
+    for(const x of [-.175,.175])s.box(x,.78,.27,.085,.035,.04,LEATHER);
+    basket(s,0,.48,.35,.22,.17,.17,12,8);
   }else if(kind==='skate'){
     skateDeck(s,.13,.25,.66,.035,0xb68a55);skateDeck(p,.136,.225,.625,.006,0xffffff);
     for(const z of [-.22,.22])s.tube([-.13,.067,z],[.13,.067,z],.015,STEEL);
     for(const [x,z,width] of MOBILITY_GROUND_CONTACTS.skate)s.ring(x,.052,z,.031,width/2,0xceae7d,12,5);
   }else{
-    for(const x of [-.13,.13]){
-      p.box(x,.16,0,.13,.15,.25,0xffffff);p.box(x,.24,-.065,.125,.15,.11,0xffffff);
-      s.box(x,.086,0,.145,.025,.27,0x685445);
-      for(let i=0;i<4;i++)s.box(x,.24-i*.017,.075-i*.027,.092,.008,.012,0xd2c4a4);
-      for(const [wx,z,width] of MOBILITY_GROUND_CONTACTS.patins)if(Math.abs(wx-x)<.08)s.ring(wx,.045,z,.027,width/2,0xc6a277,10,5);
-    }
+    for(const x of [-.13,.13])rollerSkate(s,p,x);
   }
   return {fixed:s.data(),paint:p.data()};
+}
+export function patinsSkateGeometry(THREE){
+  const s=new Surface(),p=new Surface();
+  rollerSkate(s,p,0);
+  const result={};
+  for(const [key,data]of [['fixed',s.data()],['paint',p.data()]]){
+    const g=new THREE.BufferGeometry();
+    for(const [name,values]of [['position',data.positions],['normal',data.normals],['color',data.colors]])g.setAttribute(name,new THREE.Float32BufferAttribute(values,3));
+    g.computeBoundingSphere();result[key]=g;
+  }
+  return result;
 }
 export function mobilityModelGeometry(THREE,kind){
   const surface=mobilityModelSurface(kind),result={};

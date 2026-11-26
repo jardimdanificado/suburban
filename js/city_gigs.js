@@ -9,6 +9,7 @@ import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-style
 const ACTIVE=new Set(['open','working']);
 const INTERRUPTIBLE=new Set(['leisure','walk','social','sit','outdoor_leisure']);
 const SPONTANEOUS_ART_INTERVAL=2*1440,MAX_SPONTANEOUS_ARTWORKS=24,ARTWORK_SPACING=5.5;
+const frontagePoints=new WeakMap();
 const SPONTANEOUS_ART_TITLES=Object.freeze(['Maré','Mangue','Girassol','Cajueiro','Caribe','Caju','Aroeira','Dendê','Jangada','Canoa','Azulejo','Coqueiral','Pitanga','Bromélia','Coroa-de-frade','Mandacaru','Calango','Sereia','Boiúna','Farol','Aratu','Cocada','Renda','Fandango','Batuque','Chuva-de-verão','Pôr-do-sol','Mormaço','Cais','Vento sul','Palmeiral','Caminho das águas']);
 function spontaneousArtworkTitle(city){
  const first=SPONTANEOUS_ART_TITLES[Math.floor(city.random()*SPONTANEOUS_ART_TITLES.length)];
@@ -73,7 +74,8 @@ export class CityGigs{
   const artists=eligible.map(c=>({citizen:c,roll:Math.floor(city.random()*100)})).filter(row=>row.roll<58+(city.politics?.secretaries?.find(office=>office.officeId==='education_culture')?.skill||0)*.2).sort((a,b)=>(b.citizen.skills.artistic-a.citizen.skills.artistic)||a.roll-b.roll||a.citizen.id-b.citizen.id);
   if(profile)profile.rankMs=performance.now()-phaseStart;
   const siteTimings=profile?{filterMs:0,visitMs:0,artistsVisited:0,sitesVisited:0}:null;
-  for(const {citizen,roll} of artists){
+  const artistList=city.fastForward?artists.slice(0,8):artists;
+  for(const {citizen,roll} of artistList){
    const loopStart=profile?performance.now():0,filterStart=profile?performance.now():0;
    if(profile){siteTimings.filterMs+=performance.now()-filterStart;siteTimings.artistsVisited++;siteTimings.sitesVisited++;}
    const party=city.politics?.party?.(citizen.political?.partyId),partyId=roll%4===0&&party?.active?party.id:null,kind=roll%8===0?'statue':roll%4===0?'painting':'banner',pointStarted=profile?performance.now():0,wallSupport=kind==='painting'?nearbyGraffitiSurfaces(city,citizen).find(s=>s.surface==='wall'):null,point=wallSupport?.approach||this.sidewalkArtworkPoint(citizen);
@@ -94,7 +96,7 @@ export class CityGigs{
   const options=[];
   for(const key of tiles){const x=key%world.width,y=Math.floor(key/world.width),distance=Math.hypot(citizen.entity.x-(x+.5),citizen.entity.y-(y+.5));if(distance>18||world.sidewalkTreeTiles?.has(key)||!world.hasSidewalk(x,y)||!city.walkable(x,y)||busy(x,y)||nearDoor(x,y))continue;options.push({x:x+.5,y:y+.5,distance,tie:city.random()});}
   options.sort((a,b)=>a.distance-b.distance||a.tie-b.tie);
-  for(const point of options.slice(0,48))if(city.findPath(citizen.entity,point)!==null)return {x:point.x,y:point.y};
+  for(const point of options.slice(0,city.fastForward?6:48))if(city.findPath(citizen.entity,point)!==null)return {x:point.x,y:point.y};
   return null;
  }
  consumeArtworkMaterial(job){
@@ -131,21 +133,30 @@ export class CityGigs{
   // A posted gig previously ran A* once for every resident just to find one
   // worker. Probe a small rotating batch; unreachable candidates do not starve
   // everyone farther down the list because the next dispatch advances the cursor.
-  const count=Math.min(24,eligible.length),start=(job.candidateCursor||0)%eligible.length,reachable=[];
+  const count=Math.min(city.fastForward?4:8,eligible.length),start=(job.candidateCursor||0)%eligible.length,reachable=[];
   const support=job.artworkSupport,bridge=support?.kind==='skybridge'?(city.skybridgeLinksForRevision?.()||[]).find(item=>item.id===support.linkId):null,interiorTarget=support?.kind==='skybridge'?bridge&&{x:b.entity.x+b.units.find(u=>u.id===support.unitId).x+.5,y:b.entity.y+b.units.find(u=>u.id===support.unitId).y+.5,z:support.floor*CITY_FLOOR_HEIGHT}:support?{x:job.point.x,y:job.point.y,z:job.point.z||0}:null;
   for(let i=0;i<count;i++){const candidate=eligible[(start+i)%eligible.length],inside=candidate.indoorLocation?.buildingId===b.id;if((inside||city.findPath(candidate.entity,point)!==null)&&(!support||interiorTarget&&interiorRoute(b,{x:b.door.x,y:b.door.y,z:0},interiorTarget)!==null)){reachable.push(candidate);break;}}
   job.candidateCursor=(start+count)%eligible.length;return reachable;
  }
  frontagePoint(b,{excludeArtId=null}={}){
-  const d=b.door,city=this.city,points=[];
+  const d=b.door,city=this.city;
+  const worldRev=city.world.topologyRevision??city.world.revision,structRev=city.structureRevision,artRev=city.justice?.artRevision||0;
+  if(excludeArtId==null){
+   const cached=frontagePoints.get(b);
+   if(cached&&cached.worldRev===worldRev&&cached.structRev===structRev&&cached.artRev===artRev&&cached.doorX===d.x&&cached.doorY===d.y)return cached.point;
+  }
+  const points=[];
   for(let radius=1;radius<=5;radius++)for(let dy=-radius;dy<=radius;dy++)for(let dx=-radius;dx<=radius;dx++){
    if(Math.max(Math.abs(dx),Math.abs(dy))!==radius)continue;
    points.push({x:Math.floor(d.x)+dx+.5,y:Math.floor(d.y)+dy+.5});
   }
   const outsideBuilding=p=>!city.buildings.some(other=>!other.entity.destroyed&&p.x>=other.entity.x&&p.x<other.entity.x+other.width&&p.y>=other.entity.y&&p.y<other.entity.y+other.depth);
   const clearOfArtwork=p=>!(city.justice?.art||[]).some(piece=>piece.id!==excludeArtId&&!piece.entity.destroyed&&!piece.support&&Math.hypot(piece.entity.x-p.x,piece.entity.y-p.y)<.9);
-  const options=points.filter(p=>{const x=Math.floor(p.x),y=Math.floor(p.y);return outsideBuilding(p)&&city.walkable(x,y)&&!isRoadAt(city.world,x,y)&&clearOfArtwork(p)&&city.findPath(d,p)!==null;}).sort((a,z)=>Math.hypot(a.x-d.x,a.y-d.y)-Math.hypot(z.x-d.x,z.y-d.y)||a.y-z.y||a.x-z.x);
-  return options[0]||null;
+  const options=points.filter(p=>{const x=Math.floor(p.x),y=Math.floor(p.y);return outsideBuilding(p)&&city.walkable(x,y)&&!isRoadAt(city.world,x,y)&&clearOfArtwork(p);}).sort((a,z)=>Math.hypot(a.x-d.x,a.y-d.y)-Math.hypot(z.x-d.x,z.y-d.y)||a.y-z.y||a.x-z.x);
+  let result=null;
+  for(const p of options)if(city.findPath(d,p)!==null){result=p;break;}
+  if(excludeArtId==null)frontagePoints.set(b,{worldRev,structRev,artRev,doorX:d.x,doorY:d.y,point:result});
+  return result;
  }
  release(job,c,{reopen=true}={}){
   if(c){if(c.informalJobId===job.id){c.task=null;c.targetId=null;c.action='';}this.city.furniture?.release(c);c.informalJobId=null;c.workCell=null;c.path=[];if(job.artworkSupport?.kind==='skybridge'&&(c.skybridgeZ>0||c.skybridgeTransit?.phase==='crossing'))this.city.justice.routeWorkerOffSkybridge(c);}
@@ -278,10 +289,12 @@ export class CityGigs{
   const city=this.city;for(const job of this.jobs)if(job.artwork?.kind==='flags')job.artwork.kind='banner';if(city.profileDiagnostics)this.lastSpontaneousArtworkProfile=null;
   this.postSpontaneousArtwork();
   if(city.minute%60===0&&city.hour>=7&&city.hour<20){this.postNeededWork();this.runEnvironmentCleanupProgram();}
+  const dispatchInterval=city.fastForward?(city.fastForward2?12:6):3;
+  let dispatchSearchBudget=city.fastForward?(city.fastForward2?4:6):16;
   for(const job of this.jobs){if(!ACTIVE.has(job.status))continue;if(job.artworkFacadeSupport?.kind==='street-graffiti'&&!graffitiSurfaceExists(city,job.artworkFacadeSupport)){this.cancel(job,'parede removida antes de concluir a pintura');continue;}const b=city.building(job.buildingId);if(!b){this.cancel(job,'imóvel removido');continue;}if(job.artworkSupport?.kind==='skybridge'&&(!(city.skybridgeLinksForRevision?.()||[]).some(link=>link.id===job.artworkSupport.linkId)||!b.units.some(unit=>unit.id===job.artworkSupport.unitId))){this.cancel(job,'passarela ou acesso ao prédio removido');continue;}
    let worker=city.society.citizen(job.workerId);
    if(worker&&(worker.entity.destroyed||city.urgentNeed(worker)&&!(job.artworkSupport?.kind==='skybridge'&&job.artworkSupport.phase==='returning'))){this.release(job,worker);worker=null;}
-   if(!worker){if(city.hour<7||city.hour>=20||city.minute%3!==job.id%3)continue;const candidates=this.candidates(job);job.availableCandidates=job.availableCandidatePool??candidates.length;worker=candidates[0];if(!worker)continue;
+   if(!worker){if(city.hour<7||city.hour>=20||city.minute%dispatchInterval!==job.id%dispatchInterval||dispatchSearchBudget<=0)continue;dispatchSearchBudget--;const candidates=this.candidates(job);job.availableCandidates=job.availableCandidatePool??candidates.length;worker=candidates[0];if(!worker)continue;
     const goal=job.artworkSupport?b.door:['gardening','art-cleaning','art-installation','art-removal','public-cleaning'].includes(job.kind)?job.point:job.scope==='frontage'?this.frontagePoint(b):b.door;if(!goal)continue;const path=job.artworkSupport&&worker.indoorLocation?.buildingId===b.id?[]:city.findPath(worker.entity,goal);if(path===null)continue;
     job.workerId=worker.id;job.status='working';job.startedAt=city.minute;worker.informalJobId=job.id;city.furniture?.release(worker);worker.task=job.kind==='gardening'?'informal-gardening':job.artworkSupport?'informal-service':job.kind==='art-installation'?'informal-art-installation':job.scope==='interior'?'informal-service':'informal-frontage';worker.targetId=job.artworkSupport||job.scope==='interior'?b.id:null;worker.path=path;worker.servicePaid=null;const label=job.kind==='repair'?'um reparo':job.kind==='gardening'?'um serviço de jardinagem':job.kind==='art-installation'?'uma instalação artística':job.kind==='art-removal'?'uma retirada de obra de arte':job.kind==='art-cleaning'?'uma limpeza de arte':job.kind==='public-cleaning'?'uma faxina pública':'uma faxina';city.history.record('service',`${worker.entity.properties.name} aceitou ${label} em ${b.entity.properties.name}.`,[job.payerAccountId,worker.accountId,b.accountId],{kind:'gig-accepted',gigId:job.id,buildingId:b.id,citizenIds:[worker.id],scope:job.scope,service:job.kind,amount:job.fee,minute:city.minute});city.log(`${worker.entity.properties.name} aceitou o bico #${job.id}.`,'work',[worker.id],{kind:'gig-accepted',gigId:job.id,buildingId:b.id,service:job.kind,amount:job.fee});
    }
