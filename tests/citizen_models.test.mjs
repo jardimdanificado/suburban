@@ -15,7 +15,7 @@ async function models(){const requests=[],group={meshes:new Set(),add(m){this.me
 const frameCount=Object.values(CITIZEN_MODEL_FRAMES).reduce((sum,frames)=>sum+frames.length,0);
 test('all supplied OBJ frames parse as finite triangular meshes with shared world scale',async()=>{
  const {model,requests}=await models();assert(model.ready);assert.equal(requests.length,frameCount);assert.equal(model.frames.size,frameCount);
- for(const [clip,frames]of Object.entries(CITIZEN_MODEL_FRAMES))for(const frame of frames){const geometry=model.frames.get(`${clip}:${frame}`),p=geometry.attributes.position.array,n=geometry.attributes.normal.array;assert(p.length>0);assert(p.every(Number.isFinite));assert(n.every(Number.isFinite));assert.equal(p.length,n.length);assert(Math.max(...p.filter((_,i)=>i%3===1))<1.1);assert(Math.min(...p.filter((_,i)=>i%3===1))>=-.001);}
+ for(const [clip,frames]of Object.entries(CITIZEN_MODEL_FRAMES))for(const frame of frames){const geometry=model.frames.get(`${clip}:${frame}`),p=geometry.attributes.position.array,n=geometry.attributes.normal.array;assert(p.length>0);assert(p.every(Number.isFinite));assert(n.every(Number.isFinite));assert.equal(p.length,n.length);assert(Math.max(...p.filter((_,i)=>i%3===1))<1.25);assert(Math.min(...p.filter((_,i)=>i%3===1))>=-.001);}
 });
 test('OBJ parser triangulates quads, resolves negative indices and rejects invalid meshes',()=>{
  const data=parseCitizenOBJ('v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nf -4 -3 -2 -1');assert.equal(data.triangles,2);assert.equal(data.positions.length,18);assert(data.normals.every(Number.isFinite));

@@ -10,7 +10,7 @@ import {CITIZEN_BODY_FACE_COUNT,CITIZEN_GARMENT_FACES} from './city_garment_face
 import {fittedSkirtSurface} from './city_citizen_skirts.js?v=anatomical-dress-skirt-1';
 import {createPoseWeightMorph,computeWeightMorphAttributes} from './city_citizen_weight_morph.js?v=anatomical-3d-morph-1';
 /** OBJ snapshots share one geometry per frame and one instanced draw per visible frame. */
-export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0],acenar:[0,1,2,3],comemorar:[0,1,2,3],nadar:[0,1,2,3],boiar:[0,1,2,3],carregar:[0,1,2,3,4]});
+export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0],acenar:[0,1,2,3],comemorar:[0,1,2,3],conversar:[0,1,2,3],cavar:[0,1,2,3],colher:[0,1,2,3],aplaudir:[0,1,2,3],beber:[0,1,2,3],pescar:[0,1,2,3],chorar:[0,1,2,3],tocar_violao:[0,1,2,3],dancar_samba:[0,1,2,3,4,5],dancar_hiphop:[0,1,2,3,4,5],dancar_boba:[0,1,2,3,4,5],dancar_breakdance:[0,1,2,3,4,5],dancar_macarena:[0,1,2,3,4,5],dancar_moonwalk:[0,1,2,3,4,5],nadar:[0,1,2,3],boiar:[0,1,2,3],carregar:[0,1,2,3,4]});
 const citizenHasPath=c=>c?._renderPathActive??!!c?.path?.length;
 export function citizenIsSleeping(c){
  if(c?.task!=='energy'||!c.sleep?.active||citizenHasPath(c)||c.mobilityTrip||c.ridingVehicleId||c.deliveryId)return false;
@@ -22,6 +22,7 @@ const WORK_TASKS=new Set(['work','manage','construction','clean','cleaning','res
 const CASUAL_WALK_TASKS=new Set(['walk','leisure','social','visit','shopping','street-market-shopping']);
 const BIKE_KINDS=new Set(['bicicleta','bicicleta_carga']),GLIDE_KINDS=new Set(['patinete','patins','skate']);
 const ALT_USE_TASKS=new Set(['food','workmeal','provisions','toilet','hygiene','water','health','shopping','supplies','care','caregiving','leisure','social','vote']);
+const DANCE_CLIPS=Object.freeze(['dancar_samba','dancar_hiphop','dancar_boba','dancar_breakdance','dancar_macarena','dancar_moonwalk']);
 const ACTION_CLIPS=new Set(['run','pedal','murro','chute','derrotado','nadar','carregar']);
 const PRINTED_GARMENTS=new Set(['camisa social','camisa estampada','vestido estampado']),PATTERNED_GARMENTS=new Set(['camisa estampada','vestido estampado']),DRESS_PIECES=new Set(['vestido','vestido estampado']),SKIRT_PIECES=new Set(['saia','saia longa']),HAND_PIECES=new Set(['luvas']);
 const COMBINABLE_GARMENTS=new Set(['camisa','camiseta','regata','terno','casaco','trapos','macacão']);
@@ -51,14 +52,24 @@ export function citizenAnimation(c,moving=false,inWater=undefined){
   if(c.task==='sit'&&c.seated||c.furnitureUse?.type==='bench'||c.furnitureUse?.type==='beach_chair')return 'sentado_no_banco';
   if(c.seated)return 'seated';
   if(c.policePatrol)return 'a_postos';
+  if(c.conversation)return 'conversar';
   if(c.celebrating||c.task==='celebrate')return 'comemorar';
+  if(c.clapping||c.task==='clap')return 'aplaudir';
+  if(c.playingGuitar||c.task==='music')return 'tocar_violao';
+  if(c.dancing||c.task==='dance')return c.danceStyle&&CITIZEN_MODEL_FRAMES[c.danceStyle]?c.danceStyle:DANCE_CLIPS[(c.id||0)%DANCE_CLIPS.length];
   if(c.waving||c.task==='wave')return 'acenar';
+  if(c.crying)return 'chorar';
   const activelyUsingFurniture=!!c.furnitureUse&&!c.furnitureUse.seated;
   const activelyWorkingOutside=!!c.workCell||!!c.forestryJob||!!c.paintWorkId;
   const activelyInsideWork=!!c.indoorLocation?.unitId&&WORK_TASKS.has(c.task);
   const activelyOnGig=!!c.informalJobId&&!citizenHasPath(c);
   const activelyWorking=WORK_TASKS.has(c.task)&&!citizenHasPath(c)&&(activelyUsingFurniture||activelyWorkingOutside||activelyInsideWork||activelyOnGig||c.task==='construction'&&c.workProjectId!=null);
-  if(!activelyWorking)return 'idle';
+  if(!activelyWorking)return (c.mood??0)<=-15?'chorar':'idle';
+  if(c.task==='water'||c.task==='drink')return 'beber';
+  if(c.task==='fishing')return 'pescar';
+  if(c.task==='farm'||c.forestryJob?.stage==='plant'||c.task==='informal-gardening')return 'colher';
+  if(c.task==='construction'||c.forestryJob?.stage==='cut')return 'cavar';
+  if(c.task==='campaign')return 'acenar';
   return ALT_USE_TASKS.has(c.task)?'use_alt':'use';
 }
 export function citizenFrame(clip,time,phase=0,oneShot=false){
@@ -67,7 +78,7 @@ export function citizenFrame(clip,time,phase=0,oneShot=false){
   if(clip==='glide')return FRAME_POSES.use[1];
   const sequence=clip==='pedal'?[0,2,4]:clip==='use'?[0,1]:CITIZEN_MODEL_FRAMES[clip]||CITIZEN_MODEL_FRAMES.idle,poseClip=clip==='pedal'?'run':clip in CITIZEN_MODEL_FRAMES?clip:'idle';
   if(sequence.length===1)return FRAME_POSES[poseClip][sequence[0]];
-  const fps=ACTION_CLIPS.has(clip)?8:4,index=Math.floor(Math.max(0,time)*fps+phase),frame=sequence[oneShot?Math.min(index,sequence.length-1):index%sequence.length];
+  const fps=ACTION_CLIPS.has(clip)?8:clip.startsWith('dancar_')?5:clip==='conversar'?2.5:4,index=Math.floor(Math.max(0,time)*fps+phase),frame=sequence[oneShot?Math.min(index,sequence.length-1):index%sequence.length];
   return FRAME_POSES[poseClip][frame]||{clip:poseClip,frame};
 }
 const FRAME_POSES=Object.fromEntries(Object.entries(CITIZEN_MODEL_FRAMES).map(([clip,frames])=>[clip,Object.fromEntries(frames.map(frame=>[frame,Object.freeze({clip,frame})]))]));
