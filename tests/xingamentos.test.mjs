@@ -171,6 +171,17 @@ test('graffiti insult mode uses the generator and keeps the target', () => {
   assert.equal(graffitiMessage(city, c, {xingamento: true, targetName: 'Fulana', genero: 'f', tipo: 'conduta', modelo: 'e', intensidade: 0}), 'Fulana é uma ladra');
 });
 
+test('large walls add curated predicates to the insult without changing the target', () => {
+  const city = {random: zero};
+  const c = {entity: {properties: {name: 'Fulano'}}};
+  const support = {kind: 'street-graffiti', surface: 'ground', width: .86 * 7, height: .86 * 9, tileX: 0, tileY: 0, tileWidth: 7, tileHeight: 9};
+  const message = graffitiContent(city, c, {xingamento: true, tipo: 'conduta', modelo: 'e', intensidade: 0, support}).message;
+  assert(message.startsWith('Fulano é um ladrão'), message);
+  assert(message.includes('; '), message);
+  const small = graffitiContent(city, c, {xingamento: true, tipo: 'conduta', modelo: 'e', intensidade: 0}).message;
+  assert(!small.includes('; '), 'single tile keeps the short insult');
+});
+
 test('hate graffiti requires a known category and a caller-supplied text', () => {
   assert.throws(() => graffitiDeOdio({message: 'texto', prejudiceType: 'inventado'}), RangeError);
   comCategoriaVazia('racismo', () => {

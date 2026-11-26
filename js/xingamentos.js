@@ -354,7 +354,7 @@ function montarXingamento({nome, feminino, entradas, escolhido, chance, sorteio,
   // correta sem inventar palavras fora do repertório curado.
   const quantidade = Math.max(0, Math.min(3, Math.floor(Number(detalhe) || 0)));
   if (quantidade && !texto.endsWith('?')) {
-    const restantes = PREDICADOS.slice();
+    const restantes = PREDICADOS.filter(predicado => !texto.includes(predicado));
     const extras = [];
     while (extras.length < quantidade && restantes.length) {
       const [predicado] = restantes.splice(Math.min(restantes.length - 1, Math.floor(sorteio() * restantes.length)), 1);

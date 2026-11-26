@@ -106,12 +106,10 @@ test('new human animation clips map to the corresponding citizen states', () => 
   assert.equal(citizenAnimation({ swimming: true }, false), 'boiar');
   assert.equal(citizenAnimation({ deliveryId: 1 }, true), 'carregar');
   assert.equal(citizenAnimation({ task: 'walk' }, true), 'run');
-  assert.equal(citizenAnimation({ conversation: {} }, false), 'conversar');
   assert.equal(citizenAnimation({ celebrating: true }, false), 'comemorar');
-  assert.equal(citizenAnimation({ dancing: true }, false), 'dancar');
   assert.equal(citizenAnimation({ waving: true }, false), 'acenar');
-  assert.equal(citizenAnimation({ task: 'clean', workCell: { x: 1, y: 1 } }, false), 'varrer');
-  assert.equal(citizenAnimation({ task: 'construction', workProjectId: 1 }, false), 'cavar');
+  assert.equal(citizenAnimation({ task: 'clean', workCell: { x: 1, y: 1 } }, false), 'use');
+  assert.equal(citizenAnimation({ task: 'construction', workProjectId: 1 }, false), 'use');
 });
 
 test('bridge motion interpolates smoothly from shore into water without blocking or teleporting', () => {

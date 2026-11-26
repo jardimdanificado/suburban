@@ -17,8 +17,8 @@ export function graffitiTileSpan(support) {
   return {
     width,
     height,
-    tilesX: Math.max(1, Number(support?.tileWidth) || Math.round(width / GRAFFITI_TILE_WIDTH)),
-    tilesY: Math.max(1, Number(support?.tileHeight) || Math.round(height / (wall ? GRAFFITI_WALL_TILE_HEIGHT : GRAFFITI_TILE_WIDTH))),
+    tilesX: Math.max(1, Math.round(Number(support?.tileWidth)) || Math.round(width / GRAFFITI_TILE_WIDTH)),
+    tilesY: Math.max(1, Math.round(Number(support?.tileHeight)) || Math.round(height / (wall ? GRAFFITI_WALL_TILE_HEIGHT : GRAFFITI_TILE_WIDTH))),
   };
 }
 
