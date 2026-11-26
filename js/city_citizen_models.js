@@ -31,7 +31,7 @@ function activeSubstanceEffect(c){
   return null;
 }
 const TOOL_CLIPS=Object.freeze({cavar:'shovel',colher:'scythe',pescar:'rod',tocar_violao:'guitar',beber:'mug',pichar:'spray'});
-const ACTION_CLIPS=new Set(['run','caminhar','pedal','murro','chute','derrotado','nadar','carregar','escalar']);
+const ACTION_CLIPS=new Set(['run','caminhar','pedal','murro','chute','derrotado','nadar','carregar','escalar','pichar']);
 const PRINTED_GARMENTS=new Set(['camisa social','camisa estampada','vestido estampado']),PATTERNED_GARMENTS=new Set(['camisa estampada','vestido estampado']),DRESS_PIECES=new Set(['vestido','vestido estampado']),SKIRT_PIECES=new Set(['saia','saia longa']),HAND_PIECES=new Set(['luvas']);
 const COMBINABLE_GARMENTS=new Set(['camisa','camiseta','regata','terno','casaco','trapos','macacão']);
 const HEADWEAR_PIECES=new Set(['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','cesta']);
@@ -609,7 +609,7 @@ if (vCitizenDirt.a > 0.05) {
       }
     }
     let motion=this.motion.get(entity);
-     if(!motion){motion={x,y,renderX:x,renderY:y,angle:0,renderAngle:0,walkDistance:0,walkFrame:0};this.motion.set(entity,motion);}
+     if(!motion){motion={x,y,renderX:x,renderY:y,angle:0,renderAngle:0,walkDistance:0,walkFrame:0,renderClimbZ:c.climbing?.z||0};this.motion.set(entity,motion);}
     const dx=x-motion.x,dy=y-motion.y;
     const moved=dx*dx+dy*dy>1e-7;
      if(moved){motion.angle=Math.atan2(dx,dy);if(!this.animationPaused)motion.walkDistance+=Math.hypot(dx,dy);motion.x=x;motion.y=y;}
@@ -626,6 +626,9 @@ if (vCitizenDirt.a > 0.05) {
       motion.renderAngle+=angleDelta*alpha;
       renderX=motion.renderX;renderY=motion.renderY;renderAngle=motion.renderAngle;
     }else{motion.renderX=x;motion.renderY=y;motion.renderAngle=motion.angle;}
+    if(c.dead||c.unconsciousUntil||!c.climbing){motion.renderClimbZ=0;}
+    else if(this.frameDelta>0&&!this.animationPaused){const cur=motion.renderClimbZ??c.climbing.z,diff=c.climbing.z-cur,maxStep=Math.max(this.frameDelta*(c.climbing.phase==='down'?.75:.55),Math.abs(diff)*Math.min(1,this.frameDelta*5));motion.renderClimbZ=Math.abs(diff)<=maxStep?c.climbing.z:cur+Math.sign(diff)*maxStep;}
+    else{motion.renderClimbZ=c.climbing.z;}
     if(visualOffset){renderX+=visualOffset.x;renderY+=visualOffset.y;}
     if((c.furnitureUse?.type==='bench'||c.furnitureUse?.type==='beach_chair')&&c.furnitureUse.seated){renderX+=Math.sin(renderAngle)*.16;renderY+=Math.cos(renderAngle)*.16;}
     // Match gait to the distance displayed, including high-speed interpolation.
@@ -664,7 +667,7 @@ if (vCitizenDirt.a > 0.05) {
       }batch.capacity=capacity;
     }
     const bikeRider=c.ridingVehicleId&&BIKE_KINDS.has(c.ridingVehicleKind),riderLift=bikeRider?(c.ridingAsPassenger?0.23:0.38):c.ridingVehicleId?0.18:0;
-    const size=(entity.properties.render.size||1)*(perspective?1.05:1),heightScale=(c.bodyHeightCm||170)/170,baseSurfaceH=waterSurfaceY!=null&&(clip==='nadar'||clip==='boiar')?(clip==='boiar'?waterSurfaceY-0.77*size*heightScale:waterSurfaceY-0.32*size):surfaceH,positionY=baseSurfaceH+(posePoint?.z??inside?.z??0)+riderLift,bodyIndex=batch.count;
+    const size=(entity.properties.render.size||1)*(perspective?1.05:1),heightScale=(c.bodyHeightCm||170)/170,baseSurfaceH=waterSurfaceY!=null&&(clip==='nadar'||clip==='boiar')?(clip==='boiar'?waterSurfaceY-0.77*size*heightScale:waterSurfaceY-0.32*size):surfaceH,positionY=baseSurfaceH+(posePoint?.z??inside?.z??0)+(motion.renderClimbZ||0)+riderLift,bodyIndex=batch.count;
     const transformUnchanged=motion.bodyBatch===batch&&motion.bodyMesh===batch.mesh&&motion.clothingMesh===batch.clothingMesh&&motion.bodyIndex===bodyIndex&&motion.bodyFrame===this.frameToken-1&&motion.bodyX===renderX&&motion.bodyY===positionY&&motion.bodyZ===renderY&&motion.bodyAngle===renderAngle&&motion.bodySize===size&&motion.bodyHeightScale===heightScale&&motion.bodyLying===lying;
     this.position.set(renderX,positionY,renderY);
     // Accessory meshes can change batch/index even while the body keeps its

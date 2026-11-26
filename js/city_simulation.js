@@ -1881,8 +1881,8 @@ export class CitySimulation {
     for(const c of this.citizens){
       if(!c.climbing||!c.graffitiMission||c.entity.destroyed||c.dead||c.custody){if(c.climbing)c.climbing=null;continue;}
       c.path=[];c.entity.x=c.climbing.x;c.entity.y=c.climbing.y;
-      if(c.climbing.phase==='up'){c.climbing.z=Math.min(c.climbing.targetZ,c.climbing.z+dt*1.8);c.climbing.dtMoved=true;}
-      else if(c.climbing.phase==='down'){c.climbing.z=Math.max(0,c.climbing.z-dt*2.2);c.climbing.dtMoved=true;}
+      if(c.climbing.phase==='up'){c.climbing.z=Math.min(c.climbing.targetZ,c.climbing.z+dt*.42);c.climbing.dtMoved=true;}
+      else if(c.climbing.phase==='down'){c.climbing.z=Math.max(0,c.climbing.z-dt*.55);c.climbing.dtMoved=true;}
     }
     for (const c of movers) {
       if(c.climbing){c.path=[];continue;}

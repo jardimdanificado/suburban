@@ -114,7 +114,7 @@ export function reachUpperGraffiti(city,c,mission){
  if(c.climbing.phase==='painting')return true;
  if(!c.climbing.dtMoved&&city.minute>c.climbing.lastMinute){
   const mins=Math.max(1,city.minute-c.climbing.lastMinute);
-  const step=(c.climbing.phase==='down'?-2.2:1.85)*mins;
+  const step=(c.climbing.phase==='down'?-.65:.55)*mins;
   c.climbing.z=Math.max(0,Math.min(c.climbing.targetZ,c.climbing.z+step));
  }
  c.climbing.lastMinute=city.minute;c.climbing.dtMoved=false;
