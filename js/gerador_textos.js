@@ -829,6 +829,6 @@ export function gerarDialogoTematico(tema, {
   };
 }
 
-// O léxico curado não exige aquecimento. A função permanece exportada para
-// manter compatível a inicialização do simulador e do app.
-export function aquecerCatalogos() {}
+// Aquece o banco de cenas no startup (após a carga circular de vocabulario.js)
+// para evitar o engasgo de ~1s na primeira frase ou pichação durante o jogo.
+export function aquecerCatalogos() { bancoAtual(); }
