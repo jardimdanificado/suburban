@@ -47,7 +47,7 @@ export function citizenAnimation(c,moving=false,inWater=undefined){
     if(BIKE_KINDS.has(c.ridingVehicleKind))return c.ridingAsPassenger?'sentado_no_banco':'seated';
     return GLIDE_KINDS.has(c.ridingVehicleKind)?'glide':'passenger';
   }
-  if(c.climbing)return c.climbing.phase==='painting'?'pichar':'escalar';
+  if(c.climbing&&(c.climbing.phase!=='down'||c.climbing.z>.02))return c.climbing.phase==='painting'?'pichar':'escalar';
   const substance=activeSubstanceEffect(c);
   if(inWater!==undefined?inWater:c.swimming)return moving?'nadar':'boiar';
   if(moving){
@@ -627,8 +627,11 @@ if (vCitizenDirt.a > 0.05) {
       renderX=motion.renderX;renderY=motion.renderY;renderAngle=motion.renderAngle;
     }else{motion.renderX=x;motion.renderY=y;motion.renderAngle=motion.angle;}
     if(c.dead||c.unconsciousUntil||!c.climbing){motion.renderClimbZ=0;}
-    else if(this.frameDelta>0&&!this.animationPaused){const cur=motion.renderClimbZ??c.climbing.z,diff=c.climbing.z-cur,maxStep=Math.max(this.frameDelta*(c.climbing.phase==='down'?.75:.55),Math.abs(diff)*Math.min(1,this.frameDelta*5));motion.renderClimbZ=Math.abs(diff)<=maxStep?c.climbing.z:cur+Math.sign(diff)*maxStep;}
-    else{motion.renderClimbZ=c.climbing.z;}
+    else if(this.frameDelta>0&&!this.animationPaused){
+      const goal=c.climbing.phase==='down'?0:c.climbing.targetZ;
+      const cur=motion.renderClimbZ??c.climbing.z,diff=goal-cur,speed=c.climbing.phase==='down'?.62:.48,maxStep=this.frameDelta*speed;
+      motion.renderClimbZ=Math.abs(diff)<=maxStep?goal:cur+Math.sign(diff)*maxStep;
+    }else{motion.renderClimbZ=c.climbing.z;}
     if(visualOffset){renderX+=visualOffset.x;renderY+=visualOffset.y;}
     if((c.furnitureUse?.type==='bench'||c.furnitureUse?.type==='beach_chair')&&c.furnitureUse.seated){renderX+=Math.sin(renderAngle)*.16;renderY+=Math.cos(renderAngle)*.16;}
     // Match gait to the distance displayed, including high-speed interpolation.

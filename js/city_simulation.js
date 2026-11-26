@@ -1882,7 +1882,10 @@ export class CitySimulation {
       if(!c.climbing||!c.graffitiMission||c.entity.destroyed||c.dead||c.custody){if(c.climbing)c.climbing=null;continue;}
       c.path=[];c.entity.x=c.climbing.x;c.entity.y=c.climbing.y;
       if(c.climbing.phase==='up'){c.climbing.z=Math.min(c.climbing.targetZ,c.climbing.z+dt*.42);c.climbing.dtMoved=true;}
-      else if(c.climbing.phase==='down'){c.climbing.z=Math.max(0,c.climbing.z-dt*.55);c.climbing.dtMoved=true;}
+      else if(c.climbing.phase==='down'){
+        c.climbing.z=Math.max(0,c.climbing.z-dt*.55);c.climbing.dtMoved=true;
+        if(c.climbing.z<=0){const doneMsg=c.graffitiMission?.paintedAction;c.climbing=null;c.skybridgeZ=0;c.facingTarget=null;c.graffitiMission=null;c.task=null;c.path=[];if(doneMsg)c.action=doneMsg;}
+      }
     }
     for (const c of movers) {
       if(c.climbing){c.path=[];continue;}
@@ -1934,6 +1937,7 @@ export class CitySimulation {
         }
       }
       if(movedAny){
+        if(!c.path.length&&c.seatId)this.furniture.syncCitizen(c);
         let actionState=movementActionCache.get(c);if(!actionState){actionState={action:null};movementActionCache.set(c,actionState);}
         const actionDelivery=c.deliveryId??null,actionBoat=c.boatClass??null,actionSky=c.skybridgeZ>0,actionSwim=!!c.swimming,actionForestry=c.forestryJob?.stage??null,actionVisit=c.socialVisitId??null;
         if(actionState.task!==c.task||actionState.delivery!==actionDelivery||actionState.boat!==actionBoat||actionState.sky!==actionSky||actionState.swim!==actionSwim||actionState.forestry!==actionForestry||actionState.visit!==actionVisit||actionState.action!==c.action){
