@@ -41,7 +41,7 @@ function renderSegmentWalkable(world,ax,ay,bx,by,allowWater=false,occupied=null)
 function citizenMotionObstacles(sample){
   const city=sample.city;if(!city?._ensureBlockedGrid)return city?.occupied;
   sample.collisionGrid=city._ensureBlockedGrid();sample.collisionWidth=city.world.width;
-  return sample.collisionTiles??={has(key){const comma=key.indexOf(','),x=Number(key.slice(0,comma)),y=Number(key.slice(comma+1));return sample.collisionGrid[y*sample.collisionWidth+x]===1;}};
+  return sample.collisionTiles??={has(key){const comma=key.indexOf(','),x=Number(key.slice(0,comma)),y=Number(key.slice(comma+1));if(sample.collisionGrid[y*sample.collisionWidth+x]!==1)return false;const seatId=sample.citizen?.seatId;if(seatId){const benchId=Number(seatId.slice(0,seatId.indexOf(':'))),bench=city.furniture?.benches?.find(b=>b.id===benchId);if(bench&&Math.floor(bench.x)===x&&Math.floor(bench.y)===y)return false;}return !(Math.floor(sample.entity.x)===x&&Math.floor(sample.entity.y)===y&&city.furniture?.benches?.some(b=>Math.floor(b.x)===x&&Math.floor(b.y)===y));}};
 }
 export function sampleCitizenMotion(world,sample,now,smoothMovement=true){
   if(sample.citizen?.playerControlled){

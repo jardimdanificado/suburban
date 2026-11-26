@@ -15,7 +15,7 @@ test('trees block routes and cutting or gathering approaches from a neighboring 
  city.nature.remove(tree,'test');assert.equal(city.walkable(4,4),true);
 });
 
-test('benches block through traffic but reserved users reach the front and render on the seat',()=>{
+test('benches block through traffic but reserved users walk onto the seat and sit without teleporting',()=>{
  const city=setup({starter:true,population:12}),c=city.citizens[0];
  const bench={id:999,x:4.5,y:4.5,angle:0,kind:'bench',seats:[null,null]};
  city.furniture.benches=[bench];city.obstacleRevision++;
@@ -25,10 +25,13 @@ test('benches block through traffic but reserved users reach the front and rende
  assert(path.every(p=>Math.floor(p.x)!==4||Math.floor(p.y)!==4));
  c.entity.x=3.5;c.entity.y=5.5;c.path=[];c.indoorLocation=null;
  const seat=city.furniture.claimBench(c,c.entity,Infinity);assert(seat);
- assert(seat.path.every(p=>city.walkable(Math.floor(p.x),Math.floor(p.y))));
+ assert(seat.path.slice(0,-1).every(p=>city.walkable(Math.floor(p.x),Math.floor(p.y))));
+ assert.equal(seat.path.at(-1).benchSeat,true);
+ assert.equal(Math.floor(seat.path.at(-1).x),4);assert.equal(Math.floor(seat.path.at(-1).y),4);
  Object.assign(c.entity,seat.point);c.task='sit';c.path=[];city.furniture.syncCitizen(c);
- assert(c.seated);assert.equal(Math.floor(c.furnitureUse.posePoint.x),4);assert.equal(Math.floor(c.furnitureUse.posePoint.y),4);
- city.furniture.release(c);assert.equal(city.walkable(Math.floor(c.entity.x),Math.floor(c.entity.y)),true);
+ assert(c.seated);assert.equal(Math.floor(c.entity.x),4);assert.equal(Math.floor(c.entity.y),4);
+ assert.equal(c.furnitureUse.posePoint.x,c.entity.x);assert.equal(c.furnitureUse.posePoint.y,c.entity.y);
+ city.furniture.release(c);assert(c._benchExitPoint);
 });
 
 test('reconciliation removes old benches overlapping trees without deleting valid benches',()=>{

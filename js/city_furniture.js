@@ -91,20 +91,21 @@ export class CityFurniture{
    }if(this.benches.length>=limit)break;
   }
  }
- release(c){if(c.seatId){const [id,slot]=c.seatId.split(':').map(Number),b=this.benches.find(b=>b.id===id);if(b?.seats[slot]===c.id)b.seats[slot]=null;}c.seatId=null;c.seated=false;c.furnitureUse=null;c.sitStartedAt=null;c.sitUntil=null;}
+ release(c){if(c.seatId){const [id,slot]=seatIdParts(c.seatId),b=this.benches.find(b=>b.id===id);if(b?.seats[slot]===c.id)b.seats[slot]=null;if(b&&!BEACH_SEATS.has(b.kind)&&c.entity&&Math.hypot(c.entity.x-b.x,c.entity.y-b.y)<.7)c._benchExitPoint=this.seatApproachPoint(b,slot);}c.seatId=null;c.seated=false;c.furnitureUse=null;c.sitStartedAt=null;c.sitUntil=null;}
  claimBench(c,origin=c.entity,maxDistance=14){
-  if(c.seatId){const [id,slot]=c.seatId.split(':').map(Number),bench=this.benches.find(b=>b.id===id);if(bench?.seats[slot]===c.id)return {bench,point:this.seatPoint(bench,slot)};}
+  if(c.seatId){const [id,slot]=seatIdParts(c.seatId),bench=this.benches.find(b=>b.id===id);if(bench?.seats[slot]===c.id)return {bench,point:this.seatPoint(bench,slot)};}
   for(const bench of [...this.benches].sort((a,b)=>Math.hypot(a.x-origin.x,a.y-origin.y)-Math.hypot(b.x-origin.x,b.y-origin.y))){if(Math.hypot(bench.x-origin.x,bench.y-origin.y)>maxDistance)continue;
-   for(let slot=0;slot<(bench.seats?.length||0);slot++){const who=this.city.society.citizen(bench.seats[slot]);if(who&&!who.entity.destroyed&&who.seatId===`${bench.id}:${slot}`)continue;const point=this.seatPoint(bench,slot),path=this.city.findPath(c.entity,point);if(path===null)continue;
-    // Pathfinding ends at the tile center. Add the actual seat position so the
-    // citizen reaches the bench instead of stopping a few tenths of a tile away.
-    const end=path.at(-1)||c.entity;if(Math.hypot(end.x-point.x,end.y-point.y)>.04)path.push({...point});
+   for(let slot=0;slot<(bench.seats?.length||0);slot++){const who=this.city.society.citizen(bench.seats[slot]);if(who&&!who.entity.destroyed&&who.seatId===`${bench.id}:${slot}`)continue;const approach=this.seatApproachPoint(bench,slot),point=this.seatPoint(bench,slot),path=this.city.findPath(c.entity,approach);if(path===null)continue;
+    // Walk to the front of the bench first, then step onto the seat itself so
+    // the citizen never teleports onto or off the bench.
+    const end=path.at(-1)||c.entity;if(Math.hypot(end.x-approach.x,end.y-approach.y)>.04)path.push({...approach});
+    if(Math.hypot(approach.x-point.x,approach.y-point.y)>.04)path.push({...point,benchSeat:true});
     bench.seats[slot]=c.id;c.seatId=`${bench.id}:${slot}`;return {bench,point,path};}
   }return null;
  }
  seatPosePoint(b,slot){const offset=b.kind==='bench'?(slot===0?-.18:.18):0;return {x:b.x+Math.cos(b.angle)*offset,y:b.y-Math.sin(b.angle)*offset};}
- // Walking stops in front of the collider; only the seated render pose occupies the bench.
- seatPoint(b,slot){const point=this.seatPosePoint(b,slot);return {x:point.x+Math.sin(b.angle)*.72,y:point.y+Math.cos(b.angle)*.72};}
+ seatApproachPoint(b,slot){const point=this.seatPosePoint(b,slot);return {x:point.x+Math.sin(b.angle)*.72,y:point.y+Math.cos(b.angle)*.72};}
+ seatPoint(b,slot){return this.seatPosePoint(b,slot);}
  queueSeat(c,b){const seat=this.claimBench(c,b.door,10);if(!seat)return false;const distance=Math.hypot(c.entity.x-seat.point.x,c.entity.y-seat.point.y);if(distance>.15&&!c.path.length)c.path=seat.path||this.city.findPath(c.entity,seat.point)||[];return true;}
  waitForInputs(c,b,reason='Aguardando matéria-prima'){
   const city=this.city,resume=c.task,seat=this.claimBench(c,c.entity,14);c.workWait={employerId:b.id,resume,retryAt:city.minute+30,reason};c.task='work-wait';c.targetId=b.id;

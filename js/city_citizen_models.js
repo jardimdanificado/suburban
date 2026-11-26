@@ -10,7 +10,7 @@ import {CITIZEN_BODY_FACE_COUNT,CITIZEN_GARMENT_FACES} from './city_garment_face
 import {fittedSkirtSurface} from './city_citizen_skirts.js?v=anatomical-dress-skirt-1';
 import {createPoseWeightMorph,computeWeightMorphAttributes} from './city_citizen_weight_morph.js?v=anatomical-3d-morph-1';
 /** OBJ snapshots share one geometry per frame and one instanced draw per visible frame. */
-export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],caminhar:[0,1,2,3,4,5],andar_lento:[0,1,2,3,4,5],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0],acenar:[0,1,2,3,4,5],comemorar:[0,1,2,3],conversar:[0,1,2,3],cavar:[0,1,2,3],colher:[0,1,2,3],aplaudir:[0,1,2,3,4,5],beber:[0,1,2,3],pescar:[0],chorar:[0,1,2,3],tocar_violao:[0,1,2,3],escalar:[0,1,2,3,4,5],pichar:[0,1,2,3],dancar_samba:[0,1,2,3,4,5,6,7,8,9],dancar_salsa:[0,1,2,3,4,5,6,7,8,9],dancar_rumba:[0,1,2,3,4,5,6,7,8,9],dancar_hiphop:[0,1,2,3,4,5,6,7,8,9],dancar_boba:[0,1,2,3,4,5,6,7,8,9],dancar_breakdance:[0,1,2,3,4,5,6,7,8,9],dancar_macarena:[0,1,2,3,4,5,6,7,8,9],nadar:[0,1,2,3,4,5],boiar:[0,1,2,3],carregar:[0,1,2,3,4,5],carregar_parado:[0,1,2,3],droga_cafe_andar:[0,1,2,3,4,5],droga_cafe_idle:[0,1,2,3],droga_alcool_andar:[0,1,2,3,4,5],droga_alcool_idle:[0,1,2,3],droga_folha_coca_andar:[0,1,2,3,4,5],droga_folha_coca_idle:[0,1,2,3],droga_tabaco_andar:[0,1,2,3,4,5],droga_tabaco_idle:[0,1,2,3],droga_cannabis_andar:[0,1,2,3,4,5],droga_cannabis_idle:[0,1,2,3],droga_coca_andar:[0,1,2,3,4,5],droga_coca_idle:[0,1,2,3],droga_cubensis_andar:[0,1,2,3,4,5],droga_cubensis_idle:[0,1,2,3],droga_amanita_andar:[0,1,2,3,4,5],droga_amanita_idle:[0,1,2,3],droga_peyote_andar:[0,1,2,3,4,5],droga_peyote_idle:[0,1,2,3],droga_trombeta_anjo_andar:[0,1,2,3,4,5],droga_trombeta_anjo_idle:[0,1,2,3]});
+export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],caminhar:[0,1,2,3,4,5],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0],acenar:[0,1,2,3,4,5],comemorar:[0,1,2,3],conversar:[0,1,2,3],cavar:[0,1,2,3],colher:[0,1,2,3],aplaudir:[0,1,2,3,4,5],beber:[0,1,2,3],pescar:[0],chorar:[0,1,2,3],tocar_violao:[0,1,2,3],escalar:[0,1,2,3,4,5],pichar:[0,1,2,3],dancar_samba:[0,1,2,3,4,5,6,7,8,9],dancar_salsa:[0,1,2,3,4,5,6,7,8,9],dancar_rumba:[0,1,2,3,4,5,6,7,8,9],dancar_hiphop:[0,1,2,3,4,5,6,7,8,9],dancar_boba:[0,1,2,3,4,5,6,7,8,9],dancar_breakdance:[0,1,2,3,4,5,6,7,8,9],dancar_macarena:[0,1,2,3,4,5,6,7,8,9],nadar:[0,1,2,3,4,5],boiar:[0,1,2,3],carregar:[0,1,2,3,4,5],carregar_parado:[0,1,2,3],droga_cafe_andar:[0,1,2,3,4,5],droga_cafe_idle:[0,1,2,3],droga_alcool_andar:[0,1,2,3,4,5],droga_alcool_idle:[0,1,2,3],droga_folha_coca_andar:[0,1,2,3,4,5],droga_folha_coca_idle:[0,1,2,3],droga_tabaco_andar:[0,1,2,3,4,5],droga_tabaco_idle:[0,1,2,3],droga_cannabis_andar:[0,1,2,3,4,5],droga_cannabis_idle:[0,1,2,3],droga_coca_andar:[0,1,2,3,4,5],droga_coca_idle:[0,1,2,3],droga_cubensis_andar:[0,1,2,3,4,5],droga_cubensis_idle:[0,1,2,3],droga_amanita_andar:[0,1,2,3,4,5],droga_amanita_idle:[0,1,2,3],droga_peyote_andar:[0,1,2,3,4,5],droga_peyote_idle:[0,1,2,3],droga_trombeta_anjo_andar:[0,1,2,3,4,5],droga_trombeta_anjo_idle:[0,1,2,3]});
 const citizenHasPath=c=>c?._renderPathActive??!!c?.path?.length;
 export function citizenIsSleeping(c){
  if(c?.task!=='energy'||!c.sleep?.active||citizenHasPath(c)||c.mobilityTrip||c.ridingVehicleId||c.deliveryId)return false;
@@ -31,7 +31,7 @@ function activeSubstanceEffect(c){
   return null;
 }
 const TOOL_CLIPS=Object.freeze({cavar:'shovel',colher:'scythe',pescar:'rod',tocar_violao:'guitar',beber:'mug',pichar:'spray'});
-const ACTION_CLIPS=new Set(['run','caminhar','andar_lento','pedal','murro','chute','derrotado','nadar','carregar','escalar']);
+const ACTION_CLIPS=new Set(['run','caminhar','pedal','murro','chute','derrotado','nadar','carregar','escalar']);
 const PRINTED_GARMENTS=new Set(['camisa social','camisa estampada','vestido estampado']),PATTERNED_GARMENTS=new Set(['camisa estampada','vestido estampado']),DRESS_PIECES=new Set(['vestido','vestido estampado']),SKIRT_PIECES=new Set(['saia','saia longa']),HAND_PIECES=new Set(['luvas']);
 const COMBINABLE_GARMENTS=new Set(['camisa','camiseta','regata','terno','casaco','trapos','macacão']);
 const HEADWEAR_PIECES=new Set(['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','cesta']);
@@ -54,8 +54,7 @@ export function citizenAnimation(c,moving=false,inWater=undefined){
     if(c.deliveryId||c.forestryJob?.stage==='return'||c.carryLoad)return 'carregar';
     if(substance&&CITIZEN_MODEL_FRAMES[`droga_${substance}_andar`])return `droga_${substance}_andar`;
     if(c.task==='combat-flee'||c.task==='police-response'||c.running||(c.playerControlled&&c.playerRunning))return 'run';
-    if(c.task==='outdoor_leisure'||c.task==='swim-leisure'||(c.needs?.energy??100)<25)return 'andar_lento';
-    if(CASUAL_WALK_TASKS.has(c.task))return 'caminhar';
+    if(CASUAL_WALK_TASKS.has(c.task)||c.task==='outdoor_leisure'||c.task==='swim-leisure')return 'caminhar';
     return 'run';
   }
   if(c.fishingPose)return c.fishingPose.chair||c.fishingPose.boat?'sentado_no_banco':'sentado_no_chao';
@@ -94,7 +93,7 @@ export function citizenFrame(clip,time,phase=0,oneShot=false){
   if(clip==='glide')return FRAME_POSES.use[1];
   const sequence=clip==='pedal'?[0,2,4]:clip==='use'?[0,1]:CITIZEN_MODEL_FRAMES[clip]||CITIZEN_MODEL_FRAMES.idle,poseClip=clip==='pedal'?'run':clip in CITIZEN_MODEL_FRAMES?clip:'idle';
   if(sequence.length===1)return FRAME_POSES[poseClip][sequence[0]];
-  const fps=clip==='andar_lento'?5:clip==='caminhar'?6.5:clip.endsWith('_andar')?6:ACTION_CLIPS.has(clip)?8:clip.startsWith('dancar_')?5:clip==='conversar'?2.5:4,index=Math.floor(Math.max(0,time)*fps+phase),frame=sequence[oneShot?Math.min(index,sequence.length-1):index%sequence.length];
+  const fps=clip==='caminhar'?6.5:clip.endsWith('_andar')?6:ACTION_CLIPS.has(clip)?8:clip.startsWith('dancar_')?5:clip==='conversar'?2.5:4,index=Math.floor(Math.max(0,time)*fps+phase),frame=sequence[oneShot?Math.min(index,sequence.length-1):index%sequence.length];
   return FRAME_POSES[poseClip][frame]||{clip:poseClip,frame};
 }
 const FRAME_POSES=Object.fromEntries(Object.entries(CITIZEN_MODEL_FRAMES).map(([clip,frames])=>[clip,Object.fromEntries(frames.map(frame=>[frame,Object.freeze({clip,frame})]))]));
@@ -645,7 +644,7 @@ if (vCitizenDirt.a > 0.05) {
     const poseBodyShape=clip==='sentado_no_banco'&&bodyShape.fat>.9?{...bodyShape,fat:.9}:bodyShape;
     if(actionState){const token=`${clip}:${actionToken??''}`;if(motion.actionToken!==token){motion.actionToken=token;motion.actionStartedAt=this.clock;}}
     else motion.actionToken=null;
-    const animationTime=(clip==='run'||clip==='caminhar'||clip==='andar_lento'||clip==='pedal'||clip.endsWith('_andar'))?motion.walkFrame/8:actionState?this.clock-(motion.actionStartedAt??this.clock):this.clock,pose=citizenFrame(clip,animationTime,actionState?0:(entity.id*13)%17,actionState),key=`${pose.clip}:${pose.frame}`;
+    const animationTime=(clip==='run'||clip==='caminhar'||clip==='pedal'||clip.endsWith('_andar'))?motion.walkFrame/8:actionState?this.clock-(motion.actionStartedAt??this.clock):this.clock,pose=citizenFrame(clip,animationTime,actionState?0:(entity.id*13)%17,actionState),key=`${pose.clip}:${pose.frame}`;
     if(c.climbing){motion.angle=Math.atan2(c.climbing.facingX-x,c.climbing.facingY-y);renderAngle=motion.angle;}
     else if(!traveling&&!sleeping&&c.facingTarget)motion.angle=Math.atan2(c.facingTarget.x-x,c.facingTarget.y-y);
     const appearance=this.appearanceFor(c,entity),{piece,printed,patterned,garment,garmentHex,garmentColorHex,printId,garmentMaterial,lower,lowerSkirt,itemColorHexes}=appearance;

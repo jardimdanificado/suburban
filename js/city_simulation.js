@@ -1897,6 +1897,7 @@ export class CitySimulation {
       if(load?.pickedUp&&!c.mobilityTrip&&(c.deliveryLoad||load.quantity)>this.vehicles.cargoCapacity(c)){c.action='Aguardando veículo para transportar a carga';continue;}
       if(!c.path.length&&c.skybridgeZ&&!c.skybridgeId){c.skybridgeZ=0;c.skybridgeId=null;}
       if (c.conversation || c.workMeal || !c.path.length) continue;
+      if(c._benchExitPoint){const exit=c._benchExitPoint;c._benchExitPoint=null;if(Math.hypot(c.entity.x-exit.x,c.entity.y-exit.y)>.12&&this.walkable(Math.floor(exit.x),Math.floor(exit.y)))c.path.unshift({...exit});}
       let distance = dt * (this.society.isAdult(c) ? 4 : 2.5) * (c.playerControlled&&this.characterGame?.input?.run&&c.needs.energy>12?1.65:1) * this.justice.mobilityFactor(c) * bodyMovementSpeedFactor(c) * (this.fauna?.mountSpeedFor?.(c) ?? 1);
       let movedAny=false;
       while (distance > 0 && c.path.length) {
@@ -1906,10 +1907,10 @@ export class CitySimulation {
           if(!this.beginSkybridgeTransit(c,leg)){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;c.skybridgeTransit=null;}
           break;
         }
-        const pBridge=p.skybridgeId||(c.skybridgeZ>0?c.skybridgeId:null),elevated=!!pBridge,boatWaypoint=!!p.boatClass,tx=Math.floor(p.x),ty=Math.floor(p.y),tile=tileAt(this.world,tx,ty),swimTile=!elevated&&!boatWaypoint&&tile===TILE_WATER;
+        const pBridge=p.skybridgeId||(c.skybridgeZ>0?c.skybridgeId:null),elevated=!!pBridge,boatWaypoint=!!p.boatClass,tx=Math.floor(p.x),ty=Math.floor(p.y),tile=tileAt(this.world,tx,ty),swimTile=!elevated&&!boatWaypoint&&tile===TILE_WATER,allowBenchSeat=!!(p.benchSeat&&c.seatId&&terrainWalkable(this.world,tx,ty));
         if(pBridge&&!this.skybridgeLinksForRevision().some(link=>link.id===pBridge)){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
         if(boatWaypoint&&tile!==TILE_WATER){c.path=[];c.task=null;c.boatClass=null;break;}
-        if(!elevated&&!boatWaypoint&&!swimTile&&(!this.walkable(tx,ty)||!canStep(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y),tx,ty))){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
+        if(!elevated&&!boatWaypoint&&!swimTile&&!allowBenchSeat&&(!this.walkable(tx,ty)||!canStep(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y),tx,ty))){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
         const lane=!elevated&&!boatWaypoint&&!c.playerControlled&&c.path.length>1?SUBTILE_WALK_OFFSETS[c.id&3]:null;
         const targetX=lane?tx+0.5+lane[0]:p.x,targetY=lane?ty+0.5+lane[1]:p.y;
         const dx=targetX-c.entity.x,dy=targetY-c.entity.y,dz=(p.z||0)-(c.skybridgeZ||0),len=Math.hypot(dx,dy,dz);

@@ -23,14 +23,14 @@ const CHANNEL_FILES = {};
 // Event kind to positional one-shot. `duration` trims long recordings such as
 // the 27 s door latch down to one open.
 const EVENT_SOUNDS = {
-  construction: { key: 'hammer', gain: 0.28, duration: 2 },
-  'project-started': { key: 'hammer', gain: 0.25, duration: 2 },
-  'service-contracted': { key: 'hammer', gain: 0.25, duration: 2 },
-  'business-founded': { key: 'cash_register', gain: 0.22, duration: 2.2 },
-  purchase: { key: 'coins', gain: 0.2, duration: 1.1 },
-  'home-lease': { key: 'coins', gain: 0.18, duration: 1.1 },
-  'bill-voted': { key: 'gavel', gain: 0.28, duration: 2.5 },
-  'council-elected': { key: 'gavel', gain: 0.24, duration: 2.5 },
+  construction: { key: 'hammer', gain: 0.5, duration: 2 },
+  'project-started': { key: 'hammer', gain: 0.45, duration: 2 },
+  'service-contracted': { key: 'hammer', gain: 0.45, duration: 2 },
+  'business-founded': { key: 'cash_register', gain: 0.4, duration: 2.2 },
+  purchase: { key: 'coins', gain: 0.35, duration: 1.1 },
+  'home-lease': { key: 'coins', gain: 0.3, duration: 1.1 },
+  'bill-voted': { key: 'gavel', gain: 0.5, duration: 2.5 },
+  'council-elected': { key: 'gavel', gain: 0.4, duration: 2.5 },
 };
 
 // Same curve as the PannerNode 'inverse' distance model, kept pure so the
@@ -524,7 +524,7 @@ export class SpatialAudio {
     try { buffer = await this.loadBuffer(file); } catch { this.activeFauna--; return; }
     if (this.paused || this.disposed || !this.ctx) { this.activeFauna--; return; }
     const spec = ANIMAL_SPECIES[call.species];
-    const gain = (spec?.category === 'livestock' ? 0.26 : 0.32) * (call.animal?.state === 'flee' ? 1.2 : 1) * groundScale;
+    const gain = (spec?.category === 'livestock' ? 0.45 : 0.55) * (call.animal?.state === 'flee' ? 1.2 : 1) * groundScale;
     const y = this.groundYAt(call.x, call.z) + (call.y || 0) + 0.45;
     const bufferDuration = Number(buffer?.duration) || 0;
     const offset = bufferDuration > FAUNA_CALL_MAX_DURATION + 1
@@ -561,7 +561,7 @@ export class SpatialAudio {
           const distance = Math.hypot(entity.x - pose.x, entity.y - pose.z);
           if (distance <= 15) {
             this.doorTimer = 0.9;
-            this.playWorldOneShot('door', entity.x, entity.y, 0.18, 1.8);
+            this.playWorldOneShot('door', entity.x, entity.y, 0.3, 1.8);
           }
         }
         if (indoor != null || citizen.dead || citizen.custody || citizen.climbing) continue;
@@ -586,7 +586,7 @@ export class SpatialAudio {
         if (citizen.ridingVehicleId) {
           if (BIKE_KINDS.has(citizen.ridingVehicleKind) && moved >= 0.05 && cooldowns.bike <= 0 && this.worldFiles.bike) {
             cooldowns.bike = 1.4 + this.random() * 1.6;
-            candidates.push({ distance, key: 'bike', x: entity.x, y, z: entity.y, gain: 0.22 * groundScale, duration: 0.95, rate: 0.94 + this.random() * 0.12 });
+            candidates.push({ distance, key: 'bike', x: entity.x, y, z: entity.y, gain: 0.38 * groundScale, duration: 0.95, rate: 0.94 + this.random() * 0.12 });
           }
           continue;
         }
@@ -594,7 +594,7 @@ export class SpatialAudio {
           if (cooldowns.swim <= 0) {
             cooldowns.swim = 0.85 + this.random() * 0.9;
             const splashKey = this.pickWorldKey(['water_splash', 'water_splash_2', 'water_splash_3']) || 'water_splash';
-            candidates.push({ distance, key: splashKey, x: entity.x, y, z: entity.y, gain: 0.22 * groundScale, duration: 0.65, rate: 0.9 + this.random() * 0.2 });
+            candidates.push({ distance, key: splashKey, x: entity.x, y, z: entity.y, gain: 0.38 * groundScale, duration: 0.65, rate: 0.9 + this.random() * 0.2 });
           }
           continue;
         }
@@ -605,20 +605,20 @@ export class SpatialAudio {
             const pool = female ? ['voice_female', 'voice_female_2'] : ['voice_male'];
             if (this.worldFiles.voice_laugh && this.random() < 0.16) pool.unshift('voice_laugh');
             const voiceKey = this.pickWorldKey(pool) || (female ? 'voice_female' : 'voice_male');
-            candidates.push({ distance, key: voiceKey, x: entity.x, y: y + 1.2, z: entity.y, gain: 0.24 * groundScale, duration: 1.1 + this.random() * 0.9, rate: 0.92 + this.random() * 0.16 });
+            candidates.push({ distance, key: voiceKey, x: entity.x, y: y + 1.2, z: entity.y, gain: 0.42 * groundScale, duration: 1.1 + this.random() * 0.9, rate: 0.92 + this.random() * 0.16 });
           }
         }
         if (FORAGE_TASKS.has(citizen.task) && cooldowns.forage <= 0) {
           cooldowns.forage = 1.4 + this.random() * 1.6;
-          candidates.push({ distance, key: 'grazing', x: entity.x, y, z: entity.y, gain: 0.18 * groundScale, duration: 0.85, rate: 0.95 + this.random() * 0.1 });
+          candidates.push({ distance, key: 'grazing', x: entity.x, y, z: entity.y, gain: 0.32 * groundScale, duration: 0.85, rate: 0.95 + this.random() * 0.1 });
         }
         if (cooldowns.work <= 0 && moved < 0.04) {
           if (citizen.task === 'construction' && citizen.workProjectId != null) {
             cooldowns.work = 1.5 + this.random() * 1.5;
-            candidates.push({ distance, key: this.pickWorldKey(['hammer', 'saw']) || 'hammer', x: entity.x, y, z: entity.y, gain: 0.2 * groundScale, duration: 0.9, rate: 0.95 + this.random() * 0.1 });
+            candidates.push({ distance, key: this.pickWorldKey(['hammer', 'saw']) || 'hammer', x: entity.x, y, z: entity.y, gain: 0.34 * groundScale, duration: 0.9, rate: 0.95 + this.random() * 0.1 });
           } else if (citizen.forestryJob?.stage === 'cut' && this.worldFiles.wood_chop) {
             cooldowns.work = 1.6 + this.random() * 1.4;
-            candidates.push({ distance, key: 'wood_chop', x: entity.x, y, z: entity.y, gain: 0.2 * groundScale, duration: 0.9, rate: 0.95 + this.random() * 0.1 });
+            candidates.push({ distance, key: 'wood_chop', x: entity.x, y, z: entity.y, gain: 0.34 * groundScale, duration: 0.9, rate: 0.95 + this.random() * 0.1 });
           }
         }
         if (moved >= 0.04 && cooldowns.step <= 0) {
@@ -634,11 +634,11 @@ export class SpatialAudio {
               : surface === 'footsteps_dirt'
                 ? (this.pickWorldKey(['footsteps_dirt', 'footsteps_dirt_2', 'footsteps_dirt_3']) || surface)
                 : (this.pickWorldKey(['footsteps_sand', 'footsteps_sand_2', 'footsteps_sand_3']) || surface);
-            candidates.push({ distance, key: stepKey, x: entity.x, y, z: entity.y, gain: 0.24 * groundScale, duration: 0.34, rate: 0.92 + this.random() * 0.16 });
+            candidates.push({ distance, key: stepKey, x: entity.x, y, z: entity.y, gain: 0.45 * groundScale, duration: 0.34, rate: 0.92 + this.random() * 0.16 });
             if (GRASS_TILES.has(tile) && this.random() < 0.45) {
               const foliageKey = this.pickWorldKey(['grass_rustle', 'bush_rustle']);
               if (foliageKey) {
-                candidates.push({ distance, key: foliageKey, x: entity.x, y, z: entity.y, gain: 0.14 * groundScale, duration: 0.45, rate: 0.95 + this.random() * 0.15 });
+                candidates.push({ distance, key: foliageKey, x: entity.x, y, z: entity.y, gain: 0.24 * groundScale, duration: 0.45, rate: 0.95 + this.random() * 0.15 });
               }
             }
           }
@@ -663,13 +663,13 @@ export class SpatialAudio {
         cd.rustle = Math.max(0, cd.rustle - stepDt);
         if ((animal.state === 'graze' || animal.state === 'forage' || animal.state === 'eat') && cd.graze <= 0) {
           cd.graze = 1.6 + this.random() * 1.8;
-          candidates.push({ distance, key: 'grazing', x: animal.x, y, z: animal.y, gain: 0.18 * groundScale, duration: 0.9, rate: 0.9 + this.random() * 0.2 });
+          candidates.push({ distance, key: 'grazing', x: animal.x, y, z: animal.y, gain: 0.32 * groundScale, duration: 0.9, rate: 0.9 + this.random() * 0.2 });
         } else if ((animal.state === 'walk' || animal.state === 'flee') && cd.rustle <= 0 && world?.map && Number.isFinite(world.width)) {
           const tile = world.map[Math.floor(animal.y) * world.width + Math.floor(animal.x)];
           if (GRASS_TILES.has(tile)) {
             cd.rustle = 0.7 + this.random() * 0.8;
             const foliageKey = this.pickWorldKey(['grass_rustle', 'bush_rustle']) || 'grass_rustle';
-            candidates.push({ distance, key: foliageKey, x: animal.x, y, z: animal.y, gain: 0.14 * groundScale, duration: 0.5, rate: 0.95 + this.random() * 0.15 });
+            candidates.push({ distance, key: foliageKey, x: animal.x, y, z: animal.y, gain: 0.24 * groundScale, duration: 0.5, rate: 0.95 + this.random() * 0.15 });
           }
         }
       }

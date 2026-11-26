@@ -394,11 +394,12 @@ function addVariedStatue(THREE,group,piece,stone){
 export function drawWallPainting(ctx,piece,onReady=null){
   const design=ensureWallArtDesign(piece);
   if(design){
-    drawPartyFlag(ctx,design,0,0,512,256,onReady);
+    drawPartyFlag(ctx,design,0,0,512,256,onReady,{border:false});
     // The wall supplies the field color; keep only painted flag marks.
     const background=design.background||'#ffffff',hex=background.replace('#',''),color=parseInt(hex.length===3?hex.split('').map(c=>c+c).join(''):hex,16);
+    const br=color>>16&255,bg=color>>8&255,bb=color&255;
     const pixels=ctx.getImageData(0,0,512,256),data=pixels.data;
-    for(let i=0;i<data.length;i+=4)if(data[i]===(color>>16&255)&&data[i+1]===(color>>8&255)&&data[i+2]===(color&255))data[i+3]=0;
+    for(let i=0;i<data.length;i+=4)if(Math.abs(data[i]-br)<=2&&Math.abs(data[i+1]-bg)<=2&&Math.abs(data[i+2]-bb)<=2)data[i+3]=0;
     ctx.putImageData(pixels,0,0);
   }
 }

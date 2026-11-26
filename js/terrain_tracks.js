@@ -499,10 +499,12 @@ export class TerrainTracks {
       }
     };
     this._mudStainCooldown??=new Map();
+    this._seatedFootCooldown??=new WeakMap();
     for(const entity of entities){
       const citizen=entity.properties?.citizen,vehicle=entity.properties?.cityVehicle,animal=entity.properties?.cityAnimal;
       if(!citizen&&!vehicle&&!animal)continue;
-      const elevated=citizen&&(citizen.skybridgeZ>0||citizen._renderIndoorPosition?.z>0||citizen.furnitureUse?.seated||citizen.furnitureUse?.pose==='lying');
+      const seatedOnBench=citizen&&!citizen.indoorLocation&&citizen.skybridgeZ<=0&&citizen.furnitureUse?.seated&&citizen.furnitureUse?.type==='bench';
+      const elevated=citizen&&(citizen.skybridgeZ>0||citizen._renderIndoorPosition?.z>0||(!seatedOnBench&&citizen.furnitureUse?.seated)||citizen.furnitureUse?.pose==='lying');
       const animalElevated=animal&&((animal.altitude||0)>0.12||animal.dead);
       if(entity.destroyed||animalElevated||citizen&&(citizen.ridingVehicleId||citizen.indoorLocation||elevated)||vehicle&&(vehicle.boatClass&&!vehicle.towedByVehicleId||vehicle.ferrying||vehicle.scrapped)) {this.motion.reset(entity);this.sandCarry.reset(entity);this.dirtCarry.reset(entity);this.paintCarry.reset(entity);continue;}
       const motion=citizen&&models?.motion?.get(entity),visible=motion&&Number.isFinite(motion.bodyX)&&Number.isFinite(motion.bodyZ)&&motion.bodyFrame===models.frameToken;
@@ -515,6 +517,14 @@ export class TerrainTracks {
       const animalProfile=animal?animalTrackProfile(animal.species):null;
       const scale=animal?(ANIMAL_SPECIES[animal.species]?.size||.5):(motion?.bodySize||1);
       const contacts=this.motion.move(entity,{x,z,angle,vehicle:vehicle?.good||null,scale,hull,animalProfile},this.time);
+      if(seatedOnBench){
+        const lastSeated=this._seatedFootCooldown.get(entity)??-Infinity;
+        if(this.time-lastSeated>=10){
+          this._seatedFootCooldown.set(entity,this.time);
+          const fx=x+Math.sin(angle)*.25*scale,fz=z+Math.cos(angle)*.25*scale;
+          for(const side of [-1,1])contacts.push({x:fx+Math.cos(angle)*side*.075*scale,z:fz-Math.sin(angle)*side*.075*scale,angle,width:.10*scale,length:.22*scale,kind:side});
+        }
+      }
       stamps.push(...contacts);
       stamps.push(...this.sandCarry.contacts(entity,contacts,world));
       const dirtDeposits=this.dirtCarry.contacts(entity,contacts,world,[TILE_ROAD_GRASS,TILE_ROAD_HILL,TILE_FLOOR,TILE_HILL],'dirt',
