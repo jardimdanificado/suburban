@@ -151,10 +151,10 @@ export function ambiencePlan({ listener, features = {}, night = false } = {}) {
     const gain = volume * distanceAttenuation(distance, { refDistance: 6, maxDistance: radius, rolloffFactor: 0.8 });
     if (gain >= 0.03) zones.push({ key, x: feature.x, z: feature.z, distance, gain });
   };
-  add(night ? 'frogs' : 'river', features.water, 0.45, 26);
+  add('river', features.water, night ? 0.35 : 0.45, 26);
   add('beach', features.beach, night ? 0.38 : 0.48, 28);
-  add(night ? 'night_insects' : 'forest_birds', features.plants, 0.34, 24);
-  add('tree_leaves', features.plants, 0.24, 24);
+  if (!night) add('forest_birds', features.plants, 0.34, 24);
+  add('tree_leaves', features.plants, night ? 0.2 : 0.24, 24);
   add('construction', features.construction, 0.35, 24);
   add('city_street', features.buildings, night ? 0.08 : 0.12, 26);
   zones.sort((a, b) => b.gain - a.gain);

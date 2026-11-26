@@ -148,7 +148,7 @@ test('fauna calls respect radius, sleep, cooldown and night weighting', () => {
   assert.ok(nightCall.weight < 1, 'night birds are quieter');
 });
 
-test('ambience plan prefers the nearest features and swaps nature at night', () => {
+test('ambience plan prefers the nearest features and drops daytime birds at night', () => {
   const listener = { x: 0, y: 2, z: 0 };
   const features = {
     water: { x: 3, z: 0 }, plants: { x: 2, z: 0 }, crowd: { x: 4, z: 0, count: 14 },
@@ -157,7 +157,7 @@ test('ambience plan prefers the nearest features and swaps nature at night', () 
   const day = ambiencePlan({ listener, features, night: false });
   assert.deepEqual(day.map(zone => zone.key), ['river', 'forest_birds', 'tree_leaves', 'city_street']);
   const night = ambiencePlan({ listener, features, night: true });
-  assert.deepEqual(night.map(zone => zone.key), ['frogs', 'night_insects', 'tree_leaves', 'city_street']);
+  assert.deepEqual(night.map(zone => zone.key), ['river', 'tree_leaves', 'city_street']);
   assert.equal(isNightHour(22), true);
   assert.equal(isNightHour(12), false);
 });
