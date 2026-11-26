@@ -794,7 +794,7 @@ function addWaterDitherShader(material, steps = 7.0, intensity = 1.2, scale = 2.
       }
     ` + shader.fragmentShader.replace(
       '#include <color_fragment>',
-      '#include <color_fragment>\n      diffuseColor.a *= mix(0.80, 0.42, clamp(vWaterShoreMix, 0.0, 1.0));'
+      '#include <color_fragment>\n      diffuseColor.a *= mix(0.58, 0.26, clamp(vWaterShoreMix, 0.0, 1.0));'
     );
     // Ramp with specular brightness: at night there is no glare to break up,
     // so leave the tiny ambient specular alone instead of adding noise to it.
@@ -4017,7 +4017,7 @@ export class RCT3DRenderer {
     }));
     this.infiniteSea.position.y = WATER_LEVEL - 1.15;
     this.infiniteSea.renderOrder = -1;
-    this.infiniteSea.receiveShadow = true;
+    this.infiniteSea.receiveShadow = false;
     this.scene.add(this.infiniteSea);
     const normSand = generateProceduralTerrainNormalMap("sand", 0.72);
     const normOak = generateProceduralFoliageNormalMap("oak", 1.0);
@@ -7196,7 +7196,7 @@ export class RCT3DRenderer {
       const deep = deepBedSample(px, pz);
       if (localProfile) {
         const s = localProfile.sample(px, pz);
-        const blend = Math.max(0, Math.min(1, (s.distance - 2.4) / 1.8));
+        const blend = Math.max(0, Math.min(1, (s.distance - 2.4) / 0.8));
         const y = s.height * (1 - blend) + deep.y * blend;
         const depthFactor = Math.max(0, Math.min(1, (WATER_LEVEL - y) / 0.85));
         const wet = 0.75 * (1 - blend) + (0.75 - depthFactor * 0.32) * blend;
@@ -7232,7 +7232,6 @@ export class RCT3DRenderer {
       const waterBucket = tileMeshBuckets[TILE_WATER];
       const bedBucket = tileMeshBuckets.shoreSand;
       const localProfile = beach || sandShoreTileSurface(world, tx, ty, { profileOnly: true });
-      const baseH = WATER_LEVEL - 1.10;
       const bedAt = (px, pz) => beach ? beach.sample(px, pz).height : waterBedSample(px, pz, localProfile).y;
       const tint = waterTint(waterPollutionAt(world, tx, ty));
       const waterColor = tint.map(value => (0.58 + value * 0.42) * zoneMult * 0.88);
@@ -7242,21 +7241,25 @@ export class RCT3DRenderer {
           const x0 = ax + (bx - ax) * t0, z0 = az + (bz - az) * t0;
           const x1 = ax + (bx - ax) * t1, z1 = az + (bz - az) * t1;
           const b0 = bedAt(x0, z0), b1 = bedAt(x1, z1);
-          const waterPts = [
-            [x0, b0, z0], [x1, b1, z1], [x1, WATER_LEVEL, z1],
-            [x0, b0, z0], [x1, WATER_LEVEL, z1], [x0, WATER_LEVEL, z0],
-          ];
-          for (const [px, py, pz] of waterPts) {
-            waterBucket.pos.push(px, py, pz);
-            waterBucket.uvs.push((px + pz) / 8, py / 2);
-            waterBucket.colors.push(...waterColor);
-            waterBucket.waterCells.push(ty * this.mapWidth + tx);
-            waterBucket.waterLights.push(zoneMult);
-            waterBucket.waterShoreMix.push(0.22);
+          const wLo0 = Math.min(WATER_LEVEL, b0), wLo1 = Math.min(WATER_LEVEL, b1);
+          if (wLo0 < WATER_LEVEL - 1e-4 || wLo1 < WATER_LEVEL - 1e-4) {
+            const waterPts = [
+              [x0, wLo0, z0], [x1, wLo1, z1], [x1, WATER_LEVEL, z1],
+              [x0, wLo0, z0], [x1, WATER_LEVEL, z1], [x0, WATER_LEVEL, z0],
+            ];
+            for (const [px, py, pz] of waterPts) {
+              waterBucket.pos.push(px, py, pz);
+              waterBucket.uvs.push((px + pz) / 8, py / 2);
+              waterBucket.colors.push(...waterColor);
+              waterBucket.waterCells.push(ty * this.mapWidth + tx);
+              waterBucket.waterLights.push(zoneMult);
+              waterBucket.waterShoreMix.push(0.22);
+            }
           }
+          const lo0 = Math.min(0.0, b0 - 0.08), lo1 = Math.min(0.0, b1 - 0.08);
           const bedPts = [
-            [x0, baseH, z0], [x1, baseH, z1], [x1, b1, z1],
-            [x0, baseH, z0], [x1, b1, z1], [x0, b0, z0],
+            [x0, lo0, z0], [x1, lo1, z1], [x1, b1, z1],
+            [x0, lo0, z0], [x1, b1, z1], [x0, b0, z0],
           ];
           for (let k = 0; k < 6; k++) {
             const [px, py, pz] = bedPts[k];
@@ -9013,7 +9016,7 @@ export class RCT3DRenderer {
             waterGroundH=bedY(cx,cy)*(1-u)*(1-v)+bedY(cx+1,cy)*u*(1-v)+bedY(cx+1,cy+1)*u*v+bedY(cx,cy+1)*(1-u)*v;
           }
         }
-        const inDeepWater=citizenOnWater&&waterGroundH<WATER_LEVEL-0.36;
+        const inDeepWater=citizenOnWater&&(waterGroundH<WATER_LEVEL-0.22||(cityCitizen.swimming&&waterGroundH<WATER_LEVEL-0.12));
         const waterTime=this.materials?.[TILE_WATER]?.userData?.caribbeanWaterTime?.value??0;
         const waveY=inDeepWater?waterWaveHeight(sampleX,sampleY,waterTime):0;
         const citizenSkyZ=cityCitizen&&!cityCitizen.indoorLocation&&(cityCitizen.skybridgeZ>0)?cityCitizen.skybridgeZ:0;

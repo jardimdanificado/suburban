@@ -19,7 +19,7 @@ function buildSandShoreTileSurface(world,tx,ty,profileOnly,steps){
   if(at(tx,ty)!==TILE_WATER&&!(profileOnly&&isSlopingBeachTile(world,tx,ty)))return null;
   const segments=[];
   const edge=(ax,az,bx,bz)=>segments.push([ax,az,bx,bz,terrainCornerHeight(world,ax,az),terrainCornerHeight(world,bx,bz)]);
-  const radius=3;
+  const radius=4;
   for(let z=ty-radius;z<=ty+radius;z++)for(let x=tx-radius;x<=tx+radius;x++){
     if(at(x,z)!==TILE_WATER)continue;
     if(isSlopingBeachTile(world,x,z-1))edge(x,z,x+1,z);
