@@ -6,6 +6,8 @@ import {inventoryFree} from './city_inventory.js';
 import {boatAccessAccounts,planBoatTrip} from './city_boat_towing.js?v=shared-crossings-1';
 
 const steps=[[1,0],[-1,0],[0,1],[0,-1]],habitats=new WeakMap();
+const FISH_BY_HABITAT=new Map();
+for(const g of Object.keys(FISH_SPECIES)){const k=`${FISH_SPECIES[g].salinity}:${FISH_SPECIES[g].zone}`;let list=FISH_BY_HABITAT.get(k);if(!list){list=[];FISH_BY_HABITAT.set(k,list);}list.push(g);}
 const isWater=(world,x,y)=>x>=0&&y>=0&&x<world.width&&y<world.height&&world.getTile(x,y)===TILE_WATER;
 export function fishingWaters(world){
  const previous=habitats.get(world);if(previous?.revision===(world.revision||0))return previous;
@@ -26,7 +28,7 @@ export function fishingWaters(world){
 export function fishHabitat(world,x,y){
  x=Math.floor(x);y=Math.floor(y);if(!isWater(world,x,y))return null;
  const data=fishingWaters(world),cell=y*world.width+x,body=data.bodies[data.bodyAt[cell]],zone=data.distance[cell]<0||data.distance[cell]>=3?'middle':'shore';
- return {bodyId:body.id,salinity:body.salinity,zone,species:Object.keys(FISH_SPECIES).filter(g=>FISH_SPECIES[g].salinity===body.salinity&&FISH_SPECIES[g].zone===zone)};
+ return {bodyId:body.id,salinity:body.salinity,zone,species:FISH_BY_HABITAT.get(`${body.salinity}:${zone}`)||[]};
 }
 export function fishSupplyInputs(economy){
  const available=new Set();for(const body of fishingWaters(economy.city.world).bodies)for(const good of Object.keys(FISH_SPECIES))if(FISH_SPECIES[good].salinity===body.salinity&&(FISH_SPECIES[good].zone==='shore'||body.cells.some(cell=>fishingWaters(economy.city.world).distance[cell]>=3)))available.add(good);
@@ -34,7 +36,15 @@ export function fishSupplyInputs(economy){
  return goods.length?{[goods[0]]:1}:{};
 }
 export function fishingSiteNearby(city,point){
- return shorePoints(city).some(shore=>Math.hypot(shore.x-point.x,shore.y-point.y)<=48);
+ const world=city.world,data=fishingWaters(world),w=world.width,h=world.height;
+ const minX=Math.max(0,Math.floor(point.x-48)),maxX=Math.min(w-1,Math.ceil(point.x+48));
+ const minY=Math.max(0,Math.floor(point.y-48)),maxY=Math.min(h-1,Math.ceil(point.y+48));
+ for(let ty=minY;ty<=maxY;ty++)for(let tx=minX;tx<=maxX;tx++){
+  if(Math.hypot(tx+.5-point.x,ty+.5-point.y)>48)continue;
+  if(!city.walkable(tx,ty)||tileHeight(tileAt(world,tx,ty))>1.25)continue;
+  for(const [dx,dy]of steps){const wx=tx+dx,wy=ty+dy;if(wx>=0&&wy>=0&&wx<w&&wy<h&&data.distance[wy*w+wx]===1)return true;}
+ }
+ return false;
 }
 function livingFish(city){
  if(!city.fauna?.animals)return [];
@@ -46,10 +56,13 @@ function livingFish(city){
   counts.set(a.species,(counts.get(a.species)||0)+1);
   list.push(a);
  }
- return list.filter(a=>(counts.get(a.species)||0)>(city.fauna.minViableCount?.(a.species)??2));
+ const minViable=new Map();
+ for(const sp of counts.keys())minViable.set(sp,city.fauna.minViableCount?.(sp)??2);
+ return list.filter(a=>(counts.get(a.species)||0)>minViable.get(a.species));
 }
-function nearestHarvestableFish(city,point,maxDist=4.5,bodyId=null,zone=null){
- const fishes=livingFish(city),waters=fishingWaters(city.world),width=city.world.width;
+function nearestHarvestableFish(city,point,maxDist=4.5,bodyId=null,zone=null,fishes=null){
+ fishes??=livingFish(city);if(!fishes.length)return null;
+ const waters=fishingWaters(city.world),width=city.world.width;
  let best=null,bestDist=maxDist;
  for(const fish of fishes){
   const cell=Math.floor(fish.y)*width+Math.floor(fish.x);
@@ -92,7 +105,7 @@ function chooseSite(city,b,c){
   for(const shore of shores.slice(0,16)){
    if(Math.hypot(shore.x-b.door.x,shore.y-b.door.y)>48)continue;
    const bodyId=fishHabitat(city.world,shore.water.x,shore.water.y)?.bodyId;
-   const fish=nearestHarvestableFish(city,shore.water,48,bodyId,'middle')||nearestHarvestableFish(city,shore.water,48,bodyId);if(!fish)continue;
+   const fish=nearestHarvestableFish(city,shore.water,48,bodyId,'middle',fishes)||nearestHarvestableFish(city,shore.water,48,bodyId,null,fishes);if(!fish)continue;
    const point={x:Math.floor(fish.x)+.5,y:Math.floor(fish.y)+.5};
    if(habitat){if(Math.hypot(boat.x-shore.x,boat.y-shore.y)>1.6||!route(city,c,shore))continue;
     boat.fishingCitizenId=c.id;boat.driverId=c.id;delete boat.waterRoute;c.fishingJob={buildingId:b.id,stage:'board',boatId:boat.id,shore,point,targetFishId:fish.id,labor:0};return true;
@@ -102,7 +115,7 @@ function chooseSite(city,b,c){
   }
  }
  const shores=shorePoints(city).filter(p=>Math.hypot(p.x-b.door.x,p.y-b.door.y)<=48)
-  .map(shore=>({shore,fish:nearestHarvestableFish(city,shore.water,4.5)}))
+  .map(shore=>({shore,fish:nearestHarvestableFish(city,shore.water,4.5,null,null,fishes)}))
   .filter(entry=>entry.fish)
   .sort((a,d)=>Math.hypot(a.shore.x-c.entity.x,a.shore.y-c.entity.y)-Math.hypot(d.shore.x-c.entity.x,d.shore.y-c.entity.y));
  for(const {shore,fish}of shores.slice(0,32)){

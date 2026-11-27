@@ -936,11 +936,13 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
     :x>=renderer.renderedMinTx&&x+width<=renderer.renderedMaxTx+1&&y>=renderer.renderedMinTy&&y+depth<=renderer.renderedMaxTy+1);
   renderer.lampMeshes ??= new Map();
   const cityNightLights=renderer.cityNightLights??=[];cityNightLights.length=0;
-  const liveBuildings = new Set();
-  for (const e of entities) if (e.properties?.cityBuilding && !e.destroyed) liveBuildings.add(e.id);
+  const liveBuildings = renderer._liveBuildingIds ??= new Set();
+  liveBuildings.clear();
   const sleepingFloorsByBuilding=new Map();
-  for(const entity of entities){
-    const citizen=entity.properties?.citizen,location=citizen?.indoorLocation;
+  for(const e of entities){
+    if(e.destroyed)continue;
+    if(e.properties?.cityBuilding){liveBuildings.add(e.id);continue;}
+    const citizen=e.properties?.citizen,location=citizen?.indoorLocation;
     if(!location||!citizenIsSleeping(citizen))continue;
     let floors=sleepingFloorsByBuilding.get(location.buildingId);if(!floors){floors=new Set();sleepingFloorsByBuilding.set(location.buildingId,floors);}
     floors.add(location.floor??0);

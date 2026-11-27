@@ -347,17 +347,27 @@ export class CityFauna {
     const spec = ANIMAL_SPECIES[species];
     if (!spec) return 0;
     const world = this.city.world;
+    const rev = `${world?.revision || 0}:${world?.width || 0}x${world?.height || 0}`;
+    if (this._speciesCapacityRev !== rev) {
+      this._speciesCapacityRev = rev;
+      this._speciesCapacityCache = new Map();
+    }
+    const cached = this._speciesCapacityCache.get(species);
+    if (cached !== undefined) return cached;
+    let cap;
     if (spec.aquatic) {
       const waters = fishingWaters(world);
       let cells = 0;
       for (const body of waters.bodies) {
         if (!spec.salinity || body.salinity === spec.salinity) cells += body.cells.length;
       }
-      if (!cells) return 0;
-      return Math.max(4, Math.min(spec.maxWild || 40, Math.round(cells / 24)));
+      cap = cells ? Math.max(4, Math.min(spec.maxWild || 40, Math.round(cells / 24))) : 0;
+    } else {
+      const areaScale = ((world?.width || 64) * (world?.height || 64)) / 4096;
+      cap = Math.min(spec.maxWild || 4, Math.max(FAUNA_RULES.spawnPerSpeciesMin, Math.round(areaScale * (spec.maxWild || 3))));
     }
-    const areaScale = ((world?.width || 64) * (world?.height || 64)) / 4096;
-    return Math.min(spec.maxWild || 4, Math.max(FAUNA_RULES.spawnPerSpeciesMin, Math.round(areaScale * (spec.maxWild || 3))));
+    this._speciesCapacityCache.set(species, cap);
+    return cap;
   }
 
   minViableCount(species) {
@@ -424,8 +434,8 @@ export class CityFauna {
       riderId: null,
       x: entity.x,
       y: entity.y,
-      altitude: spec.aquatic ? -0.05 : 0,
-      targetAltitude: spec.aquatic ? -0.05 : 0,
+      altitude: spec.aquatic ? -0.36 : 0,
+      targetAltitude: spec.aquatic ? -0.36 : 0,
       inTreePlantId: null,
       nestId: null,
       angle: Math.random() * Math.PI * 2,
@@ -990,8 +1000,8 @@ export class CityFauna {
         animal.altitude = 0;
         animal.targetAltitude = 0;
       } else if (spec?.aquatic) {
-        animal.altitude = -0.05;
-        animal.targetAltitude = -0.05;
+        animal.altitude = -0.36;
+        animal.targetAltitude = -0.36;
       }
 
       if (animal.state === 'eat') {
@@ -1072,7 +1082,7 @@ export class CityFauna {
               animal.targetAltitude = 2.4;
               animal.thinkTimer = 0.1;
             } else {
-              animal.targetAltitude = spec?.aquatic ? -0.05 : 0;
+              animal.targetAltitude = spec?.aquatic ? -0.36 : 0;
               animal.state = 'idle';
               animal.action = 'Observando';
               animal.stateTimer = 0.8 + Math.random() * 1.2;

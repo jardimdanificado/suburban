@@ -9541,7 +9541,7 @@ export class RCT3DRenderer {
     this.instOakLeaves.count = oakCount;
     this.instOakLeaves.instanceMatrix.needsUpdate = true;
     if (this.instOakLeaves.instanceColor) this.instOakLeaves.instanceColor.needsUpdate = true;
-    const commitInst=(mesh,count,withColor=false)=>{mesh.count=count;if(count>0){mesh.instanceMatrix.needsUpdate=true;if(withColor&&mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}};
+    const commitInst=(mesh,count,withColor=false)=>{mesh.count=count;mesh.visible=count>0;if(count>0){mesh.instanceMatrix.needsUpdate=true;if(withColor&&mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}};
     commitInst(this.instTropicalTreeBlooms,tropicalTreeBloomCount,true);
     commitInst(this.instPalmTrunks,palmCount);
     commitInst(this.instPalmFronds,palmFrondCount);
@@ -9581,85 +9581,43 @@ export class RCT3DRenderer {
     }
 
     for (let s = 0; s < 2; s++) {
-      this.instSlaughterhouseWalls[s].count = slaughterhouseCounts[s];
-      this.instSlaughterhouseWalls[s].instanceMatrix.needsUpdate = true;
-      this.instSlaughterhouseRoofs[s].count = slaughterhouseCounts[s];
-      this.instSlaughterhouseRoofs[s].instanceMatrix.needsUpdate = true;
-      if (this.instSlaughterhouseRoofs[s].instanceColor) this.instSlaughterhouseRoofs[s].instanceColor.needsUpdate = true;
+      commitInst(this.instSlaughterhouseWalls[s], slaughterhouseCounts[s]);
+      commitInst(this.instSlaughterhouseRoofs[s], slaughterhouseCounts[s], true);
     }
 
     for (let k = 0; k < 2; k++) {
-      this.instKitchenWalls[k].count = kitchenCounts[k];
-      this.instKitchenWalls[k].instanceMatrix.needsUpdate = true;
-      this.instKitchenRoofs[k].count = kitchenCounts[k];
-      this.instKitchenRoofs[k].instanceMatrix.needsUpdate = true;
-      if (this.instKitchenRoofs[k].instanceColor) this.instKitchenRoofs[k].instanceColor.needsUpdate = true;
+      commitInst(this.instKitchenWalls[k], kitchenCounts[k]);
+      commitInst(this.instKitchenRoofs[k], kitchenCounts[k], true);
     }
 
-    this.instWaterWellBase.count = waterWellCount;
-    this.instWaterWellBase.instanceMatrix.needsUpdate = true;
-    this.instWaterWellWood.count = waterWellCount;
-    this.instWaterWellWood.instanceMatrix.needsUpdate = true;
-    this.instWaterWellRoof.count = waterWellCount;
-    this.instWaterWellRoof.instanceMatrix.needsUpdate = true;
-    if (this.instWaterWellRoof.instanceColor) this.instWaterWellRoof.instanceColor.needsUpdate = true;
+    commitInst(this.instWaterWellBase, waterWellCount);
+    commitInst(this.instWaterWellWood, waterWellCount);
+    commitInst(this.instWaterWellRoof, waterWellCount, true);
 
     for (let h = 0; h < this.instHouseWallVariants.length; h++) {
-      this.instHouseWallVariants[h].count = houseVariantCounts[h];
-      this.instHouseWallVariants[h].instanceMatrix.needsUpdate = true;
-      this.instHouseRoofVariants[h].count = houseVariantCounts[h];
-      this.instHouseRoofVariants[h].instanceMatrix.needsUpdate = true;
-      if (this.instHouseRoofVariants[h].instanceColor) {
-        this.instHouseRoofVariants[h].instanceColor.needsUpdate = true;
-      }
+      commitInst(this.instHouseWallVariants[h], houseVariantCounts[h]);
+      commitInst(this.instHouseRoofVariants[h], houseVariantCounts[h], true);
     }
 
     for (let l = 0; l < 7; l++) {
-      this.instLeaderHouseWallVariants[l].count = leaderVariantCounts[l];
-      this.instLeaderHouseWallVariants[l].instanceMatrix.needsUpdate = true;
-      this.instLeaderHouseRoofVariants[l].count = leaderVariantCounts[l];
-      this.instLeaderHouseRoofVariants[l].instanceMatrix.needsUpdate = true;
-      if (this.instLeaderHouseRoofVariants[l].instanceColor) {
-        this.instLeaderHouseRoofVariants[l].instanceColor.needsUpdate = true;
-      }
+      commitInst(this.instLeaderHouseWallVariants[l], leaderVariantCounts[l]);
+      commitInst(this.instLeaderHouseRoofVariants[l], leaderVariantCounts[l], true);
     }
 
-    this.instHouseWalls.count = houseCount;
-    this.instHouseWalls.instanceMatrix.needsUpdate = true;
-    this.instHouseRoofs.count = houseCount;
-    this.instHouseRoofs.instanceMatrix.needsUpdate = true;
-
-    this.instHousePegs.count = pegsCount;
-    this.instHousePegs.instanceMatrix.needsUpdate = true;
-
-    this.instHouseStage1.count = stage1Count;
-    this.instHouseStage1.instanceMatrix.needsUpdate = true;
-
-    this.instHouseStage2.count = stage2Count;
-    this.instHouseStage2.instanceMatrix.needsUpdate = true;
-
-    this.instHouseStage3.count = stage3Count;
-    this.instHouseStage3.instanceMatrix.needsUpdate = true;
-
-    this.instTorches.count = torchCount;
-    this.instTorches.instanceMatrix.needsUpdate = true;
-    this.instTorchesUnlit.count = torchUnlitCount;
-    this.instTorchesUnlit.instanceMatrix.needsUpdate = true;
-    this.instTorchFlames.count = torchFlameCount;
-    this.instTorchFlames.instanceMatrix.needsUpdate = true;
-
-    this.instWoodCampfires.count = woodCampfireCount;
-    this.instWoodCampfires.instanceMatrix.needsUpdate = true;
-    this.instCampfireFlames.count = campfireFlameCount;
-    this.instCampfireFlames.instanceMatrix.needsUpdate = true;
-
-    this.instRoads.count = roadCount;
-    this.instRoads.instanceMatrix.needsUpdate = true;
-    this.instRoadSnaps.count = roadSnapCount;
-    this.instRoadSnaps.instanceMatrix.needsUpdate = true;
-
-    this.instWaterPlatforms.count = waterPlatformCount;
-    this.instWaterPlatforms.instanceMatrix.needsUpdate = true;
+    commitInst(this.instHouseWalls, houseCount);
+    commitInst(this.instHouseRoofs, houseCount);
+    commitInst(this.instHousePegs, pegsCount);
+    commitInst(this.instHouseStage1, stage1Count);
+    commitInst(this.instHouseStage2, stage2Count);
+    commitInst(this.instHouseStage3, stage3Count);
+    commitInst(this.instTorches, torchCount);
+    commitInst(this.instTorchesUnlit, torchUnlitCount);
+    commitInst(this.instTorchFlames, torchFlameCount);
+    commitInst(this.instWoodCampfires, woodCampfireCount);
+    commitInst(this.instCampfireFlames, campfireFlameCount);
+    commitInst(this.instRoads, roadCount);
+    commitInst(this.instRoadSnaps, roadSnapCount);
+    commitInst(this.instWaterPlatforms, waterPlatformCount);
 
     this.lastInstCamTileX = curCamTileX;
     this.lastInstCamTileY = curCamTileY;

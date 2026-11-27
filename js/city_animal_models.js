@@ -137,12 +137,12 @@ export class CityAnimalModels {
     this.frameDelta = Math.max(0, Math.min(0.1, dt));
     this.clock += this.frameDelta * Math.max(0, Math.min(2, speed));
     this.shadowCount = 0;
-    if (this.shadowMesh) this.shadowMesh.count = 0;
+    if (this.shadowMesh) { this.shadowMesh.count = 0; this.shadowMesh.visible = false; }
     this.flyCount = 0;
-    if (this.flyMesh) this.flyMesh.count = 0;
+    if (this.flyMesh) { this.flyMesh.count = 0; this.flyMesh.visible = false; }
     for (const batch of this.activeBatches) {
       batch.count = 0;
-      if (batch.mesh) batch.mesh.count = 0;
+      if (batch.mesh) { batch.mesh.count = 0; batch.mesh.visible = false; }
     }
     this.activeBatches.clear();
   }
@@ -303,6 +303,7 @@ export class CityAnimalModels {
     for (const batch of this.activeBatches) {
       if (!batch.mesh) continue;
       batch.mesh.count = batch.count;
+      batch.mesh.visible = batch.count > 0;
       if (batch.count > 0) {
         batch.mesh.instanceMatrix.needsUpdate = true;
         if (batch.mesh.instanceColor) batch.mesh.instanceColor.needsUpdate = true;
@@ -310,10 +311,12 @@ export class CityAnimalModels {
     }
     if (this.shadowMesh) {
       this.shadowMesh.count = this.shadowCount;
+      this.shadowMesh.visible = this.shadowCount > 0;
       if (this.shadowCount > 0) this.shadowMesh.instanceMatrix.needsUpdate = true;
     }
     if (this.flyMesh) {
       this.flyMesh.count = this.flyCount;
+      this.flyMesh.visible = this.flyCount > 0;
       if (this.flyCount > 0) this.flyMesh.instanceMatrix.needsUpdate = true;
     }
   }
