@@ -74,19 +74,27 @@ test('makeClothingPattern uses symbols and colors with no words',()=>{
   }
 });
 
-test('citizens start with standardized municipal kit and tailors produce fixed print runs per clothing line',()=>{
+test('citizens start with varied municipal kit and tailors produce fixed print runs per clothing line',()=>{
   const city=makeCity(321);
   city.municipalIdentity={flag:{background:'#8a3b2c',foreground:'#f5e9bf',colors:['#8a3b2c','#2b5c4f','#1f2428']}};
-  const c1=makeCitizen(1),c2=makeCitizen(2);
-  initializeClothes(city,c1);
-  initializeClothes(city,c2);
-  assert.equal(c1.wardrobe.length,3);
-  assert.equal(c2.wardrobe.length,3);
-  assert(c1.wardrobe.every(g=>g.municipalKit&&g.brandName==='Prefeitura · Kit municipal'));
-  assert.equal(c1.wardrobe[0].color,'#8a3b2c');
-  assert.equal(c1.wardrobe[1].color,'#2b5c4f');
-  assert.equal(c1.wardrobe[2].color,'#1f2428');
-  assert.equal(c2.wardrobe[0].color,'#8a3b2c');
+  const allowedColors=new Set(['#8a3b2c','#2b5c4f','#1f2428','#f5e9bf']);
+  const women=Array.from({length:30},(_,i)=>Object.assign(makeCitizen(i+1),{socialProfile:{gender:'woman'}}));
+  const men=Array.from({length:30},(_,i)=>Object.assign(makeCitizen(i+101),{socialProfile:{gender:'man'}}));
+  for(const c of [...women,...men]){
+    initializeClothes(city,c);
+    assert(c.wardrobe.length>=2&&c.wardrobe.length<=4);
+    assert(c.wardrobe.every(g=>g.municipalKit&&g.brandName==='Prefeitura · Kit municipal'&&allowedColors.has(g.color)));
+    assert.equal(c.wardrobe[0].color,'#8a3b2c');
+    assert(c.wearingIndex>=0);
+    assert(c.footwearIndex>=0);
+  }
+  const womanPieces=new Set(women.flatMap(c=>c.wardrobe.map(g=>g.piece)));
+  const manPieces=new Set(men.flatMap(c=>c.wardrobe.map(g=>g.piece)));
+  assert(womanPieces.has('saia')||womanPieces.has('saia longa'),'women municipal kit should include skirts');
+  assert(womanPieces.has('vestido'),'women municipal kit should include dresses');
+  assert(manPieces.has('bermuda')||manPieces.has('shorts'),'men municipal kit should include shorts/bermuda');
+  assert(!manPieces.has('saia')&&!manPieces.has('saia longa')&&!manPieces.has('vestido'),'men municipal kit should not assign skirts or dresses');
+  assert(new Set([...womanPieces,...manPieces]).size>=8,'municipal kit should provide varied garment types');
 
   const tailor=makeStore(10,'tailor');
   const firstLine=createClothingLine(city,tailor,{piece:'camisa estampada',editionSize:3});

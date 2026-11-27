@@ -5,6 +5,7 @@ import {tourismHourly,externalTradeHourly} from '../js/city_external_trade.js';
 import {setEconomicPolicy} from '../js/city_economic_policies.js';
 import {ensureExternalAccount} from '../js/city_currency.js';
 import {buildingActivityProfile} from '../js/city_building_activity_profiles.js';
+import {barMusicPlan,BAR_MUSIC_MAX_SPEED} from '../js/spatial_audio.js';
 
 function addBusiness(city,type,owner=null){
  for(const site of city.economy.locateBuilding(type)){
@@ -109,4 +110,21 @@ test('bars stock and serve legalized substances while blocking prohibited ones',
  assert(bar.balance>barBefore);
  assert.equal(patron.lastSubstanceUse?.id,'cannabis');
  assert.equal(totalMoney(city),city.currency.netIssued());
+});
+
+test('barMusicPlan plays near open bars at normal speed and fades out on fast forward',()=>{
+ const city=setup({starter:true,funded:true,population:64});
+ const owner=city.citizens.find(c=>!c.entity.destroyed&&city.society.isAdult(c));
+ const bar=addBusiness(city,'bar',owner);
+ const listener={x:bar.door.x+2,z:bar.door.y+2};
+ city.minute=Math.floor(city.minute/1440)*1440+20*60;
+ const normal=barMusicPlan({city,listener,speed:1,altitude:0});
+ assert.equal(normal.length,1);
+ assert.equal(normal[0].buildingId,bar.id);
+ const fast=barMusicPlan({city,listener,speed:6,altitude:0});
+ assert.equal(fast.length,1);
+ assert(fast[0].gain<normal[0].gain);
+ assert.equal(barMusicPlan({city,listener,speed:BAR_MUSIC_MAX_SPEED+1,altitude:0}).length,0);
+ city.minute=Math.floor(city.minute/1440)*1440+10*60;
+ assert.equal(barMusicPlan({city,listener,speed:1,altitude:0}).length,0);
 });

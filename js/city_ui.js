@@ -1029,6 +1029,7 @@ export class CityUI {
     const currency=this.city.currency,mint=this.city.buildings.find(b=>b.type==='mint'&&!b.entity.destroyed);
     const bank=this.city.bank,welfare=this.city.welfare;
     p.metrics([['TESOURO',money(this.city.treasury),C.gold],['INFLAÇÃO DIÁRIA',`${(currency.dailyInflation*100).toFixed(2)}%`,currency.dailyInflation>.001?C.red:C.green],['POUPANÇA',money([...bank.deposits.values()].reduce((n,d)=>n+d.balance,0)),C.cyan],['BENEFÍCIOS HOJE',money(welfare.spentToday),C.blue]]);
+    p.note('Inflação diária indica quanto os preços sobem por dia; poupança é o total guardado pelos moradores no banco; benefícios hoje mostra o valor já pago em assistência social.');
     this.section(p,'financeCurrency','Moeda e inflação',()=>{
     p.heading('INDICADORES MONETÁRIOS');
     p.kv('Dinheiro emitido',money(currency.issued));p.kv('Emitido hoje',money(currency.issuedToday));
@@ -1069,7 +1070,7 @@ export class CityUI {
       if(!this.host){p.heading('ADMINISTRAÇÃO');p.links([['Contratos','contracts'],['Tesouro e política monetária','finance']].map(([label,view])=>({label,click:()=>this.showView(view)})));}
       if(hall)p.button('DOSSIÊ DA PREFEITURA',()=>this.openBuilding(hall.id));
     } else if(view==='contracts'){p.heading('CONTRATOS MUNICIPAIS');this.contracts(p,this.cachedList(`municipal-contracts:${this.contractPlotId||'all'}`,()=>city.development.projects.filter(o=>this.contractPlotId?o.plotId===this.contractPlotId:o.accountId==='treasury').slice().sort((a,b)=>Number(a.cancelled||a.status==='completed')-Number(b.cancelled||b.status==='completed')||Number(b.status==='blocked')-Number(a.status==='blocked')||b.startedAt-a.startedAt)));}
-    else if(view==='finance'){renderFiscalReport(this,p);this.monetaryPolicy(p);p.heading('MOVIMENTAÇÕES DO TESOURO');p.metrics([['DISPONÍVEL',money(city.treasury),C.gold]]);this.journal(p,'treasury');}
+    else if(view==='finance'){renderFiscalReport(this,p);this.monetaryPolicy(p);p.heading('MOVIMENTAÇÕES DO TESOURO');const reserve=city.fiscal?.reserve?.()||0,free=city.treasury-reserve;p.metrics([['CAIXA TOTAL',money(city.treasury),C.gold],['RESERVA PROTEGIDA',money(reserve),C.cyan],['FOLGA LIVRE',free>=0?money(free):`-${money(-free)}`,free>=0?C.green:C.red]]);const grouped=this.cachedList('treasury-reason-summary',()=>{const map=new Map();for(const l of city.ledger||[]){if(l.from!=='treasury'&&l.to!=='treasury')continue;const key=l.reason||'Outras movimentações',row=map.get(key)||{reason:key,count:0,inflow:0,outflow:0};row.count++;if(l.to==='treasury')row.inflow+=l.amount||0;else row.outflow+=l.amount||0;map.set(key,row);}return [...map.values()].sort((a,b)=>(b.inflow+b.outflow)-(a.inflow+a.outflow)).slice(0,15);});p.note('Resumo agrupado dos lançamentos recentes por motivo, para visualizar de onde veio e para onde foi o dinheiro sem precisar ler registro por registro.');p.table([{label:'Motivo da movimentação',weight:3},{label:'Qtd.',weight:.6},{label:'Entrou'},{label:'Saiu'}],grouped.map(r=>({cells:[r.reason,String(r.count),money(r.inflow),money(r.outflow)]})),{empty:'Nenhuma movimentação recente registrada.'});this.section(p,'treasuryJournal','Histórico detalhado (log por log)',()=>this.journal(p,'treasury'),false);}
     else {
       renderGovernmentDashboard(this,p);
     }

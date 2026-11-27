@@ -31,7 +31,7 @@ test('government sections and their subviews reuse the government window',()=>{
   h.click('POLÍTICA');
   state.openPanel({politicsTab:'council'});assert.equal(state.politicsTab,'council');
   state.openPanel({councilView:'members'});assert.equal(state.councilView,'members');
-  h.click('TESOURO');assert.equal(state.view(),'finance');
+  h.click('TESOURO');assert.equal(state.view(),'finance');assert.doesNotThrow(h.draw);
   assert.equal(h.desktop.openDestination('government','contracts'),state);
   assert.equal(state.view(),'contracts');assert.equal(h.desktop.manager.windows.length,count);
 });

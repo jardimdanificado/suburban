@@ -124,21 +124,62 @@ function municipalKitColors(city){
   return {
     top:flag?.background||'#4c655c',
     bottom:flag?.colors?.[1]||flag?.foreground||'#344e79',
-    shoes:flag?.colors?.[2]||'#34383e'
+    shoes:flag?.colors?.[2]||'#34383e',
+    accent:flag?.foreground||flag?.colors?.[1]||'#4c655c'
   };
+}
+const MUNICIPAL_KIT_VARIANTS={
+  woman:[
+    {top:'camisa',bottom:'saia',shoes:'sapatos',style:'simples'},
+    {top:'camiseta',bottom:'saia',shoes:'sapatos',style:'simples'},
+    {top:'regata',bottom:'saia',shoes:'sapatos',style:'esportivo'},
+    {top:'camisa social',bottom:'saia longa',shoes:'sapatos',style:'social'},
+    {top:'camisa',bottom:'saia longa',shoes:'botas',style:'clássico'},
+    {top:'vestido',bottom:null,shoes:'sapatos',style:'clássico'},
+    {top:'vestido',bottom:null,shoes:'botas',style:'simples'},
+    {top:'camisa',bottom:'calça',shoes:'sapatos',style:'simples'},
+    {top:'camiseta',bottom:'shorts',shoes:'sapatos',style:'esportivo'},
+    {top:'camisa social',bottom:'calça social',shoes:'sapatos',style:'social'},
+    {top:'macacão',bottom:null,shoes:'botas',style:'simples'},
+    {top:'casaco',bottom:'calça',shoes:'botas',style:'clássico'}
+  ],
+  man:[
+    {top:'camisa',bottom:'calça',shoes:'sapatos',style:'simples'},
+    {top:'camiseta',bottom:'calça',shoes:'sapatos',style:'simples'},
+    {top:'camiseta',bottom:'bermuda',shoes:'sapatos',style:'esportivo'},
+    {top:'regata',bottom:'bermuda',shoes:'sapatos',style:'esportivo'},
+    {top:'regata',bottom:'shorts',shoes:'sapatos',style:'esportivo'},
+    {top:'camisa social',bottom:'calça social',shoes:'sapatos',style:'social'},
+    {top:'casaco',bottom:'calça',shoes:'botas',style:'clássico'},
+    {top:'macacão',bottom:null,shoes:'botas',style:'simples'},
+    {top:'terno',bottom:null,shoes:'sapatos',style:'social'}
+  ]
+};
+MUNICIPAL_KIT_VARIANTS.nonbinary=[...MUNICIPAL_KIT_VARIANTS.woman,...MUNICIPAL_KIT_VARIANTS.man];
+const MUNICIPAL_KIT_HATS=['boné','chapéu','chapéu de palha pequeno','chapéu de palha médio'];
+function municipalKitVariant(city,c){
+  const gender=c?.socialProfile?.gender;
+  const pool=MUNICIPAL_KIT_VARIANTS[gender]||MUNICIPAL_KIT_VARIANTS.nonbinary;
+  const hash=((Math.imul((Number(c?.id)||0)+17,2654435761)^(Number(city?.initialSeed)||0))>>>0);
+  const base=pool[hash%pool.length];
+  const hatRoll=((hash>>>8)%10);
+  const hat=hatRoll<2?MUNICIPAL_KIT_HATS[(hash>>>12)%MUNICIPAL_KIT_HATS.length]:null;
+  return {...base,hat};
 }
 export function initializeClothes(city,c){
   const kit=municipalKitColors(city);
+  const variant=municipalKitVariant(city,c);
   if(!c.wardrobe){
-    c.wardrobe=[{piece:'camisa',style:'simples',color:kit.top,brandId:null,brandName:'Prefeitura · Kit municipal',quality:35,condition:75,dirt:0,acquiredAt:city.minute,municipalKit:true}];
+    c.wardrobe=[{piece:variant.top,style:variant.style,color:kit.top,brandId:null,brandName:'Prefeitura · Kit municipal',quality:35,condition:75,dirt:0,acquiredAt:city.minute,municipalKit:true}];
     changeOwner(city,c.wardrobe[0],c.accountId,c.entity.properties.name,'kit municipal inicial');
     c.clothingUpdatedAt=city.minute;
   }
   if(!c.initialOutfitCompleted){
     c.initialOutfitCompleted=true;
-    const add=(piece,color)=>{const g={piece,style:'simples',color,brandId:null,brandName:'Prefeitura · Kit municipal',quality:35,condition:75,dirt:0,acquiredAt:city.minute,municipalKit:true};changeOwner(city,g,c.accountId,c.entity.properties.name,'kit municipal inicial');c.wardrobe.push(g);};
-    if(!c.wardrobe.some(g=>LOWER_BODY_TYPES.has(g.piece))&&!c.wardrobe.some(g=>['vestido','vestido estampado','macacão','terno'].includes(g.piece)))add('calça',kit.bottom);
-    if(!c.wardrobe.some(g=>FOOTWEAR_TYPES.has(g.piece)))add('sapatos',kit.shoes);
+    const add=(piece,color)=>{const g={piece,style:variant.style,color,brandId:null,brandName:'Prefeitura · Kit municipal',quality:35,condition:75,dirt:0,acquiredAt:city.minute,municipalKit:true};changeOwner(city,g,c.accountId,c.entity.properties.name,'kit municipal inicial');c.wardrobe.push(g);};
+    if(variant.bottom&&!c.wardrobe.some(g=>LOWER_BODY_TYPES.has(g.piece))&&!c.wardrobe.some(g=>ONE_PIECE_TYPES.has(g.piece)))add(variant.bottom,kit.bottom);
+    if(!c.wardrobe.some(g=>FOOTWEAR_TYPES.has(g.piece)))add(variant.shoes,kit.shoes);
+    if(variant.hat&&!c.wardrobe.some(g=>HEADWEAR_TYPES.has(g.piece)))add(variant.hat,kit.accent);
   }
   if((c.visualWardrobePatternVersion??0)<4){
     c.visualWardrobePatternVersion=4;

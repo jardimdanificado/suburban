@@ -7,6 +7,7 @@ import { ANIMAL_SPECIES } from './animal_catalog.js';
 
 export const DEFAULT_MANIFEST_URL = 'data/audio/manifest.json';
 export const MAX_AUDIBLE_SPEED = 16;
+export const BAR_MUSIC_MAX_SPEED = 8;
 const WATER_TILE = 2;
 const SAND_TILE = 3;
 const VOID_TILE = 5;
@@ -161,6 +162,31 @@ export function ambiencePlan({ listener, features = {}, night = false } = {}) {
   return zones.slice(0, 4);
 }
 
+export function barMusicPlan({ city, listener, speed = 1, altitude = 0 } = {}) {
+  if (!city || !listener || speed > BAR_MUSIC_MAX_SPEED) return [];
+  const speedScale = speed <= 4 ? 1 : Math.max(0, 1 - (speed - 4) / (BAR_MUSIC_MAX_SPEED - 4));
+  const groundScale = groundAudibility(altitude);
+  if (speedScale <= 0.01 || groundScale <= 0.01) return [];
+  const zones = [];
+  for (const b of city.buildings || []) {
+    const isBar = b.type === 'bar';
+    const isShow = b.type === 'show_house';
+    if (!isBar && !isShow) continue;
+    const open = isBar
+      ? city.substances?.barOpen?.(b)
+      : (b.active && !b.entity?.destroyed && (city.hour >= 18 || city.hour < 2) && (b.workers?.length || b.ownerId != null));
+    if (!open) continue;
+    const x = b.door?.x ?? b.entity?.x, z = b.door?.y ?? b.entity?.y;
+    if (!Number.isFinite(x) || !Number.isFinite(z)) continue;
+    const distance = Math.hypot(x - listener.x, z - listener.z);
+    const base = isShow ? 0.2 : 0.16;
+    const gain = base * speedScale * groundScale * distanceAttenuation(distance, { refDistance: 3, maxDistance: 22, rolloffFactor: 1.3 });
+    if (gain >= 0.01) zones.push({ buildingId: b.id, type: b.type, x, z, distance, gain });
+  }
+  zones.sort((a, b) => b.gain - a.gain);
+  return zones.slice(0, 2);
+}
+
 // Dirt and stone roads take dirt footsteps, sand takes sand footsteps, and
 // grass/earth takes grass footsteps. Water and void get no footsteps.
 const DIRT_TILES = new Set([6, 7, 8, 11, 12, 13]);
@@ -273,6 +299,9 @@ export class SpatialAudio {
     this.buffers = new Map();
     this.bufferBytes = 0;
     this.playing = new Set();
+    this.barMusicTimer = 0;
+    this.barMusicStep = 0;
+    this.barMusicBus = null;
     this.channels = new Map();
     this.voices = new Map();
     this.wind = null;
@@ -411,10 +440,17 @@ export class SpatialAudio {
       } catch {}
       try { this.wind.element.pause(); } catch {}
     }
+    if (this.barMusicBus) {
+      try {
+        this.barMusicBus.gain.gain.cancelScheduledValues(now);
+        this.barMusicBus.gain.gain.setValueAtTime(0, now);
+      } catch {}
+    }
     this.faunaTimer = 0.8;
     this.ambienceTimer = 0;
     this.voiceTimer = 0;
     this.doorTimer = 0;
+    this.barMusicTimer = 0;
   }
 
   update(dt = 0) {
@@ -436,6 +472,7 @@ export class SpatialAudio {
     this.updateListener(pose);
     this.updateWind(pose);
     this.updateAmbience(dt, pose);
+    this.updateBarMusic(dt, pose);
     this.updateFauna(dt, pose);
     this.updateCitizenVoices(dt, pose);
     this.pollCityEvents(pose);
@@ -490,6 +527,75 @@ export class SpatialAudio {
     gain.connect(this.master);
     this.wind = { element, source, gain };
     return this.wind;
+  }
+
+  ensureBarMusicBus() {
+    if (this.barMusicBus) return this.barMusicBus;
+    if (!this.ctx || !this.master) return null;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 680;
+    const panner = this.ctx.createPanner();
+    panner.panningModel = 'HRTF';
+    panner.distanceModel = 'inverse';
+    panner.refDistance = 3;
+    panner.maxDistance = 22;
+    panner.rolloffFactor = 1.2;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0;
+    filter.connect(panner);
+    panner.connect(gain);
+    gain.connect(this.master);
+    this.barMusicBus = { filter, panner, gain };
+    return this.barMusicBus;
+  }
+
+  updateBarMusic(dt, pose) {
+    if (!this.ctx || this.ctx.state !== 'running') return;
+    const city = this.getCity();
+    const speed = this.getSpeed() || 1;
+    const zones = barMusicPlan({ city, listener: pose, speed, altitude: pose.altitude });
+    const now = this.ctx.currentTime;
+    if (!zones.length) {
+      if (this.barMusicBus) this.barMusicBus.gain.gain.setTargetAtTime(0, now, 0.2);
+      return;
+    }
+    const bus = this.ensureBarMusicBus();
+    if (!bus) return;
+    const top = zones[0];
+    if (bus.panner.positionX) {
+      bus.panner.positionX.setTargetAtTime(top.x, now, 0.1);
+      bus.panner.positionY.setTargetAtTime(pose.y, now, 0.1);
+      bus.panner.positionZ.setTargetAtTime(top.z, now, 0.1);
+    } else {
+      bus.panner.setPosition(top.x, pose.y, top.z);
+    }
+    bus.gain.gain.setTargetAtTime(top.gain, now, 0.25);
+    this.barMusicTimer -= dt;
+    if (this.barMusicTimer > 0) return;
+    this.barMusicTimer = 0.45;
+    const chords = [
+      [130.81, 196.0, 246.94, 329.63],
+      [110.0, 174.61, 220.0, 261.63],
+      [146.83, 220.0, 261.63, 349.23],
+      [98.0, 174.61, 246.94, 293.66],
+    ];
+    const step = this.barMusicStep++ % 16;
+    const chord = chords[Math.floor(step / 4)];
+    const notes = step % 2 === 0 ? [chord[0], chord[1], chord[2]] : [chord[2], chord[3]];
+    for (const freq of notes) {
+      const osc = this.ctx.createOscillator();
+      const env = this.ctx.createGain();
+      osc.type = step % 4 === 0 ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(freq, now);
+      env.gain.setValueAtTime(0.0001, now);
+      env.gain.exponentialRampToValueAtTime(0.14 / notes.length, now + 0.04);
+      env.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+      osc.connect(env);
+      env.connect(bus.filter);
+      osc.start(now);
+      osc.stop(now + 0.44);
+    }
   }
 
   updateFauna(dt, pose) {
