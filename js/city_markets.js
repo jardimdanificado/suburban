@@ -4,7 +4,7 @@ import { inventoryFree } from './city_inventory.js';
 import {isRoadAt} from './city_terrain.js?v=entrance-retaining-clearance-1';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export function carryCapacity(c){return injuredCarryCapacity(c,c?.equipment?.carrinho?72:c?.equipment?.cesta?36:24);}
-const STREET_MERCHANT_TYPES=new Set(['market','greengrocer','bakery','restaurant','cycle_shop','clothing_store','sports_shop','thrift_store','pharmacy','artisan','publisher','farm','furniture','tailor','pottery','soapworks','toolmaker']);
+const STREET_MERCHANT_TYPES=new Set(['market','greengrocer','bakery','restaurant','cycle_shop','clothing_store','sports_shop','thrift_store','pharmacy','artisan','publisher','farm','furniture','tailor','pottery','soapworks','toolmaker','juice_bar','brewery','shoemaker','jeweler','bar']);
 const live=c=>!!c?.entity&&!c.entity.destroyed;
 function hasStreetProducts(b){return STREET_MERCHANT_TYPES.has(b.type)||['services','food'].includes(INDUSTRIES[b.type]?.category);}
 function nearRoad(city,x,y){return [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>isRoadAt(city.world,x+dx,y+dy));}

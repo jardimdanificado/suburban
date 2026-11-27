@@ -12,6 +12,7 @@ export const INDUSTRIAL_GOODS = {...FISH_GOODS,...ANIMAL_GOODS,...SUBSTANCE_GOOD
   ['bicicleta','Bicicleta',14000],['bicicleta_carga','Bicicleta de carga',28000],['patinete','Patinete',9500],['patins','Patins',10500],['skate','Skate',6500],
   ['cordas','Cordas navais',420],['casco_naval','Casco naval',2600],['mastros','Mastros',900],['velas','Velas de navegação',1600],['ferragens_navais','Ferragens navais',1250],
   ['canoe','Canoa',22000],['launch','Lancha',56000],['ferry','Balsa',145000],['cargo','Navio cargueiro',280000],
+  ['suco','Suco natural',240],['bebida','Bebida artesanal',420],['petisco','Petisco e porção',320],['calcados','Calçados',1100],['joias_artesanais','Artesanato e bijuterias',950],
 ].map(([id,label,price])=>[id,{label,price}]))};
 const industry = (label, inputs, outputs, labor, skill, impact, category='industry', use=null) => ({ label, inputs, outputs, labor, skill, impact, category, use, color: category==='food'?0xc6a363:category==='services'?0x87b7bc:0xa6a0ba, rent:90, price:80000, jobs:2 });
 export const INDUSTRIES = {
@@ -99,6 +100,15 @@ export const INDUSTRIES = {
   research_institute: {...industry('Instituto de pesquisa',{}, {},1,'social','Pesquisas eleitorais presenciais financiadas por investidores e empresas; prefeitura contrata somente na falta de investimento privado.','services'),jobs:3,color:0x648caf},
   legal_office: industry('Escritório de advocacia',{}, {},1,'law','Atendimento jurídico particular e defesa criminal.','services'),
   bank: industry('Banco',{}, {},1,'commerce','Depósitos mantêm reserva integral; crédito usa somente capital próprio disponível.','services'),
+  juice_bar: industry('Casa de sucos e polpas',{maracuja:2,vidro:1},{suco:4},16,'baking','Processa frutas locais em sucos naturais para mercados, bares e turismo.','food',{need:'water',boost:14}),
+  petiscaria: industry('Petiscaria e porções',{queijo:1,pao:1,oleo:1},{petisco:3},14,'baking','Prepara petiscos e porções para bares, eventos e turismo.','food',{need:'food',boost:16}),
+  shoemaker: industry('Sapataria',{couro_curtido:2,borracha:1},{calcados:2},24,'construction','Fabrica calçados duráveis com couro curtido e borracha local.','services',{need:'hygiene',boost:8}),
+  jeweler: industry('Ateliê de bijuterias',{ceramica:1,vidro:1,aluminio:1},{joias_artesanais:2},26,'artistic','Produz souvenires e bijuterias artesanais para moradores, turistas e exportação.','services',{need:'leisure',boost:10}),
+  hotel: industry('Hotel e pousada',{moveis:1,sabao:1,roupas:1},{},1,'care','Hospeda visitantes externos e viajantes com serviços locais de hotelaria.','services',{need:'energy',boost:20}),
+  casino: industry('Cassino e casa de jogos',{cerveja:1},{},1,'management','Entretenimento de apostas reguladas com caixa próprio e alta arrecadação turística.','services',{need:'leisure',boost:24}),
+  show_house: industry('Casa de shows e teatro',{cerveja:1,tinta:1},{},1,'artistic','Apresentações culturais e música ao vivo para moradores e visitantes.','services',{need:'leisure',boost:26}),
+  gym: industry('Academia e esportes',{},{},1,'care','Atividades físicas e condicionamento para saúde e bem-estar dos moradores.','services',{need:'health',boost:16}),
+  repair_shop: industry('Oficina de consertos',{ferramentas:1,madeira:1},{},18,'maintenance','Repara móveis, utensílios e equipamentos domésticos da vizinhança.','services'),
 };
 export const INDUSTRIAL_FOODS = ['leite','queijo','ovos','massa','conserva','marmita','marmita_simples','marmita_rustica','marmita_peixe','carne_bovina','carne_suina','carne_ovina','carne_caprina','carne_ave','carne_caca','churrasco','marmita_carne'];
 
