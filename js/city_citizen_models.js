@@ -62,7 +62,7 @@ export function citizenAnimation(c,moving=false,inWater=undefined){
     if(CASUAL_WALK_TASKS.has(c.task)||c.task==='outdoor_leisure'||c.task==='swim-leisure')return 'caminhar';
     return 'run';
   }
-  if(c.fishingPose)return c.fishingPose.chair||c.fishingPose.boat?'sentado_no_banco':'sentado_no_chao';
+  if(c.fishingPose)return c.fishingPose.boat?'sentado_no_banco':'colher';
   if(c.combatReaction)return 'derrotado';
   if(c.combatAnimation?.clip)return c.combatAnimation.clip;
   if(citizenIsSleeping(c))return 'dormindo';

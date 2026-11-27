@@ -146,7 +146,7 @@ test('CityAnimalModels loads OBJ frames and batches visible animals', async () =
   });
   const ok = await models.loading;
   assert.equal(ok, true);
-  assert.equal(models.frames.size, 768);
+  assert.equal(models.frames.size, 832);
 
   const world = createWorld(24, 24, 0);
   const city = createMockCity(world);
@@ -538,4 +538,32 @@ test('terrestrial species have distinct silhouettes and species-specific gaits',
   const coati = load('quati', 'idle', 0);
   const capy = load('capivara', 'idle', 0);
   assert.ok(coati.bounds.max[1] > capy.bounds.max[1], 'coati upright tail should raise its idle silhouette');
+});
+
+test('fish live in water, join the food chain, and sustainable reproduction prevents extinction', () => {
+  const world = createWorld(48, 48, 0);
+  for (let y = 8; y < 40; y++) for (let x = 20; x < 34; x++) world.map[y][x] = 2;
+  world.revision++;
+  const city = createMockCity(world);
+  city.fauna.initialize();
+
+  const freshFish = [...city.fauna.animals.values()].filter(a => !a.dead && ['tilapia', 'pacu'].includes(a.species));
+  assert.ok(freshFish.length >= 4, 'should spawn freshwater fish in lake');
+  assert.ok(freshFish.every(f => f.altitude < 0), 'fish should swim submerged');
+
+  // Predators/piscivores must not hunt prey below minViableCount
+  const heron = city.fauna.spawn(19, 20, 'garca', { hunger: 20, force: true });
+  for (const sp of ['tilapia', 'pacu']) {
+    const list = [...city.fauna.animals.values()].filter(a => a.species === sp && !a.dead);
+    const minV = city.fauna.minViableCount(sp);
+    for (let i = minV; i < list.length; i++) city.fauna.markDead(list[i], 'Teste');
+  }
+  assert.equal(city.fauna.findPrey(heron), null, 'piscivore respects minimum viable fish reserve');
+
+  // Sustainable reproduction restores depleted populations
+  const tilapias = [...city.fauna.animals.values()].filter(a => a.species === 'tilapia' && !a.dead);
+  for (const t of tilapias) t.hunger = 80;
+  const before = city.fauna.wildCount('tilapia');
+  city.fauna.sustainEcosystem();
+  assert.ok(city.fauna.wildCount('tilapia') > before, 'healthy adults reproduce toward carrying capacity');
 });

@@ -229,7 +229,7 @@ export class CityAnimalModels {
     batch.count++;
     if (options.outline) options.outline.add(source, this.matrix);
 
-    if ((animal.altitude || 0) > 0.25 && this.THREE.CircleGeometry && this.THREE.MeshBasicMaterial) {
+    if (!spec.aquatic && (animal.altitude || 0) > 0.25 && this.THREE.CircleGeometry && this.THREE.MeshBasicMaterial) {
       if (this.shadowCount === this.shadowCapacity) {
         const cap = Math.max(32, this.shadowCapacity * 2);
         const geo = new this.THREE.CircleGeometry(0.35, 10);

@@ -222,6 +222,10 @@ export const ANIMAL_SPECIES = Object.freeze({
   tie_sangue: { id: 'tie_sangue', label: 'Tiê-sangue', scientific: 'Ramphocelus bresilius', category: 'wild', bodyPlan: 'songbird', diet: 'herbivore', temperament: 'shy', canFly: true, grazesGrass: false, terrain: [0, 9], nearTree: true, speed: 1.4, size: 0.28, color: 0xd42222, accentColor: 0x1e1c1e, maxWild: 5, products: { penas: 1 } },
   joao_de_barro: { id: 'joao_de_barro', label: 'João-de-barro', scientific: 'Furnarius rufus', category: 'wild', bodyPlan: 'songbird', diet: 'omnivore', temperament: 'shy', canFly: true, grazesGrass: false, terrain: [0, 9], speed: 1.35, size: 0.28, color: 0xb56b38, accentColor: 0xe8dcc8, maxWild: 6, products: { penas: 1 } },
   andorinha: { id: 'andorinha', label: 'Andorinha', scientific: 'Pygochelidon cyanoleuca', category: 'wild', bodyPlan: 'swallow', diet: 'omnivore', temperament: 'shy', canFly: true, grazesGrass: false, terrain: [0, 9], speed: 1.9, size: 0.24, color: 0x28385e, accentColor: 0xf0eee8, maxWild: 7, products: { penas: 1 } },
+  tilapia: { id: 'tilapia', label: 'Tilápia', scientific: 'Oreochromis niloticus', category: 'wild', bodyPlan: 'fish', diet: 'herbivore', temperament: 'shy', aquatic: true, salinity: 'fresh', zone: 'shore', grazesGrass: false, terrain: [2], speed: 1.35, size: 0.32, color: 0x6f8d7a, accentColor: 0x9eb89e, maxWild: 14, products: { tilapia: 1 } },
+  pacu: { id: 'pacu', label: 'Pacu', scientific: 'Piaractus mesopotamicus', category: 'wild', bodyPlan: 'fish', diet: 'omnivore', temperament: 'shy', aquatic: true, salinity: 'fresh', zone: 'middle', grazesGrass: false, terrain: [2], speed: 1.5, size: 0.40, color: 0x6a7882, accentColor: 0xc27a4c, maxWild: 10, products: { pacu: 1 } },
+  robalo: { id: 'robalo', label: 'Robalo', scientific: 'Centropomus undecimalis', category: 'wild', bodyPlan: 'fish', diet: 'carnivore', temperament: 'shy', aquatic: true, salinity: 'salt', zone: 'shore', grazesGrass: false, terrain: [2], speed: 1.65, size: 0.42, color: 0x7c8e94, accentColor: 0xd4dcde, maxWild: 12, products: { robalo: 1 } },
+  cavala: { id: 'cavala', label: 'Cavala', scientific: 'Scomberomorus cavalla', category: 'wild', bodyPlan: 'fish', diet: 'carnivore', temperament: 'shy', aquatic: true, salinity: 'salt', zone: 'middle', grazesGrass: false, terrain: [2], speed: 1.9, size: 0.48, color: 0x456b8c, accentColor: 0xc8d8e4, maxWild: 10, products: { cavala: 1 } },
 });
 
 const MOUNT_SPECIES = { cavalo: 2.25, boi: 1.55, vaca: 1.45, anta: 1.6, ema: 1.9 };
@@ -237,6 +241,7 @@ const ANIMAL_SCALES = {
   pombo: 0.41, periquito: 0.31, sagui: 0.2, bem_te_vi: 0.33, sabia: 0.33,
   cardeal: 0.3, sanhaco: 0.29, tie_sangue: 0.29, joao_de_barro: 0.3,
   canario: 0.25, rolinha: 0.3, andorinha: 0.3, beija_flor: 0.27,
+  tilapia: 0.30, pacu: 0.38, robalo: 0.40, cavala: 0.46,
 };
 const ANIMAL_PRICES = {
   cavalo: 18000, boi: 14000, vaca: 12000, anta: 11000, ema: 8500,
@@ -246,7 +251,7 @@ const ANIMAL_PRICES = {
   tatu: 3200, pato: 2600, galinha: 2400, coelho: 2200,
 };
 for (const [id, spec] of Object.entries(ANIMAL_SPECIES)) {
-  spec.tameable = true;
+  spec.tameable = !spec.aquatic;
   spec.role = MOUNT_SPECIES[id] ? 'mount' : 'companion';
   spec.mountSpeed = MOUNT_SPECIES[id] || 0;
   spec.marketPrice = ANIMAL_PRICES[id] || 4000;

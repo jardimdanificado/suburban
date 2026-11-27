@@ -5,12 +5,13 @@ import { CITY_FLOOR_HEIGHT } from './city_building_geometry.js?v=banner-placemen
 import { buildingLeisureSpaces } from './city_balconies.js?v=sertanejo-house-styles-1';
 import { tileAt, ROAD_TILES, surfaceElevation } from './city_terrain.js?v=minimal-settlement-1';
 import { TILE_WATER } from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
+import { fishHabitat, fishingWaters } from './city_fishing.js';
 import { skybridgeLinks } from './city_skybridges.js?v=seeded-business-visual-v1';
 import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=colonial-colored-trim-1';
 
 export const FAUNA_RULES = Object.freeze({
-  maxWildAnimals: 180,
-  spawnPerSpeciesMin: 1,
+  maxWildAnimals: 260,
+  spawnPerSpeciesMin: 2,
   grazeRestore: 22,
   feedRestore: 45,
   hungerPerMinute: 0.35,
@@ -18,7 +19,10 @@ export const FAUNA_RULES = Object.freeze({
   predatorSightRadius: 6.5,
   ranchRadius: 6,
   huntDamage: 45,
+  minViableRatio: 0.4,
+  reproduceInterval: 25,
 });
+const PISCIVORE_SPECIES = new Set(['garca', 'martim_pescador', 'colhereiro', 'guara', 'jacare']);
 
 export const RANCH_ANIMALS = Object.freeze({
   cattle_ranch: ['vaca', 'boi'],
@@ -338,10 +342,27 @@ export class CityFauna {
     return true;
   }
 
+  speciesCapacity(species) {
+    const spec = ANIMAL_SPECIES[species];
+    if (!spec) return 0;
+    const world = this.city.world;
+    const areaScale = ((world?.width || 64) * (world?.height || 64)) / 4096;
+    return Math.min(spec.maxWild || 4, Math.max(FAUNA_RULES.spawnPerSpeciesMin, Math.round(areaScale * (spec.maxWild || 3))));
+  }
+
+  minViableCount(species) {
+    return Math.max(2, Math.floor(this.speciesCapacity(species) * FAUNA_RULES.minViableRatio));
+  }
+
   matchesHabitat(x, y, species) {
     const spec = ANIMAL_SPECIES[species];
     if (!this.canOccupy(x, y, species)) return false;
     const ix = Math.floor(x), iy = Math.floor(y);
+    if (spec.aquatic) {
+      const hab = fishHabitat(this.city.world, ix, iy);
+      if (!hab || (spec.salinity && hab.salinity !== spec.salinity)) return false;
+      return true;
+    }
     if (spec.nearWater && tileAt(this.city.world, ix, iy) !== TILE_WATER && !hasAdjacentTile(this.city.world, ix, iy, TILE_WATER)) {
       return false;
     }
@@ -390,8 +411,8 @@ export class CityFauna {
       riderId: null,
       x: entity.x,
       y: entity.y,
-      altitude: 0,
-      targetAltitude: 0,
+      altitude: spec.aquatic ? -0.16 : 0,
+      targetAltitude: spec.aquatic ? -0.16 : 0,
       inTreePlantId: null,
       nestId: null,
       angle: Math.random() * Math.PI * 2,
@@ -425,10 +446,27 @@ export class CityFauna {
     const world = this.city.world;
     if (!world?.width || !world?.height) return;
 
+    const waters = fishingWaters(world);
+    const waterCells = [];
+    for (const body of waters.bodies) {
+      for (const cell of body.cells) {
+        waterCells.push({ x: cell % world.width, y: Math.floor(cell / world.width), salinity: body.salinity, zone: waters.distance[cell] < 0 || waters.distance[cell] >= 3 ? 'middle' : 'shore' });
+      }
+    }
     for (const species of ANIMAL_SPECIES_IDS) {
       const spec = ANIMAL_SPECIES[species];
-      const target = Math.min(spec.maxWild || 4, Math.max(1, Math.round((world.width * world.height) / 4096 * (spec.maxWild || 3))));
+      const target = this.speciesCapacity(species);
       let spawned = 0;
+      if (spec.aquatic) {
+        const pool = waterCells.filter(c => !spec.salinity || c.salinity === spec.salinity);
+        const preferred = spec.zone ? pool.filter(c => c.zone === spec.zone) : pool;
+        const candidates = preferred.length ? preferred : pool;
+        for (let attempt = 0; attempt < candidates.length * 2 && spawned < target && this.wildCount() < FAUNA_RULES.maxWildAnimals; attempt++) {
+          const pick = candidates[Math.floor(Math.random() * candidates.length)];
+          if (this.spawn(pick.x, pick.y, species)) spawned++;
+        }
+        continue;
+      }
       for (let attempt = 0; attempt < target * 40 && spawned < target && this.wildCount() < FAUNA_RULES.maxWildAnimals; attempt++) {
         const x = Math.floor(Math.random() * world.width);
         const y = Math.floor(Math.random() * world.height);
@@ -605,11 +643,28 @@ export class CityFauna {
   }
 
   findPrey(predator) {
-    let closest = null, bestDist = 14;
+    const predSpec = ANIMAL_SPECIES[predator.species];
+    const isAquatic = !!predSpec?.aquatic;
+    const isPiscivore = PISCIVORE_SPECIES.has(predator.species);
+    let closest = null, bestDist = isPiscivore ? 10 : 14;
+    const counts = new Map();
+    for (const a of this.animals.values()) {
+      if (a.dead || a.entity?.destroyed || a.category !== 'wild') continue;
+      counts.set(a.species, (counts.get(a.species) || 0) + 1);
+    }
     for (const a of this.animals.values()) {
       if (a === predator || a.dead || a.entity?.destroyed || a.category !== 'wild') continue;
       const sp = ANIMAL_SPECIES[a.species];
-      if (!sp || sp.temperament === 'predator') continue;
+      if (!sp) continue;
+      if (isAquatic) {
+        if (!sp.aquatic || sp.size >= (predSpec.size || 0.4)) continue;
+      } else if (isPiscivore) {
+        if (!sp.aquatic) continue;
+      } else {
+        if (sp.aquatic || sp.temperament === 'predator') continue;
+      }
+      // Preserve breeding reserve so predators never cause species extinction.
+      if ((counts.get(a.species) || 0) <= this.minViableCount(a.species)) continue;
       const d = Math.hypot(a.x - predator.x, a.y - predator.y);
       if (d < bestDist) { bestDist = d; closest = a; }
     }
@@ -686,22 +741,25 @@ export class CityFauna {
       }
     }
 
-    // 2. Predator hunting wild prey
-    if (spec.temperament === 'predator' && animal.hunger < 65) {
+    // 2. Predator and piscivore hunting wild prey (guarded by minViableCount)
+    if ((spec.temperament === 'predator' || (PISCIVORE_SPECIES.has(animal.species) && animal.hunger < 65) || (spec.aquatic && spec.diet === 'carnivore' && animal.hunger < 55)) && animal.hunger < 65) {
       const prey = this.findPrey(animal);
       if (prey) {
-        if (prey.dist < 1.2) {
+        const catchRange = PISCIVORE_SPECIES.has(animal.species) ? 1.65 : 1.2;
+        if (prey.dist < catchRange) {
           this.markDead(prey.animal, 'Abatido');
           this.feedOnCarcass(animal, prey.animal);
           animal.action = `Devora ${ANIMAL_SPECIES[prey.animal.species]?.label?.toLowerCase() || 'presa'}`;
           return;
         }
-        animal.state = 'walk';
-        animal.action = `Caçando ${ANIMAL_SPECIES[prey.animal.species]?.label?.toLowerCase() || 'presa'}`;
-        animal.targetX = prey.animal.x;
-        animal.targetY = prey.animal.y;
-        animal.stateTimer = 2.0;
-        return;
+        if (!PISCIVORE_SPECIES.has(animal.species) || this.canOccupy(prey.animal.x, prey.animal.y, animal.species, animal.buildingId)) {
+          animal.state = 'walk';
+          animal.action = `Caçando ${ANIMAL_SPECIES[prey.animal.species]?.label?.toLowerCase() || 'presa'}`;
+          animal.targetX = prey.animal.x;
+          animal.targetY = prey.animal.y;
+          animal.stateTimer = 2.0;
+          return;
+        }
       }
     }
 
@@ -913,13 +971,25 @@ export class CityFauna {
         this.decideBehavior(animal, isNight);
       }
 
-      if (!spec?.canFly && animal.inTreePlantId == null) {
+      if (!spec?.canFly && !spec?.aquatic && animal.inTreePlantId == null) {
         animal.altitude = 0;
         animal.targetAltitude = 0;
+      } else if (spec?.aquatic) {
+        animal.altitude = -0.16;
+        animal.targetAltitude = -0.16;
       }
 
       if (animal.state === 'eat') {
         animal.hunger = Math.min(100, animal.hunger + 8 * stepDt);
+      } else if (animal.category === 'wild') {
+        animal.hunger = Math.max(0, (animal.hunger ?? 70) - FAUNA_RULES.hungerPerMinute * 0.12 * stepDt);
+        if (animal.hunger <= 0) {
+          animal.health = Math.max(0, (animal.health ?? 100) - 0.8 * stepDt);
+          if (animal.health <= 0) {
+            this.markDead(animal, 'Inanição');
+            continue;
+          }
+        }
       }
 
       // Smoothly ascend or descend toward targetAltitude
@@ -937,7 +1007,8 @@ export class CityFauna {
           const destAlt = animal.action === 'Voando para poleiro' ? (animal.perchAltitude ?? 1.5) : animal.action === 'Voando para o ninho' ? (this.nests.get(animal.nestId)?.z ?? 1.8) : 0.25;
           animal.targetAltitude = distLeft < 1.8 ? destAlt : Math.max(animal.targetAltitude || 0, destAlt + 0.6, 2.2);
         }
-        const arrived = this.moveTowards(animal, animal.targetX, animal.targetY, animal.state === 'flee' ? 1.75 : 1.0, stepDt);
+        const speedMult = animal.state === 'flee' ? 1.75 : spec?.aquatic ? 0.45 : 1.0;
+        const arrived = this.moveTowards(animal, animal.targetX, animal.targetY, speedMult, stepDt);
         if (arrived) {
           animal.targetX = null;
           animal.targetY = null;
@@ -986,12 +1057,64 @@ export class CityFauna {
               animal.targetAltitude = 2.4;
               animal.thinkTimer = 0.1;
             } else {
-              animal.targetAltitude = 0;
+              animal.targetAltitude = spec?.aquatic ? -0.16 : 0;
               animal.state = 'idle';
               animal.action = 'Observando';
               animal.stateTimer = 0.8 + Math.random() * 1.2;
               animal.thinkTimer = 0.3;
             }
+          }
+        }
+      }
+    }
+
+    this.reproduceTimer = (this.reproduceTimer ?? 0) + stepDt;
+    if (this.reproduceTimer >= FAUNA_RULES.reproduceInterval) {
+      this.reproduceTimer = 0;
+      this.sustainEcosystem();
+    }
+  }
+
+  sustainEcosystem() {
+    const world = this.city.world;
+    if (!world?.width || !world?.height) return;
+    const bySpecies = new Map();
+    let totalWild = 0;
+    for (const a of this.animals.values()) {
+      if (a.dead || a.entity?.destroyed || a.category !== 'wild') continue;
+      totalWild++;
+      let list = bySpecies.get(a.species);
+      if (!list) { list = []; bySpecies.set(a.species, list); }
+      list.push(a);
+    }
+    for (const species of ANIMAL_SPECIES_IDS) {
+      if (totalWild >= FAUNA_RULES.maxWildAnimals) break;
+      const cap = this.speciesCapacity(species);
+      const list = bySpecies.get(species) || [];
+      if (list.length >= cap) continue;
+      const healthy = list.filter(a => (a.hunger ?? 70) >= 50 && (a.health ?? 100) >= 65);
+      if (list.length >= 2 && healthy.length >= 1) {
+        const parent = healthy[Math.floor(Math.random() * healthy.length)];
+        for (let attempt = 0; attempt < 8; attempt++) {
+          const sx = Math.floor(parent.x) + Math.floor(Math.random() * 5) - 2;
+          const sy = Math.floor(parent.y) + Math.floor(Math.random() * 5) - 2;
+          if (!this.matchesHabitat(sx, sy, species)) continue;
+          const baby = this.spawn(sx, sy, species, { hunger: 75 });
+          if (baby) {
+            parent.hunger = Math.max(25, parent.hunger - 20);
+            totalWild++;
+            break;
+          }
+        }
+      } else if (list.length < Math.min(2, cap)) {
+        // Gentle immigration fallback prevents permanent local extinction.
+        for (let attempt = 0; attempt < 16; attempt++) {
+          const sx = Math.floor(Math.random() * world.width);
+          const sy = Math.floor(Math.random() * world.height);
+          if (!this.matchesHabitat(sx, sy, species)) continue;
+          if (this.spawn(sx, sy, species, { hunger: 75 })) {
+            totalWild++;
+            break;
           }
         }
       }

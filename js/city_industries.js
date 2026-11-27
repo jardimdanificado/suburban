@@ -17,7 +17,7 @@ export const INDUSTRIAL_GOODS = {...FISH_GOODS,...ANIMAL_GOODS,...SUBSTANCE_GOOD
 const industry = (label, inputs, outputs, labor, skill, impact, category='industry', use=null) => ({ label, inputs, outputs, labor, skill, impact, category, use, color: category==='food'?0xc6a363:category==='services'?0x87b7bc:0xa6a0ba, rent:90, price:80000, jobs:2 });
 export const INDUSTRIES = {
   fishing_tackle:industry('Oficina de pesca',{madeira:1,fibras:2,ferro:1},{vara_pesca:2},18,'construction','Fabrica varas, linhas e anzóis com madeira, fibras e ferro.'),
-  fishery:industry('Colônia de pescadores',{vara_pesca:1,moveis:1},Object.fromEntries(Object.keys(FISH_SPECIES).map(g=>[g,1])),6,'fishing','Pesca presencial na margem ou em canoas. Espécies dependem da salinidade e da distância da margem.','food'),
+  fishery:industry('Colônia de pescadores',{},Object.fromEntries(Object.keys(FISH_SPECIES).map(g=>[g,1])),6,'fishing','Pesca presencial de peixes reais na margem ou em canoas, respeitando a reserva reprodutiva.','food'),
   fishmonger:industry('Peixaria',Object.fromEntries(Object.keys(FISH_SPECIES).map(g=>[g,1])),{file_peixe:2},8,'baking','Limpa e beneficia cada espécie capturada; fornece filés para restaurantes e cozinhas.','food'),
   ...Object.fromEntries(Object.entries(SUBSTANCE_INDUSTRIES).map(([id,args])=>[id,industry(...args)])),
   road_paving:industry('Empresa de asfaltamento',{}, {},1,'construction','Executa contratos municipais e privados de pavimentação com acabamento de asfalto.','services'),

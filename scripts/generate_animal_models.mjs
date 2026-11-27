@@ -771,8 +771,59 @@ function buildPrimate(spec, p) {
   return m;
 }
 
+function buildFish(spec, p, clip) {
+  const m = createMesh();
+  const deep = spec.id === 'tilapia' || spec.id === 'pacu';
+  const bodyRy = deep ? 0.24 : 0.16;
+  const bodyRx = deep ? 0.11 : 0.10;
+  const swim = clip === 'walk' ? 0.16 : clip === 'sleep' ? 0.02 : 0.06;
+  const phase = p.tailYaw || 0;
+  const bob = (p.bodyBob || 0) * 0.4;
+  const pitch = (p.headPitch || 0) * 0.25;
+
+  // Fuselage body from snout (+Z) to peduncle (-Z)
+  m.addLoft([
+    { x: Math.sin(phase) * swim * 0.15, y: 0.26 + bob - pitch * 0.1, z: 0.46, rx: 0.032, ry: 0.038 },
+    { x: Math.sin(phase) * swim * 0.05, y: 0.27 + bob, z: 0.34, rx: bodyRx * 0.72, ry: bodyRy * 0.74 },
+    { x: 0, y: 0.28 + bob, z: 0.14, rx: bodyRx, ry: bodyRy },
+    { x: Math.sin(phase) * swim * 0.35, y: 0.27 + bob, z: -0.08, rx: bodyRx * 0.88, ry: bodyRy * 0.88 },
+    { x: Math.sin(phase) * swim * 0.85, y: 0.26 + bob, z: -0.28, rx: bodyRx * 0.45, ry: bodyRy * 0.48 },
+    { x: Math.sin(phase) * swim * 1.35, y: 0.26 + bob, z: -0.42, rx: 0.022, ry: 0.055 },
+  ], 8);
+
+  // Forked caudal tail fin
+  const tx = Math.sin(phase) * swim * 1.35;
+  const tailTipX = Math.sin(phase + 0.5) * swim * 2.15;
+  m.addLoft([
+    { x: tx, y: 0.26 + bob, z: -0.40, rx: 0.018, ry: 0.05 },
+    { x: tailTipX, y: 0.36 + bob, z: -0.58, rx: 0.010, ry: 0.085, yaw: phase * 0.5 },
+  ], 6);
+  m.addLoft([
+    { x: tx, y: 0.26 + bob, z: -0.40, rx: 0.018, ry: 0.05 },
+    { x: tailTipX, y: 0.16 + bob, z: -0.58, rx: 0.010, ry: 0.080, yaw: phase * 0.5 },
+  ], 6);
+
+  // Dorsal fin
+  m.addLoft([
+    { x: 0, y: 0.28 + bodyRy * 0.85 + bob, z: 0.12, rx: 0.012, ry: 0.035 },
+    { x: Math.sin(phase) * swim * 0.3, y: 0.28 + bodyRy + 0.11 + bob, z: -0.04, rx: 0.008, ry: 0.055 },
+    { x: Math.sin(phase) * swim * 0.65, y: 0.28 + bodyRy * 0.72 + bob, z: -0.20, rx: 0.008, ry: 0.028 },
+  ], 4);
+
+  // Pectoral fins
+  for (const side of [-1, 1]) {
+    m.addLoft([
+      { x: side * bodyRx * 0.85, y: 0.21 + bob, z: 0.18, rx: 0.012, ry: 0.022 },
+      { x: side * (bodyRx + 0.12), y: 0.17 + bob, z: 0.05 + Math.sin(phase) * 0.03 * side, rx: 0.008, ry: 0.042 },
+    ], 4);
+  }
+
+  return m;
+}
+
 function buildAnimalMesh(spec, clip, frame) {
   const p = frameParams(clip, frame, spec);
+  if (spec.bodyPlan === 'fish') return { mesh: buildFish(spec, p, clip), airborneLift: 0 };
   if (['chicken', 'duck', 'heron', 'toucan', 'macaw', 'rhea', 'songbird', 'hummingbird', 'parrot', 'owl', 'raptor', 'woodpecker', 'kingfisher', 'spoonbill', 'swallow'].includes(spec.bodyPlan)) {
     return { mesh: buildBird(spec, p, clip), airborneLift: 0 };
   }

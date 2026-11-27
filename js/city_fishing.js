@@ -1,4 +1,5 @@
 import {FISH_SPECIES,FISHING_RULES} from './fishing_catalog.js';
+import {ANIMAL_SPECIES} from './animal_catalog.js';
 import {TILE_WATER} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import {tileAt,tileHeight,surfaceElevation} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {inventoryFree} from './city_inventory.js';
@@ -27,7 +28,6 @@ export function fishHabitat(world,x,y){
  const data=fishingWaters(world),cell=y*world.width+x,body=data.bodies[data.bodyAt[cell]],zone=data.distance[cell]<0||data.distance[cell]>=3?'middle':'shore';
  return {bodyId:body.id,salinity:body.salinity,zone,species:Object.keys(FISH_SPECIES).filter(g=>FISH_SPECIES[g].salinity===body.salinity&&FISH_SPECIES[g].zone===zone)};
 }
-// Alternative species are substitutes, never four mandatory ingredients in one batch.
 export function fishSupplyInputs(economy){
  const available=new Set();for(const body of fishingWaters(economy.city.world).bodies)for(const good of Object.keys(FISH_SPECIES))if(FISH_SPECIES[good].salinity===body.salinity&&(FISH_SPECIES[good].zone==='shore'||body.cells.some(cell=>fishingWaters(economy.city.world).distance[cell]>=3)))available.add(good);
  const goods=[...available].sort((a,b)=>economy.businesses.reduce((n,firm)=>n+(firm.inventory[b]||0)-(firm.inventory[a]||0),0));
@@ -36,9 +36,29 @@ export function fishSupplyInputs(economy){
 export function fishingSiteNearby(city,point){
  return shorePoints(city).some(shore=>Math.hypot(shore.x-point.x,shore.y-point.y)<=48);
 }
-function stock(city,point){
- city.world.fishStocks??=new Map();const key=`${Math.floor(point.x)},${Math.floor(point.y)}`,row=city.world.fishStocks.get(key)||{amount:FISHING_RULES.stock,minute:city.minute};
- const elapsed=Math.max(0,city.minute-row.minute);row.amount=Math.min(FISHING_RULES.stock,row.amount+elapsed/FISHING_RULES.regrowMinutes);row.minute=city.minute;city.world.fishStocks.set(key,row);return row;
+function livingFish(city){
+ if(!city.fauna?.animals)return [];
+ const counts=new Map();
+ const list=[];
+ for(const a of city.fauna.animals.values()){
+  if(a.dead||a.entity?.destroyed||a.category!=='wild')continue;
+  if(!ANIMAL_SPECIES[a.species]?.aquatic)continue;
+  counts.set(a.species,(counts.get(a.species)||0)+1);
+  list.push(a);
+ }
+ return list.filter(a=>(counts.get(a.species)||0)>(city.fauna.minViableCount?.(a.species)??2));
+}
+function nearestHarvestableFish(city,point,maxDist=4.5,bodyId=null,zone=null){
+ const fishes=livingFish(city),waters=fishingWaters(city.world),width=city.world.width;
+ let best=null,bestDist=maxDist;
+ for(const fish of fishes){
+  const cell=Math.floor(fish.y)*width+Math.floor(fish.x);
+  if(bodyId!==null&&waters.bodyAt[cell]!==bodyId)continue;
+  if(zone&&((waters.distance[cell]<0||waters.distance[cell]>=3)?'middle':'shore')!==zone)continue;
+  const d=Math.hypot(fish.x-point.x,fish.y-point.y);
+  if(d<bestDist){bestDist=d;best=fish;}
+ }
+ return best;
 }
 function waterPath(world,from,to){
  const sx=Math.floor(from.x),sy=Math.floor(from.y),gx=Math.floor(to.x),gy=Math.floor(to.y),width=world.width;
@@ -63,37 +83,41 @@ function returnFromWater(city,c){
  for(const shore of points){const path=waterPath(city.world,boat,shore.water);if(path!==null){job.shore=shore;job.stage='sail-return';job.waterPath=path;idlePose(c);c.path=[];return true;}}return false;
 }
 function chooseSite(city,b,c){
+ const fishes=livingFish(city);
+ if(!fishes.length)return false;
  const accounts=boatAccessAccounts(city,c);accounts.add(b.accountId);
  const boats=[...(city.vehicles?.units.values()||[])].filter(v=>v.boatClass==='canoe'&&v.active&&!v.scrapped&&!v.driverId&&!v.transportCitizenId&&!v.mechanicId&&!v.localTripCitizenId&&!v.fishingCitizenId&&!v.worldFleetReserved&&(v.condition??100)>15&&accounts.has(v.ownerAccountId)).sort((a,d)=>Math.hypot(a.x-c.entity.x,a.y-c.entity.y)-Math.hypot(d.x-c.entity.x,d.y-c.entity.y));
  for(const boat of boats.slice(0,4)){
   const habitat=fishHabitat(city.world,boat.x,boat.y),shores=shorePoints(city,habitat?.bodyId??null).sort((a,d)=>Math.hypot(a.x-boat.x,a.y-boat.y)-Math.hypot(d.x-boat.x,d.y-boat.y));
   for(const shore of shores.slice(0,16)){
    if(Math.hypot(shore.x-b.door.x,shore.y-b.door.y)>48)continue;
-   const body=fishingWaters(city.world).bodies[fishHabitat(city.world,shore.water.x,shore.water.y).bodyId],middle=body.cells.filter(cell=>fishingWaters(city.world).distance[cell]>=3).map(cell=>({x:cell%city.world.width+.5,y:Math.floor(cell/city.world.width)+.5})).filter(p=>stock(city,p).amount>=1).sort((a,d)=>Math.hypot(a.x-shore.water.x,a.y-shore.water.y)-Math.hypot(d.x-shore.water.x,d.y-shore.water.y));
-   const point=middle[0];if(!point)continue;
+   const bodyId=fishHabitat(city.world,shore.water.x,shore.water.y)?.bodyId;
+   const fish=nearestHarvestableFish(city,shore.water,48,bodyId,'middle')||nearestHarvestableFish(city,shore.water,48,bodyId);if(!fish)continue;
+   const point={x:Math.floor(fish.x)+.5,y:Math.floor(fish.y)+.5};
    if(habitat){if(Math.hypot(boat.x-shore.x,boat.y-shore.y)>1.6||!route(city,c,shore))continue;
-    boat.fishingCitizenId=c.id;boat.driverId=c.id;delete boat.waterRoute;c.fishingJob={buildingId:b.id,stage:'board',boatId:boat.id,shore,point,labor:0};return true;
+    boat.fishingCitizenId=c.id;boat.driverId=c.id;delete boat.waterRoute;c.fishingJob={buildingId:b.id,stage:'board',boatId:boat.id,shore,point,targetFishId:fish.id,labor:0};return true;
    }
    const path=planBoatTrip(city,c.entity,shore,{boat,relocate:true,serviceAccountId:b.accountId});
-   if(!path)continue;c.path=path;c.fishingJob={buildingId:b.id,stage:'tow',boatId:boat.id,shore,point,labor:0};return true;
+   if(!path)continue;c.path=path;c.fishingJob={buildingId:b.id,stage:'tow',boatId:boat.id,shore,point,targetFishId:fish.id,labor:0};return true;
   }
  }
- const shores=shorePoints(city).filter(p=>Math.hypot(p.x-b.door.x,p.y-b.door.y)<=48&&stock(city,p.water).amount>=1).sort((a,d)=>Math.hypot(a.x-c.entity.x,a.y-c.entity.y)-Math.hypot(d.x-c.entity.x,d.y-c.entity.y));
- for(const shore of shores.slice(0,32)){if([...city.citizens].some(other=>other.id!==c.id&&other.fishingJob?.stage==='fish'&&Math.hypot(other.entity.x-shore.x,other.entity.y-shore.y)<.7))continue;if(route(city,c,shore)){c.fishingJob={buildingId:b.id,stage:'approach',shore,point:shore.water,labor:0};return true;}}
+ const shores=shorePoints(city).filter(p=>Math.hypot(p.x-b.door.x,p.y-b.door.y)<=48)
+  .map(shore=>({shore,fish:nearestHarvestableFish(city,shore.water,4.5)}))
+  .filter(entry=>entry.fish)
+  .sort((a,d)=>Math.hypot(a.shore.x-c.entity.x,a.shore.y-c.entity.y)-Math.hypot(d.shore.x-c.entity.x,d.shore.y-c.entity.y));
+ for(const {shore,fish}of shores.slice(0,32)){
+  if([...city.citizens].some(other=>other.id!==c.id&&other.fishingJob?.stage==='fish'&&Math.hypot(other.entity.x-shore.x,other.entity.y-shore.y)<.7))continue;
+  if(route(city,c,shore)){c.fishingJob={buildingId:b.id,stage:'approach',shore,point:shore.water,targetFishId:fish.id,labor:0};return true;}
+ }
  return false;
-}
-function equip(city,b,c){
- if(!c.fishingRod?.remaining){if(!(b.inventory.vara_pesca>0))return false;b.inventory.vara_pesca--;c.fishingRod={remaining:FISHING_RULES.rodCatches,buildingId:b.id};city.economy.recordGoods('fishing-equipment','vara_pesca',1,b.id,c.id);}
- if(!c.fishingChair&&(b.inventory.moveis||0)>0){b.inventory.moveis--;c.fishingChair={buildingId:b.id};city.economy.recordGoods('fishing-equipment','moveis',1,b.id,c.id);}return true;
 }
 export function fishingWork(city,b,c){
  if(c.path.length||c.localBoatTrip)return true;
  let job=c.fishingJob;
  if(!job){
-  if(!equip(city,b,c)){c.action='Aguardando vara de pesca';return false;}
   if(inventoryFree(b)<1){c.action='Estoque da pesca cheio';return false;}
   if(c.fishingCatch&&Object.values(c.fishingCatch.goods).some(n=>n>0)){c.fishingJob={buildingId:c.fishingCatch.buildingId,stage:'deliver'};const origin=city.building(c.fishingCatch.buildingId);if(origin)route(city,c,origin.door);return true;}
-  if(!chooseSite(city,b,c)){c.action='Sem ponto de pesca acessível';return false;}return true;
+  if(!chooseSite(city,b,c)){c.action='Aguardando cardumes na água';return false;}return true;
  }
  const origin=city.building(job.buildingId)||b;
  if(job.stage==='deliver'){
@@ -107,16 +131,23 @@ export function fishingWork(city,b,c){
  if(job.stage!=='fish')return true;
  const habitat=fishHabitat(city.world,job.point.x,job.point.y),near=job.boatId?Math.hypot(c.entity.x-job.point.x,c.entity.y-job.point.y)<.2:Math.hypot(c.entity.x-job.shore.x,c.entity.y-job.shore.y)<.2;
  if(!habitat||!near){idlePose(c);if(job.boatId)returnFromWater(city,c);else c.fishingJob=null;return false;}
- c.fishingPose={chair:!job.boatId&&!!c.fishingChair,boat:!!job.boatId,water:job.point,salinity:habitat.salinity,zone:habitat.zone};
- c.action=`Pescando · água ${habitat.salinity==='fresh'?'doce':'salgada'} · ${habitat.zone==='shore'?'margem':'miolo'}`;
- const reserve=stock(city,job.point),total=Object.values(c.fishingCatch?.goods||{}).reduce((n,a)=>n+a,0);
- if(reserve.amount<1||total>=FISHING_RULES.basket||!c.fishingRod?.remaining){
+ let fish=job.targetFishId!=null?city.fauna?.animals?.get?.(job.targetFishId):null;
+ if(!fish||fish.dead||fish.entity?.destroyed||Math.hypot(fish.x-c.entity.x,fish.y-c.entity.y)>8.0){
+  fish=nearestHarvestableFish(city,job.point,8.0,habitat.bodyId);
+  job.targetFishId=fish?.id??null;
+ }
+ const total=Object.values(c.fishingCatch?.goods||{}).reduce((n,a)=>n+a,0);
+ if(!fish||total>=FISHING_RULES.basket){
   idlePose(c);if(job.boatId)returnFromWater(city,c);else{job.stage='deliver';route(city,c,origin.door);}return true;
  }
+ c.fishingPose={chair:false,boat:!!job.boatId,water:{x:fish.x,y:fish.y},salinity:habitat.salinity,zone:habitat.zone};
+ c.action=`Pescando à mão · ${ANIMAL_SPECIES[fish.species]?.label||fish.species}`;
  job.labor+=(1+(c.skills?.fishing||0)/80);if(job.labor<FISHING_RULES.labor)return true;job.labor-=FISHING_RULES.labor;
- const good=habitat.species[Math.floor((city.random?.()??.5)*habitat.species.length)];reserve.amount--;c.fishingCatch??={buildingId:origin.id,goods:{}};c.fishingCatch.goods[good]=(c.fishingCatch.goods[good]||0)+1;c.fishingRod.remaining--;
- city.economy.produced[good]=(city.economy.produced[good]||0)+1;city.economy.recordGoods('fishing-catch',good,1,null,c.id,{buildingId:origin.id,salinity:habitat.salinity,zone:habitat.zone,x:job.point.x,y:job.point.y});c.fishingCaughtAt=city.minute;
- if(c.fishingRod.remaining<=0){city.economy.consumed.vara_pesca++;c.fishingRod=null;}
+ const good=fish.species;
+ fish.dead=true;fish.deadAt=city.minute;fish.action='Pescado';fish.entity.destroyed=true;
+ c.fishingCatch??={buildingId:origin.id,goods:{}};c.fishingCatch.goods[good]=(c.fishingCatch.goods[good]||0)+1;
+ city.economy.produced[good]=(city.economy.produced[good]||0)+1;city.economy.recordGoods('fishing-catch',good,1,null,c.id,{buildingId:origin.id,salinity:habitat.salinity,zone:habitat.zone,x:fish.x,y:fish.y});c.fishingCaughtAt=city.minute;
+ job.targetFishId=null;
  return true;
 }
 function moveBoat(city,c,boat,point,distance){const dx=point.x-c.entity.x,dy=point.y-c.entity.y,len=Math.hypot(dx,dy),travel=Math.min(distance,len),ratio=travel/(len||1);c.entity.x+=dx*ratio;c.entity.y+=dy*ratio;boat.x=c.entity.x;boat.y=c.entity.y;boat.angle=len?Math.atan2(dx,dy):boat.angle;boat.distance=(boat.distance||0)+travel;boat.altitude=surfaceElevation(city.world,boat.x,boat.y);if(boat.entity){boat.entity.x=boat.x;boat.entity.y=boat.y;boat.entity.altitude=boat.altitude;}return {done:len<=distance,travel};}

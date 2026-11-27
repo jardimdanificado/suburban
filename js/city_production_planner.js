@@ -9,7 +9,7 @@ const key=(type,crop)=>`${type}:${crop||''}`;
 const pending=p=>!p.cancelled&&p.status!=='completed';
 const inputs=(type,economy)=>{
   if(type==='fishmonger')return fishSupplyInputs(economy);
-  if(type==='fishery')return {vara_pesca:1};
+  if(type==='fishery')return {};
   if(type==='shipyard'){
     const firm=economy.businesses.find(b=>b.type==='shipyard'&&b.active&&!b.entity.destroyed);
     return (firm&&economy.city.vehicles?.recipeFor(firm)?.inputs)||INDUSTRIES.shipyard.inputs;

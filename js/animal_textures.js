@@ -49,6 +49,10 @@ const SPECIES_PATTERNS = {
   tie_sangue: { base: [212, 34, 34], accent: [30, 28, 30], wing: [36, 32, 34], pattern: 'feathers', bump: 0.3 },
   joao_de_barro: { base: [180, 106, 56], accent: [232, 220, 200], belly: [230, 218, 198], pattern: 'belly', bump: 0.3 },
   andorinha: { base: [40, 56, 94], accent: [240, 238, 232], belly: [240, 238, 232], pattern: 'belly', bump: 0.28 },
+  tilapia: { base: [110, 142, 120], accent: [58, 78, 66], belly: [198, 210, 196], pattern: 'scales', bump: 0.45 },
+  pacu: { base: [106, 120, 130], accent: [194, 122, 76], belly: [212, 168, 126], pattern: 'scales', bump: 0.45 },
+  robalo: { base: [124, 142, 148], accent: [56, 68, 76], belly: [222, 228, 230], pattern: 'scales', bump: 0.40 },
+  cavala: { base: [68, 108, 142], accent: [34, 58, 86], belly: [210, 222, 232], pattern: 'scales', bump: 0.40 },
 };
 
 const clamp01 = v => (v < 0 ? 0 : v > 1 ? 1 : v);
