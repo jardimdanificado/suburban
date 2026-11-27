@@ -10,7 +10,8 @@ import { skybridgeLinks } from './city_skybridges.js?v=seeded-business-visual-v1
 import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=colonial-colored-trim-1';
 
 export const FAUNA_RULES = Object.freeze({
-  maxWildAnimals: 260,
+  maxWildAnimals: 220,
+  maxWildAquatic: 240,
   spawnPerSpeciesMin: 2,
   grazeRestore: 22,
   feedRestore: 45,
@@ -346,6 +347,15 @@ export class CityFauna {
     const spec = ANIMAL_SPECIES[species];
     if (!spec) return 0;
     const world = this.city.world;
+    if (spec.aquatic) {
+      const waters = fishingWaters(world);
+      let cells = 0;
+      for (const body of waters.bodies) {
+        if (!spec.salinity || body.salinity === spec.salinity) cells += body.cells.length;
+      }
+      if (!cells) return 0;
+      return Math.max(4, Math.min(spec.maxWild || 40, Math.round(cells / 24)));
+    }
     const areaScale = ((world?.width || 64) * (world?.height || 64)) / 4096;
     return Math.min(spec.maxWild || 4, Math.max(FAUNA_RULES.spawnPerSpeciesMin, Math.round(areaScale * (spec.maxWild || 3))));
   }
@@ -383,7 +393,10 @@ export class CityFauna {
     const spec = ANIMAL_SPECIES[species];
     if (!spec) return null;
     if (!options.force && !this.canOccupy(x, y, species, options.buildingId ?? null)) return null;
-    if (!options.livestock && this.wildCount() >= FAUNA_RULES.maxWildAnimals) return null;
+    if (!options.livestock) {
+      const cap = spec.aquatic ? FAUNA_RULES.maxWildAquatic : FAUNA_RULES.maxWildAnimals;
+      if (this.wildCount(null, !!spec.aquatic) >= cap) return null;
+    }
 
     const city = this.city;
     const entity = city.createEntity({
@@ -411,8 +424,8 @@ export class CityFauna {
       riderId: null,
       x: entity.x,
       y: entity.y,
-      altitude: spec.aquatic ? -0.16 : 0,
-      targetAltitude: spec.aquatic ? -0.16 : 0,
+      altitude: spec.aquatic ? -0.05 : 0,
+      targetAltitude: spec.aquatic ? -0.05 : 0,
       inTreePlantId: null,
       nestId: null,
       angle: Math.random() * Math.PI * 2,
@@ -432,10 +445,11 @@ export class CityFauna {
     return animal;
   }
 
-  wildCount(species = null) {
+  wildCount(species = null, aquaticOnly = null) {
     let count = 0;
     for (const a of this.animals.values()) {
       if (a.dead || a.entity?.destroyed || a.category !== 'wild') continue;
+      if (aquaticOnly !== null && !!ANIMAL_SPECIES[a.species]?.aquatic !== aquaticOnly) continue;
       if (!species || a.species === species) count++;
     }
     return count;
@@ -461,13 +475,14 @@ export class CityFauna {
         const pool = waterCells.filter(c => !spec.salinity || c.salinity === spec.salinity);
         const preferred = spec.zone ? pool.filter(c => c.zone === spec.zone) : pool;
         const candidates = preferred.length ? preferred : pool;
-        for (let attempt = 0; attempt < candidates.length * 2 && spawned < target && this.wildCount() < FAUNA_RULES.maxWildAnimals; attempt++) {
+        for (let attempt = 0; attempt < Math.max(target * 6, candidates.length) && spawned < target && this.wildCount(null, true) < FAUNA_RULES.maxWildAquatic; attempt++) {
           const pick = candidates[Math.floor(Math.random() * candidates.length)];
+          if (!pick) break;
           if (this.spawn(pick.x, pick.y, species)) spawned++;
         }
         continue;
       }
-      for (let attempt = 0; attempt < target * 40 && spawned < target && this.wildCount() < FAUNA_RULES.maxWildAnimals; attempt++) {
+      for (let attempt = 0; attempt < target * 40 && spawned < target && this.wildCount(null, false) < FAUNA_RULES.maxWildAnimals; attempt++) {
         const x = Math.floor(Math.random() * world.width);
         const y = Math.floor(Math.random() * world.height);
         if (!this.matchesHabitat(x, y, species)) continue;
@@ -975,8 +990,8 @@ export class CityFauna {
         animal.altitude = 0;
         animal.targetAltitude = 0;
       } else if (spec?.aquatic) {
-        animal.altitude = -0.16;
-        animal.targetAltitude = -0.16;
+        animal.altitude = -0.05;
+        animal.targetAltitude = -0.05;
       }
 
       if (animal.state === 'eat') {
@@ -1057,7 +1072,7 @@ export class CityFauna {
               animal.targetAltitude = 2.4;
               animal.thinkTimer = 0.1;
             } else {
-              animal.targetAltitude = spec?.aquatic ? -0.16 : 0;
+              animal.targetAltitude = spec?.aquatic ? -0.05 : 0;
               animal.state = 'idle';
               animal.action = 'Observando';
               animal.stateTimer = 0.8 + Math.random() * 1.2;
@@ -1079,16 +1094,18 @@ export class CityFauna {
     const world = this.city.world;
     if (!world?.width || !world?.height) return;
     const bySpecies = new Map();
-    let totalWild = 0;
+    let totalLand = 0, totalAquatic = 0;
     for (const a of this.animals.values()) {
       if (a.dead || a.entity?.destroyed || a.category !== 'wild') continue;
-      totalWild++;
+      if (ANIMAL_SPECIES[a.species]?.aquatic) totalAquatic++;
+      else totalLand++;
       let list = bySpecies.get(a.species);
       if (!list) { list = []; bySpecies.set(a.species, list); }
       list.push(a);
     }
     for (const species of ANIMAL_SPECIES_IDS) {
-      if (totalWild >= FAUNA_RULES.maxWildAnimals) break;
+      const isAquatic = !!ANIMAL_SPECIES[species]?.aquatic;
+      if (isAquatic ? totalAquatic >= FAUNA_RULES.maxWildAquatic : totalLand >= FAUNA_RULES.maxWildAnimals) continue;
       const cap = this.speciesCapacity(species);
       const list = bySpecies.get(species) || [];
       if (list.length >= cap) continue;
@@ -1102,7 +1119,7 @@ export class CityFauna {
           const baby = this.spawn(sx, sy, species, { hunger: 75 });
           if (baby) {
             parent.hunger = Math.max(25, parent.hunger - 20);
-            totalWild++;
+            if (isAquatic) totalAquatic++; else totalLand++;
             break;
           }
         }
@@ -1113,7 +1130,7 @@ export class CityFauna {
           const sy = Math.floor(Math.random() * world.height);
           if (!this.matchesHabitat(sx, sy, species)) continue;
           if (this.spawn(sx, sy, species, { hunger: 75 })) {
-            totalWild++;
+            if (isAquatic) totalAquatic++; else totalLand++;
             break;
           }
         }

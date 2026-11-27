@@ -4,6 +4,7 @@ import {setup,totalMoney} from './helpers/city.mjs';
 import {externalTradeHourly} from '../js/city_external_trade.js';
 import {setEconomicPolicy} from '../js/city_economic_policies.js';
 import {initializeEquity} from '../js/city_equity.js';
+import {CURRENCY_RULES} from '../js/city_currency.js';
 
 function addBusiness(city,type,owner=null){
  for(const site of city.economy.locateBuilding(type)){
@@ -79,4 +80,17 @@ test('popular refectory buys local retail food before ordering external imports'
  assert(market.inventory.arroz<1200);
  assert(city.logistics.shipments.some(s=>s.seller===market&&s.buyer===store&&s.good==='arroz'));
  assert.equal(city.economy.externalTrade?.imports||0,importsBefore);
+});
+
+test('initial money supply scales with population and gives citizens starting cash',()=>{
+ const small=setup({starter:true,population:64});
+ const large=setup({starter:true,population:120});
+ assert(large.currency.issued>small.currency.issued);
+ assert(small.citizens.every(c=>c.balance>=CURRENCY_RULES.citizenGrant));
+ assert(CURRENCY_RULES.citizenGrant>0);
+ small.currency.daily();
+ large.currency.daily();
+ assert.equal(Math.round(large.currency.priceIndex*100)/100,1);
+ assert.equal(totalMoney(small),small.currency.netIssued());
+ assert.equal(totalMoney(large),large.currency.netIssued());
 });

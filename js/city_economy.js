@@ -14,7 +14,7 @@ import {rentOffice,rentAvailableOffice,officeStartupCost,prepareOfficeSearch,off
 import {taxCategory,taxRate} from './city_sales_tax.js';
 import {equityShares,offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends,distributeWorkerProfitShare} from './city_equity.js?v=daily-mayor-privatization-2';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
-import {externalTradeHourly,tourismHourly,orderImport,ensureImportDepot,importDepotClaim} from './city_external_trade.js';
+import {EXTERNAL_TRADE_RULES,externalTradeHourly,tourismHourly,orderImport,ensureImportDepot,importDepotClaim} from './city_external_trade.js';
 import {outdoorCellReady,workCellReady,activityRoomReady} from './city_interiors.js?v=citizen-access-1';
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
@@ -789,7 +789,7 @@ export class CityEconomy {
         const canImport=!worldIncoming&&!importIncoming&&(batch||!hasLocalMakers||isRetail)&&remaining>0&&!assemblerHasStarterStock&&!['lixo','sementes','pedra'].includes(good);
         if(canImport&&inventoryFree(buyer)>0){
           const target=buyer,retailBuyer=isRetail,importReserve=retailBuyer?Math.max(this.city.currency.price(5000),this.city.fiscal.businessReserve(target)):target.workers.length*target.wage*90;
-          const freightHeadroom=this.city.currency.price((this.city.world.width+this.city.world.height+24*4)*12),unitCost=Math.ceil(this.goods[good].price*2.25)+Math.ceil(this.goods[good].price*(this.city.politics?.policy?.importTaxes?.[good]||0))+Math.ceil(this.goods[good].price*.03),affordable=retailBuyer?Math.floor(Math.max(0,target.balance-importReserve-freightHeadroom)/Math.max(1,unitCost)):24;
+          const freightHeadroom=this.city.currency.price((this.city.world.width+this.city.world.height+24*4)*12),unitCost=Math.ceil(this.goods[good].price*EXTERNAL_TRADE_RULES.importPriceFactor)+Math.ceil(this.goods[good].price*(this.city.politics?.policy?.importTaxes?.[good]||0))+Math.ceil(this.goods[good].price*.03),affordable=retailBuyer?Math.floor(Math.max(0,target.balance-importReserve-freightHeadroom)/Math.max(1,unitCost)):24;
           const limit=Math.min(remaining,inventoryFree(target),this.city.logistics.transportLimit(null,target),24,affordable);
           if(limit>0&&target.balance>importReserve){const shipment=orderImport(this.city,target,good,limit,{reserveBalance:retailBuyer?importReserve:0});if(shipment)remaining-=limit;}
         }
@@ -830,9 +830,9 @@ export class CityEconomy {
         let purchase=local[0]||null,quantity=0;
         if(purchase)quantity=Math.min(missing,purchase.available,inventoryFree(store),purchase.seller===depot?purchase.available:Math.min(24,city.logistics.transportLimit(purchase.seller,store)));
         else {
-          const importCost=good=>this.goods[good].price*2.25+Math.ceil(this.goods[good].price*(city.politics?.policy?.importTaxes?.[good]||0));
+          const importCost=good=>this.goods[good].price*EXTERNAL_TRADE_RULES.importPriceFactor+Math.ceil(this.goods[good].price*(city.politics?.policy?.importTaxes?.[good]||0));
           const good=foodGoods.filter(g=>this.accepts(store,g)&&!(store.worldIncoming?.[g])&&!(store.importIncoming?.[g])).sort((a,b)=>importCost(a)-importCost(b))[0];if(!good)break;
-          purchase={good,price:Math.ceil(this.goods[good].price*2.25)};quantity=Math.min(missing,10000,inventoryFree(store));
+          purchase={good,price:Math.ceil(this.goods[good].price*EXTERNAL_TRADE_RULES.importPriceFactor)};quantity=Math.min(missing,10000,inventoryFree(store));
         }
         if(quantity<1)break;
         let fee=city.currency.price(Math.max(120,(city.world.width+city.world.height+quantity*4)*12)*1.5);

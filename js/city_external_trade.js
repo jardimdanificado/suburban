@@ -4,7 +4,7 @@ import {INDUSTRIES} from './city_industries.js';
 import {inventoryFree} from './city_inventory.js';
 import {ensureExternalAccount} from './city_currency.js';
 // External buyers and suppliers use an unlimited account outside the local money supply.
-export const EXTERNAL_TRADE_RULES=Object.freeze({minimumFirmStock:24,maximumPerSale:12,maximumSalesPerHour:4,priceFactor:1.1,importPriceFactor:2.25,maximumImportQuantity:24});
+export const EXTERNAL_TRADE_RULES=Object.freeze({minimumFirmStock:24,maximumPerSale:12,maximumSalesPerHour:4,priceFactor:1.1,importPriceFactor:1.65,maximumImportQuantity:24});
 const foreignBrands=new Map();
 export function fictionalForeignBrand(good){
  if(foreignBrands.has(good))return foreignBrands.get(good);
