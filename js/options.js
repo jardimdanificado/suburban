@@ -15,10 +15,10 @@ const GRAPHICS = [
   effect("dust", "POEIRA", BOOL, true),
 ];
 const AUDIO = [
-  { key: "musicMuted", label: "MUTE", values: BOOL, default: false },
-  { key: "musicVolume", label: "VOLUME DA MUSICA", values: [0, 0.1, 0.25, 0.5, 0.75, 1].map(v => [v, `${v * 100}%`]), default: 0.25 },
+  { key: "musicMuted", label: "MUTE MUSICA", values: BOOL, default: false },
+  { key: "musicVolume", label: "VOLUME DA MUSICA", values: [0, 0.1, 0.25, 0.5, 0.75, 1].map(v => [v, `${v * 100}%`]), default: 0.5 },
   { key: "sfxMuted", label: "MUTE EFEITOS", values: BOOL, default: false },
-  { key: "sfxVolume", label: "VOLUME DOS EFEITOS", values: [0, 0.1, 0.25, 0.5, 0.75, 1].map(v => [v, `${v * 100}%`]), default: 0.8 },
+  { key: "sfxVolume", label: "VOLUME DOS EFEITOS", values: [0, 0.1, 0.25, 0.5, 0.75, 1].map(v => [v, `${v * 100}%`]), default: 0.75 },
 ];
 const TIME = [{key:"fastForwardEnabled",label:"MODOS FF",values:BOOL,default:false}];
 const INTERFACE = [{key:'pauseForCouncilBills',label:'PAUSAR EM PROJETOS DA CÂMARA',values:BOOL,default:false},{key:'showInterventions',label:'CONTROLES DE INTERVENÇÃO',values:BOOL,default:true}];

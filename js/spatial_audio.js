@@ -268,7 +268,7 @@ export class SpatialAudio {
     mediaFactory = defaultMediaFactory,
     fetchImpl = (...args) => fetch(...args),
     random = Math.random,
-    volume = 0.8,
+    volume = 0.75,
     muted = false,
     maxBufferBytes = MAX_BUFFER_BYTES,
   } = {}) {

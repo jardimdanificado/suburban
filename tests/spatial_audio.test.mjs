@@ -436,6 +436,21 @@ test('options apply and persist sound-effect mute and volume', () => {
   assert.equal(JSON.parse(saved).sfxVolume, 1);
 });
 
+test('audio defaults are valid option values and apply on fresh storage', () => {
+  const musicApplied = [];
+  const sfxApplied = [];
+  const music = { setMuted: value => musicApplied.push(['muted', value]), setVolume: value => musicApplied.push(['volume', value]) };
+  const audio = { setMuted: value => sfxApplied.push(['muted', value]), setVolume: value => sfxApplied.push(['volume', value]) };
+  const renderer = new Proxy({}, { get: () => () => {} });
+  const panel = new OptionsPanel({ renderer, time: { setFastForwardEnabled() {} }, music, audio });
+  assert.equal(panel.values.musicMuted, false);
+  assert.equal(panel.values.musicVolume, 0.5);
+  assert.equal(panel.values.sfxMuted, false);
+  assert.equal(panel.values.sfxVolume, 0.75);
+  assert.deepEqual(musicApplied, [['muted', false], ['volume', 0.5]]);
+  assert.deepEqual(sfxApplied, [['muted', false], ['volume', 0.75]]);
+});
+
 test('ambience plan selects beach near sandy shores without crowd loop', () => {
   const listener = { x: 0, y: 2, z: 0 };
   const plan = ambiencePlan({

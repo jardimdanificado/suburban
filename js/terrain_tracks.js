@@ -191,7 +191,7 @@ export class PaintCarry {
     for(const stamp of stamps){
       const walking=Math.abs(stamp.kind)===1;
       const foot=walking?(stamp.kind<0?0:1):stamp.kind===2?'hull':`wheel:${stamp.carryContact}`;
-      const capacity=walking?3:.75;
+      const capacity=walking?10:1.5;
       let state=map.get(foot);
       let stepped=null;
       const list=isGrid?groundArt.get((Math.floor(stamp.x)>>3)+','+(Math.floor(stamp.z)>>3)):groundArt;
@@ -380,7 +380,7 @@ export class TerrainTracks {
     }
     const shape=this.paintMesh.geometry.getAttribute('contactShape'),info=this.paintMesh.geometry.getAttribute('contactInfo'),rgba=this.paintMesh.geometry.getAttribute('paintRgba');
     const toLinear=v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4;
-    stamps.forEach((s,i)=>{const scale=Math.abs(s.kind)===1?.55:.7;shape.setXYZW(i,s.x,s.z,s.width*scale,s.length*scale);info.setXY(i,s.angle,s.kind);const c=s.paintColor??0xffffff;rgba.setXYZW(i,toLinear((c>>16&255)/255),toLinear((c>>8&255)/255),toLinear((c&255)/255),Math.max(.12,Math.min(.85,s.paintLoad??.7)));});
+    stamps.forEach((s,i)=>{const scale=Math.abs(s.kind)===1?.9:.95;shape.setXYZW(i,s.x,s.z,s.width*scale,s.length*scale);info.setXY(i,s.angle,s.kind);const c=s.paintColor??0xffffff;rgba.setXYZW(i,toLinear((c>>16&255)/255),toLinear((c>>8&255)/255),toLinear((c&255)/255),Math.max(.18,Math.min(1,s.paintLoad??.85)));});
     shape.needsUpdate=info.needsUpdate=rgba.needsUpdate=true;this.paintMesh.geometry.instanceCount=stamps.length;
     const old=renderer.getRenderTarget(),autoClear=renderer.autoClear,shadowUpdate=renderer.shadowMap.autoUpdate,shadowNeedsUpdate=renderer.shadowMap.needsUpdate;
     renderer.autoClear=false;renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=false;
@@ -493,7 +493,7 @@ export class TerrainTracks {
         p.wearProgress=Math.min(1,(p.wearProgress||0)+(Math.abs(stamp.kind)===1?.025:.045));
         p._smudgeSteps=(p._smudgeSteps||0)+1;
         if(p._smudgeSteps===1||p._smudgeSteps%4===0||p.wearProgress>=1){p.smudgeRevision=(p.smudgeRevision||0)+1;if(p.wearProgress>=1)this._groundSourceCache=null;}
-        if(citizen)city?.sanitation?.soilCitizen?.(citizen,'tinta',1.0,item.inkColor,'arms');
+        if(citizen)city?.sanitation?.soilCitizen?.(citizen,'tinta',3.0,item.inkColor,'feet');
       }else if(item.dirtKind&&citizen){
         city?.sanitation?.soilCitizen?.(citizen,item.dirtKind,item.dirtKind==='bosta'?1.5:1.2,null,'feet');
       }

@@ -268,7 +268,11 @@ test('walking across ground graffiti smudges the paint and leaves colored footpr
     support: { kind: 'street-graffiti', surface: 'ground', position: { x: 5.5, y: 5.5, z: 0 }, width: 0.86, height: 0.86 },
     layers: []
   };
-  const city = { justice: { art: [groundPiece] } };
+  const soiled = [];
+  const city = {
+    justice: { art: [groundPiece] },
+    sanitation: { soilCitizen: (citizen, kind, amount, color, zone) => soiled.push({ citizen, kind, amount, color, zone }) }
+  };
   const walker = { id: 1, x: 5.0, y: 5.5, properties: { citizen: {} } };
 
   // Start outside, then walk across the ground graffiti at (5.5, 5.5) and continue past it
@@ -278,11 +282,14 @@ test('walking across ground graffiti smudges the paint and leaves colored footpr
   assert.ok((groundPiece.groundSmudges?.length || 0) >= 1, 'footsteps on ground graffiti record smudges');
   assert.ok((groundPiece.smudgeRevision || 0) >= 1);
   assert.ok((groundPiece.wearProgress || 0) > 0);
+  assert.ok(soiled.length >= 1 && soiled.every(s => s.kind === 'tinta' && s.zone === 'feet' && s.color === 0x33ddff));
 
-  // Walk further off the graffiti: shoes shed colored paint footprints
-  walker.x = 6.8;
-  tracker.update({}, world, [walker], 0.1, null, null, null, city);
-  assert.ok(paintFootprints.length >= 1, 'shoes carry graffiti paint onto adjacent ground');
+  // Walk further off the graffiti: shoes shed colored paint footprints over many steps
+  for (let step = 1; step <= 6; step++) {
+    walker.x = 5.6 + step * 0.6;
+    tracker.update({}, world, [walker], 0.1, null, null, null, city);
+  }
+  assert.ok(paintFootprints.length >= 8, `expected >= 8 paint footprints, got ${paintFootprints.length}`);
   assert.ok(paintFootprints.every(s => s.paintColor === 0x33ddff && s.paintLoad > 0));
 });
 
